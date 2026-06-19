@@ -281,6 +281,9 @@ Completed:
 - [x] chosen `TCntV.01` ranges と control-delimited `/DocumentText` intervals を比較する `rjtd text-position-count-control-ranges <file> [control-code]` を追加する。
 - [x] candidate control-delimited overlap summaries を decoded-false `textCountRanges` model/export/app-core JSON の `controlRangeOverlaps` として expose する。
 - [x] `controlRangeOverlaps` から derived decoded-false `textBoundaryCandidates` model/export/app-core JSON を expose し、parsed paragraph semantics を変えずに paragraph-boundary candidate evidence を保存する。
+- [x] multi-interval `textBoundaryCandidates` を decoded-false `tableCandidates` として model/export/app-core JSON と validation warnings に保存し、interval ごとの source range、text preview、line-break count も保持する。ただし parsed blocks や table/cell fallback APIs は変更しない。
+- [x] model-derived decoded-false table candidates と interval source evidence を出力する `rjtd table-candidates <file>` を追加する。
+- [x] `table-candidates` を current local samples 全体に sweep する。61 checked、0 failures、candidates を持つ files 10、candidates total 134、byte-basis rows 65、unit-basis rows 69、max 44 intervals、interval line breaks を持つ candidates 0。row/cell geometry が証明されるまでは diagnostic-only に保つ。
 - [x] model-derived decoded-false boundary candidate の basis、delimiter、interval count、single/multi classification、source span、`decoded=false` を出力する `rjtd text-boundary-candidates <file>` を追加する。
 - [x] `text-boundary-candidates` を current local samples 全体に sweep する。61 checked、candidates を持つ files 10、candidate rows 356、overlapped intervals 1,586、single-interval candidates 222、multi-interval candidates 134。最大 single candidate は `justsystems-20120223023609-jp-just-finance-j200403sc.jtd` の `0x001c`/unit 44 intervals であり、paragraph promotion にはより strict な rule が必要である。
 - [x] decoded-false boundary candidate を `/DocumentText` visible text、line breaks、edge alignment と比較する `rjtd text-boundary-candidate-context <file>` を追加する。

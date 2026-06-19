@@ -26,8 +26,8 @@ use rjtd_export::{to_json, to_markdown, to_plain_text};
 use rjtd_model::{
     ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate, ObjectFrameRecordCandidate,
     ObjectFrameReferenceRowCandidate, ObjectImagePayloadSpan, ObjectImageSignatureHit,
-    ObjectStreamCandidate as ModelObjectStreamCandidate, TextBoundaryCandidate, TextCountRange,
-    TextLayoutExactEvidence, parse_document,
+    ObjectStreamCandidate as ModelObjectStreamCandidate, TableCandidate, TextBoundaryCandidate,
+    TextCountRange, TextLayoutExactEvidence, parse_document,
 };
 
 const BROKEN_PIPE_EXIT: &str = "__rjtd_broken_pipe__";
@@ -2804,6 +2804,30 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             }
             Ok(())
         }
+        Some("table-candidates") => {
+            let path = required_path(args.next(), "table-candidates")?;
+            let bytes = read_file(path)?;
+            let document = parse_document(&bytes).map_err(|error| error.to_string())?;
+
+            for candidate in document.table_candidates() {
+                write_stdout_line(&format!(
+                    "table-candidate\t{}\tkind={}\trange={}\tboundary={}\tbasis={}\tdelimiter=0x{:04x}\tintervals={}\tfirst={}\tlast={}\tsource={}-{}\tinterval-details={}\tdecoded=false",
+                    candidate.index(),
+                    candidate.kind(),
+                    candidate.text_count_range_index(),
+                    candidate.text_boundary_candidate_index(),
+                    candidate.basis().as_str(),
+                    candidate.delimiter_code(),
+                    candidate.interval_count(),
+                    candidate.first_interval_index(),
+                    candidate.last_interval_index(),
+                    candidate.source_start(),
+                    candidate.source_end(),
+                    format_table_candidate_intervals(candidate)
+                ))?;
+            }
+            Ok(())
+        }
         Some("text-boundary-candidate-context") => {
             let path = required_path(args.next(), "text-boundary-candidate-context")?;
             let bytes = read_file(path)?;
@@ -4201,6 +4225,7 @@ Usage:
   rjtd text-position-count-range-boundaries <file.jtd>
   rjtd text-position-count-control-ranges <file.jtd> [control-code]
   rjtd text-boundary-candidates <file.jtd>
+  rjtd table-candidates <file.jtd>
   rjtd text-boundary-candidate-context <file.jtd>
   rjtd text-boundary-candidate-agreement <file.jtd>
   rjtd text-boundary-candidate-layout-context <file.jtd>
@@ -6273,6 +6298,29 @@ fn format_boundary_candidate_interval_kind(interval_count: usize) -> &'static st
     } else {
         "multi"
     }
+}
+
+fn format_table_candidate_intervals(candidate: &TableCandidate) -> String {
+    if candidate.intervals().is_empty() {
+        return "-".to_string();
+    }
+
+    candidate
+        .intervals()
+        .iter()
+        .map(|interval| {
+            format!(
+                "{}:source-interval={},source={}-{},line-breaks={},text={}",
+                interval.index(),
+                interval.source_interval_index(),
+                interval.source_start(),
+                interval.source_end(),
+                interval.line_break_count(),
+                escaped_text(interval.text_preview())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("|")
 }
 
 fn range_basis_from_candidate(basis: &str) -> RangeBasis {

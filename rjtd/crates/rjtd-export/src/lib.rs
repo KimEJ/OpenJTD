@@ -8,9 +8,9 @@ use rjtd_model::{
     ObjectImageHeaderFieldCandidates, ObjectImageNumericHeaderField, ObjectImagePayloadEnvelope,
     ObjectImagePayloadSpan, ObjectImageSourcePathCandidate, ObjectStreamCandidate,
     ObjectStreamOwnershipCandidate, ObjectStreamOwnershipReferenceCandidate, StyleRef,
-    TextBoundaryCandidate, TextControlBoundary, TextCountControlRangeOverlap, TextCountRange,
-    TextCountRangeOverlap, TextLayoutExactEvidence, TextParagraphBoundaryCandidate, TextSourceSpan,
-    UnknownObject,
+    TableCandidate, TableCandidateInterval, TextBoundaryCandidate, TextControlBoundary,
+    TextCountControlRangeOverlap, TextCountRange, TextCountRangeOverlap, TextLayoutExactEvidence,
+    TextParagraphBoundaryCandidate, TextSourceSpan, UnknownObject,
 };
 
 pub fn to_plain_text(document: &Document) -> String {
@@ -160,6 +160,13 @@ pub fn to_json(document: &Document) -> String {
             output.push(',');
         }
         push_text_paragraph_boundary_candidate_json(&mut output, candidate);
+    }
+    output.push_str("],\"tableCandidates\":[");
+    for (index, candidate) in document.table_candidates().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_table_candidate_json(&mut output, candidate);
     }
     output.push_str("],\"rawStreams\":[");
     for (index, stream) in document.raw_streams().iter().enumerate() {
@@ -774,6 +781,61 @@ fn push_text_paragraph_boundary_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+fn push_table_candidate_json(output: &mut String, candidate: &TableCandidate) {
+    output.push_str("{\"index\":");
+    output.push_str(&candidate.index().to_string());
+    output.push_str(",\"kind\":");
+    push_json_string(output, candidate.kind());
+    output.push_str(",\"textBoundaryCandidateIndex\":");
+    output.push_str(&candidate.text_boundary_candidate_index().to_string());
+    output.push_str(",\"textCountRangeIndex\":");
+    output.push_str(&candidate.text_count_range_index().to_string());
+    output.push_str(",\"basis\":");
+    push_json_string(output, candidate.basis().as_str());
+    output.push_str(",\"delimiterCode\":");
+    output.push_str(&candidate.delimiter_code().to_string());
+    output.push_str(",\"delimiterCodeHex\":");
+    push_json_string(output, &format!("0x{:04x}", candidate.delimiter_code()));
+    output.push_str(",\"intervalCount\":");
+    output.push_str(&candidate.interval_count().to_string());
+    output.push_str(",\"firstIntervalIndex\":");
+    output.push_str(&candidate.first_interval_index().to_string());
+    output.push_str(",\"lastIntervalIndex\":");
+    output.push_str(&candidate.last_interval_index().to_string());
+    output.push_str(",\"sourceStart\":");
+    output.push_str(&candidate.source_start().to_string());
+    output.push_str(",\"sourceEnd\":");
+    output.push_str(&candidate.source_end().to_string());
+    output.push_str(",\"intervals\":");
+    push_table_candidate_intervals_json(output, candidate.intervals());
+    output.push_str(",\"rule\":");
+    push_json_string(output, candidate.rule());
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_table_candidate_intervals_json(output: &mut String, intervals: &[TableCandidateInterval]) {
+    output.push('[');
+    for (index, interval) in intervals.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"index\":");
+        output.push_str(&interval.index().to_string());
+        output.push_str(",\"sourceIntervalIndex\":");
+        output.push_str(&interval.source_interval_index().to_string());
+        output.push_str(",\"sourceStart\":");
+        output.push_str(&interval.source_start().to_string());
+        output.push_str(",\"sourceEnd\":");
+        output.push_str(&interval.source_end().to_string());
+        output.push_str(",\"textPreview\":");
+        push_json_string(output, interval.text_preview());
+        output.push_str(",\"lineBreakCount\":");
+        output.push_str(&interval.line_break_count().to_string());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push(']');
+}
+
 fn push_text_layout_exact_evidence_json(output: &mut String, evidence: &TextLayoutExactEvidence) {
     output.push_str("{\"target\":");
     push_json_string(output, evidence.target());
@@ -1193,7 +1255,7 @@ mod tests {
 
         assert_eq!(
             to_json(&document),
-            "{\"metadata\":{\"title\":\"sample\"},\"blocks\":[{\"type\":\"paragraph\",\"style\":null,\"inlines\":[{\"type\":\"text\",\"text\":\"hello\\n\\\"\",\"style\":null}]}],\"unknownStyles\":[],\"unknownObjects\":[],\"objectStreamCandidates\":[],\"objectFrameRecords\":[],\"textCountRanges\":[],\"textControlBoundaries\":[],\"textBoundaryCandidates\":[],\"textParagraphBoundaryCandidates\":[],\"rawStreams\":[]}"
+            "{\"metadata\":{\"title\":\"sample\"},\"blocks\":[{\"type\":\"paragraph\",\"style\":null,\"inlines\":[{\"type\":\"text\",\"text\":\"hello\\n\\\"\",\"style\":null}]}],\"unknownStyles\":[],\"unknownObjects\":[],\"objectStreamCandidates\":[],\"objectFrameRecords\":[],\"textCountRanges\":[],\"textControlBoundaries\":[],\"textBoundaryCandidates\":[],\"textParagraphBoundaryCandidates\":[],\"tableCandidates\":[],\"rawStreams\":[]}"
         );
     }
 

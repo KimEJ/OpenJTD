@@ -629,6 +629,22 @@ fn text_count_boundary_path() -> PathBuf {
     write_sample(compound.into_inner().into_inner())
 }
 
+fn text_count_table_candidate_path() -> PathBuf {
+    let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    compound
+        .create_stream("/DocumentText")
+        .unwrap()
+        .write_all(&document_text_fixture())
+        .unwrap();
+    compound
+        .create_stream("/DocumentTextPositionTables")
+        .unwrap()
+        .write_all(&text_count_table_fixture_with_ranges(&[(0, 30)]))
+        .unwrap();
+
+    write_sample(compound.into_inner().into_inner())
+}
+
 fn text_count_cluster_path() -> PathBuf {
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
     compound
@@ -3183,6 +3199,31 @@ fn text_boundary_candidates_command_reports_model_candidates() {
         concat!(
             "text-boundary-candidate\t0\tkind=controlDelimitedTextCountRange\trange=0\tbasis=byte\tdelimiter=0x001c\tintervals=1\tinterval-kind=single\tfirst=0\tlast=0\tsource=10-14\tdecoded=false\n",
             "text-boundary-candidate\t1\tkind=controlDelimitedTextCountRange\trange=0\tbasis=unit\tdelimiter=0x001c\tintervals=1\tinterval-kind=single\tfirst=1\tlast=1\tsource=8-11\tdecoded=false\n",
+        )
+    );
+}
+
+#[test]
+fn table_candidates_command_reports_model_interval_evidence() {
+    let path = text_count_table_candidate_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("table-candidates")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        concat!(
+            "table-candidate\t0\tkind=multiIntervalControlRangeTableCandidate\trange=0\tboundary=0\tbasis=byte\tdelimiter=0x001c\tintervals=2\tfirst=0\tlast=1\tsource=10-22\tinterval-details=0:source-interval=0,source=10-14,line-breaks=0,text=銀河|1:source-interval=1,source=16-22,line-breaks=0,text=鉄道\tdecoded=false\n",
+            "table-candidate\t1\tkind=multiIntervalControlRangeTableCandidate\trange=0\tboundary=1\tbasis=unit\tdelimiter=0x001c\tintervals=2\tfirst=0\tlast=1\tsource=5-11\tinterval-details=0:source-interval=0,source=5-7,line-breaks=0,text=銀河|1:source-interval=1,source=8-11,line-breaks=0,text=鉄道\tdecoded=false\n",
         )
     );
 }

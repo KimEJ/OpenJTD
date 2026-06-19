@@ -72,6 +72,7 @@ pub struct Document {
     text_control_boundaries: Vec<TextControlBoundary>,
     text_boundary_candidates: Vec<TextBoundaryCandidate>,
     text_paragraph_boundary_candidates: Vec<TextParagraphBoundaryCandidate>,
+    table_candidates: Vec<TableCandidate>,
 }
 
 impl Document {
@@ -88,6 +89,7 @@ impl Document {
             text_control_boundaries: Vec::new(),
             text_boundary_candidates: Vec::new(),
             text_paragraph_boundary_candidates: Vec::new(),
+            table_candidates: Vec::new(),
         }
     }
 
@@ -211,6 +213,10 @@ impl Document {
         &self.text_paragraph_boundary_candidates
     }
 
+    pub fn table_candidates(&self) -> &[TableCandidate] {
+        &self.table_candidates
+    }
+
     pub fn push_unknown_style(&mut self, style: UnknownStyle) {
         self.unknown_styles.push(style);
     }
@@ -248,6 +254,10 @@ impl Document {
         candidate: TextParagraphBoundaryCandidate,
     ) {
         self.text_paragraph_boundary_candidates.push(candidate);
+    }
+
+    pub fn push_table_candidate(&mut self, candidate: TableCandidate) {
+        self.table_candidates.push(candidate);
     }
 }
 
@@ -293,6 +303,9 @@ impl DocumentParser for IchitaroParser {
             }
             for candidate in text_boundary_candidates_from_ranges(document.text_count_ranges()) {
                 document.push_text_boundary_candidate(candidate);
+            }
+            for candidate in table_candidates_from_text_boundaries(&document) {
+                document.push_table_candidate(candidate);
             }
             for candidate in
                 text_paragraph_boundary_candidates_from_layout(&document, map.entries(), data)
@@ -482,7 +495,7 @@ impl DocumentCore {
     pub fn get_document_info(&self) -> String {
         let style_candidates = text_style_candidates(self.document.unknown_styles());
         format!(
-            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":\"Hiragino Sans\",\"fontsUsed\":[\"Hiragino Sans\"],\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{}}}",
+            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":\"Hiragino Sans\",\"fontsUsed\":[\"Hiragino Sans\"],\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
             APP_SOURCE_FORMAT,
             json_string(&self.file_name),
             self.page_count(),
@@ -506,7 +519,9 @@ impl DocumentCore {
             self.document.text_paragraph_boundary_candidates().len(),
             text_paragraph_boundary_candidates_json(
                 self.document.text_paragraph_boundary_candidates()
-            )
+            ),
+            self.document.table_candidates().len(),
+            table_candidates_json(self.document.table_candidates())
         )
     }
 
@@ -6637,6 +6652,149 @@ impl TextBoundaryCandidate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableCandidate {
+    index: usize,
+    text_boundary_candidate_index: usize,
+    text_count_range_index: usize,
+    basis: TextCountRangeOverlapBasis,
+    delimiter_code: u16,
+    interval_count: usize,
+    first_interval_index: usize,
+    last_interval_index: usize,
+    source_start: usize,
+    source_end: usize,
+    intervals: Vec<TableCandidateInterval>,
+}
+
+impl TableCandidate {
+    fn from_text_boundary_candidate(
+        index: usize,
+        candidate: &TextBoundaryCandidate,
+        intervals: Vec<TableCandidateInterval>,
+    ) -> Self {
+        Self {
+            index,
+            text_boundary_candidate_index: candidate.index(),
+            text_count_range_index: candidate.text_count_range_index(),
+            basis: candidate.basis(),
+            delimiter_code: candidate.delimiter_code(),
+            interval_count: candidate.interval_count(),
+            first_interval_index: candidate.first_interval_index(),
+            last_interval_index: candidate.last_interval_index(),
+            source_start: candidate.source_start(),
+            source_end: candidate.source_end(),
+            intervals,
+        }
+    }
+
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    pub fn kind(&self) -> &'static str {
+        "multiIntervalControlRangeTableCandidate"
+    }
+
+    pub fn text_boundary_candidate_index(&self) -> usize {
+        self.text_boundary_candidate_index
+    }
+
+    pub fn text_count_range_index(&self) -> usize {
+        self.text_count_range_index
+    }
+
+    pub fn basis(&self) -> TextCountRangeOverlapBasis {
+        self.basis
+    }
+
+    pub fn delimiter_code(&self) -> u16 {
+        self.delimiter_code
+    }
+
+    pub fn interval_count(&self) -> usize {
+        self.interval_count
+    }
+
+    pub fn first_interval_index(&self) -> usize {
+        self.first_interval_index
+    }
+
+    pub fn last_interval_index(&self) -> usize {
+        self.last_interval_index
+    }
+
+    pub fn source_start(&self) -> usize {
+        self.source_start
+    }
+
+    pub fn source_end(&self) -> usize {
+        self.source_end
+    }
+
+    pub fn intervals(&self) -> &[TableCandidateInterval] {
+        &self.intervals
+    }
+
+    pub fn rule(&self) -> &'static str {
+        "control-delimited-text-count-range-with-multiple-intervals"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableCandidateInterval {
+    index: usize,
+    source_interval_index: usize,
+    source_start: usize,
+    source_end: usize,
+    text_preview: String,
+    line_break_count: usize,
+}
+
+impl TableCandidateInterval {
+    fn new(
+        index: usize,
+        source_interval_index: usize,
+        source_start: usize,
+        source_end: usize,
+        text_preview: String,
+        line_break_count: usize,
+    ) -> Self {
+        Self {
+            index,
+            source_interval_index,
+            source_start,
+            source_end,
+            text_preview,
+            line_break_count,
+        }
+    }
+
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    pub fn source_interval_index(&self) -> usize {
+        self.source_interval_index
+    }
+
+    pub fn source_start(&self) -> usize {
+        self.source_start
+    }
+
+    pub fn source_end(&self) -> usize {
+        self.source_end
+    }
+
+    pub fn text_preview(&self) -> &str {
+        &self.text_preview
+    }
+
+    pub fn line_break_count(&self) -> usize {
+        self.line_break_count
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextLayoutExactEvidence {
     target: &'static str,
     base: &'static str,
@@ -8574,6 +8732,75 @@ fn text_boundary_candidates_from_ranges(ranges: &[TextCountRange]) -> Vec<TextBo
     candidates
 }
 
+fn table_candidates_from_text_boundaries(document: &Document) -> Vec<TableCandidate> {
+    let Some(bounds) = document_text_source_bounds(document) else {
+        return Vec::new();
+    };
+
+    let mut table_candidates = Vec::new();
+    for candidate in document.text_boundary_candidates() {
+        if candidate.interval_count() <= 1 {
+            continue;
+        }
+        let intervals = table_candidate_intervals(document, &bounds, candidate);
+        if intervals.len() <= 1 {
+            continue;
+        }
+        table_candidates.push(TableCandidate::from_text_boundary_candidate(
+            table_candidates.len(),
+            candidate,
+            intervals,
+        ));
+    }
+    table_candidates
+}
+
+fn table_candidate_intervals(
+    document: &Document,
+    bounds: &TextSourceSpan,
+    candidate: &TextBoundaryCandidate,
+) -> Vec<TableCandidateInterval> {
+    text_control_source_intervals(document, bounds, candidate.delimiter_code())
+        .into_iter()
+        .filter(|interval| {
+            (candidate.first_interval_index()..=candidate.last_interval_index())
+                .contains(&interval.index)
+        })
+        .filter_map(|interval| {
+            let (interval_start, interval_end) =
+                source_interval_range(&interval, candidate.basis());
+            let source_start = interval_start.max(candidate.source_start());
+            let source_end = interval_end.min(candidate.source_end());
+            if source_start >= source_end {
+                return None;
+            }
+            let text = text_for_source_range(document, candidate.basis(), source_start, source_end);
+            let text_preview = preview_text(&text, 80);
+            let line_break_count = text_line_break_count(&text);
+            Some(TableCandidateInterval::new(
+                0,
+                interval.index,
+                source_start,
+                source_end,
+                text_preview,
+                line_break_count,
+            ))
+        })
+        .enumerate()
+        .map(|(index, interval)| TableCandidateInterval { index, ..interval })
+        .collect()
+}
+
+fn source_interval_range(
+    interval: &TextControlSourceInterval,
+    basis: TextCountRangeOverlapBasis,
+) -> (usize, usize) {
+    match basis {
+        TextCountRangeOverlapBasis::Byte => (interval.byte_start, interval.byte_end),
+        TextCountRangeOverlapBasis::Unit => (interval.unit_start, interval.unit_end),
+    }
+}
+
 fn text_paragraph_boundary_candidates_from_layout(
     document: &Document,
     entries: &[DocumentTextMapEntry],
@@ -9004,6 +9231,55 @@ fn text_preview_for_source_overlap(
     overlap_start: usize,
     overlap_end: usize,
 ) -> String {
+    preview_text(
+        &text_for_source_overlap(text, span, basis, overlap_start, overlap_end),
+        80,
+    )
+}
+
+fn text_for_source_range(
+    document: &Document,
+    basis: TextCountRangeOverlapBasis,
+    source_start: usize,
+    source_end: usize,
+) -> String {
+    let mut text = String::new();
+    for block in document.blocks() {
+        let Block::Paragraph(paragraph) = block else {
+            continue;
+        };
+        for inline in paragraph.inlines() {
+            let Inline::Text(run) = inline else {
+                continue;
+            };
+            let Some(span) = run.source_span() else {
+                continue;
+            };
+            let (entry_start, entry_end) = source_span_range(span, basis);
+            let overlap_start = entry_start.max(source_start);
+            let overlap_end = entry_end.min(source_end);
+            if overlap_start >= overlap_end {
+                continue;
+            }
+            text.push_str(&text_for_source_overlap(
+                run.text(),
+                span,
+                basis,
+                overlap_start,
+                overlap_end,
+            ));
+        }
+    }
+    text
+}
+
+fn text_for_source_overlap(
+    text: &str,
+    span: &TextSourceSpan,
+    basis: TextCountRangeOverlapBasis,
+    overlap_start: usize,
+    overlap_end: usize,
+) -> String {
     let (relative_start, relative_end) = match basis {
         TextCountRangeOverlapBasis::Byte => (
             overlap_start.saturating_sub(span.byte_start()) / 2,
@@ -9017,7 +9293,7 @@ fn text_preview_for_source_overlap(
             overlap_end.saturating_sub(span.unit_start()),
         ),
     };
-    preview_text(&text_by_utf16_units(text, relative_start, relative_end), 80)
+    text_by_utf16_units(text, relative_start, relative_end)
 }
 
 fn text_by_utf16_units(text: &str, start: usize, end: usize) -> String {
@@ -9084,6 +9360,7 @@ enum JtdValidationWarningKind {
     TextCountControlRangeDiagnosticOnly,
     TextBoundaryCandidateDiagnosticOnly,
     TextParagraphBoundaryCandidateDiagnosticOnly,
+    TableCandidateDiagnosticOnly,
 }
 
 impl JtdValidationWarningKind {
@@ -9101,6 +9378,7 @@ impl JtdValidationWarningKind {
             Self::TextParagraphBoundaryCandidateDiagnosticOnly => {
                 "JtdTextParagraphBoundaryCandidateDiagnosticOnly"
             }
+            Self::TableCandidateDiagnosticOnly => "JtdTableCandidateDiagnosticOnly",
         }
     }
 
@@ -9125,6 +9403,9 @@ impl JtdValidationWarningKind {
             }
             Self::TextParagraphBoundaryCandidateDiagnosticOnly => {
                 "JTD text paragraph-boundary candidate preserved as diagnostic data"
+            }
+            Self::TableCandidateDiagnosticOnly => {
+                "JTD table candidate preserved as diagnostic data"
             }
         }
     }
@@ -9227,6 +9508,12 @@ fn jtd_validation_warnings(document: &Document) -> Vec<JtdValidationWarning> {
     for _ in document.text_paragraph_boundary_candidates() {
         warnings.push(JtdValidationWarning::document_level(
             JtdValidationWarningKind::TextParagraphBoundaryCandidateDiagnosticOnly,
+        ));
+    }
+
+    for _ in document.table_candidates() {
+        warnings.push(JtdValidationWarning::document_level(
+            JtdValidationWarningKind::TableCandidateDiagnosticOnly,
         ));
     }
 
@@ -9951,6 +10238,18 @@ fn text_paragraph_boundary_candidates_json(
     output
 }
 
+fn table_candidates_json(candidates: &[TableCandidate]) -> String {
+    let mut output = String::from("[");
+    for (index, candidate) in candidates.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_table_candidate_json(&mut output, candidate);
+    }
+    output.push(']');
+    output
+}
+
 fn object_stream_candidates_json(candidates: &[ObjectStreamCandidate]) -> String {
     let mut output = String::from("[");
     for (index, candidate) in candidates.iter().enumerate() {
@@ -10456,6 +10755,64 @@ fn push_text_paragraph_boundary_candidate_json(
     output.push_str(",\"pageFieldEvidence\":");
     push_text_layout_exact_evidence_json(output, candidate.page_field_evidence());
     output.push_str(",\"decoded\":false}");
+}
+
+fn push_table_candidate_json(output: &mut String, candidate: &TableCandidate) {
+    output.push_str("{\"index\":");
+    output.push_str(&candidate.index().to_string());
+    output.push_str(",\"kind\":");
+    output.push_str(&json_string(candidate.kind()));
+    output.push_str(",\"textBoundaryCandidateIndex\":");
+    output.push_str(&candidate.text_boundary_candidate_index().to_string());
+    output.push_str(",\"textCountRangeIndex\":");
+    output.push_str(&candidate.text_count_range_index().to_string());
+    output.push_str(",\"basis\":");
+    output.push_str(&json_string(candidate.basis().as_str()));
+    output.push_str(",\"delimiterCode\":");
+    output.push_str(&candidate.delimiter_code().to_string());
+    output.push_str(",\"delimiterCodeHex\":");
+    output.push_str(&json_string(&format!(
+        "0x{:04x}",
+        candidate.delimiter_code()
+    )));
+    output.push_str(",\"intervalCount\":");
+    output.push_str(&candidate.interval_count().to_string());
+    output.push_str(",\"firstIntervalIndex\":");
+    output.push_str(&candidate.first_interval_index().to_string());
+    output.push_str(",\"lastIntervalIndex\":");
+    output.push_str(&candidate.last_interval_index().to_string());
+    output.push_str(",\"sourceStart\":");
+    output.push_str(&candidate.source_start().to_string());
+    output.push_str(",\"sourceEnd\":");
+    output.push_str(&candidate.source_end().to_string());
+    output.push_str(",\"intervals\":");
+    push_table_candidate_intervals_json(output, candidate.intervals());
+    output.push_str(",\"rule\":");
+    output.push_str(&json_string(candidate.rule()));
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_table_candidate_intervals_json(output: &mut String, intervals: &[TableCandidateInterval]) {
+    output.push('[');
+    for (index, interval) in intervals.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"index\":");
+        output.push_str(&interval.index().to_string());
+        output.push_str(",\"sourceIntervalIndex\":");
+        output.push_str(&interval.source_interval_index().to_string());
+        output.push_str(",\"sourceStart\":");
+        output.push_str(&interval.source_start().to_string());
+        output.push_str(",\"sourceEnd\":");
+        output.push_str(&interval.source_end().to_string());
+        output.push_str(",\"textPreview\":");
+        output.push_str(&json_string(interval.text_preview()));
+        output.push_str(",\"lineBreakCount\":");
+        output.push_str(&interval.line_break_count().to_string());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push(']');
 }
 
 fn push_text_layout_exact_evidence_json(output: &mut String, evidence: &TextLayoutExactEvidence) {
@@ -11996,6 +12353,87 @@ mod tests {
         assert!(warnings.contains("\"JTD text-boundary candidate preserved as diagnostic data\""));
         assert!(warnings.contains("\"kind\":\"JtdTextCountControlRangeDiagnosticOnly\""));
         assert!(warnings.contains("\"kind\":\"JtdTextBoundaryCandidateDiagnosticOnly\""));
+    }
+
+    #[test]
+    fn parser_preserves_multi_interval_table_candidates_as_diagnostics() {
+        let position_table = text_count_table_fixture_with_ranges(&[(0, 30)]);
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_with_control_boundary()),
+            (
+                rjtd_core::document_text_position::DOCUMENT_TEXT_POSITION_TABLES_PATH,
+                &position_table,
+            ),
+        ]);
+        let document = parse_document(&bytes).unwrap();
+
+        assert_eq!(document.table_candidates().len(), 2);
+        let byte_candidate = &document.table_candidates()[0];
+        let unit_candidate = &document.table_candidates()[1];
+        assert_eq!(
+            byte_candidate.kind(),
+            "multiIntervalControlRangeTableCandidate"
+        );
+        assert_eq!(byte_candidate.basis(), TextCountRangeOverlapBasis::Byte);
+        assert_eq!(byte_candidate.interval_count(), 2);
+        assert_eq!(byte_candidate.first_interval_index(), 0);
+        assert_eq!(byte_candidate.last_interval_index(), 1);
+        assert_eq!(
+            byte_candidate.rule(),
+            "control-delimited-text-count-range-with-multiple-intervals"
+        );
+        assert_eq!(unit_candidate.basis(), TextCountRangeOverlapBasis::Unit);
+        assert_eq!(unit_candidate.interval_count(), 2);
+
+        let byte_intervals = byte_candidate.intervals();
+        assert_eq!(byte_intervals.len(), 2);
+        assert_eq!(byte_intervals[0].index(), 0);
+        assert_eq!(byte_intervals[0].source_interval_index(), 0);
+        assert_eq!(byte_intervals[0].text_preview(), "銀河");
+        assert_eq!(byte_intervals[0].line_break_count(), 0);
+        assert!(byte_intervals[0].source_start() < byte_intervals[0].source_end());
+        assert!(byte_intervals[0].source_start() >= byte_candidate.source_start());
+        assert!(byte_intervals[0].source_end() <= byte_candidate.source_end());
+        assert_eq!(byte_intervals[1].index(), 1);
+        assert_eq!(byte_intervals[1].source_interval_index(), 1);
+        assert_eq!(byte_intervals[1].text_preview(), "鉄道");
+        assert_eq!(byte_intervals[1].line_break_count(), 0);
+        assert!(byte_intervals[1].source_start() < byte_intervals[1].source_end());
+        assert!(byte_intervals[1].source_start() >= byte_candidate.source_start());
+        assert!(byte_intervals[1].source_end() <= byte_candidate.source_end());
+
+        let unit_intervals = unit_candidate.intervals();
+        assert_eq!(unit_intervals.len(), 2);
+        assert_eq!(unit_intervals[0].source_interval_index(), 0);
+        assert_eq!(unit_intervals[0].text_preview(), "銀河");
+        assert_eq!(unit_intervals[1].source_interval_index(), 1);
+        assert_eq!(unit_intervals[1].text_preview(), "鉄道");
+
+        let core = DocumentCore::from_document(document);
+        let info = core.get_document_info();
+        assert!(info.contains("\"tableCandidateCount\":2"));
+        assert!(info.contains("\"tableCandidates\":[{\"index\":0"));
+        assert!(info.contains("\"kind\":\"multiIntervalControlRangeTableCandidate\""));
+        assert!(info.contains("\"textBoundaryCandidateIndex\":0"));
+        assert!(info.contains("\"intervalCount\":2"));
+        assert!(info.contains("\"intervals\":[{\"index\":0"));
+        assert!(info.contains("\"sourceIntervalIndex\":0"));
+        assert!(info.contains("\"textPreview\":\"銀河\""));
+        assert!(info.contains("\"textPreview\":\"鉄道\""));
+        assert!(info.contains("\"lineBreakCount\":0"));
+        assert!(
+            info.contains(
+                "\"rule\":\"control-delimited-text-count-range-with-multiple-intervals\""
+            )
+        );
+        assert_eq!(
+            core.get_table_dimensions(0, 0, 0).unwrap(),
+            "{\"rowCount\":0,\"colCount\":0,\"cellCount\":0}"
+        );
+
+        let warnings = core.get_validation_warnings();
+        assert!(warnings.contains("\"JTD table candidate preserved as diagnostic data\":2"));
+        assert!(warnings.contains("\"kind\":\"JtdTableCandidateDiagnosticOnly\""));
     }
 
     #[test]
