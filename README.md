@@ -1,13 +1,13 @@
 # OpenJTD
 
-An open-source project for building a JTD editor for Ichitaro document formats
+Open-source JTD rendering engine and editor project for Ichitaro documents
 (`.jtd`, `.jtt`, and `.jttc`).
 
-OpenJTD's final goal is an open-source JTD editor. The current phase focuses on
-`rjtd`, a Rust toolset that builds the components needed to get there:
-container inspection, text extraction, document modeling, export, and viewer
-integration. The longer-term technical milestone is a practical JTD engine that
-can support editing.
+OpenJTD aims to become an open-source JTD rendering engine and editor. The
+current phase focuses on `rjtd`, a Rust toolset that builds the components
+needed to get there: container inspection, text extraction, document modeling,
+export, and viewer integration. The longer-term technical milestone is a
+practical JTD engine that can support faithful layout rendering and editing.
 
 ## Current rjtd Components
 
@@ -63,7 +63,7 @@ OpenJTD's repository layout and engine boundaries take inspiration from the
 ## Project Status
 
 OpenJTD is in the reverse-engineering and component-building stage. It is not
-yet a JTD editor or complete Ichitaro renderer, and the `rjtd` APIs, data model,
+yet a complete JTD rendering engine or editor, and the `rjtd` APIs, data model,
 and diagnostic commands may still change.
 
 Text extraction works for observed files, but full paragraph semantics, layout

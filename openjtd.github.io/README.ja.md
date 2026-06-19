@@ -1,3 +1,4 @@
 # openjtd.github.io
 
-OpenJTD project website と public documentation portal を管理する場所である。
+一太郎文書向けのオープンソース JTD レンダリングエンジン兼エディタプロジェクト、
+OpenJTD の website を管理する場所である。

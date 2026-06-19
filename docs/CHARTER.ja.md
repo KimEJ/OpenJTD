@@ -1,20 +1,20 @@
 # OpenJTD Project Charter
 
-Open-source JTD Editor and Rust-based Ichitaro Document Engine
+Open-source JTD Rendering Engine and Editor Project for Ichitaro Documents
 
 Open Infrastructure for Ichitaro Documents
 
 ## Vision
 
 OpenJTD は、日本のワードプロセッサ「一太郎 (Ichitaro)」で使われる JTD 文書形式の
-エディタを作るためのオープンソースプロジェクトである。
+オープンソース JTD レンダリングエンジン兼エディタプロジェクトである。
 
 このプロジェクトは単なるファイル変換器ではない。
 
-最終目標は、オープンソースの JTD エディタを作ることです。現在の実装の中心は、
-解析、parser、document modeling、export、viewer integration を担う Rust ツール群
-`rjtd` である。長期的な技術目標は、編集機能を支えられる実用的な JTD エンジンを
-作ることである。
+最終目標は、オープンソースの JTD レンダリングエンジン兼エディタを作ることである。
+現在の実装の中心は、解析、parser、document modeling、export、viewer integration を
+担う Rust ツール群 `rjtd` である。長期的な技術目標は、忠実なレイアウト描画と編集
+機能を支えられる実用的な JTD エンジンを作ることである。
 
 ## Foundational Principle
 
