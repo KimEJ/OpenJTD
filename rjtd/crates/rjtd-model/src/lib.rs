@@ -318,6 +318,26 @@ const APP_WRAP_COLUMNS: usize = 82;
 const APP_SOURCE_FORMAT: &str = "jtd";
 const APP_DEFAULT_DPI: f64 = 96.0;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WritingMode {
+    #[default]
+    Horizontal,
+    VerticalRl,
+}
+
+impl WritingMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Horizontal => "horizontal",
+            Self::VerticalRl => "vertical-rl",
+        }
+    }
+
+    fn is_vertical(self) -> bool {
+        matches!(self, Self::VerticalRl)
+    }
+}
+
 /// Application-facing document core, shaped after rhwp's `DocumentCore`.
 ///
 /// rjtd does not yet have a full Ichitaro layout engine. This facade keeps the
@@ -333,6 +353,7 @@ pub struct DocumentCore {
     show_control_codes: bool,
     show_transparent_borders: bool,
     clip_enabled: bool,
+    writing_mode: WritingMode,
     next_snapshot_id: u32,
     snapshots: Vec<DocumentSnapshot>,
     caret_section: u32,
@@ -392,6 +413,7 @@ struct DocumentSnapshot {
     show_control_codes: bool,
     show_transparent_borders: bool,
     clip_enabled: bool,
+    writing_mode: WritingMode,
     caret_section: u32,
     caret_paragraph: u32,
     caret_char_offset: u32,
@@ -410,6 +432,7 @@ impl DocumentSnapshot {
             show_control_codes: core.show_control_codes,
             show_transparent_borders: core.show_transparent_borders,
             clip_enabled: core.clip_enabled,
+            writing_mode: core.writing_mode,
             caret_section: core.caret_section,
             caret_paragraph: core.caret_paragraph,
             caret_char_offset: core.caret_char_offset,
@@ -434,6 +457,7 @@ impl DocumentCore {
             show_control_codes: false,
             show_transparent_borders: false,
             clip_enabled: true,
+            writing_mode: WritingMode::Horizontal,
             next_snapshot_id: 1,
             snapshots: Vec::new(),
             caret_section: 0,
@@ -458,10 +482,11 @@ impl DocumentCore {
     pub fn get_document_info(&self) -> String {
         let style_candidates = text_style_candidates(self.document.unknown_styles());
         format!(
-            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":\"Hiragino Sans\",\"fontsUsed\":[\"Hiragino Sans\"],\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{}}}",
+            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":\"Hiragino Sans\",\"fontsUsed\":[\"Hiragino Sans\"],\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{}}}",
             APP_SOURCE_FORMAT,
             json_string(&self.file_name),
             self.page_count(),
+            self.writing_mode.as_str(),
             self.document.blocks().len(),
             self.document.raw_streams().len(),
             self.document.unknown_styles().len(),
@@ -505,6 +530,14 @@ impl DocumentCore {
         if dpi.is_finite() && dpi > 0.0 {
             self.dpi = dpi;
         }
+    }
+
+    pub fn writing_mode(&self) -> WritingMode {
+        self.writing_mode
+    }
+
+    pub fn set_writing_mode(&mut self, writing_mode: WritingMode) {
+        self.writing_mode = writing_mode;
     }
 
     pub fn get_page_def(&self, section_idx: u32) -> Result<String> {
@@ -3633,6 +3666,7 @@ impl DocumentCore {
         self.show_control_codes = snapshot.show_control_codes;
         self.show_transparent_borders = snapshot.show_transparent_borders;
         self.clip_enabled = snapshot.clip_enabled;
+        self.writing_mode = snapshot.writing_mode;
         self.caret_section = snapshot.caret_section;
         self.caret_paragraph = snapshot.caret_paragraph;
         self.caret_char_offset = snapshot.caret_char_offset;
@@ -4878,6 +4912,7 @@ impl DocumentCore {
             lines,
             index + 1,
             self.page_count() as usize,
+            self.writing_mode,
         ))
     }
 
@@ -10898,8 +10933,9 @@ fn push_object_image_signature_hits_json(output: &mut String, hits: &[ObjectImag
 
 fn page_layer_tree_json(core: &DocumentCore, lines: &[PageTextLine], profile: &str) -> String {
     let mut output = format!(
-        "{{\"schemaVersion\":1,\"schemaMinorVersion\":0,\"schema\":{{\"major\":1,\"minor\":0}},\"resourceTableVersion\":1,\"resourceTableMinorVersion\":0,\"resourceTable\":{{\"major\":1,\"minor\":0}},\"unit\":\"px\",\"coordinateSystem\":\"page\",\"profile\":{},\"outputOptions\":{{\"showParagraphMarks\":{},\"showControlCodes\":{},\"showTransparentBorders\":{},\"clipEnabled\":{},\"debugOverlay\":false}},\"pageWidth\":{:.1},\"pageHeight\":{:.1},\"root\":{{\"kind\":\"leaf\",\"bounds\":{{\"x\":0.0,\"y\":0.0,\"width\":{:.1},\"height\":{:.1}}},\"ops\":[",
+        "{{\"schemaVersion\":1,\"schemaMinorVersion\":0,\"schema\":{{\"major\":1,\"minor\":0}},\"resourceTableVersion\":1,\"resourceTableMinorVersion\":0,\"resourceTable\":{{\"major\":1,\"minor\":0}},\"unit\":\"px\",\"coordinateSystem\":\"page\",\"profile\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"outputOptions\":{{\"showParagraphMarks\":{},\"showControlCodes\":{},\"showTransparentBorders\":{},\"clipEnabled\":{},\"debugOverlay\":false}},\"pageWidth\":{:.1},\"pageHeight\":{:.1},\"root\":{{\"kind\":\"leaf\",\"bounds\":{{\"x\":0.0,\"y\":0.0,\"width\":{:.1},\"height\":{:.1}}},\"ops\":[",
         json_string(profile),
+        core.writing_mode.as_str(),
         core.show_paragraph_marks,
         core.show_control_codes,
         core.show_transparent_borders,
@@ -10918,9 +10954,23 @@ fn page_layer_tree_json(core: &DocumentCore, lines: &[PageTextLine], profile: &s
             continue;
         }
 
-        let y = APP_PAGE_MARGIN_PX as f64 + line_index as f64 * APP_LINE_HEIGHT_PX as f64;
-        let baseline = y + APP_FONT_SIZE_PX as f64;
-        let mut x = APP_PAGE_MARGIN_PX as f64;
+        let mut x = if core.writing_mode.is_vertical() {
+            APP_PAGE_WIDTH_PX as f64
+                - APP_PAGE_MARGIN_PX as f64
+                - ((line_index + 1) as f64 * APP_LINE_HEIGHT_PX as f64)
+        } else {
+            APP_PAGE_MARGIN_PX as f64
+        };
+        let mut y = if core.writing_mode.is_vertical() {
+            APP_PAGE_MARGIN_PX as f64
+        } else {
+            APP_PAGE_MARGIN_PX as f64 + line_index as f64 * APP_LINE_HEIGHT_PX as f64
+        };
+        let baseline = if core.writing_mode.is_vertical() {
+            x + APP_FONT_SIZE_PX as f64
+        } else {
+            y + APP_FONT_SIZE_PX as f64
+        };
 
         for fragment in page_text_line_fragments(&core.document, line) {
             if fragment.text.is_empty() {
@@ -10932,9 +10982,21 @@ fn page_layer_tree_json(core: &DocumentCore, lines: &[PageTextLine], profile: &s
                 output.push(',');
             }
             first_op = false;
-            push_page_layer_text_run_json(&mut output, source_id, x, y, baseline, &fragment);
+            push_page_layer_text_run_json(
+                &mut output,
+                source_id,
+                x,
+                y,
+                baseline,
+                core.writing_mode,
+                &fragment,
+            );
             push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
-            x += text_width_px(&fragment.text);
+            if core.writing_mode.is_vertical() {
+                y += text_width_px(&fragment.text);
+            } else {
+                x += text_width_px(&fragment.text);
+            }
         }
     }
 
@@ -11007,13 +11069,17 @@ fn push_page_layer_text_run_json(
     x: f64,
     y: f64,
     baseline: f64,
+    writing_mode: WritingMode,
     fragment: &PageLayerTextFragment,
 ) {
-    let width = text_width_px(&fragment.text);
+    let (width, height) = if writing_mode.is_vertical() {
+        (APP_LINE_HEIGHT_PX as f64, text_width_px(&fragment.text))
+    } else {
+        (text_width_px(&fragment.text), APP_LINE_HEIGHT_PX as f64)
+    };
     output.push_str("{\"type\":\"textRun\",\"bbox\":");
     output.push_str(&format!(
-        "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{:.3}}}",
-        APP_LINE_HEIGHT_PX
+        "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{height:.3}}}"
     ));
     output.push_str(",\"text\":");
     output.push_str(&json_string(&fragment.text));
@@ -11022,7 +11088,9 @@ fn push_page_layer_text_run_json(
         output.push_str(&source_range_json(fragment.char_start, fragment.char_end));
     }
     output.push_str(&format!(
-        ",\"baseline\":{baseline:.3},\"rotation\":0.000,\"isVertical\":false,\"orientation\":\"horizontal\",\"projectionKind\":\"fallback\",\"source\":"
+        ",\"baseline\":{baseline:.3},\"rotation\":0.000,\"isVertical\":{},\"orientation\":\"{}\",\"projectionKind\":\"fallback\",\"source\":",
+        writing_mode.is_vertical(),
+        writing_mode.as_str()
     ));
     push_page_layer_source_span_json(output, source_id, fragment);
     output.push_str(",\"positions\":");
@@ -11216,26 +11284,44 @@ fn push_f64_array_json(output: &mut String, values: &[f64]) {
     output.push(']');
 }
 
-fn render_text_page_svg(lines: &[PageTextLine], page_number: usize, page_count: usize) -> String {
+fn render_text_page_svg(
+    lines: &[PageTextLine],
+    page_number: usize,
+    page_count: usize,
+    writing_mode: WritingMode,
+) -> String {
     let mut svg = String::new();
     svg.push_str(&format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{APP_PAGE_WIDTH_PX}\" height=\"{APP_PAGE_HEIGHT_PX}\" viewBox=\"0 0 {APP_PAGE_WIDTH_PX} {APP_PAGE_HEIGHT_PX}\">"
     ));
     svg.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>");
-    svg.push_str(&format!(
-        "<text x=\"{APP_PAGE_MARGIN_PX}\" y=\"{}\" font-family=\"Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, Noto Sans CJK JP, sans-serif\" font-size=\"{APP_FONT_SIZE_PX}\" fill=\"#111111\" letter-spacing=\"0\">",
-        APP_PAGE_MARGIN_PX + APP_FONT_SIZE_PX
-    ));
 
-    for (index, line) in lines.iter().enumerate() {
-        let y = APP_PAGE_MARGIN_PX + APP_FONT_SIZE_PX + (index as f32 * APP_LINE_HEIGHT_PX);
+    if writing_mode.is_vertical() {
+        svg.push_str("<g writing-mode=\"vertical-rl\" glyph-orientation-vertical=\"auto\">");
+        for (index, line) in lines.iter().enumerate() {
+            let x = APP_PAGE_WIDTH_PX - APP_PAGE_MARGIN_PX - (index as f32 * APP_LINE_HEIGHT_PX);
+            svg.push_str(&format!(
+                "<text x=\"{x}\" y=\"{APP_PAGE_MARGIN_PX}\" font-family=\"Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, Noto Sans CJK JP, sans-serif\" font-size=\"{APP_FONT_SIZE_PX}\" fill=\"#111111\" letter-spacing=\"0\" writing-mode=\"vertical-rl\">{}</text>",
+                escape_xml(line.text())
+            ));
+        }
+        svg.push_str("</g>");
+    } else {
         svg.push_str(&format!(
-            "<tspan x=\"{APP_PAGE_MARGIN_PX}\" y=\"{y}\">{}</tspan>",
-            escape_xml(line.text())
+            "<text x=\"{APP_PAGE_MARGIN_PX}\" y=\"{}\" font-family=\"Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, Noto Sans CJK JP, sans-serif\" font-size=\"{APP_FONT_SIZE_PX}\" fill=\"#111111\" letter-spacing=\"0\">",
+            APP_PAGE_MARGIN_PX + APP_FONT_SIZE_PX
         ));
-    }
 
-    svg.push_str("</text>");
+        for (index, line) in lines.iter().enumerate() {
+            let y = APP_PAGE_MARGIN_PX + APP_FONT_SIZE_PX + (index as f32 * APP_LINE_HEIGHT_PX);
+            svg.push_str(&format!(
+                "<tspan x=\"{APP_PAGE_MARGIN_PX}\" y=\"{y}\">{}</tspan>",
+                escape_xml(line.text())
+            ));
+        }
+
+        svg.push_str("</text>");
+    }
     svg.push_str(&format!(
         "<text x=\"{}\" y=\"{}\" text-anchor=\"end\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#777777\" letter-spacing=\"0\">{}/{}</text>",
         APP_PAGE_WIDTH_PX - APP_PAGE_MARGIN_PX,
@@ -11330,6 +11416,8 @@ mod tests {
         assert!(document_info.contains("\"sourceFormat\":\"jtd\""));
         assert!(document_info.contains("\"fileName\":\"sample.jtd\""));
         assert!(document_info.contains("\"sectionCount\":1"));
+        assert!(document_info.contains("\"writingMode\":\"horizontal\""));
+        assert!(document_info.contains("\"writingModeDecoded\":false"));
         assert!(document_info.contains("\"textControlBoundaryCount\":0"));
         assert!(document_info.contains("\"textControlBoundaries\":[]"));
 
@@ -11364,6 +11452,8 @@ mod tests {
         let layer_tree = core.get_page_layer_tree(0).unwrap();
         assert!(layer_tree.contains("\"schema\":{\"major\":1,\"minor\":0}"));
         assert!(layer_tree.contains("\"resourceTable\":{\"major\":1,\"minor\":0}"));
+        assert!(layer_tree.contains("\"writingMode\":\"horizontal\""));
+        assert!(layer_tree.contains("\"writingModeDecoded\":false"));
         assert!(layer_tree.contains("\"outputOptions\":{"));
         assert!(layer_tree.contains("\"showParagraphMarks\":true"));
         assert!(layer_tree.contains("\"showControlCodes\":true"));
@@ -11374,6 +11464,8 @@ mod tests {
         assert!(layer_tree.contains("\"type\":\"pageBackground\""));
         assert!(layer_tree.contains("\"backgroundColor\":\"#ffffff\""));
         assert!(layer_tree.contains("\"type\":\"textRun\""));
+        assert!(layer_tree.contains("\"isVertical\":false"));
+        assert!(layer_tree.contains("\"orientation\":\"horizontal\""));
         assert!(layer_tree.contains("\"textSources\":["));
         assert!(layer_tree.contains("\"fontResources\":{\"blobs\":[],\"faces\":[]}"));
         assert!(layer_tree.contains("\"knownFeatures\":["));
@@ -11435,6 +11527,30 @@ mod tests {
         let moved = core.move_vertical(0, 0, 0, 1, -1.0).unwrap();
         assert!(moved.contains("\"paragraphIndex\":1"));
         assert!(moved.contains("\"preferredX\":72.0"));
+    }
+
+    #[test]
+    fn document_core_projects_vertical_writing_mode_to_svg_and_layer_tree() {
+        let document = Document::from_plain_text("縦書き\n本文");
+        let mut core = DocumentCore::from_document(document);
+        core.set_writing_mode(WritingMode::VerticalRl);
+
+        assert_eq!(core.writing_mode(), WritingMode::VerticalRl);
+        assert!(
+            core.get_document_info()
+                .contains("\"writingMode\":\"vertical-rl\"")
+        );
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("writing-mode=\"vertical-rl\""));
+        assert!(svg.contains(">縦書き</text>"));
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"writingMode\":\"vertical-rl\""));
+        assert!(layer_tree.contains("\"writingModeDecoded\":false"));
+        assert!(layer_tree.contains("\"isVertical\":true"));
+        assert!(layer_tree.contains("\"orientation\":\"vertical-rl\""));
+        assert!(layer_tree.contains("\"projectionKind\":\"fallback\""));
     }
 
     #[test]
@@ -12078,6 +12194,7 @@ mod tests {
         let mut core = DocumentCore::from_document(document);
         core.set_file_name("sample.jtd");
         core.set_dpi(120.0);
+        core.set_writing_mode(WritingMode::VerticalRl);
         core.copy_selection(0, 0, 0, 0, 2).unwrap();
 
         let snapshot_id = core.save_snapshot();
@@ -12086,6 +12203,7 @@ mod tests {
         core.insert_text(0, 0, 4, "の夜").unwrap();
         core.set_file_name("edited.jtd");
         core.set_dpi(144.0);
+        core.set_writing_mode(WritingMode::Horizontal);
         core.set_show_control_codes(true);
         core.set_show_transparent_borders(true);
         core.clear_clipboard();
@@ -12096,6 +12214,7 @@ mod tests {
         assert_eq!(core.get_text_range(0, 0, 0, 10).unwrap(), "銀河鉄道");
         assert_eq!(core.file_name(), "sample.jtd");
         assert_eq!(core.get_dpi(), 120.0);
+        assert_eq!(core.writing_mode(), WritingMode::VerticalRl);
         assert_eq!(core.get_clipboard_text(), "銀河");
         assert!(!core.get_show_control_codes());
         assert!(!core.get_show_transparent_borders());

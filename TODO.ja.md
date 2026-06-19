@@ -271,6 +271,7 @@ Completed:
 - [x] app-core `getPageLayerTree` から fallback `textRun` ops と rhwp-shaped `textSources`/`source` span を expose し、可能な場合は JTD byte/unit source range も含める。
 - [x] `getPageLayerTree` に fallback `pageBackground` paint op を追加し、layer/replay order を rhwp の background-to-flow model に合わせる。
 - [x] `schema`、`resourceTable`、`outputOptions`、`fontResources`、feature lists、fallback `textV2` diagnostics など rhwp-shaped layer tree envelope metadata を追加する。
+- [x] model-owned fallback `WritingMode` path を追加し、`DocumentCore`、SVG page rendering、`getPageLayerTree` が exporter から raw style streams を読まずに `horizontal` と `vertical-rl` を project できるようにする。
 - [x] conditional `rjtd-export` local-sample PDF smoke test を追加し、available local `.jtd`、`.jtt`、`.jttc` samples をすべて parse/export して PDF header、page marker、EOF marker、minimum size を確認する。
 - [x] app-core `getValidationWarnings` が empty report 固定ではなく、rhwp-shaped JTD fallback/preservation diagnostics を report するようにする。
 - [x] `/DocumentText` control boundary codes を decoded-false `textControlBoundaries` model/export/app-core metadata として保存し、可能な場合は byte/unit source span を attach する。

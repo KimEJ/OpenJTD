@@ -285,6 +285,7 @@ Completed:
 - [x] Add WASM `getCursorRect`, `hitTest`, `getLineInfo`, `moveVertical`, and explicit no-hit header/footer/footnote fallback APIs.
 - [x] Add minimal body-text editing APIs to `DocumentCore` and `rjtd-wasm`: `insertText`, `deleteText`, `splitParagraph`, `mergeParagraph`, `getTextRange`, `getParagraphLength`, and `getParagraphCount`.
 - [x] Ensure fallback pages are rebuilt after body-text edits so PDF/SVG/canvas/cursor APIs observe the edited model.
+- [x] Add a model-owned fallback `WritingMode` path so `DocumentCore`, SVG page rendering, and `getPageLayerTree` can project `horizontal` or `vertical-rl` without exporters reading raw style streams.
 - [x] Add rhwp-shaped no-op page/section/page-border setters until JTD page setting streams are decoded.
 - [x] Add fallback character/paragraph/style APIs for rhwp Studio formatting panels: default char properties, default paragraph properties, a single `Normal` style, empty numbering/bullet lists, and no-op format/style application.
 - [x] Add body selection and plain-text internal clipboard APIs: `getSelectionRects`, `deleteRange`, `copySelection`, `pasteInternal`, `hasInternalClipboard`, `getClipboardText`, and `clipboardHasControl`.
@@ -336,6 +337,7 @@ Remaining:
 - [ ] Add fixture-based expected JSON outputs once redistributable samples are available.
 - [ ] Convert decompressed `.jttc` template text/control placeholders into meaningful model blocks once the inner `DocumentText` structure is understood.
 - [ ] Replace the current text-only PDF/SVG layout with a real Ichitaro layout renderer once page geometry, tables, images, and style streams are decoded.
+- [ ] Decode Ichitaro vertical-writing flags from style/layout streams and set model `WritingMode` from parsed evidence instead of the current fallback default.
 - [ ] Implement real canvas/layer paint operations in the app compatibility layer once the renderer can emit non-text visual primitives.
 - [ ] Replace fallback cursor/hit-test geometry with real JTD layout geometry after `/LineMark`, `/PageMark`, `/PaperMark`, style, and object semantics are proven.
 - [ ] Replace text-flattening body edit fallback with structure-preserving edits once true JTD paragraph records, inline controls, and styles are decoded.
