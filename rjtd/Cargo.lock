@@ -532,6 +532,7 @@ name = "rjtd-cli"
 version = "0.0.0"
 dependencies = [
  "cfb",
+ "image",
  "rjtd-core",
  "rjtd-export",
  "rjtd-model",
@@ -548,6 +549,7 @@ dependencies = [
 name = "rjtd-export"
 version = "0.0.0"
 dependencies = [
+ "image",
  "pdf-writer",
  "rjtd-core",
  "rjtd-model",
@@ -559,6 +561,7 @@ dependencies = [
 name = "rjtd-model"
 version = "0.0.0"
 dependencies = [
+ "base64",
  "cfb",
  "image",
  "rjtd-core",
@@ -575,6 +578,7 @@ dependencies = [
 name = "rjtd-wasm"
 version = "0.0.0"
 dependencies = [
+ "image",
  "rjtd-core",
  "rjtd-model",
  "wasm-bindgen",

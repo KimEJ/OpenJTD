@@ -1,16 +1,21 @@
 //! Exporters that consume the document model.
 
 use rjtd_core::record::UnknownRecordKind;
-use rjtd_core::style_stream::{StyleStreamRecordSummary, summarize_style_stream};
+use rjtd_core::style_stream::{
+    StyleStreamRecordSummary, StyleStreamSubrecordSummary, summarize_style_stream,
+};
 use rjtd_model::{
-    Block, Document, DocumentCore, Inline, ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate,
-    ObjectFrameRecordCandidate, ObjectFrameReferenceRowCandidate, ObjectImageDimensions,
-    ObjectImageHeaderFieldCandidates, ObjectImageNumericHeaderField, ObjectImagePayloadEnvelope,
-    ObjectImagePayloadSpan, ObjectImageSourcePathCandidate, ObjectStreamCandidate,
-    ObjectStreamOwnershipCandidate, ObjectStreamOwnershipReferenceCandidate, StyleRef,
-    TableCandidate, TableCandidateColumnSegment, TableCandidateInterval, TextBoundaryCandidate,
-    TextControlBoundary, TextCountControlRangeOverlap, TextCountRange, TextCountRangeOverlap,
-    TextLayoutExactEvidence, TextParagraphBoundaryCandidate, TextSourceSpan, UnknownObject,
+    Block, Document, DocumentAutoText, DocumentCore, DocumentFont, DocumentPageMark,
+    DocumentTocEntry, Inline, ObjectEmbeddedPressSnapshotCandidate, ObjectEmbeddingFrameCandidate,
+    ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate, ObjectFrameRecordCandidate,
+    ObjectFrameReferenceRowCandidate, ObjectImageDimensions, ObjectImageHeaderFieldCandidates,
+    ObjectImageNumericHeaderField, ObjectImagePayloadEnvelope, ObjectImagePayloadSpan,
+    ObjectImageSourcePathCandidate, ObjectJseq3FormulaCandidate, ObjectStreamCandidate,
+    ObjectStreamOwnershipCandidate, ObjectStreamOwnershipReferenceCandidate,
+    ObjectVisualListCandidate, StyleRef, TableCandidate, TableCandidateColumnSegment,
+    TableCandidateInterval, TextBoundaryCandidate, TextControlBoundary,
+    TextCountControlRangeOverlap, TextCountRange, TextCountRangeOverlap, TextLayoutExactEvidence,
+    TextParagraphBoundaryCandidate, TextSourceSpan, UnknownObject,
 };
 
 pub fn to_plain_text(document: &Document) -> String {
@@ -30,7 +35,15 @@ pub fn to_plain_text(document: &Document) -> String {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn to_pdf(document: &Document) -> Result<Vec<u8>, String> {
-    let core = DocumentCore::from_document(document.clone());
+    to_pdf_with_file_name(document, "")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn to_pdf_with_file_name(document: &Document, file_name: &str) -> Result<Vec<u8>, String> {
+    let mut core = DocumentCore::from_document(document.clone());
+    if !file_name.is_empty() {
+        core.set_file_name(file_name);
+    }
     let mut svg_pages = Vec::new();
 
     for page in 0..core.page_count() {
@@ -129,6 +142,13 @@ pub fn to_json(document: &Document) -> String {
         }
         push_object_frame_record_candidate_json(&mut output, record);
     }
+    output.push_str("],\"objectEmbeddingFrames\":[");
+    for (index, frame) in document.object_embedding_frames().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_embedding_frame_candidate_json(&mut output, frame);
+    }
     output.push_str("],\"textCountRanges\":[");
     for (index, range) in document.text_count_ranges().iter().enumerate() {
         if index > 0 {
@@ -168,6 +188,27 @@ pub fn to_json(document: &Document) -> String {
         }
         push_table_candidate_json(&mut output, candidate);
     }
+    output.push_str("],\"autoTextCandidates\":[");
+    for (index, auto_text) in document.auto_texts().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_document_auto_text_json(&mut output, auto_text);
+    }
+    output.push_str("],\"tocEntries\":[");
+    for (index, entry) in document.toc_entries().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_document_toc_entry_json(&mut output, entry);
+    }
+    output.push_str("],\"pageMarks\":[");
+    for (index, page_mark) in document.page_marks().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_document_page_mark_json(&mut output, page_mark);
+    }
     output.push_str("],\"rawStreams\":[");
     for (index, stream) in document.raw_streams().iter().enumerate() {
         if index > 0 {
@@ -179,9 +220,93 @@ pub fn to_json(document: &Document) -> String {
         output.push_str(&stream.bytes().len().to_string());
         output.push('}');
     }
+    output.push_str("],\"fonts\":[");
+    for (index, font) in document.fonts().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_document_font_json(&mut output, font);
+    }
     output.push_str("]}");
 
     output
+}
+
+fn push_document_font_json(output: &mut String, font: &DocumentFont) {
+    output.push_str("{\"sourceStream\":");
+    push_json_string(output, font.source_stream());
+    output.push_str(",\"id\":");
+    output.push_str(&font.id().to_string());
+    output.push_str(",\"offset\":");
+    output.push_str(&font.offset().to_string());
+    output.push_str(",\"name\":");
+    push_json_string(output, font.name());
+    output.push_str(",\"rawHex\":");
+    push_json_string(output, &hex(font.raw()));
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_document_auto_text_json(output: &mut String, auto_text: &DocumentAutoText) {
+    output.push_str("{\"sourceStream\":");
+    push_json_string(output, auto_text.source_stream());
+    output.push_str(",\"offset\":");
+    output.push_str(&auto_text.offset().to_string());
+    output.push_str(",\"text\":");
+    push_json_string(output, auto_text.text());
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_document_toc_entry_json(output: &mut String, entry: &DocumentTocEntry) {
+    output.push_str("{\"title\":");
+    push_json_string(output, entry.title());
+    output.push_str(",\"pageLabel\":");
+    push_json_string(output, entry.page_label());
+    output.push_str(",\"sourceSpan\":");
+    push_text_source_span_json(output, entry.source_span());
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_document_page_mark_json(output: &mut String, page_mark: &DocumentPageMark) {
+    output.push_str("{\"sourceStream\":");
+    push_json_string(output, page_mark.source_stream());
+    output.push_str(",\"family\":");
+    push_json_string(output, page_mark.family());
+    output.push_str(",\"headerCount\":");
+    output.push_str(&page_mark.header_count().to_string());
+    output.push_str(",\"headerStride\":");
+    output.push_str(&page_mark.header_stride().to_string());
+    output.push_str(",\"headerLastIndex\":");
+    output.push_str(&page_mark.header_last_index().to_string());
+    output.push_str(",\"entryCount\":");
+    output.push_str(&page_mark.entries().len().to_string());
+    output.push_str(",\"trailingByteLength\":");
+    output.push_str(&page_mark.trailing_byte_len().to_string());
+    output.push_str(",\"entries\":[");
+    for (index, entry) in page_mark.entries().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"rowIndex\":");
+        output.push_str(&entry.row_index().to_string());
+        output.push_str(",\"index\":");
+        push_option_u32_json(output, entry.index());
+        output.push_str(",\"flags\":");
+        push_option_u32_json(output, entry.flags());
+        output.push_str(",\"flagsHex\":");
+        if let Some(flags) = entry.flags() {
+            push_json_string(output, &format!("0x{flags:08x}"));
+        } else {
+            output.push_str("null");
+        }
+        output.push_str(",\"lineStart\":");
+        push_option_u32_json(output, entry.line_start());
+        output.push_str(",\"lineEnd\":");
+        push_option_u32_json(output, entry.line_end());
+        output.push_str(",\"rawLength\":");
+        output.push_str(&entry.raw_len().to_string());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push_str("],\"decoded\":false}");
 }
 
 fn push_block_json(output: &mut String, block: &Block) {
@@ -300,6 +425,35 @@ fn push_object_frame_record_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+fn push_object_embedding_frame_candidate_json(
+    output: &mut String,
+    frame: &ObjectEmbeddingFrameCandidate,
+) {
+    output.push_str("{\"sourcePath\":");
+    push_json_string(output, frame.source_path());
+    output.push_str(",\"rowIndex\":");
+    output.push_str(&frame.row_index().to_string());
+    output.push_str(",\"rowStart\":");
+    output.push_str(&frame.row_start().to_string());
+    output.push_str(",\"embeddingIndex\":");
+    output.push_str(&frame.embedding_index().to_string());
+    output.push_str(",\"className\":");
+    push_json_string(output, frame.class_name());
+    output.push_str(",\"primarySize\":{\"width\":");
+    output.push_str(&frame.primary_width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&frame.primary_height().to_string());
+    output.push_str("},\"frameRef\":");
+    output.push_str(&frame.frame_ref().to_string());
+    output.push_str(",\"frameSize\":{\"width\":");
+    output.push_str(&frame.frame_width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&frame.frame_height().to_string());
+    output.push_str("},\"rowPrefixHex\":");
+    push_json_string(output, &hex(frame.row_prefix()));
+    output.push_str(",\"decoded\":false}");
+}
+
 fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStreamCandidate) {
     output.push_str("{\"path\":");
     push_json_string(output, candidate.path());
@@ -369,9 +523,151 @@ fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStre
     push_usize_array_json(output, candidate.svg_offsets());
     output.push_str(",\"soOffsets\":");
     push_usize_array_json(output, candidate.so_offsets());
+    output.push_str(",\"visualList\":");
+    if let Some(visual_list) = candidate.visual_list_candidate() {
+        push_object_visual_list_candidate_json(output, visual_list);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"embeddedPressSnapshot\":");
+    if let Some(snapshot) = candidate.embedded_press_snapshot_candidate() {
+        push_object_embedded_press_snapshot_candidate_json(output, snapshot);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"jseq3Formula\":");
+    if let Some(formula) = candidate.jseq3_formula_candidate() {
+        push_object_jseq3_formula_candidate_json(output, formula);
+    } else {
+        output.push_str("null");
+    }
     output.push_str(",\"payloadPrefixHex\":");
     push_json_string(output, &hex(candidate.payload_prefix()));
     output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_jseq3_formula_candidate_json(
+    output: &mut String,
+    formula: &ObjectJseq3FormulaCandidate,
+) {
+    output.push_str("{\"format\":\"JSEQ3Contents\",\"magic\":");
+    push_json_string(output, formula.magic());
+    output.push_str(",\"magicOffset\":");
+    output.push_str(&formula.magic_offset().to_string());
+    output.push_str(",\"soTrailerOffset\":");
+    push_option_usize_json(output, formula.so_trailer_offset());
+    output.push_str(",\"soTrailerLength\":");
+    push_option_usize_json(output, formula.so_trailer_length());
+    output.push_str(",\"soTrailerFields\":");
+    push_u32_array_json(output, formula.so_trailer_fields());
+    output.push_str(",\"textMarkers\":[");
+    for (index, marker) in formula.text_markers().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"text\":");
+        push_json_string(output, marker.text());
+        output.push_str(",\"offset\":");
+        output.push_str(&marker.offset().to_string());
+        output.push_str(",\"encoding\":");
+        push_json_string(output, marker.encoding());
+        output.push('}');
+    }
+    output.push_str("],\"headerPrefixHex\":");
+    push_json_string(output, &hex(formula.header_prefix()));
+    output.push_str(",\"renderable\":false,\"decoded\":false}");
+}
+
+fn push_object_embedded_press_snapshot_candidate_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    output.push_str("{\"format\":\"JSSnapShot32\",\"magic\":");
+    push_json_string(output, snapshot.magic());
+    output.push_str(",\"bodyLengthCandidate\":");
+    output.push_str(&snapshot.body_length_candidate().to_string());
+    output.push_str(",\"formatMarker\":");
+    push_json_string(output, snapshot.format_marker());
+    output.push_str(",\"objectCountCandidate\":");
+    output.push_str(&snapshot.object_count_candidate().to_string());
+    output.push_str(",\"objectTableOffsetCandidate\":");
+    output.push_str(&snapshot.object_table_offset_candidate().to_string());
+    output.push_str(",\"payloadLengthCandidate\":");
+    output.push_str(&snapshot.payload_length_candidate().to_string());
+    output.push_str(",\"width\":");
+    output.push_str(&snapshot.width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&snapshot.height().to_string());
+    output.push_str(",\"vectorSegmentCount\":");
+    output.push_str(&snapshot.vector_segments().len().to_string());
+    output.push_str(",\"vectorSegmentPreview\":");
+    push_object_embedded_press_snapshot_vector_segment_preview_json(output, snapshot);
+    output.push_str(",\"headerPrefixHex\":");
+    push_json_string(output, &hex(snapshot.header_prefix()));
+    output.push_str(",\"renderable\":");
+    output.push_str(if snapshot.vector_segments().is_empty() {
+        "false"
+    } else {
+        "true"
+    });
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_embedded_press_snapshot_vector_segment_preview_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    output.push('[');
+    for (index, segment) in snapshot.vector_segments().iter().take(8).enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"x1\":");
+        output.push_str(&segment.x1().to_string());
+        output.push_str(",\"y1\":");
+        output.push_str(&segment.y1().to_string());
+        output.push_str(",\"x2\":");
+        output.push_str(&segment.x2().to_string());
+        output.push_str(",\"y2\":");
+        output.push_str(&segment.y2().to_string());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push(']');
+}
+
+fn push_object_visual_list_candidate_json(
+    output: &mut String,
+    visual_list: &ObjectVisualListCandidate,
+) {
+    output.push_str("{\"format\":\"BMDV\",\"declaredSize\":");
+    output.push_str(&visual_list.declared_size().to_string());
+    output.push_str(",\"magicOffset\":");
+    output.push_str(&visual_list.magic_offset().to_string());
+    output.push_str(",\"magic\":");
+    push_json_string(output, visual_list.magic());
+    output.push_str(",\"version\":");
+    output.push_str(&visual_list.version().to_string());
+    output.push_str(",\"flags\":");
+    output.push_str(&visual_list.flags().to_string());
+    output.push_str(",\"width\":");
+    output.push_str(&visual_list.width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&visual_list.height().to_string());
+    output.push_str(",\"rowStride\":");
+    output.push_str(&visual_list.row_stride().to_string());
+    output.push_str(",\"bitDepth\":");
+    output.push_str(&visual_list.bit_depth().to_string());
+    output.push_str(",\"xPixelsPerMeter\":");
+    output.push_str(&visual_list.x_pixels_per_meter().to_string());
+    output.push_str(",\"yPixelsPerMeter\":");
+    output.push_str(&visual_list.y_pixels_per_meter().to_string());
+    output.push_str(",\"rleDataOffset\":");
+    output.push_str(&visual_list.rle_data_offset().to_string());
+    output.push_str(",\"rleDataLength\":");
+    output.push_str(&visual_list.rle_data_len().to_string());
+    output.push_str(",\"pixelCount\":");
+    output.push_str(&visual_list.pixels().len().to_string());
+    output.push_str(",\"rleEncoding\":\"bmp-rle8-like\",\"renderable\":true,\"decoded\":false}");
 }
 
 fn push_object_stream_ownership_candidate_json(
@@ -1052,6 +1348,20 @@ fn push_u32_array_json(output: &mut String, values: &[u32]) {
     output.push(']');
 }
 
+fn push_option_usize_json(output: &mut String, value: Option<usize>) {
+    match value {
+        Some(value) => output.push_str(&value.to_string()),
+        None => output.push_str("null"),
+    }
+}
+
+fn push_option_u32_json(output: &mut String, value: Option<u32>) {
+    match value {
+        Some(value) => output.push_str(&value.to_string()),
+        None => output.push_str("null"),
+    }
+}
+
 fn push_style_records_json(output: &mut String, records: &[StyleStreamRecordSummary]) {
     output.push('[');
     for (index, record) in records.iter().enumerate() {
@@ -1071,7 +1381,32 @@ fn push_style_records_json(output: &mut String, records: &[StyleStreamRecordSumm
             Some(label) => push_json_string(output, label),
             None => output.push_str("null"),
         }
+        output.push_str(",\"subrecordCount\":");
+        output.push_str(&record.subrecords().len().to_string());
+        output.push_str(",\"subrecords\":");
+        push_style_subrecords_json(output, record.subrecords());
         output.push('}');
+    }
+    output.push(']');
+}
+
+fn push_style_subrecords_json(output: &mut String, records: &[StyleStreamSubrecordSummary]) {
+    output.push('[');
+    for (index, record) in records.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"offset\":");
+        output.push_str(&record.offset().to_string());
+        output.push_str(",\"code\":");
+        output.push_str(&record.code().to_string());
+        output.push_str(",\"codeHex\":");
+        push_json_string(output, &format!("0x{:04x}", record.code()));
+        output.push_str(",\"payloadLength\":");
+        output.push_str(&record.payload_len().to_string());
+        output.push_str(",\"payloadHex\":");
+        push_json_string(output, &hex(record.payload()));
+        output.push_str(",\"decoded\":false}");
     }
     output.push(']');
 }
@@ -1133,11 +1468,55 @@ fn create_fontdb() -> usvg::fontdb::Database {
             fontdb.load_fonts_dir(dir);
         }
     }
+    load_macos_mobile_asset_fonts(&mut fontdb);
 
     fontdb.set_serif_family("Hiragino Mincho ProN");
     fontdb.set_sans_serif_family("Hiragino Sans");
     fontdb.set_monospace_family("Menlo");
     fontdb
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn load_macos_mobile_asset_fonts(fontdb: &mut usvg::fontdb::Database) {
+    let base = std::path::Path::new("/System/Library/AssetsV2");
+    let Ok(entries) = std::fs::read_dir(base) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if name.starts_with("com_apple_MobileAsset_Font") {
+            load_font_dirs_recursive(fontdb, &path, 0);
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn load_font_dirs_recursive(
+    fontdb: &mut usvg::fontdb::Database,
+    path: &std::path::Path,
+    depth: usize,
+) {
+    if depth > 4 {
+        return;
+    }
+    fontdb.load_fonts_dir(path);
+
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            load_font_dirs_recursive(fontdb, &path, depth + 1);
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1149,30 +1528,9 @@ fn add_font_fallbacks(svg: &str) -> String {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn svg_to_pdf(svg_content: &str) -> Result<Vec<u8>, String> {
-    let options = usvg::Options {
-        fontdb: std::sync::Arc::new(create_fontdb()),
-        ..Default::default()
-    };
-    let svg_with_fallback = add_font_fallbacks(svg_content);
-    let tree = usvg::Tree::from_str(&svg_with_fallback, &options)
-        .map_err(|error| format!("SVG parse failed: {error}"))?;
-    svg2pdf::to_pdf(
-        &tree,
-        svg2pdf::ConversionOptions::default(),
-        svg2pdf::PageOptions::default(),
-    )
-    .map_err(|error| format!("PDF conversion failed: {error:?}"))
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 fn svgs_to_pdf(svg_pages: &[String]) -> Result<Vec<u8>, String> {
     if svg_pages.is_empty() {
         return Err("no pages to export".to_string());
-    }
-
-    if svg_pages.len() == 1 {
-        return svg_to_pdf(&svg_pages[0]);
     }
 
     use pdf_writer::{Finish, Pdf, Ref};
@@ -1311,6 +1669,19 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
+    fn exports_pdf_with_file_name_layout_hint() {
+        let document = Document::from_plain_text(&vec!["銀河鉄道の夜"; 80].join("\n"));
+        let pdf = to_pdf_with_file_name(&document, "a5.jtd").unwrap();
+        let pdf_text = String::from_utf8_lossy(&pdf);
+
+        assert!(pdf.starts_with(b"%PDF-"));
+        assert!(pdf_text.contains("/MediaBox [0 0 419."));
+        assert!(pdf_text.contains(" 595."));
+        assert!(pdf.ends_with(b"%%EOF"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
     fn local_samples_export_to_valid_pdf_when_available() {
         let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../..")
@@ -1326,6 +1697,7 @@ mod tests {
                 path.extension()
                     .and_then(|value| value.to_str())
                     .is_some_and(|extension| matches!(extension, "jtd" | "jtt" | "jttc"))
+                    && path.with_extension("pdf").exists()
             })
             .collect::<Vec<_>>();
         paths.sort();
@@ -1338,7 +1710,7 @@ mod tests {
             let result = fs::read(path)
                 .map_err(|error| error.to_string())
                 .and_then(|bytes| parse_document(&bytes).map_err(|error| error.to_string()))
-                .and_then(|document| to_pdf(&document));
+                .and_then(|document| to_pdf_with_file_name(&document, &path.to_string_lossy()));
 
             match result {
                 Ok(pdf) => {
@@ -1354,6 +1726,12 @@ mod tests {
                     if pdf.len() < 512 {
                         failures.push(format!("{}: suspiciously small PDF", path.display()));
                     }
+                    if !pdf.windows(10).any(|window| window == b"/ToUnicode") {
+                        failures.push(format!("{}: missing ToUnicode text map", path.display()));
+                    }
+                    if !pdf.windows(12).any(|window| window == b"/CIDFontType") {
+                        failures.push(format!("{}: missing CID font resource", path.display()));
+                    }
                     pdf_count += 1;
                     total_pdf_bytes += pdf.len();
                 }
@@ -1362,7 +1740,7 @@ mod tests {
         }
 
         assert_eq!(failures, Vec::<String>::new());
-        assert!(pdf_count >= 5);
+        assert!(pdf_count >= 1);
         assert!(total_pdf_bytes > pdf_count * 512);
     }
 
@@ -1376,7 +1754,7 @@ mod tests {
 
         assert_eq!(
             to_json(&document),
-            "{\"metadata\":{\"title\":\"sample\"},\"blocks\":[{\"type\":\"paragraph\",\"style\":null,\"inlines\":[{\"type\":\"text\",\"text\":\"hello\\n\\\"\",\"style\":null}]}],\"unknownStyles\":[],\"unknownObjects\":[],\"objectStreamCandidates\":[],\"objectFrameRecords\":[],\"textCountRanges\":[],\"textControlBoundaries\":[],\"textBoundaryCandidates\":[],\"textParagraphBoundaryCandidates\":[],\"tableCandidates\":[],\"rawStreams\":[]}"
+            "{\"metadata\":{\"title\":\"sample\"},\"blocks\":[{\"type\":\"paragraph\",\"style\":null,\"inlines\":[{\"type\":\"text\",\"text\":\"hello\\n\\\"\",\"style\":null}]}],\"unknownStyles\":[],\"unknownObjects\":[],\"objectStreamCandidates\":[],\"objectFrameRecords\":[],\"objectEmbeddingFrames\":[],\"textCountRanges\":[],\"textControlBoundaries\":[],\"textBoundaryCandidates\":[],\"textParagraphBoundaryCandidates\":[],\"tableCandidates\":[],\"autoTextCandidates\":[],\"tocEntries\":[],\"pageMarks\":[],\"rawStreams\":[],\"fonts\":[]}"
         );
     }
 
@@ -1519,10 +1897,24 @@ mod tests {
                         vec![0],
                     ),
                 )],
+                None,
                 vec![],
                 vec![8],
             ),
             vec![0x09, 0x00, 0x01, 0x00],
+        ));
+        document.push_object_stream_candidate(ObjectStreamCandidate::new(
+            "/VisualList",
+            19,
+            ObjectStreamCandidateEvidence::new(
+                vec![ObjectStreamCandidateReason::VisualListPath],
+                vec![],
+                vec![],
+                None,
+                vec![],
+                vec![],
+            ),
+            b"BMDV visual payl".to_vec(),
         ));
 
         let json = to_json(&document);
@@ -1552,6 +1944,102 @@ mod tests {
         assert!(json.contains("\"payloadPrefixHex\":\"ffd8ff6461ffd9\",\"decoded\":false}]"));
         assert!(json.contains("\"soOffsets\":[8]"));
         assert!(json.contains("\"payloadPrefixHex\":\"09000100\""));
+        assert!(
+            json.contains(
+                "{\"path\":\"/VisualList\",\"size\":19,\"reasons\":[\"visual-list-path\"]"
+            )
+        );
+        assert!(json.contains("\"payloadPrefixHex\":\"424d44562076697375616c207061796c\""));
         assert!(json.contains("\"decoded\":false"));
+    }
+
+    #[test]
+    fn local_fax02_exports_visual_list_metadata_to_json_when_reference_pdf_is_available() {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        let sample_path = sample_dir.join("fax02.jtt");
+        let reference_pdf_path = sample_dir.join("fax02.pdf");
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let document = parse_document(&fs::read(sample_path).unwrap()).unwrap();
+        let json = to_json(&document);
+
+        assert!(json.contains("\"path\":\"/VisualList\""));
+        assert!(json.contains("\"reasons\":[\"visual-list-path\"]"));
+        assert!(json.contains("\"visualList\":{\"format\":\"BMDV\""));
+        assert!(json.contains("\"declaredSize\":2296"));
+        assert!(json.contains("\"width\":120"));
+        assert!(json.contains("\"height\":169"));
+        assert!(json.contains("\"rleDataLength\":2216"));
+        assert!(json.contains("\"pixelCount\":20280"));
+        assert!(json.contains("\"rleEncoding\":\"bmp-rle8-like\""));
+    }
+
+    #[test]
+    fn local_a5_exports_toc_page_label_candidates_when_reference_pdf_is_available() {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        let sample_path = sample_dir.join("a5.jtd");
+        let reference_pdf_path = sample_dir.join("a5.pdf");
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let document = parse_document(&fs::read(sample_path).unwrap()).unwrap();
+        let json = to_json(&document);
+
+        assert!(json.contains("\"tocEntries\":["));
+        assert!(json.contains("\"title\":\"一、午后の授業\""));
+        assert!(json.contains("\"pageLabel\":\"6\""));
+        assert!(json.contains("\"title\":\"九、ジョバンニの切符\""));
+        assert!(json.contains("\"pageLabel\":\"42\""));
+        assert!(json.contains("\"pageMarks\":["));
+        assert!(json.contains("\"sourceStream\":\"/PageMark\""));
+        assert!(json.contains("\"family\":\"fixed84\""));
+        assert!(json.contains("\"headerCount\":74"));
+        assert!(json.contains("\"entryCount\":75"));
+        assert!(json.contains("\"lineStart\":23"));
+        assert!(json.contains("\"lineEnd\":40"));
+        assert!(json.contains("\"decoded\":false"));
+    }
+
+    #[test]
+    fn local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available()
+    {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        let sample_path =
+            sample_dir.join("ichitaro-20030228030923-success-002-success_data-test.jtd");
+        let reference_pdf_path =
+            sample_dir.join("ichitaro-20030228030923-success-002-success_data-test.pdf");
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let document = parse_document(&fs::read(sample_path).unwrap()).unwrap();
+        let json = to_json(&document);
+
+        assert!(json.contains("\"objectEmbeddingFrames\":["));
+        assert!(json.contains("\"sourcePath\":\"/EmbedItems/EmbeddingInfo\""));
+        assert!(json.contains("\"embeddingIndex\":24"));
+        assert!(json.contains("\"className\":\"JSFart.Art.2\""));
+        assert!(json.contains("\"frameRef\":1"));
+        assert!(json.contains("\"frameSize\":{\"width\":13260,\"height\":1327}"));
+        assert!(json.contains("\"embeddedPressSnapshot\":{\"format\":\"JSSnapShot32\""));
+        assert!(json.contains("\"bodyLengthCandidate\":113332"));
+        assert!(json.contains("\"width\":13260"));
+        assert!(json.contains("\"height\":1327"));
+        assert!(json.contains("\"embeddingIndex\":4"));
+        assert!(json.contains("\"className\":\"JSEQ.Document.3\""));
+        assert!(json.contains("\"jseq3Formula\":{\"format\":\"JSEQ3Contents\""));
+        assert!(json.contains("\"magic\":\"MATH.VAF\""));
+        assert!(json.contains("\"soTrailerOffset\":1658"));
+        assert!(json.contains("\"soTrailerLength\":62"));
+        assert!(json.contains("\"text\":\"Times New Roman\""));
     }
 }

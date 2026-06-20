@@ -18,13 +18,13 @@ use rjtd_core::format::detect_format;
 use rjtd_core::layout_mark::{PageMark, PaperMark, read_page_mark, read_paper_mark};
 use rjtd_core::style_stream::{
     DOCUMENT_VIEW_STYLES_PATH, PAGE_LAYOUT_STYLE_PATH, StyleStreamRecordSummary,
-    TEXT_LAYOUT_STYLE_PATH, read_style_streams,
+    StyleStreamSubrecordSummary, TEXT_LAYOUT_STYLE_PATH, read_style_streams,
 };
 #[cfg(not(target_arch = "wasm32"))]
-use rjtd_export::to_pdf;
+use rjtd_export::to_pdf_with_file_name;
 use rjtd_export::{to_json, to_markdown, to_plain_text};
 use rjtd_model::{
-    ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate, ObjectFrameRecordCandidate,
+    DocumentCore, ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate, ObjectFrameRecordCandidate,
     ObjectFrameReferenceRowCandidate, ObjectImagePayloadSpan, ObjectImageSignatureHit,
     ObjectStreamCandidate as ModelObjectStreamCandidate, TableCandidate, TextBoundaryCandidate,
     TextCountRange, TextLayoutExactEvidence, parse_document,
@@ -39,6 +39,22 @@ const SO_RECORD_BYTES: usize = 36;
 const SO_RECORD_DWORDS: usize = SO_RECORD_BYTES / 4;
 const OBJECT_STREAM_PREFIX_PREVIEW_BYTES: usize = 16;
 const OBJECT_STREAM_MAX_REPORTED_HITS: usize = 6;
+const VISUAL_LIST_MAGIC_OFFSET: usize = 4;
+const VISUAL_LIST_MAGIC: &[u8; 4] = b"BMDV";
+const VISUAL_LIST_WIDTH_OFFSET: usize = 0x1c;
+const VISUAL_LIST_HEIGHT_OFFSET: usize = 0x20;
+const VISUAL_LIST_BIT_DEPTH_OFFSET: usize = 0x2c;
+const VISUAL_LIST_RLE_LENGTH_OFFSET: usize = 0x4c;
+const EMBEDDED_PRESS_SNAPSHOT_MAGIC: &[u8; 12] = b"JSSnapShot32";
+const EMBEDDED_PRESS_SNAPSHOT_BODY_LENGTH_OFFSET: usize = 0x24;
+const EMBEDDED_PRESS_SNAPSHOT_OBJECT_COUNT_OFFSET: usize = 0x34;
+const EMBEDDED_PRESS_SNAPSHOT_WIDTH_OFFSET: usize = 0x48;
+const EMBEDDED_PRESS_SNAPSHOT_HEIGHT_OFFSET: usize = 0x4c;
+const JSEQ3_CONTENTS_MAGIC_UTF16LE: &[u8; 16] = b"M\0A\0T\0H\0.\0V\0A\0F\0";
+const JSEQ3_SO_TRAILER_BYTES: usize = 64;
+const JSEQ3_SO_FIELD_BYTES: usize = 4;
+const JSEQ3_SO_FIELD_COUNT: usize = 9;
+const JSEQ3_TEXT_MARKERS: &[&str] = &["Times New Roman", "JustUnitMark", "JustOubunMark"];
 const OBJECT_REFERENCE_CONTEXT_BEFORE_BYTES: usize = 8;
 const OBJECT_REFERENCE_CONTEXT_AFTER_BYTES: usize = 8;
 const OBJECT_REFERENCE_FIELD_STRIDES: &[usize] = &[
@@ -87,7 +103,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
         None | Some("-h") | Some("--help") => print_help(),
         Some("streams") => {
             let path = required_path(args.next(), "streams")?;
-            let bytes = read_file(path)?;
+            let bytes = read_file(&path)?;
             let entries = inspect_cfb_entries(&bytes).map_err(|error| error.to_string())?;
             for entry in entries {
                 write_stdout_line(&format!(
@@ -101,7 +117,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
         }
         Some("info") => {
             let path = required_path(args.next(), "info")?;
-            let bytes = read_file(path)?;
+            let bytes = read_file(&path)?;
             let format = detect_format(&bytes);
             write_stdout_line(&format!("format\t{}", format.as_str()))?;
 
@@ -177,6 +193,64 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                         record.code(),
                         record.payload_len(),
                         format_optional_text(record.label())
+                    ))?;
+                }
+            }
+            Ok(())
+        }
+        Some("page-layout-style-slots") => {
+            let path = required_path(args.next(), "page-layout-style-slots")?;
+            let bytes = read_file(path)?;
+            let streams = read_style_streams(&bytes).map_err(|error| error.to_string())?;
+            let Some(stream) = streams
+                .iter()
+                .find(|stream| stream.name() == PAGE_LAYOUT_STYLE_PATH)
+            else {
+                write_stdout_line(&format!(
+                    "summary\tstatus=missing\tstream={}\trecords=0\tslots=0\tdecoded=false",
+                    PAGE_LAYOUT_STYLE_PATH
+                ))?;
+                return Ok(());
+            };
+
+            let summary = stream.summary();
+            let slot_sets = summary
+                .records()
+                .iter()
+                .map(|record| page_layout_slot_parts(record.subrecords()))
+                .collect::<Vec<_>>();
+            let slot_count = slot_sets.iter().map(BTreeMap::len).sum::<usize>();
+            let paired_slot_pairs = active_page_layout_slot_pairs(&slot_sets);
+            write_stdout_line(&format!(
+                "summary\tstatus=ok\tstream={}\tstream-bytes={}\trecords={}\tslots={}\tpaired-slot-pairs={}\tfacing-pages-candidate={}\tdecoded=false",
+                PAGE_LAYOUT_STYLE_PATH,
+                stream.bytes().len(),
+                summary.records().len(),
+                slot_count,
+                format_page_layout_slot_pairs(&paired_slot_pairs),
+                !paired_slot_pairs.is_empty()
+            ))?;
+            for (record_index, record) in summary.records().iter().enumerate() {
+                write_stdout_line(&format!(
+                    "record\t{}\toffset={}\tcode=0x{:04x}\tpayloadLength={}\tlabel={}\tsubrecords={}",
+                    record_index,
+                    record.offset(),
+                    record.code(),
+                    record.payload_len(),
+                    format_optional_text(record.label()),
+                    record.subrecords().len()
+                ))?;
+                for (slot, parts) in &slot_sets[record_index] {
+                    write_stdout_line(&format!(
+                        "slot\t{}\t0x{:02x}\tpart05First={}\tpart05NonZero={}\tpart04={}\tpart05={}\tpart06={}\tpart07={}",
+                        record_index,
+                        slot,
+                        format_page_layout_slot_part_first(parts, 0x05),
+                        format_page_layout_slot_part_nonzero(parts, 0x05),
+                        format_page_layout_slot_part(parts, 0x04),
+                        format_page_layout_slot_part(parts, 0x05),
+                        format_page_layout_slot_part(parts, 0x06),
+                        format_page_layout_slot_part(parts, 0x07)
                     ))?;
                 }
             }
@@ -740,8 +814,20 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 candidates.push(candidate);
             }
 
+            let visual_list_raster_count = candidates
+                .iter()
+                .filter(|candidate| candidate.visual_list.is_some())
+                .count();
+            let embedded_press_snapshot_count = candidates
+                .iter()
+                .filter(|candidate| candidate.embedded_press_snapshot.is_some())
+                .count();
+            let jseq3_formula_count = candidates
+                .iter()
+                .filter(|candidate| candidate.jseq3_formula.is_some())
+                .count();
             write_stdout_line(&format!(
-                "summary\tstreams={}\tcandidates={}\tunreadable={}\tobject-path={}\timage-path={}\tshape-path={}\ttable-path={}\tso-marker={}\timage-signature={}\tsvg-signature={}\tdecoded=false",
+                "summary\tstreams={}\tcandidates={}\tunreadable={}\tobject-path={}\timage-path={}\tshape-path={}\ttable-path={}\tvisual-list-path={}\tvisual-list-raster={}\tembedded-press-snapshot={}\tjseq3-formula={}\tso-marker={}\timage-signature={}\tsvg-signature={}\tdecoded=false",
                 stream_count,
                 candidates.len(),
                 unreadable_count,
@@ -749,6 +835,10 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 object_stream_reason_count(&reason_counts, "image-path"),
                 object_stream_reason_count(&reason_counts, "shape-path"),
                 object_stream_reason_count(&reason_counts, "table-path"),
+                object_stream_reason_count(&reason_counts, "visual-list-path"),
+                visual_list_raster_count,
+                embedded_press_snapshot_count,
+                jseq3_formula_count,
                 object_stream_reason_count(&reason_counts, "so-marker"),
                 object_stream_reason_count(&reason_counts, "image-signature"),
                 object_stream_reason_count(&reason_counts, "svg-signature"),
@@ -756,7 +846,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
 
             for (index, candidate) in candidates.iter().enumerate() {
                 write_stdout_line(&format!(
-                    "object-stream-candidate\t{}\tstream={}\tsize={}\treasons={}\timage-signatures={}\tsvg-offsets={}\tso-offsets={}\tprefix={}\tdecoded=false",
+                    "object-stream-candidate\t{}\tstream={}\tsize={}\treasons={}\timage-signatures={}\tsvg-offsets={}\tso-offsets={}\tvisual-list={}\tembedded-press-snapshot={}\tjseq3-formula={}\tprefix={}\tdecoded=false",
                     index,
                     escaped_path(&candidate.path),
                     candidate.size,
@@ -764,6 +854,11 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     format_object_signature_hits(&candidate.image_signature_hits),
                     format_usize_hit_list(&candidate.svg_offsets),
                     format_usize_hit_list(&candidate.so_offsets),
+                    format_visual_list_candidate(candidate.visual_list.as_ref()),
+                    format_embedded_press_snapshot_candidate(
+                        candidate.embedded_press_snapshot.as_ref()
+                    ),
+                    format_jseq3_formula_candidate(candidate.jseq3_formula.as_ref()),
                     candidate.prefix_hex,
                 ))?;
             }
@@ -2814,8 +2909,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     "table-candidate\t{}\tkind={}\trange={}\tboundary={}\tbasis={}\tdelimiter=0x{:04x}\tintervals={}\tfirst={}\tlast={}\tsource={}-{}\tinterval-details={}\tdecoded=false",
                     candidate.index(),
                     candidate.kind(),
-                    candidate.text_count_range_index(),
-                    candidate.text_boundary_candidate_index(),
+                    format_model_table_source_index(candidate.text_count_range_index()),
+                    format_model_table_source_index(candidate.text_boundary_candidate_index()),
                     candidate.basis().as_str(),
                     candidate.delimiter_code(),
                     candidate.interval_count(),
@@ -2840,8 +2935,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 write_stdout_line(&format!(
                     "table-candidate-context\t{}\trange={}\tboundary={}\tbasis={}\tdelimiter=0x{:04x}\tintervals={}\tsource={}-{}\tshape={}\tinterval-contexts={}\tdecoded=false",
                     candidate.index(),
-                    candidate.text_count_range_index(),
-                    candidate.text_boundary_candidate_index(),
+                    format_model_table_source_index(candidate.text_count_range_index()),
+                    format_model_table_source_index(candidate.text_boundary_candidate_index()),
                     candidate.basis().as_str(),
                     candidate.delimiter_code(),
                     candidate.interval_count(),
@@ -2868,8 +2963,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 write_stdout_line(&format!(
                     "table-cell-like-candidate\t{}\trange={}\tboundary={}\tbasis={}\tdelimiter=0x{:04x}\tintervals={}\tsource={}-{}\tshape={}\ttexts={}\tcolumn-split-candidate-rows={}\tmax-column-segment-count={}\tcolumn-segment-pattern-consistent={}\tcolumn-segment-pattern-mismatch-rows={}\tcolumn-grid-candidate={}\tcolumn-grid-shape={}\tcolumn-grid-pattern={}\tinterval-column-segments={}\tdecoded=false",
                     candidate.index(),
-                    candidate.text_count_range_index(),
-                    candidate.text_boundary_candidate_index(),
+                    format_model_table_source_index(candidate.text_count_range_index()),
+                    format_model_table_source_index(candidate.text_boundary_candidate_index()),
                     candidate.basis().as_str(),
                     candidate.delimiter_code(),
                     candidate.interval_count(),
@@ -3887,10 +3982,13 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             ))?;
             for (row, entry) in page_mark.entries().iter().enumerate() {
                 write_stdout_line(&format!(
-                    "entry\t{}\t{}\t{}",
+                    "entry\t{}\t{}\t{}\tflags={}\tlineStart={}\tlineEnd={}",
                     row,
                     format_optional_u32(entry.index()),
-                    bytes_to_hex(entry.raw())
+                    bytes_to_hex(entry.raw()),
+                    format_optional_u32(entry.flags()),
+                    format_optional_u32(entry.line_start()),
+                    format_optional_u32(entry.line_end())
                 ))?;
             }
             if !page_mark.trailing_bytes().is_empty() {
@@ -4120,10 +4218,22 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             }
             Ok(())
         }
+        Some("page-layer-tree") => {
+            let path = required_path(args.next(), "page-layer-tree")?;
+            let page_index = required_page_index(args.next(), "page-layer-tree")?;
+            let bytes = read_file(&path)?;
+            let mut core = DocumentCore::from_bytes(&bytes).map_err(|error| error.to_string())?;
+            core.set_file_name(&path);
+            write_stdout(
+                &core
+                    .get_page_layer_tree(page_index)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
         Some("export") => {
             let path = required_path(args.next(), "export")?;
             let options = export_options(args)?;
-            let bytes = read_file(path)?;
+            let bytes = read_file(&path)?;
             let document = parse_document(&bytes).map_err(|error| error.to_string())?;
 
             match options.format.as_str() {
@@ -4139,7 +4249,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                                     .into(),
                             );
                         };
-                        let pdf = to_pdf(&document)?;
+                        let pdf = to_pdf_with_file_name(&document, &path)?;
                         write_file(output_path, &pdf)?;
                     }
                     #[cfg(target_arch = "wasm32")]
@@ -4160,6 +4270,13 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
 
 fn required_path(path: Option<String>, command: &str) -> Result<String, String> {
     path.ok_or_else(|| format!("missing path for `{command}`"))
+}
+
+fn required_page_index(page_index: Option<String>, command: &str) -> Result<u32, String> {
+    let value = page_index.ok_or_else(|| format!("missing page index for `{command}`"))?;
+    value
+        .parse::<u32>()
+        .map_err(|_| format!("invalid page index `{value}` for `{command}`"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4232,6 +4349,7 @@ Usage:
   rjtd info <file.jtd>
   rjtd dump-stream <file.jtd> <stream-path>
   rjtd style-records <file.jtd>
+  rjtd page-layout-style-slots <file.jtd>
   rjtd style-candidates <file.jtd>
   rjtd text-layout-style-records <file.jtd>
   rjtd document-view-style-groups <file.jtd>
@@ -4313,6 +4431,7 @@ Usage:
   rjtd text-position-context <file.jtd>
   rjtd text-position-line-context <file.jtd>
   rjtd text-position-delta-scan <file.jtd>
+  rjtd page-layer-tree <file.jtd> <zero-based-page-index>
   rjtd export <file.jtd> --format <json|md|text|html|pdf> [-o output.pdf]
 ",
     )
@@ -4917,7 +5036,35 @@ struct ObjectStreamCandidate {
     image_signature_hits: Vec<ObjectSignatureHit>,
     svg_offsets: Vec<usize>,
     so_offsets: Vec<usize>,
+    visual_list: Option<CliVisualListCandidate>,
+    embedded_press_snapshot: Option<CliEmbeddedPressSnapshotCandidate>,
+    jseq3_formula: Option<CliJseq3FormulaCandidate>,
     prefix_hex: String,
+}
+
+struct CliVisualListCandidate {
+    width: u32,
+    height: u32,
+    bit_depth: u32,
+    rle_data_len: usize,
+}
+
+struct CliEmbeddedPressSnapshotCandidate {
+    width: u32,
+    height: u32,
+    body_length_candidate: u32,
+    object_count_candidate: u32,
+}
+
+struct CliJseq3FormulaCandidate {
+    so_trailer_offset: Option<usize>,
+    so_trailer_fields: Vec<u32>,
+    text_markers: Vec<CliJseq3TextMarkerCandidate>,
+}
+
+struct CliJseq3TextMarkerCandidate {
+    text: &'static str,
+    offset: usize,
 }
 
 struct ObjectSignatureHit {
@@ -4943,6 +5090,15 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
     if !so_offsets.is_empty() {
         push_unique_reason(&mut reasons, "so-marker");
     }
+    let visual_list = visual_list_candidate_from_stream(path, stream);
+    let embedded_press_snapshot = embedded_press_snapshot_candidate_from_stream(stream);
+    let jseq3_formula = jseq3_formula_candidate_from_stream(path, stream);
+    if embedded_press_snapshot.is_some() {
+        push_unique_reason(&mut reasons, "embedded-press-snapshot");
+    }
+    if jseq3_formula.is_some() {
+        push_unique_reason(&mut reasons, "jseq3-formula");
+    }
 
     if reasons.is_empty() {
         return None;
@@ -4955,8 +5111,166 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
         image_signature_hits,
         svg_offsets,
         so_offsets,
+        visual_list,
+        embedded_press_snapshot,
+        jseq3_formula,
         prefix_hex: format_hex_preview(stream, OBJECT_STREAM_PREFIX_PREVIEW_BYTES),
     })
+}
+
+fn embedded_press_snapshot_candidate_from_stream(
+    stream: &[u8],
+) -> Option<CliEmbeddedPressSnapshotCandidate> {
+    if stream.get(..EMBEDDED_PRESS_SNAPSHOT_MAGIC.len())? != EMBEDDED_PRESS_SNAPSHOT_MAGIC {
+        return None;
+    }
+    let body_length_candidate =
+        read_le32_candidate(stream, EMBEDDED_PRESS_SNAPSHOT_BODY_LENGTH_OFFSET)?;
+    let object_count_candidate =
+        read_le32_candidate(stream, EMBEDDED_PRESS_SNAPSHOT_OBJECT_COUNT_OFFSET)?;
+    let width = read_le32_candidate(stream, EMBEDDED_PRESS_SNAPSHOT_WIDTH_OFFSET)?;
+    let height = read_le32_candidate(stream, EMBEDDED_PRESS_SNAPSHOT_HEIGHT_OFFSET)?;
+    if body_length_candidate == 0 || width == 0 || height == 0 {
+        return None;
+    }
+    Some(CliEmbeddedPressSnapshotCandidate {
+        width,
+        height,
+        body_length_candidate,
+        object_count_candidate,
+    })
+}
+
+fn jseq3_formula_candidate_from_stream(
+    path: &str,
+    stream: &[u8],
+) -> Option<CliJseq3FormulaCandidate> {
+    if !path.ends_with("/JSEQ3Contents") {
+        return None;
+    }
+    if stream.get(..JSEQ3_CONTENTS_MAGIC_UTF16LE.len())? != JSEQ3_CONTENTS_MAGIC_UTF16LE {
+        return None;
+    }
+    let so_trailer_offset = find_subslice_offsets(stream, SO_RECORD_MARKER)
+        .into_iter()
+        .find(|offset| {
+            offset.saturating_add(JSEQ3_SO_FIELD_COUNT * JSEQ3_SO_FIELD_BYTES) <= stream.len()
+                && offset.saturating_add(JSEQ3_SO_TRAILER_BYTES) >= stream.len()
+        });
+    let so_trailer_fields = so_trailer_offset
+        .and_then(|offset| stream.get(offset..))
+        .map(jseq3_so_trailer_fields)
+        .unwrap_or_default();
+    Some(CliJseq3FormulaCandidate {
+        so_trailer_offset,
+        so_trailer_fields,
+        text_markers: jseq3_text_marker_candidates(stream),
+    })
+}
+
+fn jseq3_so_trailer_fields(trailer: &[u8]) -> Vec<u32> {
+    (0..JSEQ3_SO_FIELD_COUNT)
+        .filter_map(|index| read_le32_candidate(trailer, index * JSEQ3_SO_FIELD_BYTES))
+        .collect()
+}
+
+fn jseq3_text_marker_candidates(stream: &[u8]) -> Vec<CliJseq3TextMarkerCandidate> {
+    let mut candidates = Vec::new();
+    for marker in JSEQ3_TEXT_MARKERS {
+        let encoded = utf16le_bytes(marker);
+        for offset in find_subslice_offsets(stream, &encoded) {
+            candidates.push(CliJseq3TextMarkerCandidate {
+                text: *marker,
+                offset,
+            });
+        }
+    }
+    candidates.sort_by_key(|candidate| candidate.offset);
+    candidates
+}
+
+fn utf16le_bytes(text: &str) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for unit in text.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes
+}
+
+fn visual_list_candidate_from_stream(path: &str, stream: &[u8]) -> Option<CliVisualListCandidate> {
+    if !path.to_ascii_lowercase().contains("visuallist") {
+        return None;
+    }
+    if stream.get(VISUAL_LIST_MAGIC_OFFSET..VISUAL_LIST_MAGIC_OFFSET + VISUAL_LIST_MAGIC.len())?
+        != VISUAL_LIST_MAGIC
+    {
+        return None;
+    }
+    Some(CliVisualListCandidate {
+        width: read_be32_at(stream, VISUAL_LIST_WIDTH_OFFSET)?,
+        height: read_be32_at(stream, VISUAL_LIST_HEIGHT_OFFSET)?,
+        bit_depth: read_be32_at(stream, VISUAL_LIST_BIT_DEPTH_OFFSET)?,
+        rle_data_len: read_be32_at(stream, VISUAL_LIST_RLE_LENGTH_OFFSET)? as usize,
+    })
+}
+
+fn format_embedded_press_snapshot_candidate(
+    candidate: Option<&CliEmbeddedPressSnapshotCandidate>,
+) -> String {
+    candidate
+        .map(|candidate| {
+            format!(
+                "JSSnapShot32,{}x{},body={},objects={}",
+                candidate.width,
+                candidate.height,
+                candidate.body_length_candidate,
+                candidate.object_count_candidate
+            )
+        })
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_jseq3_formula_candidate(candidate: Option<&CliJseq3FormulaCandidate>) -> String {
+    let Some(candidate) = candidate else {
+        return "-".to_string();
+    };
+    let fields = if candidate.so_trailer_fields.is_empty() {
+        "-".to_string()
+    } else {
+        candidate
+            .so_trailer_fields
+            .iter()
+            .map(|field| format!("0x{field:08x}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let markers = if candidate.text_markers.is_empty() {
+        "-".to_string()
+    } else {
+        candidate
+            .text_markers
+            .iter()
+            .map(|marker| format!("{}@{}", marker.text, marker.offset))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    format!(
+        "MATH.VAF,so={},fields={},markers={}",
+        format_optional_usize(candidate.so_trailer_offset),
+        fields,
+        markers
+    )
+}
+
+fn format_visual_list_candidate(candidate: Option<&CliVisualListCandidate>) -> String {
+    candidate
+        .map(|candidate| {
+            format!(
+                "{}x{}x{}bpp,rle={}",
+                candidate.width, candidate.height, candidate.bit_depth, candidate.rle_data_len
+            )
+        })
+        .unwrap_or_else(|| "-".to_string())
 }
 
 fn push_object_path_reasons(path: &str, reasons: &mut Vec<&'static str>) {
@@ -5009,6 +5323,10 @@ fn push_object_path_reasons(path: &str, reasons: &mut Vec<&'static str>) {
             && !contains_any(segment, &["positiontable", "style"])
     }) {
         push_unique_reason(reasons, "table-path");
+    }
+
+    if segments.iter().any(|segment| *segment == "visuallist") {
+        push_unique_reason(reasons, "visual-list-path");
     }
 }
 
@@ -8410,6 +8728,92 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
     output
 }
 
+fn page_layout_slot_parts(
+    subrecords: &[StyleStreamSubrecordSummary],
+) -> BTreeMap<u8, BTreeMap<u8, &StyleStreamSubrecordSummary>> {
+    let mut slots: BTreeMap<u8, BTreeMap<u8, &StyleStreamSubrecordSummary>> = BTreeMap::new();
+    for subrecord in subrecords {
+        let code = subrecord.code();
+        let slot = (code >> 8) as u8;
+        let part = (code & 0xff) as u8;
+        if !(0x31..=0x39).contains(&slot) || !(0x04..=0x07).contains(&part) {
+            continue;
+        }
+        slots.entry(slot).or_default().insert(part, subrecord);
+    }
+    slots
+}
+
+fn active_page_layout_slot_pairs(
+    slot_sets: &[BTreeMap<u8, BTreeMap<u8, &StyleStreamSubrecordSummary>>],
+) -> BTreeSet<(u8, u8)> {
+    let mut pairs = BTreeSet::new();
+    for slots in slot_sets {
+        for (left, right) in [(0x32, 0x33), (0x34, 0x35), (0x36, 0x37), (0x38, 0x39)] {
+            let left_active = slots
+                .get(&left)
+                .is_some_and(page_layout_slot_part05_is_active);
+            let right_active = slots
+                .get(&right)
+                .is_some_and(page_layout_slot_part05_is_active);
+            if left_active && right_active {
+                pairs.insert((left, right));
+            }
+        }
+    }
+    pairs
+}
+
+fn page_layout_slot_part05_is_active(parts: &BTreeMap<u8, &StyleStreamSubrecordSummary>) -> bool {
+    parts
+        .get(&0x05)
+        .and_then(|subrecord| subrecord.payload().first().copied())
+        .is_some_and(|byte| byte != 0)
+}
+
+fn format_page_layout_slot_pairs(pairs: &BTreeSet<(u8, u8)>) -> String {
+    if pairs.is_empty() {
+        return "-".to_string();
+    }
+    pairs
+        .iter()
+        .map(|(left, right)| format!("0x{left:02x}/0x{right:02x}"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn format_page_layout_slot_part(
+    parts: &BTreeMap<u8, &StyleStreamSubrecordSummary>,
+    part: u8,
+) -> String {
+    parts
+        .get(&part)
+        .map(|subrecord| bytes_to_hex(subrecord.payload()))
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_page_layout_slot_part_first(
+    parts: &BTreeMap<u8, &StyleStreamSubrecordSummary>,
+    part: u8,
+) -> String {
+    parts
+        .get(&part)
+        .and_then(|subrecord| subrecord.payload().first().copied())
+        .map(|byte| format!("0x{byte:02x}"))
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_page_layout_slot_part_nonzero(
+    parts: &BTreeMap<u8, &StyleStreamSubrecordSummary>,
+    part: u8,
+) -> String {
+    parts
+        .get(&part)
+        .and_then(|subrecord| subrecord.payload().first().copied())
+        .map(|byte| (byte != 0).to_string())
+        .unwrap_or_else(|| "-".to_string())
+}
+
 fn format_hex_preview(bytes: &[u8], max_bytes: usize) -> String {
     if bytes.is_empty() {
         return "-".to_string();
@@ -8658,6 +9062,14 @@ fn format_optional_usize(value: Option<usize>) -> String {
     value
         .map(|value| value.to_string())
         .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_model_table_source_index(value: usize) -> String {
+    if value == usize::MAX {
+        "-".to_string()
+    } else {
+        value.to_string()
+    }
 }
 
 fn format_optional_u32(value: Option<u32>) -> String {

@@ -6,8 +6,13 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png"] }
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png"], optional = true }
 rjtd-core = { path = "../rjtd-core" }
+
+[features]
+default = ["bitmap-images"]
+bitmap-images = ["dep:image"]
 
 [dev-dependencies]
 cfb = "0.14"

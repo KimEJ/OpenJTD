@@ -138,15 +138,23 @@ pub struct StyleStreamRecordSummary {
     code: u16,
     payload_len: usize,
     label: Option<String>,
+    subrecords: Vec<StyleStreamSubrecordSummary>,
 }
 
 impl StyleStreamRecordSummary {
-    fn new(offset: usize, code: u16, payload_len: usize, label: Option<String>) -> Self {
+    fn new(
+        offset: usize,
+        code: u16,
+        payload_len: usize,
+        label: Option<String>,
+        subrecords: Vec<StyleStreamSubrecordSummary>,
+    ) -> Self {
         Self {
             offset,
             code,
             payload_len,
             label,
+            subrecords,
         }
     }
 
@@ -164,6 +172,49 @@ impl StyleStreamRecordSummary {
 
     pub fn label(&self) -> Option<&str> {
         self.label.as_deref()
+    }
+
+    pub fn subrecords(&self) -> &[StyleStreamSubrecordSummary] {
+        &self.subrecords
+    }
+
+    pub fn total_len(&self) -> usize {
+        4 + self.payload_len
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StyleStreamSubrecordSummary {
+    offset: usize,
+    code: u16,
+    payload_len: usize,
+    payload: Vec<u8>,
+}
+
+impl StyleStreamSubrecordSummary {
+    fn new(offset: usize, code: u16, payload_len: usize, payload: Vec<u8>) -> Self {
+        Self {
+            offset,
+            code,
+            payload_len,
+            payload,
+        }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn code(&self) -> u16 {
+        self.code
+    }
+
+    pub fn payload_len(&self) -> usize {
+        self.payload_len
+    }
+
+    pub fn payload(&self) -> &[u8] {
+        &self.payload
     }
 
     pub fn total_len(&self) -> usize {
@@ -306,11 +357,13 @@ fn parse_ssmg_slot_records(data: &[u8]) -> Vec<StyleStreamRecordSummary> {
         }
 
         let label = read_ssmg_slot_record_label(data, payload_start, payload_len);
+        let subrecords = parse_style_record_subrecords(&data[payload_start..payload_end]);
         records.push(StyleStreamRecordSummary::new(
             offset,
             code,
             payload_len,
             label,
+            subrecords,
         ));
         offset = align_up_relative(payload_end, SSMG_RECORD_AREA_OFFSET, SSMG_SLOT_STRIDE);
     }
@@ -371,6 +424,56 @@ fn looks_like_label_units(units: &[u16]) -> bool {
     })
 }
 
+fn parse_style_record_subrecords(payload: &[u8]) -> Vec<StyleStreamSubrecordSummary> {
+    let mut best = Vec::new();
+    let search_limit = payload.len().min(0x80);
+
+    for start in 0..search_limit {
+        let records = parse_style_record_subrecords_from(payload, start);
+        if records.len() > best.len() {
+            best = records;
+        }
+    }
+
+    if best.len() < 3 { Vec::new() } else { best }
+}
+
+fn parse_style_record_subrecords_from(
+    payload: &[u8],
+    start: usize,
+) -> Vec<StyleStreamSubrecordSummary> {
+    let mut records = Vec::new();
+    let mut offset = start;
+
+    while offset + 4 <= payload.len() {
+        let code = read_be_u16_at(payload, offset);
+        let payload_len = read_be_u16_at(payload, offset + 2) as usize;
+        if !looks_like_style_subrecord_code(code)
+            || payload_len == 0
+            || payload_len > 0x200
+            || offset + 4 + payload_len > payload.len()
+        {
+            break;
+        }
+
+        let payload_start = offset + 4;
+        let payload_end = payload_start + payload_len;
+        records.push(StyleStreamSubrecordSummary::new(
+            offset,
+            code,
+            payload_len,
+            payload[payload_start..payload_end].to_vec(),
+        ));
+        offset = payload_end;
+    }
+
+    records
+}
+
+fn looks_like_style_subrecord_code(code: u16) -> bool {
+    (0x1000..=0x7fff).contains(&code)
+}
+
 fn parse_sequential_style_records(data: &[u8]) -> Vec<StyleStreamRecordSummary> {
     let mut best = Vec::new();
     let search_limit = data.len().min(SEQUENTIAL_RECORD_SEARCH_LIMIT);
@@ -416,6 +519,7 @@ fn parse_sequential_style_records_from(data: &[u8], start: usize) -> Vec<StyleSt
             code,
             payload_len,
             None,
+            Vec::new(),
         ));
         offset = payload_end;
     }
@@ -536,10 +640,40 @@ mod tests {
         assert_eq!(summary.records()[0].code(), 0x5555);
         assert_eq!(summary.records()[0].payload_len(), 8);
         assert_eq!(summary.records()[0].label(), Some("AB"));
+        assert!(summary.records()[0].subrecords().is_empty());
         assert_eq!(summary.records()[1].offset(), 0x214);
         assert_eq!(summary.records()[1].code(), 0x5555);
         assert_eq!(summary.records()[1].payload_len(), 2);
         assert_eq!(summary.records()[1].label(), None);
+    }
+
+    #[test]
+    fn summarizes_nested_ssmg_style_subrecords() {
+        let mut bytes = vec![
+            b'S', b's', b'm', b'g', b'V', b'.', b'0', b'1', 0, 0, 0, 0x1c, 0, 0, 1, 0, 0, 0, 0,
+            0x20, 0, 1, 0, 2,
+        ];
+        let mut payload = vec![0, 1, 0, b'A'];
+        payload.extend_from_slice(&[0, 0]);
+        payload.extend_from_slice(&[0x40, 0x01, 0, 1, 0xaa]);
+        payload.extend_from_slice(&[0x31, 0x05, 0, 2, 0xbb, 0xcc]);
+        payload.extend_from_slice(&[0x39, 0x07, 0, 1, 0xdd]);
+        bytes.resize(0x114, 0);
+        bytes.extend_from_slice(&[0x44, 0x44]);
+        bytes.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+        bytes.extend_from_slice(&payload);
+
+        let summary = summarize_style_stream(&bytes);
+
+        assert_eq!(summary.records().len(), 1);
+        let record = &summary.records()[0];
+        assert_eq!(record.label(), Some("A"));
+        assert_eq!(record.subrecords().len(), 3);
+        assert_eq!(record.subrecords()[0].offset(), 6);
+        assert_eq!(record.subrecords()[0].code(), 0x4001);
+        assert_eq!(record.subrecords()[1].code(), 0x3105);
+        assert_eq!(record.subrecords()[1].payload(), &[0xbb, 0xcc]);
+        assert_eq!(record.subrecords()[2].total_len(), 5);
     }
 
     #[test]

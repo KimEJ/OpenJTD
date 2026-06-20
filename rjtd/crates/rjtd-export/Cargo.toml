@@ -9,6 +9,7 @@ repository.workspace = true
 doctest = false
 
 [dependencies]
+image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png"] }
 rjtd-core = { path = "../rjtd-core" }
 rjtd-model = { path = "../rjtd-model" }
 

@@ -7,6 +7,38 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 static SAMPLE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+fn assert_json_brackets_balanced(json: &str) {
+    let mut stack = Vec::new();
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for (offset, byte) in json.bytes().enumerate() {
+        if in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            match byte {
+                b'\\' => escaped = true,
+                b'"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+
+        match byte {
+            b'"' => in_string = true,
+            b'{' | b'[' => stack.push(byte),
+            b'}' => assert_eq!(stack.pop(), Some(b'{'), "unmatched }} at byte {offset}"),
+            b']' => assert_eq!(stack.pop(), Some(b'['), "unmatched ] at byte {offset}"),
+            _ => {}
+        }
+    }
+
+    assert!(!in_string, "unterminated JSON string");
+    assert!(stack.is_empty(), "unclosed JSON delimiters: {stack:?}");
+}
+
 fn tiny_cfb_path() -> PathBuf {
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
     compound
@@ -108,6 +140,22 @@ fn object_stream_candidates_path() -> PathBuf {
         .unwrap()
         .write_all(&embedded_object)
         .unwrap();
+    let mut embedded_press = vec![0; 0x80];
+    embedded_press[..12].copy_from_slice(b"JSSnapShot32");
+    embedded_press[0x24..0x28].copy_from_slice(&3656u32.to_le_bytes());
+    embedded_press[0x34..0x38].copy_from_slice(&17u32.to_le_bytes());
+    embedded_press[0x48..0x4c].copy_from_slice(&2590u32.to_le_bytes());
+    embedded_press[0x4c..0x50].copy_from_slice(&460u32.to_le_bytes());
+    compound
+        .create_stream("/EmbedItems/Embedding 1/\x03EmbeddedPress")
+        .unwrap()
+        .write_all(&embedded_press)
+        .unwrap();
+    compound
+        .create_stream("/EmbedItems/Embedding 1/JSEQ3Contents")
+        .unwrap()
+        .write_all(&jseq3_contents_fixture())
+        .unwrap();
     compound.create_storage("/EmbedItems/Embedding 2").unwrap();
     compound
         .create_stream("/EmbedItems/Embedding 2/Image.png")
@@ -132,8 +180,44 @@ fn object_stream_candidates_path() -> PathBuf {
         .unwrap()
         .write_all(br#"<?xml version="1.0"?><svg viewBox="0 0 10 10"></svg>"#)
         .unwrap();
+    compound
+        .create_stream("/VisualList")
+        .unwrap()
+        .write_all(b"\x00\x00\x08\xf8BMDV visual payload")
+        .unwrap();
 
     write_sample(compound.into_inner().into_inner())
+}
+
+fn jseq3_contents_fixture() -> Vec<u8> {
+    let mut stream = b"M\0A\0T\0H\0.\0V\0A\0F\0".to_vec();
+    stream.extend(utf16le_fixture("Times New Roman"));
+    stream.extend(utf16le_fixture("JustUnitMark"));
+    stream.extend(utf16le_fixture("JustOubunMark"));
+    stream.resize(116, 0);
+    for field in [
+        0x0000_4f53u32,
+        0x200e_0a20,
+        0x17ee_8d1a,
+        0x4f7a_78ca,
+        0,
+        0,
+        0x0000_8d1a,
+        0x0000_1c7a,
+        0,
+    ] {
+        stream.extend_from_slice(&field.to_le_bytes());
+    }
+    stream.resize(180, 0);
+    stream
+}
+
+fn utf16le_fixture(text: &str) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for unit in text.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes
 }
 
 fn object_frame_reference_path() -> PathBuf {
@@ -1038,6 +1122,46 @@ fn style_stream_path() -> PathBuf {
     write_sample(compound.into_inner().into_inner())
 }
 
+fn page_layout_style_slot_path() -> PathBuf {
+    let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    compound
+        .create_stream("/PageLayoutStyle")
+        .unwrap()
+        .write_all(&page_layout_style_with_slot_fixture())
+        .unwrap();
+
+    write_sample(compound.into_inner().into_inner())
+}
+
+fn a5_page_layer_tree_path() -> PathBuf {
+    let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    compound
+        .create_stream("/DocumentText")
+        .unwrap()
+        .write_all(&document_text_from_str(&a5_page_layer_tree_text()))
+        .unwrap();
+    compound
+        .create_stream("/AutoTextInfo")
+        .unwrap()
+        .write_all(&auto_text_info_fixture("銀河鉄道の夜"))
+        .unwrap();
+    compound
+        .create_stream("/PageLayoutStyle")
+        .unwrap()
+        .write_all(&page_layout_style_with_slot_fixture())
+        .unwrap();
+
+    write_named_sample("a5.jtd", compound.into_inner().into_inner())
+}
+
+fn a5_page_layer_tree_text() -> String {
+    format!(
+        "{}\n{}",
+        "銀河鉄道の夜\t\t\t\t宮沢 賢治\n目次\n一、午后の授業\n銀河鉄道の夜\n一、午后の授業",
+        "ではみなさんは、そういうふうに川だと云われたりしていました。".repeat(120)
+    )
+}
+
 fn text_position_style_context_path() -> PathBuf {
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
     let mut entry = [0; 29];
@@ -1078,6 +1202,29 @@ fn text_position_style_context_path() -> PathBuf {
 
 fn text_layout_style_with_label_fixture() -> Vec<u8> {
     ssmg_style_with_labeled_slots(0x5555, &["\u{672c}\u{6587}"])
+}
+
+fn page_layout_style_with_slot_fixture() -> Vec<u8> {
+    let mut bytes = vec![0; 0x114];
+    bytes[0..8].copy_from_slice(b"SsmgV.01");
+
+    let mut payload = Vec::new();
+    payload.extend_from_slice(&3u16.to_be_bytes());
+    for unit in "ページ".encode_utf16() {
+        payload.extend_from_slice(&unit.to_be_bytes());
+    }
+    payload.extend_from_slice(&[0, 0]);
+    payload.extend_from_slice(&[0x31, 0x04, 0, 1, 0xaa]);
+    payload.extend_from_slice(&[0x31, 0x05, 0, 2, 0x04, 0x00]);
+    payload.extend_from_slice(&[0x31, 0x06, 0, 1, 0xbb]);
+    payload.extend_from_slice(&[0x31, 0x07, 0, 1, 0xcc]);
+    payload.extend_from_slice(&[0x32, 0x05, 0, 2, 0x04, 0x00]);
+    payload.extend_from_slice(&[0x33, 0x05, 0, 2, 0x04, 0x00]);
+
+    bytes.extend_from_slice(&0x4444u16.to_be_bytes());
+    bytes.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+    bytes.extend_from_slice(&payload);
+    bytes
 }
 
 fn ssmg_style_with_labeled_slots(code: u16, labels: &[&str]) -> Vec<u8> {
@@ -1254,6 +1401,22 @@ fn write_sample(bytes: Vec<u8>) -> PathBuf {
     path
 }
 
+fn write_named_sample(file_name: &str, bytes: Vec<u8>) -> PathBuf {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let counter = SAMPLE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!(
+        "rjtd-streams-{}-{nonce}-{counter}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(file_name);
+    fs::write(&path, bytes).unwrap();
+    path
+}
+
 #[test]
 fn streams_command_lists_cfb_entries() {
     let path = tiny_cfb_path();
@@ -1395,6 +1558,81 @@ fn style_records_command_reports_style_stream_record_summaries() {
         )
     );
     assert!(stdout.contains("\u{672c}\u{6587}\n"));
+}
+
+#[test]
+fn page_layout_style_slots_command_reports_raw_slot_parts() {
+    let path = page_layout_style_slot_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("page-layout-style-slots")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("summary\tstatus=ok\tstream=/PageLayoutStyle\tstream-bytes="));
+    assert!(stdout.contains(
+        "\trecords=1\tslots=3\tpaired-slot-pairs=0x32/0x33\tfacing-pages-candidate=true\tdecoded=false\n"
+    ));
+    assert!(stdout.contains(
+        "record\t0\toffset=276\tcode=0x4444\tpayloadLength=43\tlabel=ページ\tsubrecords=6\n"
+    ));
+    assert!(stdout.contains(
+        "slot\t0\t0x31\tpart05First=0x04\tpart05NonZero=true\tpart04=aa\tpart05=0400\tpart06=bb\tpart07=cc\n"
+    ));
+    assert!(stdout.contains(
+        "slot\t0\t0x32\tpart05First=0x04\tpart05NonZero=true\tpart04=-\tpart05=0400\tpart06=-\tpart07=-\n"
+    ));
+    assert!(stdout.contains(
+        "slot\t0\t0x33\tpart05First=0x04\tpart05NonZero=true\tpart04=-\tpart05=0400\tpart06=-\tpart07=-\n"
+    ));
+}
+
+#[test]
+fn page_layer_tree_command_reports_facing_page_decoration_evidence() {
+    let path = a5_page_layer_tree_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("page-layer-tree")
+        .arg(&path)
+        .arg("5")
+        .output()
+        .unwrap();
+
+    let parent = path.parent().map(PathBuf::from);
+    fs::remove_file(&path).unwrap();
+    if let Some(parent) = parent {
+        fs::remove_dir(parent).unwrap();
+    }
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_json_brackets_balanced(&stdout);
+    assert!(stdout.contains("]},\"textSources\""));
+    assert!(stdout.contains("\"type\":\"pageDecoration\""));
+    assert!(stdout.contains("\"source\":\"autoTextInfo+pageLayoutStylePairedSlots+documentText\""));
+    assert!(stdout.contains("\"projectionKind\":\"layoutStyleAutoTextProjection\""));
+    assert!(stdout.contains("\"decoded\":false"));
+    assert!(stdout.contains("\"sidePolicy\":\"facing-pages-odd-right-even-left\""));
+    assert!(stdout.contains("\"sidePolicyDecoded\":false"));
+    assert!(stdout.contains("\"facingPagesCandidate\":true"));
+    assert!(stdout.contains("\"pairedSlotPairs\":[\"0x32/0x33\"]"));
+    assert!(stdout.contains("\"slotEvidence\""));
+    assert!(stdout.contains("\"side\":\"left\""));
+    assert!(stdout.contains("\"pageNumber\":6"));
+    assert!(stdout.contains("\"headerText\":\"一、午后の授業\""));
 }
 
 #[test]
@@ -1939,12 +2177,40 @@ fn object_stream_candidates_command_reports_visual_object_inventory() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains(
-        "summary\tstreams=6\tcandidates=5\tunreadable=0\tobject-path=2\timage-path=1\tshape-path=2\ttable-path=1\tso-marker=2\timage-signature=1\tsvg-signature=1\tdecoded=false\n"
-    ));
+    let summary = stdout.lines().next().unwrap_or_default();
+    assert!(summary.starts_with("summary\t"));
+    for field in [
+        "streams=9",
+        "candidates=8",
+        "unreadable=0",
+        "object-path=4",
+        "image-path=1",
+        "shape-path=2",
+        "table-path=1",
+        "visual-list-path=1",
+        "visual-list-raster=0",
+        "embedded-press-snapshot=1",
+        "jseq3-formula=1",
+        "so-marker=3",
+        "image-signature=1",
+        "svg-signature=1",
+        "decoded=false",
+    ] {
+        assert!(
+            summary.contains(field),
+            "summary did not contain {field}: {summary}"
+        );
+    }
     assert!(stdout.contains(
         "stream=/EmbedItems/Embedding 1/JSFart2Contents\tsize=25\treasons=object-path,so-marker\timage-signatures=-\tsvg-offsets=-\tso-offsets=13\t"
     ));
+    assert!(stdout.contains(
+        "stream=/EmbedItems/Embedding 1/\\x03EmbeddedPress\tsize=128\treasons=object-path,embedded-press-snapshot\timage-signatures=-\tsvg-offsets=-\tso-offsets=-\tvisual-list=-\tembedded-press-snapshot=JSSnapShot32,2590x460,body=3656,objects=17\t"
+    ));
+    assert!(stdout.contains("stream=/EmbedItems/Embedding 1/JSEQ3Contents"));
+    assert!(stdout.contains("jseq3-formula"));
+    assert!(stdout.contains("jseq3-formula=MATH.VAF,so=116,fields=0x00004f53,0x200e0a20"));
+    assert!(stdout.contains("markers=Times New Roman@16,JustUnitMark@46,JustOubunMark@70"));
     assert!(stdout.contains(
         "stream=/EmbedItems/Embedding 2/Image.png\tsize=44\treasons=object-path,image-path,image-signature\timage-signatures=jpeg@0\t"
     ));
@@ -1956,6 +2222,9 @@ fn object_stream_candidates_command_reports_visual_object_inventory() {
     ));
     assert!(stdout.contains(
         "stream=/Vector.svg\tsize=52\treasons=shape-path,svg-signature\timage-signatures=-\tsvg-offsets=21\tso-offsets=-\t"
+    ));
+    assert!(stdout.contains(
+        "stream=/VisualList\tsize=23\treasons=visual-list-path\timage-signatures=-\tsvg-offsets=-\tso-offsets=-\tvisual-list=-\t"
     ));
 }
 
@@ -4124,6 +4393,24 @@ fn document_text_fixture() -> Vec<u8> {
     bytes.extend_from_slice(&[0x00, 0x1c]);
     bytes.extend_from_slice(&[0x00, 0x1f]);
     for unit in "鉄道\n".encode_utf16() {
+        bytes.extend_from_slice(&unit.to_be_bytes());
+    }
+    bytes
+}
+
+fn document_text_from_str(text: &str) -> Vec<u8> {
+    let mut bytes = b"SsmgV.01".to_vec();
+    bytes.extend_from_slice(&[0x00, 0x1f]);
+    for unit in text.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_be_bytes());
+    }
+    bytes
+}
+
+fn auto_text_info_fixture(text: &str) -> Vec<u8> {
+    let mut bytes = b"SsmgV.01".to_vec();
+    bytes.resize(84, 0);
+    for unit in text.encode_utf16() {
         bytes.extend_from_slice(&unit.to_be_bytes());
     }
     bytes

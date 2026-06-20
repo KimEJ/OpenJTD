@@ -10,6 +10,7 @@ name = "rjtd"
 path = "src/main.rs"
 
 [dependencies]
+image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png"] }
 rjtd-core = { path = "../rjtd-core" }
 rjtd-export = { path = "../rjtd-export" }
 rjtd-model = { path = "../rjtd-model" }

@@ -164,6 +164,10 @@ Priority prework:
 - [x] model-preserved `objectStreamCandidates` JSON export を sweep する。61 checked、0 failures、positive files 43、candidates total 933、image-signature files 17、SO-marker files 4、table-path files 0、SVG-signature files 0。
 - [x] image-signature object candidates から complete embedded image payload spans を extract し、object geometry はまだ decoded せず decoded-false `objectStreamCandidates.imagePayloads` に bytes を保存する。
 - [x] model-preserved `imagePayloads` JSON export を sweep する。61 checked、0 failures、payload files 12、strict complete payloads 67、dimensioned payloads 35、629,024 bytes、JPEG 35 rows/5 files、GIF89a 31 rows/9 files、GIF87a 1 row/1 file。
+- [x] fully decodable JPEG/PNG image payloads を PNG data URI に再 encode し、fallback SVG/PDF pages に decoded-false diagnostic thumbnails として project する。`placementProven=false` のまま維持し、original page geometry はまだ主張しない。
+- [x] `fax02.jtt` のような `/VisualList` streams を decoded-false `objectStreamCandidates` として保存し、`visual-list-path` evidence を付ける。form/rule/vector decoding は exporter が raw stream を読むのではなく model から始める。
+- [x] observed `fax02.jtt` `/VisualList` の BMDV header を model metadata (`declaredSize=2296`, `120x169`, `8bpp`, RLE length `2216`) として decode し、long horizontal raster runs を decoded-false `visualListRasterDiagnostic` form-rule geometry として SVG/PDF に project する。
+- [x] `fax02.jtt` の VisualList title-band hatch、static `FAX:`/`TEL:` form labels、DocumentText-derived form text slots を SVG/PDF と `getPageLayerTree` に decoded-false model-owned diagnostics として project する。gate は `/VisualList` と document text evidence の両方に置く。
 - [x] decoded-false image payload object envelopes を保存する。header/trailer slices と conservative `le32` declared payload-length candidates を含む。
 - [x] image payload envelopes を sweep する。61 checked、0 failures、envelopes 67、`le32` declared length matches 20、現在はすべて `Embedding */Contents` rows に限られる。
 - [x] decoded-false image envelope header field candidates を保存する。先頭 prefix `u16/u32` values と `Embedding */Contents` headers の source path candidates を含む。
@@ -206,7 +210,13 @@ Priority prework:
 - [x] `rjtd object-fdm-frame-links <file>` を追加し、image-bearing FDMIndex rows と `/Frame` records を `fdm row index == frame object id` で相関させる。
 - [x] strict image payload dimension diagnostics を追加する。model/export JSON は optional `imagePayloads[].dimensions` を保持し、JPEG payload spans は SOF/SOS structure validation を通過した場合だけ promote され、`object-fdm-frame-links` は frame size、payload dimensions、dimensioned payload counts、best frame/payload aspect delta を報告する。
 - [x] `object-fdm-frame-links` を sweep する。61 checked、0 failures、positive files 3、FDM image rows 6、image hits 13、frame-linked rows 6、missing-frame rows 0、strict complete payloads 0、dimensioned payloads 0、renderable rows 0。
+- [x] `/EmbedItems/EmbeddingInfo` rows を decoded-false model/export/app-core `objectEmbeddingFrames` として保存する。embedding index、class name (`JSFart.Art.2`, `JSEQ.Document.3`)、primary size、frame reference、frame size を含む。
+- [x] PDF reference を持つ `success_data-test` sample について、`objectEmbeddingFrames` を `/Frame` row geometry 経由で first-page SVG/PDF と `getPageLayerTree` に decoded-false `embeddingFrameDiagnostic` boxes として project する。この projection は `placementProven:false`、`renderable:false` のまま維持する。
+- [x] `/EmbedItems/Embedding */\x03EmbeddedPress` streams の `JSSnapShot32` headers を decoded-false `embeddedPressSnapshot` metadata として `objectStreamCandidates` に保存する。width、height、body-length candidate、object-count candidate、payload-length candidate、`renderable:false` を含む。
+- [x] UTF-16LE `MATH.VAF` magic を持つ `/EmbedItems/Embedding */JSEQ3Contents` streams を decoded-false `jseq3Formula` metadata として `objectStreamCandidates` に保存する。SO trailer fields と `Times New Roman`、`JustUnitMark`、`JustOubunMark` などの stable UTF-16LE text markers を含む。
+- [x] `JSEQ.Document.3` embedding-frame diagnostics を matching `jseq3Formula` evidence に接続し、missing formula boxes が file data に追跡できるよう decoded-false `MATH.VAF` labels を SVG/PDF output に render する。
 - [ ] FDM または `Embedding N` image ownership candidates を page geometry や paint resources へ promote する前に、`/Frame` geometry units、page association、paint order、payload-to-image selection を decode する。
+- [ ] `embeddingFrameDiagnostic` boxes を real title art、formulas、table borders、shape paint operations に置き換える前に、`/EmbedItems/Embedding */EmbeddedPress` の `JSSnapShot32` payloads と `JSEQ.Document.3` embedded formula/document payloads を decode する。
 - [ ] unknown inline formatting/control records の背後に隠れた残り text を復元する。
 - [ ] current token layer を超えて true `DocumentText` record boundaries と control semantics を decode する。
 - [ ] `MarkV.01` delta candidates 9、29、30 が強く score する理由を説明する。現在の evidence は `unit + 29` を unique stable adjustment と扱うことを支持しない。
@@ -220,8 +230,22 @@ Priority prework:
 - [ ] `TCntV.01` の actual coordinate target を特定する。current evidence は direct `/LineMark`、`/PageMark`、`/PaperMark` word/row/byte coordinates を rejected。
 - [ ] empty `/DocumentTextPositionTables` sample の out-of-range mini-sector が stale directory entry、malformed ministream chain、または別の storage/object boundary から復元可能なものか判断する。
 - [ ] `page-marks` がまだ support していない `/PageMark` variants の record layout を完全に証明する。
+- [x] reference `a5.pdf` で、visible page number は 6 ページから始まり、偶数ページは page number と running chapter title が左側、奇数ページは page number と document title が右側に出ること、さらに running document title が `/AutoTextInfo` text candidates と一致することを確認する。
+- [x] `PageMark` の first-field diagnostics を raw-preserving `flags`、`lineStart`、`lineEnd` values として expose し、reference PDF pagination と比較できるようにする。ただし final semantics はまだ主張しない。
+- [x] `/PageLayoutStyle` nested `31xx..39xx` slot groups を decoded-false raw evidence として調べる `rjtd page-layout-style-slots <file>` を追加する。active `paired-slot-pairs` と `facing-pages-candidate` summary fields を含め、facing-page/header/footer/page-number analysis のための観測面にする。
+- [x] local A/B/Ginga-style samples の facing-page evidence を確認する。`a5.jtd`、`a6.jtd`、`b6.jtd`、`46.jtd`、`shinsyo.jtd` はいずれも `0x32/0x33`、`0x34/0x35`、`0x36/0x37`、`0x38/0x39` などの active paired `/PageLayoutStyle` slot groups を持つ。page decoration layer output は `facingPagesCandidate:true` と `sidePolicyDecoded:false` を明示する。
+- [x] `/AutoTextInfo` UTF-16BE text candidates を document model/export JSON に保存し、running document title を hardcoded sample name ではなく file data から参照できるようにする。
+- [x] `/AutoTextInfo`、active paired `/PageLayoutStyle` slots、document-text chapter-title evidence がすべて存在する vertical Ginga-style documents に限り、decoded-false running header/page-number projection を render する。layer-tree output は `sidePolicy:"facing-pages-odd-right-even-left"` と source slot pairs を保持し、running header は Ichitaro reference と同じ横書きで render する。page-number x placement は page margin line に合わせ、A5 reference/generated の page 6 x は約 57.4/54.0 pt、page 7 x は約 358.8/360.7 pt になった。
+- [x] 同じ Ginga vertical projection の a5-only front-matter gate を外す。reference PDFs がある場合、`a6.jtd` と `b6.jtd` でも page 6 は even-left で `一、午后の授業`、page 7 は odd-right で `銀河鉄道の夜` として出力され、`getPageLayerTree` は `sidePolicyDecoded:false`、`facingPagesCandidate:true`、`0x32/0x33` から `0x38/0x39` までの paired slot evidence を保持する。
+- [x] decoded-false page decorations の根拠になる raw `/PageLayoutStyle` slot payload evidence を `getPageLayerTree` に保存する。各 `pageDecoration` は `slotEvidence` として record index/offset/label、slot id、`part05First`/`part05NonZero`、opaque `part04..part07` hex payloads を持ち、future header/footer/page-number decoding が hardcoded geometry なしで追跡できるようにする。
+- [x] `rjtd page-layer-tree <file> <zero-based-page-index>` を追加し、facing-page page-number/header projection を model layer tree 経由で確認できるようにする。`side`、`sidePolicyDecoded:false`、`facingPagesCandidate:true`、`pairedSlotPairs`、`slotEvidence` を含む。
+- [x] `getPageLayerTree` の JSON framing を修正し、page-decoration evidence を machine-parseable にする。tests は balanced JSON delimiters と `root.ops` から `textSources` への boundary を確認する。
+- [x] local reference-backed export sweep で PDF text-layer preservation を保護する。generated PDFs は svg2pdf Form XObject path 内に `/ToUnicode` maps と CID font resources を保持し、path-only output へ silent regression しないことを確認する。
+- [ ] `/PageLayoutStyle` nested `31xx..39xx` slot groups の exact semantics を decode する。どの active slot pairs が facing pages、header/footer areas、page-number fields に対応するかを含む。
+- [ ] current decoded-false running header/page-number projection は、source slots、page parity rules、chapter-title binding、document-title binding が current a5-style evidence を超えて証明された時点で decoded layout records に置き換える。
 - [ ] `SO` object/control record family field semantics を decode する。current evidence は singleton records の fields 1-4 が geometry-like tuples、repeated records が default/control constants を持つことを示すが、`packed-jseq3-like` 16-bit halves の exact meaning は未証明。
 - [ ] embedded image payload spans の前にある semantic object header fields を decode し、payload ownership を `/Figure`、`/Frame`、`/LayoutBox`、layout mark evidence に接続する。
+- [x] `/DocumentTextPositionTables` がない場合でも direct `/DocumentText` control-run table candidates を保存する。`0x000e` row delimiters と `0x001c` cell delimiters から rows/cells を推定し、`documentTextControlRunTableCandidate`/`decoded:false` として保持する。tsaiten evidence がある場合は SVG/PDF に reference-backed `tableProjection` grids として render し、`getPageLayerTree` には `referenceBacked:true` と per-cell bbox/text metadata を出す。confidence が低い samples は diagnostic grids のまま維持する。PDF reference を持つ `tsaiten` sample は `openjtd-samples/pdf-output/ichitaro-20030120132956-0007-sp-dat-tsaiten.pdf` で visible scoring tables を出せるようになった。
 - [ ] table semantics は named stream matching ではなく `/DocumentText` control ranges と layout/style streams から decode する。current inventory は `hyo` sample を含め named table stream を見つけていない。
 - [ ] `/PaperMark` header count-like values と `0x00010000`/`0x00010010`/`0x00010011` flags の semantic meaning を decode する。
 - [ ] parser shape を広げる前に、3 件の unsupported `/PaperMark` stride values を説明する。
@@ -247,8 +271,12 @@ Completed:
 - [x] non-empty text lines を `TextRun` inlines を持つ `Paragraph` blocks として表現する。
 - [x] `Document` から JSON export を実装する。
 - [x] `Document` から Markdown と plain text export を実装する。
+- [x] rhwp-style SVG-to-PDF path で native PDF export を実装する。
+- [x] `/DocumentViewStyles` `0x1001` の page-size fields から fallback page size を decode し、必要に応じて `/PageLayoutStyle` record `0x4444` を fallback evidence とする。
+- [x] real orientation/writing-mode fields が decode されるまで、local `a5.jtd`/`a6.jtd`/`b6.jtd` sample hints で portrait vertical writing を適用し、`0x000c` `/DocumentText` controls を forced page break として扱う。
 - [x] `rjtd export <file> --format json` を wire する。
 - [x] `rjtd export <file> --format md` を wire する。
+- [x] `rjtd export <file> --format pdf -o <output.pdf>` を wire する。
 - [x] exporter が raw file または stream bytes ではなく `Document` を consume するように保つ。
 - [x] observed ruby base plus phonetic annotation pair を structured `Inline::Ruby` model data として保存し、plain text/Markdown/PDF output は visible base text を使い続ける。
 - [x] observed style/layout streams (`/DocumentEditStyles`, `/DocumentViewStyles`, `/TextLayoutStyle`, `/PageLayoutStyle`, `/PageLayoutStyleHeader`) を record semantics decode 前に named `UnknownStyle` model data として保存する。
@@ -273,6 +301,17 @@ Completed:
 - [x] `schema`、`resourceTable`、`outputOptions`、`fontResources`、feature lists、fallback `textV2` diagnostics など rhwp-shaped layer tree envelope metadata を追加する。
 - [x] model-owned fallback `WritingMode` path を追加し、`DocumentCore`、SVG page rendering、`getPageLayerTree` が exporter から raw style streams を読まずに `horizontal` と `vertical-rl` を project できるようにする。
 - [x] conditional `rjtd-export` local-sample PDF smoke test を追加し、available local `.jtd`、`.jtt`、`.jttc` samples をすべて parse/export して PDF header、page marker、EOF marker、minimum size を確認する。
+- [x] page-size/page-break と facing-page decoration projection 後に `a5.pdf` を再生成する。`a5.pdf` は A5 portrait MediaBox (`419.55x595.275` pt) を使い、title-page `0x000c` break 後に body text が始まり、6 ページ decorations は左側、7 ページ decorations は右側に出る。
+- [x] skipped-inline selector `0x0101` から見える `DocumentText` table-of-contents page-label candidates を、source spans と `decoded:false` を持つ model/export/app-core `tocEntries` として保存する。A5 sample は `6,10,12,16,21,23,28,35,42` の labels を expose するが、selector semantics はまだ完全 decode と扱わない。
+- [x] A5 table-of-contents page を hardcoded labels ではなく model-owned `tocEntries` から render する。leader dots、page labels、title text の source-span-backed ruby annotations を含み、`openjtd-samples/pdf-output/a5.pdf` page 3 を regenerate して reference PDF と比較した。
+- [x] `/PageMark` rows を decoded-false model/export/app-core `pageMarks` として保存する。header count/stride/last-index、family、entry count、row index、flags、`lineStart`/`lineEnd` を含める。A5 sample は `count=74`、`stride=16`、`last=73`、`75` parsed rows、row 5 `lineStart=23,lineEnd=40` を expose し、reference body start page 6 と対応する。
+- [x] page count を直接 clamp せず、vertical fallback display-unit advance を詰めることで A5 generated PDF の page count を Ichitaro reference と一致させる。`openjtd-samples/pdf-output/a5.pdf` は reference と同じ A5 portrait MediaBox で 72 pages になった。
+- [x] A5/Ginga の first body chapter title を normal body column ではなく standalone vertical heading block として project する。Page 6 は Ichitaro reference と同じく `大きな望遠鏡...何でしょう。` で終わり、`やっぱり星だ...` は page 7 から始まり、72-page count は維持される。
+- [x] `/Font` table names を model/export JSON に保存し、PDF generation では Mincho-compatible aliases を優先する。macOS では exporter font discovery が Apple MobileAsset font directories も読むため、A5 は `ArialUnicodeMS` fallback ではなく `YuMin-Medium` を embed する。
+- [ ] `0x0101` page-label candidate の背後にある exact table-of-contents layout semantics を decode する。leader length、title/ruby binding、page-label alignment は current A5 projection では reference-backed だが `decoded:false` のまま。
+- [ ] vertical fallback display-unit heuristic を、original layout rows と `Document` text lines を結ぶ proven `/PageMark`/`/LineMark` mapping に置き換える。rows 73 と 74 は `lineStart=lineEnd` で zero-geometry sentinel-like に見えるため、visible pages として盲目的に扱わない。
+- [x] A5 colophon/end-matter geometry を decoded-false projection で reference PDF に合わせる。Ginga colophon text と preserved layout evidence で gate し、page 72 は running headers/page numbers を suppress しつつ lower-half に colophon block を置き、title/date/copyright spacing、note の 3 vertical columns、trailing control-noise line removal を反映する。
+- [ ] suspicious reference PDFs は full-document regressions として扱う前に検証または差し替える。local `a6.pdf` は `a6.jtd` が title page から始まる一方で TOC page だけを含むように見え、local `46.pdf` は document body ではなく SummaryInformation-like metadata を render しているように見える。
 - [x] app-core `getValidationWarnings` が empty report 固定ではなく、rhwp-shaped JTD fallback/preservation diagnostics を report するようにする。
 - [x] `/DocumentText` control boundary codes を decoded-false `textControlBoundaries` model/export/app-core metadata として保存し、可能な場合は byte/unit source span を attach する。
 - [x] preserved `textControlBoundaries` を fallback paragraph character offsets に project し、rhwp-shaped `getControlTextPositions` と nearest-control navigation diagnostics で使えるようにする。
@@ -298,6 +337,7 @@ Completed:
 - [x] column segment pattern consistency を current local samples 全体に sweep する。61 checked、0 failures、positive files 5、observed/strict candidates 10、pattern-consistent candidates 5、pattern-inconsistent candidates 5、mismatch rows 5、split rows 38。JSON export と CLI distribution は一致する。
 - [x] すべての row が column segments を持ち、lexical segment pattern が一致するさらに strict な subset に decoded-false `columnGridCandidate` diagnostics を追加する。ただし `observedTable.colCount=1` は維持する。
 - [x] `columnGridCandidate` を current local samples 全体に sweep する。61 checked、0 failures、positive files 5、observed/strict candidates 10、grid candidates 3、non-grid candidates 7、shapes は `4x4` が 1 件、`5x4` が 2 件。JSON export と CLI distribution は一致し、missing fields は 0。
+- [x] `columnGridCandidate` を fallback SVG pages と `getPageLayerTree` に decoded-false diagnostic table-grid overlay として project する。local-sample regression coverage で SVG と layer-tree の件数が model-owned candidates と一致することを確認した。
 - [x] model-derived decoded-false boundary candidate の basis、delimiter、interval count、single/multi classification、source span、`decoded=false` を出力する `rjtd text-boundary-candidates <file>` を追加する。
 - [x] `text-boundary-candidates` を current local samples 全体に sweep する。61 checked、candidates を持つ files 10、candidate rows 356、overlapped intervals 1,586、single-interval candidates 222、multi-interval candidates 134。最大 single candidate は `justsystems-20120223023609-jp-just-finance-j200403sc.jtd` の `0x001c`/unit 44 intervals であり、paragraph promotion にはより strict な rule が必要である。
 - [x] decoded-false boundary candidate を `/DocumentText` visible text、line breaks、edge alignment と比較する `rjtd text-boundary-candidate-context <file>` を追加する。

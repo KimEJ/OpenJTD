@@ -112,11 +112,32 @@ impl PageMarkEntry {
     }
 
     pub fn index(&self) -> Option<u32> {
-        if self.raw.len() < 4 {
-            return None;
-        }
+        self.u32_field(0)
+    }
 
-        Some(read_u32_be(&self.raw, 0))
+    pub fn flags(&self) -> Option<u32> {
+        self.u32_field(1)
+    }
+
+    pub fn line_start(&self) -> Option<u32> {
+        self.u32_field(2)
+    }
+
+    pub fn line_end(&self) -> Option<u32> {
+        self.u32_field(3)
+    }
+
+    pub fn u32_fields(&self) -> Vec<u32> {
+        self.raw
+            .chunks_exact(4)
+            .map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect()
+    }
+
+    pub fn u32_field(&self, index: usize) -> Option<u32> {
+        let offset = index.checked_mul(4)?;
+        let bytes = self.raw.get(offset..offset + 4)?;
+        Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
 
     pub fn raw(&self) -> &[u8] {
@@ -356,6 +377,13 @@ mod tests {
         assert_eq!(page_mark.entries().len(), 3);
         assert_eq!(page_mark.trailing_bytes(), b"");
         assert_eq!(page_mark.entries()[0].index(), Some(0));
+        assert_eq!(page_mark.entries()[0].flags(), Some(0x0001_0000));
+        assert_eq!(page_mark.entries()[0].line_start(), Some(0));
+        assert_eq!(page_mark.entries()[0].line_end(), Some(2));
+        assert_eq!(
+            page_mark.entries()[0].u32_fields()[..4],
+            [0, 0x0001_0000, 0, 2]
+        );
         assert_eq!(page_mark.entries()[1].index(), Some(1));
         assert_eq!(page_mark.entries()[2].raw()[7], 0x02);
     }
@@ -495,6 +523,8 @@ mod tests {
             let mut entry = [0; 84];
             entry[0..4].copy_from_slice(&index.to_be_bytes());
             entry[4..8].copy_from_slice(&(0x0001_0000u32 + index).to_be_bytes());
+            entry[8..12].copy_from_slice(&(index * 10).to_be_bytes());
+            entry[12..16].copy_from_slice(&(index * 10 + 2).to_be_bytes());
             bytes.extend_from_slice(&entry);
         }
         bytes

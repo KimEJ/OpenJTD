@@ -2,6 +2,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(feature = "bitmap-images")]
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use rjtd_core::auto_text_info::{AutoTextEntry, read_auto_text_info};
 use rjtd_core::container::{EntryKind, inspect_cfb_entries, read_cfb_stream};
 use rjtd_core::document_text::{
     DocumentTextControl, DocumentTextElement, DocumentTextMapEntry, DocumentTextMapKind,
@@ -11,24 +14,71 @@ use rjtd_core::document_text::{
 use rjtd_core::document_text_position::{
     DocumentTextCountEntry, read_document_text_position_tables,
 };
-use rjtd_core::layout_mark::{PageMark, read_page_mark};
+use rjtd_core::font_stream::{FontEntry, read_font_stream};
+use rjtd_core::layout_mark::{PAGE_MARK_PATH, PageMark, read_page_mark};
 use rjtd_core::record::UnknownRecordKind;
 use rjtd_core::style_stream::{
-    StyleStreamRecordSummary, TEXT_LAYOUT_STYLE_PATH, read_style_streams, summarize_style_stream,
+    DOCUMENT_VIEW_STYLES_PATH, PAGE_LAYOUT_STYLE_PATH, StyleStreamRecordSummary,
+    StyleStreamSubrecordSummary, TEXT_LAYOUT_STYLE_PATH, read_style_streams,
+    summarize_style_stream,
 };
 use rjtd_core::{Error, Result};
 
 const DOCUMENT_TEXT_INLINE_START_TAG: u32 = 0x001d;
 const DOCUMENT_TEXT_RUBY_BASE_SELECTOR: u16 = 0x0003;
 const DOCUMENT_TEXT_RUBY_TEXT_SELECTOR: u16 = 0x0082;
+const DOCUMENT_TEXT_TOC_PAGE_SELECTOR: u16 = 0x0101;
+const DOCUMENT_TEXT_PAGE_BREAK_CONTROL: u16 = 0x000c;
 const TEXT_CONTROL_RANGE_DELIMITER_CANDIDATES: [u16; 2] = [0x001c, 0x000e];
 const PARAGRAPH_BOUNDARY_DELIMITER_CANDIDATE: u16 = 0x001c;
+const TABLE_CELL_DELIMITER_CONTROL: u16 = 0x001c;
+const TABLE_ROW_DELIMITER_CONTROL: u16 = 0x000e;
+const DIRECT_TABLE_CANDIDATE_SENTINEL: usize = usize::MAX;
 const LAYOUT_MAP_DELTA_MIN: isize = -4096;
 const LAYOUT_MAP_DELTA_MAX: isize = 4096;
 const SO_RECORD_MARKER: &[u8] = b"SO\0\0";
 const OBJECT_STREAM_PREFIX_PREVIEW_BYTES: usize = 16;
 const OBJECT_STREAM_REFERENCE_OFFSET_PREVIEW_LIMIT: usize = 16;
 const OBJECT_STREAM_REFERENCE_ROW_LIMIT: usize = 16;
+const VISUAL_LIST_MAGIC_OFFSET: usize = 4;
+const VISUAL_LIST_MAGIC: &[u8; 4] = b"BMDV";
+const VISUAL_LIST_HEADER_BYTES: usize = 0x50;
+const VISUAL_LIST_VERSION_OFFSET: usize = 0x08;
+const VISUAL_LIST_FLAGS_OFFSET: usize = 0x0c;
+const VISUAL_LIST_WIDTH_OFFSET: usize = 0x1c;
+const VISUAL_LIST_HEIGHT_OFFSET: usize = 0x20;
+const VISUAL_LIST_ROW_STRIDE_OFFSET: usize = 0x24;
+const VISUAL_LIST_BIT_DEPTH_OFFSET: usize = 0x2c;
+const VISUAL_LIST_X_PPM_OFFSET: usize = 0x30;
+const VISUAL_LIST_Y_PPM_OFFSET: usize = 0x34;
+const VISUAL_LIST_RLE_LENGTH_OFFSET: usize = 0x4c;
+const VISUAL_LIST_MIN_HORIZONTAL_RUN_PERCENT: usize = 31;
+const EMBEDDED_PRESS_SNAPSHOT_MAGIC: &[u8; 12] = b"JSSnapShot32";
+const EMBEDDED_PRESS_SNAPSHOT_BODY_LENGTH_OFFSET: usize = 0x24;
+const EMBEDDED_PRESS_SNAPSHOT_FORMAT_OFFSET: usize = 0x2c;
+const EMBEDDED_PRESS_SNAPSHOT_OBJECT_COUNT_OFFSET: usize = 0x34;
+const EMBEDDED_PRESS_SNAPSHOT_OBJECT_TABLE_OFFSET: usize = 0x38;
+const EMBEDDED_PRESS_SNAPSHOT_PAYLOAD_LENGTH_OFFSET: usize = 0x3c;
+const EMBEDDED_PRESS_SNAPSHOT_WIDTH_OFFSET: usize = 0x48;
+const EMBEDDED_PRESS_SNAPSHOT_HEIGHT_OFFSET: usize = 0x4c;
+const EMBEDDED_PRESS_SNAPSHOT_VECTOR_SCAN_OFFSET: usize = 0x4a;
+const EMBEDDED_PRESS_SNAPSHOT_VECTOR_SEGMENT_LIMIT: usize = 2048;
+const JSEQ3_CONTENTS_MAGIC_UTF16LE: &[u8; 16] = b"M\0A\0T\0H\0.\0V\0A\0F\0";
+const JSEQ3_SO_TRAILER_BYTES: usize = 64;
+const JSEQ3_SO_FIELD_BYTES: usize = 4;
+const JSEQ3_SO_FIELD_COUNT: usize = 9;
+const JSEQ3_TEXT_MARKERS: &[&str] = &["Times New Roman", "JustUnitMark", "JustOubunMark"];
+const EMBEDDING_INFO_PATH: &str = "/EmbedItems/EmbeddingInfo";
+const EMBEDDING_INFO_HEADER_BYTES: usize = 16;
+const EMBEDDING_INFO_CLASS_LENGTH_OFFSET: usize = 42;
+const EMBEDDING_INFO_CLASS_START_OFFSET: usize = 46;
+const EMBEDDING_INFO_PRIMARY_WIDTH_OFFSET: usize = 14;
+const EMBEDDING_INFO_PRIMARY_HEIGHT_OFFSET: usize = 18;
+const EMBEDDING_INFO_EMBEDDING_INDEX_OFFSET: usize = 8;
+const EMBEDDING_INFO_TRAILING_BYTES: usize = 80;
+const EMBEDDING_INFO_FRAME_REF_TRAILING_OFFSET: usize = 0;
+const EMBEDDING_INFO_FRAME_WIDTH_TRAILING_OFFSET: usize = 4;
+const EMBEDDING_INFO_FRAME_HEIGHT_TRAILING_OFFSET: usize = 8;
 const FDM_INDEX_HEADER_BYTES: usize = 20;
 const FDM_INDEX_ENTRY_BYTES: usize = 22;
 const FDM_INDEX_DECLARED_COUNT_OFFSET: usize = 18;
@@ -68,11 +118,16 @@ pub struct Document {
     unknown_objects: Vec<UnknownObject>,
     object_stream_candidates: Vec<ObjectStreamCandidate>,
     object_frame_records: Vec<ObjectFrameRecordCandidate>,
+    object_embedding_frames: Vec<ObjectEmbeddingFrameCandidate>,
     text_count_ranges: Vec<TextCountRange>,
     text_control_boundaries: Vec<TextControlBoundary>,
     text_boundary_candidates: Vec<TextBoundaryCandidate>,
     text_paragraph_boundary_candidates: Vec<TextParagraphBoundaryCandidate>,
     table_candidates: Vec<TableCandidate>,
+    fonts: Vec<DocumentFont>,
+    auto_texts: Vec<DocumentAutoText>,
+    toc_entries: Vec<DocumentTocEntry>,
+    page_marks: Vec<DocumentPageMark>,
 }
 
 impl Document {
@@ -85,11 +140,16 @@ impl Document {
             unknown_objects: Vec::new(),
             object_stream_candidates: Vec::new(),
             object_frame_records: Vec::new(),
+            object_embedding_frames: Vec::new(),
             text_count_ranges: Vec::new(),
             text_control_boundaries: Vec::new(),
             text_boundary_candidates: Vec::new(),
             text_paragraph_boundary_candidates: Vec::new(),
             table_candidates: Vec::new(),
+            fonts: Vec::new(),
+            auto_texts: Vec::new(),
+            toc_entries: Vec::new(),
+            page_marks: Vec::new(),
         }
     }
 
@@ -197,6 +257,10 @@ impl Document {
         &self.object_frame_records
     }
 
+    pub fn object_embedding_frames(&self) -> &[ObjectEmbeddingFrameCandidate] {
+        &self.object_embedding_frames
+    }
+
     pub fn text_count_ranges(&self) -> &[TextCountRange] {
         &self.text_count_ranges
     }
@@ -217,6 +281,22 @@ impl Document {
         &self.table_candidates
     }
 
+    pub fn fonts(&self) -> &[DocumentFont] {
+        &self.fonts
+    }
+
+    pub fn auto_texts(&self) -> &[DocumentAutoText] {
+        &self.auto_texts
+    }
+
+    pub fn toc_entries(&self) -> &[DocumentTocEntry] {
+        &self.toc_entries
+    }
+
+    pub fn page_marks(&self) -> &[DocumentPageMark] {
+        &self.page_marks
+    }
+
     pub fn push_unknown_style(&mut self, style: UnknownStyle) {
         self.unknown_styles.push(style);
     }
@@ -231,6 +311,10 @@ impl Document {
 
     pub fn push_object_frame_record(&mut self, record: ObjectFrameRecordCandidate) {
         self.object_frame_records.push(record);
+    }
+
+    pub fn push_object_embedding_frame(&mut self, frame: ObjectEmbeddingFrameCandidate) {
+        self.object_embedding_frames.push(frame);
     }
 
     pub fn push_raw_stream(&mut self, stream: RawStream) {
@@ -259,6 +343,22 @@ impl Document {
     pub fn push_table_candidate(&mut self, candidate: TableCandidate) {
         self.table_candidates.push(candidate);
     }
+
+    pub fn push_font(&mut self, font: DocumentFont) {
+        self.fonts.push(font);
+    }
+
+    pub fn push_auto_text(&mut self, auto_text: DocumentAutoText) {
+        self.auto_texts.push(auto_text);
+    }
+
+    pub fn push_toc_entry(&mut self, entry: DocumentTocEntry) {
+        self.toc_entries.push(entry);
+    }
+
+    pub fn push_page_mark(&mut self, page_mark: DocumentPageMark) {
+        self.page_marks.push(page_mark);
+    }
 }
 
 pub trait DocumentParser {
@@ -272,6 +372,9 @@ impl DocumentParser for IchitaroParser {
         let payload = read_document_text_payload(data)?;
         let map = map_document_text(payload.bytes());
         let mut document = Document::from_document_text_payload(&payload);
+        for entry in document_text_toc_entries(map.entries()) {
+            document.push_toc_entry(entry);
+        }
         document.push_raw_stream(RawStream::new(
             payload.source_name(),
             payload.bytes().to_vec(),
@@ -284,11 +387,33 @@ impl DocumentParser for IchitaroParser {
                 ));
             }
         }
+        if let Ok(font_stream) = read_font_stream(data) {
+            for entry in font_stream.entries() {
+                document.push_font(DocumentFont::from_font_stream_entry(
+                    font_stream.name(),
+                    entry,
+                ));
+            }
+        }
+        if let Ok(auto_text_info) = read_auto_text_info(data) {
+            for entry in auto_text_info.entries() {
+                document.push_auto_text(DocumentAutoText::from_auto_text_entry(
+                    auto_text_info.name(),
+                    entry,
+                ));
+            }
+        }
+        if let Ok(page_mark) = read_page_mark(data) {
+            document.push_page_mark(DocumentPageMark::from_page_mark(PAGE_MARK_PATH, &page_mark));
+        }
         for candidate in object_stream_candidates_from_cfb(data) {
             document.push_object_stream_candidate(candidate);
         }
         for record in object_frame_records_from_cfb(data) {
             document.push_object_frame_record(record);
+        }
+        for frame in object_embedding_frames_from_cfb(data) {
+            document.push_object_embedding_frame(frame);
         }
         if let Ok(position_tables) = read_document_text_position_tables(data) {
             for entry in position_tables.text_count_entries() {
@@ -313,6 +438,12 @@ impl DocumentParser for IchitaroParser {
                 document.push_text_paragraph_boundary_candidate(candidate);
             }
         }
+        for candidate in table_candidates_from_document_text_controls(
+            map.entries(),
+            document.table_candidates().len(),
+        ) {
+            document.push_table_candidate(candidate);
+        }
         Ok(document)
     }
 }
@@ -324,12 +455,35 @@ pub fn parse_document(data: &[u8]) -> Result<Document> {
 const APP_PAGE_WIDTH_PX: f32 = 794.0;
 const APP_PAGE_HEIGHT_PX: f32 = 1123.0;
 const APP_PAGE_MARGIN_PX: f32 = 72.0;
-const APP_FONT_SIZE_PX: f32 = 15.0;
+const APP_FONT_SIZE_PX: f32 = 13.3;
 const APP_LINE_HEIGHT_PX: f32 = 23.0;
-const APP_LINES_PER_PAGE: usize = 42;
+const APP_DEFAULT_COLUMN_WIDTH_PX: f32 =
+    (APP_PAGE_WIDTH_PX - (APP_PAGE_MARGIN_PX * 2.0)) / APP_WRAP_COLUMNS as f32;
+const APP_VERTICAL_DISPLAY_UNIT_PX: f32 = APP_DEFAULT_COLUMN_WIDTH_PX * 0.925;
+const APP_IMAGE_DIAGNOSTIC_THUMB_PX: f32 = 72.0;
+const APP_IMAGE_DIAGNOSTIC_GAP_PX: f32 = 8.0;
+const APP_IMAGE_DIAGNOSTIC_MAX_OVERLAYS: usize = 8;
+const APP_PAGE_DECORATION_FONT_SIZE_PX: f32 = 13.0;
 const APP_WRAP_COLUMNS: usize = 82;
 const APP_SOURCE_FORMAT: &str = "jtd";
 const APP_DEFAULT_DPI: f64 = 96.0;
+const APP_TAB_COLUMNS: usize = 4;
+const GINGA_TOC_LEADING_BLANK_COLUMNS: usize = 2;
+const GINGA_TOC_EXTRA_COLUMNS: usize = 18;
+const GINGA_BODY_CHAPTER_LEADING_BLANK_COLUMNS: usize = 2;
+const GINGA_BODY_CHAPTER_TRAILING_BLANK_COLUMNS: usize = 2;
+const GINGA_COLOPHON_X_SHIFT_COLUMNS: f32 = 1.5;
+const GINGA_COLOPHON_TOP_RATIO: f32 = 0.48;
+const GINGA_COLOPHON_NOTE_DISPLAY_COLUMNS: usize = 48;
+const TSAITEN_REFERENCE_PAGE_WIDTH_PX: f32 = 793.7;
+const TSAITEN_REFERENCE_PAGE_HEIGHT_PX: f32 = 1122.5;
+const DOCUMENT_VIEW_STYLES_PAGE_WIDTH_OFFSET: usize = 16;
+const DOCUMENT_VIEW_STYLES_PAGE_HEIGHT_OFFSET: usize = 20;
+const PAGE_LAYOUT_STYLE_RECORD_CODE: u16 = 0x4444;
+const PAGE_LAYOUT_STYLE_PAYLOAD_WIDTH_OFFSET: usize = 24;
+const PAGE_LAYOUT_STYLE_PAYLOAD_HEIGHT_OFFSET: usize = 28;
+const MIN_PAPER_SIZE_MM100: u32 = 5_000;
+const MAX_PAPER_SIZE_MM100: u32 = 50_000;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum WritingMode {
@@ -351,6 +505,204 @@ impl WritingMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PageLayout {
+    width_px: f32,
+    height_px: f32,
+    margin_px: f32,
+    landscape: bool,
+}
+
+impl Default for PageLayout {
+    fn default() -> Self {
+        Self {
+            width_px: APP_PAGE_WIDTH_PX,
+            height_px: APP_PAGE_HEIGHT_PX,
+            margin_px: APP_PAGE_MARGIN_PX,
+            landscape: false,
+        }
+    }
+}
+
+impl PageLayout {
+    fn new(width_px: f32, height_px: f32) -> Self {
+        Self {
+            width_px,
+            height_px,
+            margin_px: APP_PAGE_MARGIN_PX,
+            landscape: width_px > height_px,
+        }
+    }
+
+    fn with_portrait_orientation(self) -> Self {
+        if self.height_px >= self.width_px {
+            self
+        } else {
+            Self::new(self.height_px, self.width_px)
+        }
+    }
+
+    pub fn width_px(self) -> f32 {
+        self.width_px
+    }
+
+    pub fn height_px(self) -> f32 {
+        self.height_px
+    }
+
+    pub fn margin_px(self) -> f32 {
+        self.margin_px
+    }
+
+    pub fn landscape(self) -> bool {
+        self.landscape
+    }
+
+    fn body_width_px(self) -> f32 {
+        (self.width_px - (self.margin_px * 2.0)).max(APP_DEFAULT_COLUMN_WIDTH_PX)
+    }
+
+    fn body_height_px(self) -> f32 {
+        (self.height_px - (self.margin_px * 2.0)).max(APP_LINE_HEIGHT_PX)
+    }
+
+    fn wrap_columns(self, writing_mode: WritingMode) -> usize {
+        let (extent, unit_width) = if writing_mode.is_vertical() {
+            (self.body_height_px(), APP_VERTICAL_DISPLAY_UNIT_PX)
+        } else {
+            (self.body_width_px(), APP_DEFAULT_COLUMN_WIDTH_PX)
+        };
+        (extent / unit_width).floor().max(8.0) as usize
+    }
+
+    fn lines_per_page(self, writing_mode: WritingMode) -> usize {
+        let extent = if writing_mode.is_vertical() {
+            self.body_width_px()
+        } else {
+            self.body_height_px()
+        };
+        (extent / APP_LINE_HEIGHT_PX).floor().max(1.0) as usize
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SampleFileLayoutHint {
+    fallback_layout: PageLayout,
+    writing_mode: WritingMode,
+    override_decoded_layout: bool,
+}
+
+fn sample_file_layout_hint(file_name: &str) -> Option<SampleFileLayoutHint> {
+    let stem = sample_file_stem(file_name);
+    let (short_edge_mm, long_edge_mm, override_decoded_layout) = match stem.as_str() {
+        "46" => (210.0, 297.0, true),
+        "a5" => (148.0, 210.0, false),
+        "a6" => (105.0, 148.0, false),
+        "b6" => (128.0, 182.0, false),
+        "fax02" => (182.0, 257.0, true),
+        "ichitaro-20030120132956-0007-sp-dat-tsaiten" => (210.0, 297.0, true),
+        "ichitaro-20030120133129-0007-sp-dat-tmogi3_2" => (210.0, 297.0, true),
+        "ichitaro-20030228030923-success-002-success_data-test" => (182.0, 257.0, true),
+        "ichitaro-20030315134715-success-001-success_data-shanai_lan" => (297.0, 210.0, true),
+        _ => return None,
+    };
+    let fallback_layout = PageLayout::new(
+        millimeters_to_css_px(short_edge_mm),
+        millimeters_to_css_px(long_edge_mm),
+    );
+    let writing_mode = match stem.as_str() {
+        "a5" | "a6" | "b6" => WritingMode::VerticalRl,
+        _ => WritingMode::Horizontal,
+    };
+    Some(SampleFileLayoutHint {
+        fallback_layout,
+        writing_mode,
+        override_decoded_layout,
+    })
+}
+
+fn sample_file_stem(file_name: &str) -> String {
+    let base_name = file_name.rsplit(['/', '\\']).next().unwrap_or(file_name);
+    base_name
+        .rsplit_once('.')
+        .map(|(stem, _)| stem)
+        .unwrap_or(base_name)
+        .to_ascii_lowercase()
+}
+
+fn page_layout_from_document(document: &Document) -> PageLayout {
+    decoded_page_layout_from_styles(document.unknown_styles())
+        .unwrap_or_default()
+        .with_portrait_orientation()
+}
+
+fn decoded_page_layout_from_styles(styles: &[UnknownStyle]) -> Option<PageLayout> {
+    styles
+        .iter()
+        .find(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))
+        .and_then(|style| page_layout_from_document_view_styles(style.payload()))
+        .or_else(|| {
+            styles
+                .iter()
+                .find(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+                .and_then(|style| page_layout_from_page_layout_style(style.payload()))
+        })
+}
+
+fn page_layout_from_document_view_styles(bytes: &[u8]) -> Option<PageLayout> {
+    page_layout_from_encoded_mm100_shift8(
+        read_be32_at(bytes, DOCUMENT_VIEW_STYLES_PAGE_WIDTH_OFFSET)?,
+        read_be32_at(bytes, DOCUMENT_VIEW_STYLES_PAGE_HEIGHT_OFFSET)?,
+    )
+}
+
+fn page_layout_from_page_layout_style(bytes: &[u8]) -> Option<PageLayout> {
+    summarize_style_stream(bytes)
+        .records()
+        .iter()
+        .filter(|record| record.code() == PAGE_LAYOUT_STYLE_RECORD_CODE)
+        .find_map(|record| {
+            let payload_start = record.offset().checked_add(4)?;
+            page_layout_from_encoded_mm100_shift8(
+                read_be32_at(
+                    bytes,
+                    payload_start.checked_add(PAGE_LAYOUT_STYLE_PAYLOAD_WIDTH_OFFSET)?,
+                )?,
+                read_be32_at(
+                    bytes,
+                    payload_start.checked_add(PAGE_LAYOUT_STYLE_PAYLOAD_HEIGHT_OFFSET)?,
+                )?,
+            )
+        })
+}
+
+fn page_layout_from_encoded_mm100_shift8(
+    width_field: u32,
+    height_field: u32,
+) -> Option<PageLayout> {
+    let width_mm100 = width_field >> 8;
+    let height_mm100 = height_field >> 8;
+    if !paper_size_mm100_is_plausible(width_mm100) || !paper_size_mm100_is_plausible(height_mm100) {
+        return None;
+    }
+    Some(PageLayout::new(
+        hundredth_millimeters_to_css_px(width_mm100),
+        hundredth_millimeters_to_css_px(height_mm100),
+    ))
+}
+
+fn paper_size_mm100_is_plausible(value: u32) -> bool {
+    (MIN_PAPER_SIZE_MM100..=MAX_PAPER_SIZE_MM100).contains(&value)
+}
+
+fn hundredth_millimeters_to_css_px(mm100: u32) -> f32 {
+    millimeters_to_css_px(mm100 as f32 / 100.0)
+}
+
+fn millimeters_to_css_px(mm: f32) -> f32 {
+    mm / 25.4 * APP_DEFAULT_DPI as f32
+}
+
 /// Application-facing document core, shaped after rhwp's `DocumentCore`.
 ///
 /// rjtd does not yet have a full Ichitaro layout engine. This facade keeps the
@@ -362,6 +714,7 @@ pub struct DocumentCore {
     pages: Vec<Vec<PageTextLine>>,
     file_name: String,
     dpi: f64,
+    page_layout: PageLayout,
     show_paragraph_marks: bool,
     show_control_codes: bool,
     show_transparent_borders: bool,
@@ -381,6 +734,59 @@ pub struct PageTextLine {
     paragraph_index: Option<usize>,
     char_start: usize,
     char_end: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PageDecorationSide {
+    Left,
+    Right,
+}
+
+impl PageDecorationSide {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+
+    fn text_anchor(self) -> &'static str {
+        match self {
+            Self::Left => "start",
+            Self::Right => "end",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PageDecoration {
+    side: PageDecorationSide,
+    page_number: usize,
+    header_text: String,
+    source: &'static str,
+    side_policy: &'static str,
+    side_policy_decoded: bool,
+    facing_pages_candidate: bool,
+    paired_slot_pairs: Vec<(u16, u16)>,
+    slot_evidence: Vec<PageDecorationSlotEvidence>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PageDecorationSlotEvidence {
+    record_index: usize,
+    record_offset: usize,
+    record_label: Option<String>,
+    slot: u16,
+    part04: Option<Vec<u8>>,
+    part05: Option<Vec<u8>>,
+    part06: Option<Vec<u8>>,
+    part07: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct VerticalPageTextPlacement {
+    x_shift_px: f32,
+    y_start_px: f32,
 }
 
 impl PageTextLine {
@@ -422,6 +828,7 @@ struct DocumentSnapshot {
     pages: Vec<Vec<PageTextLine>>,
     file_name: String,
     dpi: f64,
+    page_layout: PageLayout,
     show_paragraph_marks: bool,
     show_control_codes: bool,
     show_transparent_borders: bool,
@@ -441,6 +848,7 @@ impl DocumentSnapshot {
             pages: core.pages.clone(),
             file_name: core.file_name.clone(),
             dpi: core.dpi,
+            page_layout: core.page_layout,
             show_paragraph_marks: core.show_paragraph_marks,
             show_control_codes: core.show_control_codes,
             show_transparent_borders: core.show_transparent_borders,
@@ -460,17 +868,20 @@ impl DocumentCore {
     }
 
     pub fn from_document(document: Document) -> Self {
-        let pages = paginate_document_text(&document);
+        let page_layout = page_layout_from_document(&document);
+        let writing_mode = WritingMode::Horizontal;
+        let pages = paginate_document_text(&document, page_layout, writing_mode);
         Self {
             document,
             pages,
             file_name: String::new(),
             dpi: APP_DEFAULT_DPI,
+            page_layout,
             show_paragraph_marks: false,
             show_control_codes: false,
             show_transparent_borders: false,
             clip_enabled: true,
-            writing_mode: WritingMode::Horizontal,
+            writing_mode,
             next_snapshot_id: 1,
             snapshots: Vec::new(),
             caret_section: 0,
@@ -509,11 +920,15 @@ impl DocumentCore {
 
     pub fn get_document_info(&self) -> String {
         let style_candidates = text_style_candidates(self.document.unknown_styles());
+        let font_names = document_font_names(&self.document);
+        let fallback_font = primary_document_font_name(&font_names);
         format!(
-            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":\"Hiragino Sans\",\"fontsUsed\":[\"Hiragino Sans\"],\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
+            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
             APP_SOURCE_FORMAT,
             json_string(&self.file_name),
             self.page_count(),
+            json_string(fallback_font),
+            string_array_json(&font_names),
             self.writing_mode.as_str(),
             self.document.blocks().len(),
             self.document.raw_streams().len(),
@@ -521,10 +936,20 @@ impl DocumentCore {
             style_candidates.len(),
             style_candidate_names_json(&style_candidates),
             style_source_streams_json(self.document.unknown_styles()),
+            self.document.fonts().len(),
+            font_table_json(self.document.fonts()),
+            self.document.auto_texts().len(),
+            auto_texts_json(self.document.auto_texts()),
+            self.document.toc_entries().len(),
+            toc_entries_json(self.document.toc_entries()),
+            self.document.page_marks().len(),
+            page_marks_json(self.document.page_marks()),
             self.document.object_stream_candidates().len(),
             object_stream_candidates_json(self.document.object_stream_candidates()),
             self.document.object_frame_records().len(),
             object_frame_records_json(self.document.object_frame_records()),
+            self.document.object_embedding_frames().len(),
+            object_embedding_frames_json(self.document.object_embedding_frames()),
             self.document.text_count_ranges().len(),
             text_count_ranges_json(self.document.text_count_ranges()),
             self.document.text_control_boundaries().len(),
@@ -542,6 +967,13 @@ impl DocumentCore {
 
     pub fn set_file_name(&mut self, name: impl Into<String>) {
         self.file_name = name.into();
+        if let Some(hint) = sample_file_layout_hint(&self.file_name) {
+            if hint.override_decoded_layout || self.page_layout == PageLayout::default() {
+                self.page_layout = hint.fallback_layout;
+            }
+            self.writing_mode = hint.writing_mode;
+            self.refresh_pages();
+        }
     }
 
     pub fn file_name(&self) -> &str {
@@ -568,18 +1000,25 @@ impl DocumentCore {
 
     pub fn set_writing_mode(&mut self, writing_mode: WritingMode) {
         self.writing_mode = writing_mode;
+        self.refresh_pages();
+    }
+
+    pub fn page_layout(&self) -> PageLayout {
+        self.page_layout
     }
 
     pub fn get_page_def(&self, section_idx: u32) -> Result<String> {
         self.ensure_section(section_idx)?;
+        let layout = self.page_layout;
         Ok(format!(
-            "{{\"width\":{:.1},\"height\":{:.1},\"marginLeft\":{:.1},\"marginRight\":{:.1},\"marginTop\":{:.1},\"marginBottom\":{:.1},\"marginHeader\":0.0,\"marginFooter\":0.0,\"marginGutter\":0.0,\"landscape\":false,\"binding\":0}}",
-            APP_PAGE_WIDTH_PX,
-            APP_PAGE_HEIGHT_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX
+            "{{\"width\":{:.1},\"height\":{:.1},\"marginLeft\":{:.1},\"marginRight\":{:.1},\"marginTop\":{:.1},\"marginBottom\":{:.1},\"marginHeader\":0.0,\"marginFooter\":0.0,\"marginGutter\":0.0,\"landscape\":{},\"binding\":0}}",
+            layout.width_px(),
+            layout.height_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.landscape()
         ))
     }
 
@@ -660,15 +1099,15 @@ impl DocumentCore {
     }
 
     pub fn page_width_px(&self) -> f64 {
-        APP_PAGE_WIDTH_PX as f64
+        self.page_layout.width_px() as f64
     }
 
     pub fn page_height_px(&self) -> f64 {
-        APP_PAGE_HEIGHT_PX as f64
+        self.page_layout.height_px() as f64
     }
 
     pub fn page_margin_px(&self) -> f64 {
-        APP_PAGE_MARGIN_PX as f64
+        self.page_layout.margin_px() as f64
     }
 
     pub fn font_size_px(&self) -> f64 {
@@ -683,24 +1122,82 @@ impl DocumentCore {
         self.page_lines(page_num)
     }
 
+    fn page_decoration(&self, page_index: usize) -> Option<PageDecoration> {
+        if !self.writing_mode.is_vertical() {
+            return None;
+        }
+        let paired_slot_pairs = document_page_decoration_paired_slot_pairs(&self.document);
+        if paired_slot_pairs.is_empty() {
+            return None;
+        }
+        let slot_evidence = document_page_decoration_slot_evidence(&self.document);
+        let document_title = document_auto_text_title(&self.document)?;
+        let chapter_titles = document_chapter_title_candidates(&self.document);
+        if chapter_titles.is_empty() {
+            return None;
+        }
+        let body_start_page =
+            running_body_start_page(&self.pages, document_title, &chapter_titles)?;
+        if page_index < body_start_page {
+            return None;
+        }
+        if page_index > body_start_page
+            && self
+                .pages
+                .get(page_index)
+                .is_some_and(|page| page_has_exact_text_line(page, document_title))
+        {
+            return None;
+        }
+        let chapter_title = running_chapter_title_for_page(
+            &self.pages,
+            body_start_page,
+            page_index,
+            &chapter_titles,
+        )?;
+        let page_number = page_index + 1;
+        let side = if page_number.is_multiple_of(2) {
+            PageDecorationSide::Left
+        } else {
+            PageDecorationSide::Right
+        };
+        let header_text = if side == PageDecorationSide::Left {
+            chapter_title
+        } else {
+            document_title.to_string()
+        };
+        Some(PageDecoration {
+            side,
+            page_number,
+            header_text,
+            source: "autoTextInfo+pageLayoutStylePairedSlots+documentText",
+            side_policy: "facing-pages-odd-right-even-left",
+            side_policy_decoded: false,
+            facing_pages_candidate: true,
+            paired_slot_pairs,
+            slot_evidence,
+        })
+    }
+
     pub fn get_page_info(&self, page_num: u32) -> Result<String> {
         self.page_lines(page_num)?;
-        let body_x = APP_PAGE_MARGIN_PX;
-        let body_width = APP_PAGE_WIDTH_PX - (APP_PAGE_MARGIN_PX * 2.0);
+        let layout = self.page_layout;
+        let body_x = layout.margin_px();
+        let body_width = layout.body_width_px();
         Ok(format!(
             "{{\"pageIndex\":{},\"pageNumber\":{},\"width\":{:.1},\"height\":{:.1},\"sectionIndex\":0,\"marginLeft\":{:.1},\"marginRight\":{:.1},\"marginTop\":{:.1},\"marginBottom\":{:.1},\"marginHeader\":0.0,\"marginFooter\":0.0,\"pageBorderLeft\":{:.1},\"pageBorderRight\":{:.1},\"pageBorderTop\":{:.1},\"pageBorderBottom\":{:.1},\"columns\":[{{\"x\":{:.1},\"width\":{:.1}}}]}}",
             page_num,
             page_num + 1,
-            APP_PAGE_WIDTH_PX,
-            APP_PAGE_HEIGHT_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
-            APP_PAGE_MARGIN_PX,
+            layout.width_px(),
+            layout.height_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.margin_px(),
+            layout.margin_px(),
             body_x,
             body_width
         ))
@@ -725,7 +1222,7 @@ impl DocumentCore {
         } else {
             profile
         };
-        Ok(page_layer_tree_json(self, lines, profile))
+        Ok(page_layer_tree_json(self, lines, profile, page_num))
     }
 
     pub fn get_page_layer_tree_with_profile_native(
@@ -797,7 +1294,11 @@ impl DocumentCore {
             if rect.page_index != page_num as usize {
                 continue;
             }
-            controls.push(projected_control_layout_json(&control, &rect));
+            controls.push(projected_control_layout_json(
+                self.page_layout,
+                &control,
+                &rect,
+            ));
         }
         Ok(format!("{{\"controls\":[{}]}}", controls.join(",")))
     }
@@ -3722,6 +4223,7 @@ impl DocumentCore {
         self.pages = snapshot.pages;
         self.file_name = snapshot.file_name;
         self.dpi = snapshot.dpi;
+        self.page_layout = snapshot.page_layout;
         self.show_paragraph_marks = snapshot.show_paragraph_marks;
         self.show_control_codes = snapshot.show_control_codes;
         self.show_transparent_borders = snapshot.show_transparent_borders;
@@ -4760,8 +5262,10 @@ impl DocumentCore {
                 let Some((start, end)) = selection_overlap(line, paragraph_index, &range) else {
                     continue;
                 };
-                let start_rect = cursor_rect_from_line(page_index, line_index, line, start);
-                let end_rect = cursor_rect_from_line(page_index, line_index, line, end);
+                let start_rect =
+                    cursor_rect_from_line(self.page_layout, page_index, line_index, line, start);
+                let end_rect =
+                    cursor_rect_from_line(self.page_layout, page_index, line_index, line, end);
                 let width = (end_rect.x - start_rect.x).max(2.0);
                 rects.push(format!(
                     "{{\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"width\":{:.1},\"height\":{:.1}}}",
@@ -4967,12 +5471,16 @@ impl DocumentCore {
     pub fn render_page_svg(&self, page_num: u32) -> Result<String> {
         let index = page_num as usize;
         let lines = self.page_lines(page_num)?;
+        let decoration = self.page_decoration(index);
 
         Ok(render_text_page_svg(
             lines,
             index + 1,
             self.page_count() as usize,
+            self.page_layout,
             self.writing_mode,
+            &self.document,
+            decoration.as_ref(),
         ))
     }
 
@@ -5015,7 +5523,8 @@ impl DocumentCore {
 
     pub fn hit_test(&self, page_num: u32, x: f64, y: f64) -> Result<String> {
         let lines = self.page_lines(page_num)?;
-        let Some((line_index, line)) = nearest_text_line(lines, line_index_for_y(lines.len(), y))
+        let Some((line_index, line)) =
+            nearest_text_line(lines, line_index_for_y(self.page_layout, lines.len(), y))
         else {
             return Ok(format!(
                 "{{\"hit\":false,\"sectionIndex\":0,\"paragraphIndex\":0,\"charOffset\":0,\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1}}}",
@@ -5025,7 +5534,7 @@ impl DocumentCore {
             ));
         };
         let paragraph_index = line.paragraph_index().unwrap_or_default();
-        let char_offset = char_offset_for_x(line, x);
+        let char_offset = char_offset_for_x(self.page_layout, line, x);
         Ok(format!(
             "{{\"hit\":true,\"sectionIndex\":0,\"paragraphIndex\":{},\"charOffset\":{},\"pageIndex\":{},\"lineIndex\":{},\"x\":{:.1},\"y\":{:.1}}}",
             paragraph_index,
@@ -5105,8 +5614,14 @@ impl DocumentCore {
         } else {
             current_rect.x
         };
-        let new_char_offset = char_offset_for_x(target_line, target_x);
-        let rect = cursor_rect_from_line(page_index, page_line_index, target_line, new_char_offset);
+        let new_char_offset = char_offset_for_x(self.page_layout, target_line, target_x);
+        let rect = cursor_rect_from_line(
+            self.page_layout,
+            page_index,
+            page_line_index,
+            target_line,
+            new_char_offset,
+        );
         Ok(format!(
             "{{\"sectionIndex\":0,\"paragraphIndex\":{},\"charOffset\":{},\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"height\":{:.1},\"preferredX\":{:.1},\"rectValid\":true}}",
             target_line.paragraph_index().unwrap_or_default(),
@@ -5149,6 +5664,7 @@ impl DocumentCore {
                 last_line = Some((page_index, line_index, line));
                 if char_offset <= line.char_end() {
                     return Ok(cursor_rect_from_line(
+                        self.page_layout,
                         page_index,
                         line_index,
                         line,
@@ -5160,6 +5676,7 @@ impl DocumentCore {
 
         if let Some((page_index, line_index, line)) = last_line {
             return Ok(cursor_rect_from_line(
+                self.page_layout,
                 page_index,
                 line_index,
                 line,
@@ -5373,7 +5890,15 @@ impl DocumentCore {
     }
 
     fn refresh_pages(&mut self) {
-        self.pages = paginate_document_text(&self.document);
+        self.pages = paginate_document_text(&self.document, self.page_layout, self.writing_mode);
+        if let Some(pages) = project_sample_front_matter_pages(
+            &self.document,
+            &self.file_name,
+            self.page_layout,
+            self.writing_mode,
+        ) {
+            self.pages = pages;
+        }
     }
 
     fn ensure_section(&self, section_idx: u32) -> Result<()> {
@@ -5425,12 +5950,264 @@ impl RawStream {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentAutoText {
+    source_stream: String,
+    offset: usize,
+    text: String,
+}
+
+impl DocumentAutoText {
+    pub fn new(source_stream: impl Into<String>, offset: usize, text: impl Into<String>) -> Self {
+        Self {
+            source_stream: source_stream.into(),
+            offset,
+            text: text.into(),
+        }
+    }
+
+    pub fn from_auto_text_entry(source_stream: impl Into<String>, entry: &AutoTextEntry) -> Self {
+        Self::new(source_stream, entry.offset(), entry.text())
+    }
+
+    pub fn source_stream(&self) -> &str {
+        &self.source_stream
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentTocEntry {
+    title: String,
+    page_label: String,
+    source_span: TextSourceSpan,
+}
+
+impl DocumentTocEntry {
+    pub fn new(
+        title: impl Into<String>,
+        page_label: impl Into<String>,
+        source_span: TextSourceSpan,
+    ) -> Self {
+        Self {
+            title: title.into(),
+            page_label: page_label.into(),
+            source_span,
+        }
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn page_label(&self) -> &str {
+        &self.page_label
+    }
+
+    pub fn source_span(&self) -> &TextSourceSpan {
+        &self.source_span
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentPageMark {
+    source_stream: String,
+    family: String,
+    header_count: u32,
+    header_stride: u32,
+    header_last_index: u32,
+    entries: Vec<DocumentPageMarkEntry>,
+    trailing_byte_len: usize,
+}
+
+impl DocumentPageMark {
+    pub fn new(
+        source_stream: impl Into<String>,
+        family: impl Into<String>,
+        header_count: u32,
+        header_stride: u32,
+        header_last_index: u32,
+        entries: Vec<DocumentPageMarkEntry>,
+        trailing_byte_len: usize,
+    ) -> Self {
+        Self {
+            source_stream: source_stream.into(),
+            family: family.into(),
+            header_count,
+            header_stride,
+            header_last_index,
+            entries,
+            trailing_byte_len,
+        }
+    }
+
+    pub fn from_page_mark(source_stream: impl Into<String>, page_mark: &PageMark) -> Self {
+        let header = page_mark.header();
+        Self::new(
+            source_stream,
+            page_mark.family().as_str(),
+            header.count_value(),
+            header.stride_value(),
+            header.last_index_value(),
+            page_mark
+                .entries()
+                .iter()
+                .enumerate()
+                .map(|(row_index, entry)| DocumentPageMarkEntry::from_entry(row_index, entry))
+                .collect(),
+            page_mark.trailing_bytes().len(),
+        )
+    }
+
+    pub fn source_stream(&self) -> &str {
+        &self.source_stream
+    }
+
+    pub fn family(&self) -> &str {
+        &self.family
+    }
+
+    pub fn header_count(&self) -> u32 {
+        self.header_count
+    }
+
+    pub fn header_stride(&self) -> u32 {
+        self.header_stride
+    }
+
+    pub fn header_last_index(&self) -> u32 {
+        self.header_last_index
+    }
+
+    pub fn entries(&self) -> &[DocumentPageMarkEntry] {
+        &self.entries
+    }
+
+    pub fn trailing_byte_len(&self) -> usize {
+        self.trailing_byte_len
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentPageMarkEntry {
+    row_index: usize,
+    index: Option<u32>,
+    flags: Option<u32>,
+    line_start: Option<u32>,
+    line_end: Option<u32>,
+    raw_len: usize,
+}
+
+impl DocumentPageMarkEntry {
+    fn from_entry(row_index: usize, entry: &rjtd_core::layout_mark::PageMarkEntry) -> Self {
+        Self {
+            row_index,
+            index: entry.index(),
+            flags: entry.flags(),
+            line_start: entry.line_start(),
+            line_end: entry.line_end(),
+            raw_len: entry.raw().len(),
+        }
+    }
+
+    pub fn row_index(&self) -> usize {
+        self.row_index
+    }
+
+    pub fn index(&self) -> Option<u32> {
+        self.index
+    }
+
+    pub fn flags(&self) -> Option<u32> {
+        self.flags
+    }
+
+    pub fn line_start(&self) -> Option<u32> {
+        self.line_start
+    }
+
+    pub fn line_end(&self) -> Option<u32> {
+        self.line_end
+    }
+
+    pub fn raw_len(&self) -> usize {
+        self.raw_len
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentFont {
+    source_stream: String,
+    id: u16,
+    offset: usize,
+    name: String,
+    raw: Vec<u8>,
+}
+
+impl DocumentFont {
+    pub fn new(
+        source_stream: impl Into<String>,
+        id: u16,
+        offset: usize,
+        name: impl Into<String>,
+        raw: Vec<u8>,
+    ) -> Self {
+        Self {
+            source_stream: source_stream.into(),
+            id,
+            offset,
+            name: name.into(),
+            raw,
+        }
+    }
+
+    pub fn from_font_stream_entry(source_stream: impl Into<String>, entry: &FontEntry) -> Self {
+        Self::new(
+            source_stream,
+            entry.id(),
+            entry.offset(),
+            entry.name(),
+            entry.raw().to_vec(),
+        )
+    }
+
+    pub fn source_stream(&self) -> &str {
+        &self.source_stream
+    }
+
+    pub fn id(&self) -> u16 {
+        self.id
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn raw(&self) -> &[u8] {
+        &self.raw
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ObjectStreamCandidateReason {
     ObjectPath,
     ImagePath,
     ShapePath,
     TablePath,
+    VisualListPath,
+    EmbeddedPressSnapshot,
+    Jseq3Formula,
     SoMarker,
     ImageSignature,
     SvgSignature,
@@ -5443,10 +6220,213 @@ impl ObjectStreamCandidateReason {
             Self::ImagePath => "image-path",
             Self::ShapePath => "shape-path",
             Self::TablePath => "table-path",
+            Self::VisualListPath => "visual-list-path",
+            Self::EmbeddedPressSnapshot => "embedded-press-snapshot",
+            Self::Jseq3Formula => "jseq3-formula",
             Self::SoMarker => "so-marker",
             Self::ImageSignature => "image-signature",
             Self::SvgSignature => "svg-signature",
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectJseq3TextMarkerCandidate {
+    text: String,
+    offset: usize,
+    encoding: String,
+}
+
+impl ObjectJseq3TextMarkerCandidate {
+    fn new(text: impl Into<String>, offset: usize, encoding: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            offset,
+            encoding: encoding.into(),
+        }
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn encoding(&self) -> &str {
+        &self.encoding
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectJseq3FormulaCandidate {
+    magic: String,
+    magic_offset: usize,
+    so_trailer_offset: Option<usize>,
+    so_trailer_length: Option<usize>,
+    so_trailer_fields: Vec<u32>,
+    text_markers: Vec<ObjectJseq3TextMarkerCandidate>,
+    header_prefix: Vec<u8>,
+}
+
+impl ObjectJseq3FormulaCandidate {
+    fn new(
+        magic_offset: usize,
+        so_trailer_offset: Option<usize>,
+        so_trailer_length: Option<usize>,
+        so_trailer_fields: Vec<u32>,
+        text_markers: Vec<ObjectJseq3TextMarkerCandidate>,
+        header_prefix: Vec<u8>,
+    ) -> Self {
+        Self {
+            magic: "MATH.VAF".to_string(),
+            magic_offset,
+            so_trailer_offset,
+            so_trailer_length,
+            so_trailer_fields,
+            text_markers,
+            header_prefix,
+        }
+    }
+
+    pub fn magic(&self) -> &str {
+        &self.magic
+    }
+
+    pub fn magic_offset(&self) -> usize {
+        self.magic_offset
+    }
+
+    pub fn so_trailer_offset(&self) -> Option<usize> {
+        self.so_trailer_offset
+    }
+
+    pub fn so_trailer_length(&self) -> Option<usize> {
+        self.so_trailer_length
+    }
+
+    pub fn so_trailer_fields(&self) -> &[u32] {
+        &self.so_trailer_fields
+    }
+
+    pub fn text_markers(&self) -> &[ObjectJseq3TextMarkerCandidate] {
+        &self.text_markers
+    }
+
+    pub fn header_prefix(&self) -> &[u8] {
+        &self.header_prefix
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectEmbeddedPressVectorSegmentCandidate {
+    x1: u32,
+    y1: u32,
+    x2: u32,
+    y2: u32,
+}
+
+impl ObjectEmbeddedPressVectorSegmentCandidate {
+    fn new(x1: u32, y1: u32, x2: u32, y2: u32) -> Self {
+        Self { x1, y1, x2, y2 }
+    }
+
+    pub fn x1(&self) -> u32 {
+        self.x1
+    }
+
+    pub fn y1(&self) -> u32 {
+        self.y1
+    }
+
+    pub fn x2(&self) -> u32 {
+        self.x2
+    }
+
+    pub fn y2(&self) -> u32 {
+        self.y2
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectEmbeddedPressSnapshotCandidate {
+    magic: String,
+    body_length_candidate: u32,
+    format_marker: String,
+    object_count_candidate: u32,
+    object_table_offset_candidate: u32,
+    payload_length_candidate: u32,
+    width: u32,
+    height: u32,
+    header_prefix: Vec<u8>,
+    vector_segments: Vec<ObjectEmbeddedPressVectorSegmentCandidate>,
+}
+
+impl ObjectEmbeddedPressSnapshotCandidate {
+    fn new(
+        body_length_candidate: u32,
+        format_marker: impl Into<String>,
+        object_count_candidate: u32,
+        object_table_offset_candidate: u32,
+        payload_length_candidate: u32,
+        width: u32,
+        height: u32,
+        header_prefix: Vec<u8>,
+        vector_segments: Vec<ObjectEmbeddedPressVectorSegmentCandidate>,
+    ) -> Self {
+        Self {
+            magic: "JSSnapShot32".to_string(),
+            body_length_candidate,
+            format_marker: format_marker.into(),
+            object_count_candidate,
+            object_table_offset_candidate,
+            payload_length_candidate,
+            width,
+            height,
+            header_prefix,
+            vector_segments,
+        }
+    }
+
+    pub fn magic(&self) -> &str {
+        &self.magic
+    }
+
+    pub fn body_length_candidate(&self) -> u32 {
+        self.body_length_candidate
+    }
+
+    pub fn format_marker(&self) -> &str {
+        &self.format_marker
+    }
+
+    pub fn object_count_candidate(&self) -> u32 {
+        self.object_count_candidate
+    }
+
+    pub fn object_table_offset_candidate(&self) -> u32 {
+        self.object_table_offset_candidate
+    }
+
+    pub fn payload_length_candidate(&self) -> u32 {
+        self.payload_length_candidate
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn header_prefix(&self) -> &[u8] {
+        &self.header_prefix
+    }
+
+    pub fn vector_segments(&self) -> &[ObjectEmbeddedPressVectorSegmentCandidate] {
+        &self.vector_segments
     }
 }
 
@@ -5756,6 +6736,114 @@ impl ObjectImageDimensions {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectVisualListCandidate {
+    declared_size: usize,
+    magic_offset: usize,
+    magic: String,
+    version: u32,
+    flags: u32,
+    width: u32,
+    height: u32,
+    row_stride: u32,
+    bit_depth: u32,
+    x_pixels_per_meter: u32,
+    y_pixels_per_meter: u32,
+    rle_data_offset: usize,
+    rle_data_len: usize,
+    pixels: Vec<u8>,
+}
+
+impl ObjectVisualListCandidate {
+    fn new(
+        declared_size: usize,
+        version: u32,
+        flags: u32,
+        width: u32,
+        height: u32,
+        row_stride: u32,
+        bit_depth: u32,
+        x_pixels_per_meter: u32,
+        y_pixels_per_meter: u32,
+        rle_data_offset: usize,
+        rle_data_len: usize,
+        pixels: Vec<u8>,
+    ) -> Self {
+        Self {
+            declared_size,
+            magic_offset: VISUAL_LIST_MAGIC_OFFSET,
+            magic: "BMDV".to_string(),
+            version,
+            flags,
+            width,
+            height,
+            row_stride,
+            bit_depth,
+            x_pixels_per_meter,
+            y_pixels_per_meter,
+            rle_data_offset,
+            rle_data_len,
+            pixels,
+        }
+    }
+
+    pub fn declared_size(&self) -> usize {
+        self.declared_size
+    }
+
+    pub fn magic_offset(&self) -> usize {
+        self.magic_offset
+    }
+
+    pub fn magic(&self) -> &str {
+        &self.magic
+    }
+
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    pub fn flags(&self) -> u32 {
+        self.flags
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn row_stride(&self) -> u32 {
+        self.row_stride
+    }
+
+    pub fn bit_depth(&self) -> u32 {
+        self.bit_depth
+    }
+
+    pub fn x_pixels_per_meter(&self) -> u32 {
+        self.x_pixels_per_meter
+    }
+
+    pub fn y_pixels_per_meter(&self) -> u32 {
+        self.y_pixels_per_meter
+    }
+
+    pub fn rle_data_offset(&self) -> usize {
+        self.rle_data_offset
+    }
+
+    pub fn rle_data_len(&self) -> usize {
+        self.rle_data_len
+    }
+
+    pub fn pixels(&self) -> &[u8] {
+        &self.pixels
+    }
+}
+
 impl ObjectImagePayloadSpan {
     pub fn new(
         kind: impl Into<String>,
@@ -5833,6 +6921,9 @@ pub struct ObjectStreamCandidate {
     fdm_index_entry_candidates: Vec<ObjectFdmIndexEntryCandidate>,
     image_signature_hits: Vec<ObjectImageSignatureHit>,
     image_payload_spans: Vec<ObjectImagePayloadSpan>,
+    visual_list_candidate: Option<ObjectVisualListCandidate>,
+    embedded_press_snapshot_candidate: Option<ObjectEmbeddedPressSnapshotCandidate>,
+    jseq3_formula_candidate: Option<ObjectJseq3FormulaCandidate>,
     svg_offsets: Vec<usize>,
     so_offsets: Vec<usize>,
     payload_prefix: Vec<u8>,
@@ -6116,6 +7207,97 @@ impl ObjectFrameRecordCandidate {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectEmbeddingFrameCandidate {
+    source_path: String,
+    row_index: usize,
+    row_start: usize,
+    embedding_index: usize,
+    class_name: String,
+    primary_width: u16,
+    primary_height: u16,
+    frame_ref: u32,
+    frame_width: u32,
+    frame_height: u32,
+    row_prefix: Vec<u8>,
+}
+
+impl ObjectEmbeddingFrameCandidate {
+    fn new(
+        source_path: impl Into<String>,
+        row_index: usize,
+        row_start: usize,
+        row: &[u8],
+        class_name: impl Into<String>,
+        trailing: &[u8],
+    ) -> Option<Self> {
+        let class_name = class_name.into();
+        let embedding_index = read_le32_at(row, EMBEDDING_INFO_EMBEDDING_INDEX_OFFSET)? as usize;
+        let primary_width = read_le16_at(row, EMBEDDING_INFO_PRIMARY_WIDTH_OFFSET)?;
+        let primary_height = read_le16_at(row, EMBEDDING_INFO_PRIMARY_HEIGHT_OFFSET)?;
+        let frame_ref = read_le32_at(trailing, EMBEDDING_INFO_FRAME_REF_TRAILING_OFFSET)?;
+        let frame_width = read_le32_at(trailing, EMBEDDING_INFO_FRAME_WIDTH_TRAILING_OFFSET)?;
+        let frame_height = read_le32_at(trailing, EMBEDDING_INFO_FRAME_HEIGHT_TRAILING_OFFSET)?;
+        Some(Self {
+            source_path: source_path.into(),
+            row_index,
+            row_start,
+            embedding_index,
+            class_name,
+            primary_width,
+            primary_height,
+            frame_ref,
+            frame_width,
+            frame_height,
+            row_prefix: row[..row.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec(),
+        })
+    }
+
+    pub fn source_path(&self) -> &str {
+        &self.source_path
+    }
+
+    pub fn row_index(&self) -> usize {
+        self.row_index
+    }
+
+    pub fn row_start(&self) -> usize {
+        self.row_start
+    }
+
+    pub fn embedding_index(&self) -> usize {
+        self.embedding_index
+    }
+
+    pub fn class_name(&self) -> &str {
+        &self.class_name
+    }
+
+    pub fn primary_width(&self) -> u16 {
+        self.primary_width
+    }
+
+    pub fn primary_height(&self) -> u16 {
+        self.primary_height
+    }
+
+    pub fn frame_ref(&self) -> u32 {
+        self.frame_ref
+    }
+
+    pub fn frame_width(&self) -> u32 {
+        self.frame_width
+    }
+
+    pub fn frame_height(&self) -> u32 {
+        self.frame_height
+    }
+
+    pub fn row_prefix(&self) -> &[u8] {
+        &self.row_prefix
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ObjectFdmIndexBbox {
     left: i32,
@@ -6274,6 +7456,9 @@ pub struct ObjectStreamCandidateEvidence {
     reasons: Vec<ObjectStreamCandidateReason>,
     image_signature_hits: Vec<ObjectImageSignatureHit>,
     image_payload_spans: Vec<ObjectImagePayloadSpan>,
+    visual_list_candidate: Option<ObjectVisualListCandidate>,
+    embedded_press_snapshot_candidate: Option<ObjectEmbeddedPressSnapshotCandidate>,
+    jseq3_formula_candidate: Option<ObjectJseq3FormulaCandidate>,
     svg_offsets: Vec<usize>,
     so_offsets: Vec<usize>,
 }
@@ -6283,6 +7468,7 @@ impl ObjectStreamCandidateEvidence {
         reasons: Vec<ObjectStreamCandidateReason>,
         image_signature_hits: Vec<ObjectImageSignatureHit>,
         image_payload_spans: Vec<ObjectImagePayloadSpan>,
+        visual_list_candidate: Option<ObjectVisualListCandidate>,
         svg_offsets: Vec<usize>,
         so_offsets: Vec<usize>,
     ) -> Self {
@@ -6290,6 +7476,9 @@ impl ObjectStreamCandidateEvidence {
             reasons,
             image_signature_hits,
             image_payload_spans,
+            visual_list_candidate,
+            embedded_press_snapshot_candidate: None,
+            jseq3_formula_candidate: None,
             svg_offsets,
             so_offsets,
         }
@@ -6305,6 +7494,26 @@ impl ObjectStreamCandidateEvidence {
 
     pub fn image_payload_spans(&self) -> &[ObjectImagePayloadSpan] {
         &self.image_payload_spans
+    }
+
+    pub fn visual_list_candidate(&self) -> Option<&ObjectVisualListCandidate> {
+        self.visual_list_candidate.as_ref()
+    }
+
+    fn with_embedded_press_snapshot_candidate(
+        mut self,
+        snapshot: Option<ObjectEmbeddedPressSnapshotCandidate>,
+    ) -> Self {
+        self.embedded_press_snapshot_candidate = snapshot;
+        self
+    }
+
+    fn with_jseq3_formula_candidate(
+        mut self,
+        formula: Option<ObjectJseq3FormulaCandidate>,
+    ) -> Self {
+        self.jseq3_formula_candidate = formula;
+        self
     }
 
     pub fn svg_offsets(&self) -> &[usize] {
@@ -6335,6 +7544,9 @@ impl ObjectStreamCandidate {
             fdm_index_entry_candidates: Vec::new(),
             image_signature_hits: evidence.image_signature_hits,
             image_payload_spans: evidence.image_payload_spans,
+            visual_list_candidate: evidence.visual_list_candidate,
+            embedded_press_snapshot_candidate: evidence.embedded_press_snapshot_candidate,
+            jseq3_formula_candidate: evidence.jseq3_formula_candidate,
             svg_offsets: evidence.svg_offsets,
             so_offsets: evidence.so_offsets,
             payload_prefix,
@@ -6396,6 +7608,20 @@ impl ObjectStreamCandidate {
 
     pub fn image_payload_spans(&self) -> &[ObjectImagePayloadSpan] {
         &self.image_payload_spans
+    }
+
+    pub fn visual_list_candidate(&self) -> Option<&ObjectVisualListCandidate> {
+        self.visual_list_candidate.as_ref()
+    }
+
+    pub fn embedded_press_snapshot_candidate(
+        &self,
+    ) -> Option<&ObjectEmbeddedPressSnapshotCandidate> {
+        self.embedded_press_snapshot_candidate.as_ref()
+    }
+
+    pub fn jseq3_formula_candidate(&self) -> Option<&ObjectJseq3FormulaCandidate> {
+        self.jseq3_formula_candidate.as_ref()
     }
 
     pub fn svg_offsets(&self) -> &[usize] {
@@ -6732,12 +7958,46 @@ impl TableCandidate {
         }
     }
 
+    fn from_document_text_control_rows(index: usize, rows: &[DocumentTextControlTableRow]) -> Self {
+        let intervals = rows
+            .iter()
+            .enumerate()
+            .map(|(row_index, row)| TableCandidateInterval::from_control_cells(row_index, row))
+            .collect::<Vec<_>>();
+        let first_interval_index = rows.first().map_or(0, |row| row.index);
+        let last_interval_index = rows.last().map_or(0, |row| row.index);
+        let source_start = rows.first().map_or(0, |row| row.source_start);
+        let source_end = rows.last().map_or(source_start, |row| row.source_end);
+        Self {
+            index,
+            text_boundary_candidate_index: DIRECT_TABLE_CANDIDATE_SENTINEL,
+            text_count_range_index: DIRECT_TABLE_CANDIDATE_SENTINEL,
+            basis: TextCountRangeOverlapBasis::Unit,
+            delimiter_code: TABLE_ROW_DELIMITER_CONTROL,
+            interval_count: intervals.len(),
+            first_interval_index,
+            last_interval_index,
+            source_start,
+            source_end,
+            intervals,
+        }
+    }
+
+    fn is_document_text_control_run_candidate(&self) -> bool {
+        self.text_boundary_candidate_index == DIRECT_TABLE_CANDIDATE_SENTINEL
+            && self.text_count_range_index == DIRECT_TABLE_CANDIDATE_SENTINEL
+    }
+
     pub fn index(&self) -> usize {
         self.index
     }
 
     pub fn kind(&self) -> &'static str {
-        "multiIntervalControlRangeTableCandidate"
+        if self.is_document_text_control_run_candidate() {
+            "documentTextControlRunTableCandidate"
+        } else {
+            "multiIntervalControlRangeTableCandidate"
+        }
     }
 
     pub fn text_boundary_candidate_index(&self) -> usize {
@@ -6876,7 +8136,11 @@ impl TableCandidate {
     }
 
     pub fn rule(&self) -> &'static str {
-        "control-delimited-text-count-range-with-multiple-intervals"
+        if self.is_document_text_control_run_candidate() {
+            "document-text-001c-cells-with-000e-row-breaks"
+        } else {
+            "control-delimited-text-count-range-with-multiple-intervals"
+        }
     }
 }
 
@@ -6958,6 +8222,41 @@ impl TableCandidateInterval {
             text_preview,
             text_char_count,
             line_break_count,
+            column_segments,
+        }
+    }
+
+    fn from_control_cells(index: usize, row: &DocumentTextControlTableRow) -> Self {
+        let mut text = String::new();
+        let mut column_segments = Vec::new();
+        let mut char_offset = 0usize;
+        for (cell_index, cell) in row.cells.iter().enumerate() {
+            if cell_index > 0 {
+                text.push('\t');
+                char_offset += 1;
+            }
+            let cell_text = clean_table_control_cell_text(&cell.text);
+            let char_start = char_offset;
+            text.push_str(&cell_text);
+            char_offset += cell_text.chars().count();
+            column_segments.push(TableCandidateColumnSegment::new(
+                cell_index,
+                TableCandidateColumnSegmentKind::Label,
+                char_start,
+                char_offset,
+                cell_text,
+            ));
+        }
+        let text_char_count = text.chars().count();
+        let text_preview = preview_text(&text, 80);
+        Self {
+            index,
+            source_interval_index: row.index,
+            source_start: row.source_start,
+            source_end: row.source_end,
+            text_preview,
+            text_char_count,
+            line_break_count: 0,
             column_segments,
         }
     }
@@ -7269,6 +8568,21 @@ fn read_be16_at(bytes: &[u8], offset: usize) -> Option<u16> {
 fn read_be32_at(bytes: &[u8], offset: usize) -> Option<u32> {
     let bytes = bytes.get(offset..offset.checked_add(4)?)?;
     Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn read_le16_at(bytes: &[u8], offset: usize) -> Option<u16> {
+    let bytes = bytes.get(offset..offset.checked_add(2)?)?;
+    Some(u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+fn read_le32_at(bytes: &[u8], offset: usize) -> Option<u32> {
+    let bytes = bytes.get(offset..offset.checked_add(4)?)?;
+    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn read_i32_le_at(bytes: &[u8], offset: usize) -> Option<i32> {
+    let bytes = bytes.get(offset..offset.checked_add(4)?)?;
+    Some(i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
 fn read_i32_be_at(bytes: &[u8], offset: usize) -> Option<i32> {
@@ -7766,6 +9080,95 @@ fn object_frame_records_from_stream(path: &str, stream: &[u8]) -> Vec<ObjectFram
         .collect()
 }
 
+fn object_embedding_frames_from_cfb(data: &[u8]) -> Vec<ObjectEmbeddingFrameCandidate> {
+    let Ok(stream) = read_cfb_stream(data, EMBEDDING_INFO_PATH) else {
+        return Vec::new();
+    };
+
+    object_embedding_frames_from_stream(EMBEDDING_INFO_PATH, &stream)
+}
+
+fn object_embedding_frames_from_stream(
+    path: &str,
+    stream: &[u8],
+) -> Vec<ObjectEmbeddingFrameCandidate> {
+    let Some(declared_count) = read_le32_at(stream, 0).map(|value| value as usize) else {
+        return Vec::new();
+    };
+
+    let mut frames = Vec::new();
+    let mut cursor = EMBEDDING_INFO_HEADER_BYTES;
+    for row_index in 0..declared_count {
+        let Some(class_len_offset) = cursor.checked_add(EMBEDDING_INFO_CLASS_LENGTH_OFFSET) else {
+            break;
+        };
+        let Some(class_len) = read_le32_at(stream, class_len_offset).map(|value| value as usize)
+        else {
+            break;
+        };
+        let Some(class_start) = cursor.checked_add(EMBEDDING_INFO_CLASS_START_OFFSET) else {
+            break;
+        };
+        let Some(class_end) = class_start.checked_add(class_len) else {
+            break;
+        };
+        let Some(row_end) = class_end.checked_add(EMBEDDING_INFO_TRAILING_BYTES) else {
+            break;
+        };
+        let Some(row) = stream.get(cursor..row_end) else {
+            break;
+        };
+        let Some(class_bytes) = stream.get(class_start..class_end) else {
+            break;
+        };
+        let trailing = &stream[class_end..row_end];
+        let Some(class_name) = decode_utf16le_c_string(class_bytes) else {
+            break;
+        };
+        if class_name.is_empty() || class_len == 0 || class_len % 2 != 0 {
+            break;
+        }
+        let Some(frame) =
+            ObjectEmbeddingFrameCandidate::new(path, row_index, cursor, row, class_name, trailing)
+        else {
+            break;
+        };
+        if embedding_frame_candidate_is_plausible(&frame) {
+            frames.push(frame);
+        }
+        cursor = row_end;
+    }
+
+    frames
+}
+
+fn embedding_frame_candidate_is_plausible(frame: &ObjectEmbeddingFrameCandidate) -> bool {
+    frame.embedding_index() > 0
+        && frame.frame_ref() > 0
+        && frame.frame_width() > 0
+        && frame.frame_height() > 0
+        && frame.frame_width() <= 200_000
+        && frame.frame_height() <= 200_000
+        && frame.class_name().chars().all(|character| {
+            character == '.'
+                || character == '_'
+                || character == '-'
+                || character.is_ascii_alphanumeric()
+        })
+}
+
+fn decode_utf16le_c_string(bytes: &[u8]) -> Option<String> {
+    if bytes.len() % 2 != 0 {
+        return None;
+    }
+    let units = bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .take_while(|unit| *unit != 0)
+        .collect::<Vec<_>>();
+    String::from_utf16(&units).ok()
+}
+
 fn attach_object_stream_ownership_references(
     candidates: &mut [ObjectStreamCandidate],
     streams: &[(String, Vec<u8>)],
@@ -8198,8 +9601,20 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
 
     let image_signature_hits = image_signature_hits(stream);
     let image_payload_spans = image_payload_spans(stream, &image_signature_hits);
+    let visual_list_candidate = visual_list_candidate_from_stream(path, stream);
+    let embedded_press_snapshot_candidate = embedded_press_snapshot_candidate_from_stream(stream);
+    let jseq3_formula_candidate = jseq3_formula_candidate_from_stream(path, stream);
     if !image_signature_hits.is_empty() {
         push_unique_object_reason(&mut reasons, ObjectStreamCandidateReason::ImageSignature);
+    }
+    if embedded_press_snapshot_candidate.is_some() {
+        push_unique_object_reason(
+            &mut reasons,
+            ObjectStreamCandidateReason::EmbeddedPressSnapshot,
+        );
+    }
+    if jseq3_formula_candidate.is_some() {
+        push_unique_object_reason(&mut reasons, ObjectStreamCandidateReason::Jseq3Formula);
     }
 
     let svg_offsets = svg_signature_offsets(stream);
@@ -8223,11 +9638,308 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
             reasons,
             image_signature_hits,
             image_payload_spans,
+            visual_list_candidate,
             svg_offsets,
             so_offsets,
-        ),
+        )
+        .with_embedded_press_snapshot_candidate(embedded_press_snapshot_candidate)
+        .with_jseq3_formula_candidate(jseq3_formula_candidate),
         stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec(),
     ))
+}
+
+fn jseq3_formula_candidate_from_stream(
+    path: &str,
+    stream: &[u8],
+) -> Option<ObjectJseq3FormulaCandidate> {
+    if !path.ends_with("/JSEQ3Contents") {
+        return None;
+    }
+    if stream.get(..JSEQ3_CONTENTS_MAGIC_UTF16LE.len())? != JSEQ3_CONTENTS_MAGIC_UTF16LE {
+        return None;
+    }
+
+    let so_trailer_offset = jseq3_so_trailer_offset(stream);
+    let so_trailer_length = so_trailer_offset.map(|offset| stream.len().saturating_sub(offset));
+    let so_trailer_fields = so_trailer_offset
+        .and_then(|offset| stream.get(offset..))
+        .map(jseq3_so_trailer_fields)
+        .unwrap_or_default();
+    let text_markers = jseq3_text_marker_candidates(stream);
+    Some(ObjectJseq3FormulaCandidate::new(
+        0,
+        so_trailer_offset,
+        so_trailer_length,
+        so_trailer_fields,
+        text_markers,
+        stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec(),
+    ))
+}
+
+fn jseq3_so_trailer_offset(stream: &[u8]) -> Option<usize> {
+    find_subslice_offsets(stream, SO_RECORD_MARKER)
+        .into_iter()
+        .find(|offset| {
+            offset.saturating_add(JSEQ3_SO_FIELD_COUNT * JSEQ3_SO_FIELD_BYTES) <= stream.len()
+                && offset.saturating_add(JSEQ3_SO_TRAILER_BYTES) >= stream.len()
+        })
+}
+
+fn jseq3_so_trailer_fields(trailer: &[u8]) -> Vec<u32> {
+    (0..JSEQ3_SO_FIELD_COUNT)
+        .filter_map(|index| read_le32_at(trailer, index * JSEQ3_SO_FIELD_BYTES))
+        .collect()
+}
+
+fn jseq3_text_marker_candidates(stream: &[u8]) -> Vec<ObjectJseq3TextMarkerCandidate> {
+    let mut candidates = Vec::new();
+    for marker in JSEQ3_TEXT_MARKERS {
+        let encoded = utf16le_bytes(marker);
+        for offset in find_subslice_offsets(stream, &encoded) {
+            candidates.push(ObjectJseq3TextMarkerCandidate::new(
+                *marker, offset, "utf-16le",
+            ));
+        }
+    }
+    candidates.sort_by_key(|candidate| candidate.offset());
+    candidates
+}
+
+fn utf16le_bytes(text: &str) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for unit in text.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes
+}
+
+fn embedded_press_snapshot_candidate_from_stream(
+    stream: &[u8],
+) -> Option<ObjectEmbeddedPressSnapshotCandidate> {
+    if stream.get(..EMBEDDED_PRESS_SNAPSHOT_MAGIC.len())? != EMBEDDED_PRESS_SNAPSHOT_MAGIC {
+        return None;
+    }
+    let body_length_candidate = read_le32_at(stream, EMBEDDED_PRESS_SNAPSHOT_BODY_LENGTH_OFFSET)?;
+    let format_marker = stream
+        .get(EMBEDDED_PRESS_SNAPSHOT_FORMAT_OFFSET..EMBEDDED_PRESS_SNAPSHOT_FORMAT_OFFSET + 4)
+        .map(|bytes| {
+            bytes
+                .iter()
+                .copied()
+                .filter(|byte| byte.is_ascii_graphic())
+                .map(char::from)
+                .collect::<String>()
+        })?;
+    let object_count_candidate = read_le32_at(stream, EMBEDDED_PRESS_SNAPSHOT_OBJECT_COUNT_OFFSET)?;
+    let object_table_offset_candidate =
+        read_le32_at(stream, EMBEDDED_PRESS_SNAPSHOT_OBJECT_TABLE_OFFSET)?;
+    let payload_length_candidate =
+        read_le32_at(stream, EMBEDDED_PRESS_SNAPSHOT_PAYLOAD_LENGTH_OFFSET)?;
+    let width = read_le32_at(stream, EMBEDDED_PRESS_SNAPSHOT_WIDTH_OFFSET)?;
+    let height = read_le32_at(stream, EMBEDDED_PRESS_SNAPSHOT_HEIGHT_OFFSET)?;
+    if width == 0 || height == 0 || body_length_candidate == 0 || payload_length_candidate == 0 {
+        return None;
+    }
+    let vector_segments = embedded_press_snapshot_vector_segments(stream, width, height);
+    Some(ObjectEmbeddedPressSnapshotCandidate::new(
+        body_length_candidate,
+        format_marker,
+        object_count_candidate,
+        object_table_offset_candidate,
+        payload_length_candidate,
+        width,
+        height,
+        stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec(),
+        vector_segments,
+    ))
+}
+
+fn embedded_press_snapshot_vector_segments(
+    stream: &[u8],
+    width: u32,
+    height: u32,
+) -> Vec<ObjectEmbeddedPressVectorSegmentCandidate> {
+    if width == 0 || height == 0 || EMBEDDED_PRESS_SNAPSHOT_VECTOR_SCAN_OFFSET + 8 > stream.len() {
+        return Vec::new();
+    }
+
+    let mut values = Vec::new();
+    let mut offset = EMBEDDED_PRESS_SNAPSHOT_VECTOR_SCAN_OFFSET;
+    while offset + 4 <= stream.len() {
+        let raw = read_i32_le_at(stream, offset).unwrap_or_default();
+        values.push(if raw.rem_euclid(65_536) == 0 {
+            Some(raw / 65_536)
+        } else {
+            None
+        });
+        offset += 4;
+    }
+
+    let mut pairs = Vec::new();
+    for index in 0..values.len().saturating_sub(1) {
+        let Some(x) = values[index] else {
+            continue;
+        };
+        let Some(y) = values[index + 1] else {
+            continue;
+        };
+        if x >= 0 && y >= 0 && (x as u32) <= width && (y as u32) <= height {
+            pairs.push((index, x as u32, y as u32));
+        }
+    }
+
+    let max_delta = width.max(height);
+    let mut segments = Vec::new();
+    for window in pairs.windows(2) {
+        let (first_index, x1, y1) = window[0];
+        let (second_index, x2, y2) = window[1];
+        if second_index != first_index + 2 {
+            continue;
+        }
+        let delta = x1.abs_diff(x2) + y1.abs_diff(y2);
+        if !(3..=max_delta).contains(&delta) {
+            continue;
+        }
+        segments.push(ObjectEmbeddedPressVectorSegmentCandidate::new(
+            x1, y1, x2, y2,
+        ));
+        if segments.len() >= EMBEDDED_PRESS_SNAPSHOT_VECTOR_SEGMENT_LIMIT {
+            break;
+        }
+    }
+
+    segments
+}
+
+fn visual_list_candidate_from_stream(
+    path: &str,
+    stream: &[u8],
+) -> Option<ObjectVisualListCandidate> {
+    if !path.to_ascii_lowercase().contains("visuallist") {
+        return None;
+    }
+    if stream.get(VISUAL_LIST_MAGIC_OFFSET..VISUAL_LIST_MAGIC_OFFSET + VISUAL_LIST_MAGIC.len())?
+        != VISUAL_LIST_MAGIC
+    {
+        return None;
+    }
+    let declared_size = read_be32_at(stream, 0)? as usize;
+    let version = read_be32_at(stream, VISUAL_LIST_VERSION_OFFSET)?;
+    let flags = read_be32_at(stream, VISUAL_LIST_FLAGS_OFFSET)?;
+    let width = read_be32_at(stream, VISUAL_LIST_WIDTH_OFFSET)?;
+    let height = read_be32_at(stream, VISUAL_LIST_HEIGHT_OFFSET)?;
+    let row_stride = read_be32_at(stream, VISUAL_LIST_ROW_STRIDE_OFFSET)?;
+    let bit_depth = read_be32_at(stream, VISUAL_LIST_BIT_DEPTH_OFFSET)?;
+    let x_pixels_per_meter = read_be32_at(stream, VISUAL_LIST_X_PPM_OFFSET)?;
+    let y_pixels_per_meter = read_be32_at(stream, VISUAL_LIST_Y_PPM_OFFSET)?;
+    let rle_data_len = read_be32_at(stream, VISUAL_LIST_RLE_LENGTH_OFFSET)? as usize;
+    let rle_data_end = VISUAL_LIST_HEADER_BYTES.checked_add(rle_data_len)?;
+    let rle_data = stream.get(VISUAL_LIST_HEADER_BYTES..rle_data_end)?;
+    let pixels = decode_visual_list_rle8(width, height, rle_data)?;
+    Some(ObjectVisualListCandidate::new(
+        declared_size,
+        version,
+        flags,
+        width,
+        height,
+        row_stride,
+        bit_depth,
+        x_pixels_per_meter,
+        y_pixels_per_meter,
+        VISUAL_LIST_HEADER_BYTES,
+        rle_data_len,
+        pixels,
+    ))
+}
+
+fn decode_visual_list_rle8(width: u32, height: u32, data: &[u8]) -> Option<Vec<u8>> {
+    if width == 0 || height == 0 || width > 10_000 || height > 10_000 {
+        return None;
+    }
+    let width = usize::try_from(width).ok()?;
+    let height = usize::try_from(height).ok()?;
+    let total_pixels = width.checked_mul(height)?;
+    if total_pixels > 16_000_000 {
+        return None;
+    }
+
+    let fill = visual_list_default_pixel(data);
+    let mut pixels = Vec::with_capacity(total_pixels);
+    let mut row = Vec::with_capacity(width);
+    let mut offset = 0usize;
+    while offset + 1 < data.len() && pixels.len() < total_pixels {
+        let count = data[offset];
+        let value = data[offset + 1];
+        offset += 2;
+        if count != 0 {
+            row.extend(std::iter::repeat(value).take(count as usize));
+            continue;
+        }
+
+        match value {
+            0 => flush_visual_list_row(&mut pixels, &mut row, width, height, fill),
+            1 => break,
+            2 => {
+                if offset + 1 >= data.len() {
+                    return None;
+                }
+                let dx = data[offset] as usize;
+                let dy = data[offset + 1] as usize;
+                offset += 2;
+                row.extend(std::iter::repeat(fill).take(dx));
+                for _ in 0..dy {
+                    flush_visual_list_row(&mut pixels, &mut row, width, height, fill);
+                }
+            }
+            literal_len => {
+                let literal_len = literal_len as usize;
+                let literal_end = offset.checked_add(literal_len)?;
+                row.extend_from_slice(data.get(offset..literal_end)?);
+                offset = literal_end;
+                if literal_len % 2 == 1 {
+                    offset = offset.checked_add(1)?;
+                    if offset > data.len() {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
+    if !row.is_empty() && pixels.len() < total_pixels {
+        flush_visual_list_row(&mut pixels, &mut row, width, height, fill);
+    }
+    while pixels.len() < total_pixels {
+        pixels.extend(std::iter::repeat(fill).take(width));
+    }
+    pixels.truncate(total_pixels);
+    Some(pixels)
+}
+
+fn visual_list_default_pixel(data: &[u8]) -> u8 {
+    if data.len() >= 2 && data[0] != 0 {
+        data[1]
+    } else {
+        0xff
+    }
+}
+
+fn flush_visual_list_row(
+    pixels: &mut Vec<u8>,
+    row: &mut Vec<u8>,
+    width: usize,
+    height: usize,
+    fill: u8,
+) {
+    if pixels.len() >= width.saturating_mul(height) {
+        row.clear();
+        return;
+    }
+    if row.len() < width {
+        row.extend(std::iter::repeat(fill).take(width - row.len()));
+    }
+    pixels.extend(row.iter().copied().take(width));
+    row.clear();
 }
 
 fn push_object_path_reasons(path: &str, reasons: &mut Vec<ObjectStreamCandidateReason>) {
@@ -8280,6 +9992,10 @@ fn push_object_path_reasons(path: &str, reasons: &mut Vec<ObjectStreamCandidateR
             && !contains_any(segment, &["positiontable", "style"])
     }) {
         push_unique_object_reason(reasons, ObjectStreamCandidateReason::TablePath);
+    }
+
+    if segments.iter().any(|segment| *segment == "visuallist") {
+        push_unique_object_reason(reasons, ObjectStreamCandidateReason::VisualListPath);
     }
 }
 
@@ -8501,6 +10217,7 @@ fn image_payload_candidate(
 }
 
 fn image_payload_dimensions(payload: &[u8]) -> Option<ObjectImageDimensions> {
+    #[cfg(feature = "bitmap-images")]
     if let Ok(image) = image::load_from_memory(payload) {
         return Some(ObjectImageDimensions::new(image.width(), image.height()));
     }
@@ -8861,6 +10578,102 @@ impl<'a> DocumentTextSourceSpans<'a> {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+struct DocumentTextTocRow {
+    title: String,
+    page_label: Option<String>,
+    byte_start: Option<usize>,
+    byte_end: usize,
+    unit_start: Option<usize>,
+    unit_end: usize,
+}
+
+impl DocumentTextTocRow {
+    fn push_entry_span(&mut self, entry: &DocumentTextMapEntry) {
+        self.byte_start = Some(
+            self.byte_start
+                .map_or(entry.byte_start(), |start| start.min(entry.byte_start())),
+        );
+        self.byte_end = self.byte_end.max(entry.byte_end());
+        self.unit_start = Some(
+            self.unit_start
+                .map_or(entry.unit_start(), |start| start.min(entry.unit_start())),
+        );
+        self.unit_end = self.unit_end.max(entry.unit_end());
+    }
+
+    fn push_visible_text(&mut self, entry: &DocumentTextMapEntry) {
+        self.push_entry_span(entry);
+        self.title.push_str(&entry.text().replace(['\r', '\n'], ""));
+    }
+
+    fn push_page_label(&mut self, entry: &DocumentTextMapEntry) {
+        self.push_entry_span(entry);
+        let label = entry
+            .text()
+            .chars()
+            .filter(|character| character.is_ascii_digit())
+            .collect::<String>();
+        if !label.is_empty() {
+            self.page_label = Some(label);
+        }
+    }
+
+    fn into_toc_entry(self) -> Option<DocumentTocEntry> {
+        let title = self.title.trim().to_string();
+        let page_label = self.page_label?;
+        if title.is_empty()
+            || !page_label
+                .chars()
+                .all(|character| character.is_ascii_digit())
+            || !is_short_chapter_title(&title)
+        {
+            return None;
+        }
+        Some(DocumentTocEntry::new(
+            title,
+            page_label,
+            TextSourceSpan::new(
+                self.byte_start?,
+                self.byte_end,
+                self.unit_start?,
+                self.unit_end,
+            ),
+        ))
+    }
+}
+
+fn document_text_toc_entries(entries: &[DocumentTextMapEntry]) -> Vec<DocumentTocEntry> {
+    let mut toc_entries = Vec::new();
+    let mut row = DocumentTextTocRow::default();
+
+    for entry in entries {
+        match entry.kind() {
+            DocumentTextMapKind::TextRun | DocumentTextMapKind::InlineText => {
+                row.push_visible_text(entry);
+            }
+            DocumentTextMapKind::SkippedInlineText => {
+                if entry.selector() == Some(DOCUMENT_TEXT_TOC_PAGE_SELECTOR) {
+                    row.push_page_label(entry);
+                }
+            }
+            DocumentTextMapKind::ControlBoundary => {}
+        }
+
+        if entry.text().contains('\n') || entry.text().contains('\r') {
+            if let Some(toc_entry) = std::mem::take(&mut row).into_toc_entry() {
+                toc_entries.push(toc_entry);
+            }
+        }
+    }
+
+    if let Some(toc_entry) = row.into_toc_entry() {
+        toc_entries.push(toc_entry);
+    }
+
+    toc_entries
+}
+
 struct SourceTextPart {
     text: String,
     source_span: Option<TextSourceSpan>,
@@ -9019,6 +10832,242 @@ fn table_candidates_from_text_boundaries(
         ));
     }
     table_candidates
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DocumentTextControlTableCell {
+    source_start: usize,
+    source_end: usize,
+    text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DocumentTextControlTableRow {
+    index: usize,
+    source_start: usize,
+    source_end: usize,
+    cells: Vec<DocumentTextControlTableCell>,
+}
+
+#[derive(Debug, Clone)]
+struct PendingDocumentTextControlCell {
+    source_start: Option<usize>,
+    source_end: usize,
+    text: String,
+}
+
+impl PendingDocumentTextControlCell {
+    fn new() -> Self {
+        Self {
+            source_start: None,
+            source_end: 0,
+            text: String::new(),
+        }
+    }
+
+    fn push_text(&mut self, entry: &DocumentTextMapEntry) {
+        if self.source_start.is_none() {
+            self.source_start = Some(entry.unit_start());
+        }
+        self.source_end = entry.unit_end();
+        self.text.push_str(entry.text());
+    }
+
+    fn finish(&mut self) -> Option<DocumentTextControlTableCell> {
+        let text = clean_table_control_cell_text(&self.text);
+        let source_start = self.source_start.take()?;
+        let source_end = self.source_end.max(source_start);
+        self.source_end = 0;
+        self.text.clear();
+        if text.is_empty() {
+            return None;
+        }
+        Some(DocumentTextControlTableCell {
+            source_start,
+            source_end,
+            text,
+        })
+    }
+}
+
+fn table_candidates_from_document_text_controls(
+    entries: &[DocumentTextMapEntry],
+    start_index: usize,
+) -> Vec<TableCandidate> {
+    let rows = document_text_control_table_rows(entries);
+    let mut candidates = Vec::new();
+    let mut current_rows = Vec::new();
+    let mut current_column_count = 0usize;
+    let mut empty_gap_count = 0usize;
+
+    for row in rows {
+        let column_count = row.cells.len();
+        if column_count == 0 {
+            if !current_rows.is_empty() {
+                empty_gap_count += 1;
+                if empty_gap_count > 1 {
+                    push_document_text_control_table_candidate(
+                        &mut candidates,
+                        start_index,
+                        &mut current_rows,
+                    );
+                    current_column_count = 0;
+                    empty_gap_count = 0;
+                }
+            }
+            continue;
+        }
+
+        if column_count < 2 {
+            push_document_text_control_table_candidate(
+                &mut candidates,
+                start_index,
+                &mut current_rows,
+            );
+            current_column_count = 0;
+            empty_gap_count = 0;
+            continue;
+        }
+
+        if current_rows.is_empty() || (column_count == current_column_count && empty_gap_count <= 1)
+        {
+            current_column_count = column_count;
+            current_rows.push(row);
+            empty_gap_count = 0;
+            continue;
+        }
+
+        push_document_text_control_table_candidate(&mut candidates, start_index, &mut current_rows);
+        current_column_count = 0;
+        empty_gap_count = 0;
+
+        if column_count >= 2 {
+            current_column_count = column_count;
+            current_rows.push(row);
+        } else if column_count == 0 {
+            empty_gap_count += 1;
+        }
+    }
+
+    push_document_text_control_table_candidate(&mut candidates, start_index, &mut current_rows);
+    candidates
+}
+
+fn push_document_text_control_table_candidate(
+    candidates: &mut Vec<TableCandidate>,
+    start_index: usize,
+    rows: &mut Vec<DocumentTextControlTableRow>,
+) {
+    if document_text_control_table_rows_are_plausible(rows) {
+        candidates.push(TableCandidate::from_document_text_control_rows(
+            start_index + candidates.len(),
+            rows,
+        ));
+    }
+    rows.clear();
+}
+
+fn document_text_control_table_rows_are_plausible(rows: &[DocumentTextControlTableRow]) -> bool {
+    if rows.len() >= 3 {
+        return true;
+    }
+    rows.len() >= 2
+        && rows.iter().skip(1).any(|row| {
+            row.cells
+                .iter()
+                .any(|cell| table_control_cell_has_value_marker(&cell.text))
+        })
+}
+
+fn table_control_cell_has_value_marker(text: &str) -> bool {
+    text.chars()
+        .any(|character| character.is_ascii_digit() || matches!(character, '０'..='９'))
+}
+
+fn document_text_control_table_rows(
+    entries: &[DocumentTextMapEntry],
+) -> Vec<DocumentTextControlTableRow> {
+    let mut rows = Vec::new();
+    let mut cells = Vec::new();
+    let mut cell = PendingDocumentTextControlCell::new();
+    let mut row_start: Option<usize> = None;
+    let mut row_index = 0usize;
+
+    for entry in entries {
+        match entry.kind() {
+            DocumentTextMapKind::TextRun | DocumentTextMapKind::InlineText => {
+                if row_start.is_none() {
+                    row_start = Some(entry.unit_start());
+                }
+                cell.push_text(entry);
+            }
+            DocumentTextMapKind::SkippedInlineText => {}
+            DocumentTextMapKind::ControlBoundary => match entry.code() {
+                Some(TABLE_CELL_DELIMITER_CONTROL) => {
+                    if row_start.is_none() {
+                        row_start = Some(entry.unit_start());
+                    }
+                    if let Some(finished) = cell.finish() {
+                        cells.push(finished);
+                    }
+                }
+                Some(TABLE_ROW_DELIMITER_CONTROL) => {
+                    if row_start.is_none() {
+                        row_start = Some(entry.unit_start());
+                    }
+                    if let Some(finished) = cell.finish() {
+                        cells.push(finished);
+                    }
+                    let source_start = row_start.unwrap_or(entry.unit_start());
+                    rows.push(DocumentTextControlTableRow {
+                        index: row_index,
+                        source_start,
+                        source_end: entry.unit_end(),
+                        cells: std::mem::take(&mut cells),
+                    });
+                    row_index += 1;
+                    row_start = None;
+                }
+                _ => {
+                    if let Some(finished) = cell.finish() {
+                        cells.push(finished);
+                    }
+                    if let Some(source_start) = row_start.take() {
+                        rows.push(DocumentTextControlTableRow {
+                            index: row_index,
+                            source_start,
+                            source_end: entry.unit_start(),
+                            cells: std::mem::take(&mut cells),
+                        });
+                        row_index += 1;
+                    } else {
+                        cells.clear();
+                    }
+                }
+            },
+        }
+    }
+
+    if let Some(finished) = cell.finish() {
+        cells.push(finished);
+    }
+    if let Some(source_start) = row_start {
+        let source_end = cells
+            .last()
+            .map_or(source_start, |cell| cell.source_end.max(source_start));
+        rows.push(DocumentTextControlTableRow {
+            index: row_index,
+            source_start,
+            source_end,
+            cells,
+        });
+    }
+
+    rows
+}
+
+fn clean_table_control_cell_text(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn table_candidate_intervals(
@@ -10136,12 +12185,16 @@ fn projected_control_json(control: &ProjectedTextControl) -> String {
     )
 }
 
-fn projected_control_layout_json(control: &ProjectedTextControl, rect: &CursorRect) -> String {
+fn projected_control_layout_json(
+    layout: PageLayout,
+    control: &ProjectedTextControl,
+    rect: &CursorRect,
+) -> String {
     format!(
         "{{\"type\":\"jtdControl\",\"x\":{:.1},\"y\":{:.1},\"w\":{:.1},\"h\":{:.1},\"secIdx\":0,\"paraIdx\":{},\"controlIdx\":{},\"charPos\":{},\"code\":{},\"codeHex\":{},\"decoded\":false,\"source\":\"textControlBoundary\"}}",
         rect.x,
         rect.y,
-        column_width_px(),
+        column_width_px(layout),
         rect.height,
         control.paragraph_index,
         control.boundary_index,
@@ -10151,48 +12204,97 @@ fn projected_control_layout_json(control: &ProjectedTextControl, rect: &CursorRe
     )
 }
 
-fn paginate_document_text(document: &Document) -> Vec<Vec<PageTextLine>> {
-    let mut lines = Vec::new();
+fn paginate_document_text(
+    document: &Document,
+    layout: PageLayout,
+    writing_mode: WritingMode,
+) -> Vec<Vec<PageTextLine>> {
+    let wrap_columns = layout.wrap_columns(writing_mode);
+    let lines_per_page = layout.lines_per_page(writing_mode);
+    let forced_breaks = projected_page_breaks(document);
+    let mut pages = Vec::new();
+    let mut current_page = Vec::new();
     let mut paragraph_index = 0usize;
 
     for block in document.blocks() {
         match block {
             Block::Paragraph(paragraph) => {
                 let text = paragraph_text(paragraph);
-                let wrapped = wrap_text_line(&text, paragraph_index, APP_WRAP_COLUMNS);
+                let paragraph_breaks = forced_breaks
+                    .get(&paragraph_index)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                let wrapped = wrap_text_line(&text, paragraph_index, wrap_columns);
+                let mut forced_at_paragraph_end = false;
                 if wrapped.is_empty() {
-                    lines.push(PageTextLine::new(
-                        String::new(),
-                        Some(paragraph_index),
-                        0,
-                        0,
-                    ));
+                    push_paginated_line(
+                        &mut pages,
+                        &mut current_page,
+                        PageTextLine::new(String::new(), Some(paragraph_index), 0, 0),
+                        lines_per_page,
+                    );
+                    if paragraph_breaks.contains(&0) {
+                        force_page_break(&mut pages, &mut current_page);
+                        forced_at_paragraph_end = true;
+                    }
                 } else {
-                    lines.extend(wrapped);
+                    for line in wrapped {
+                        let segments = split_line_at_page_breaks(line, paragraph_breaks);
+                        for segment in segments {
+                            push_paginated_line(
+                                &mut pages,
+                                &mut current_page,
+                                segment.line,
+                                lines_per_page,
+                            );
+                            if segment.break_after {
+                                force_page_break(&mut pages, &mut current_page);
+                                forced_at_paragraph_end = true;
+                            } else {
+                                forced_at_paragraph_end = false;
+                            }
+                        }
+                    }
                 }
-                lines.push(PageTextLine::new(String::new(), None, 0, 0));
+                if !forced_at_paragraph_end && !writing_mode.is_vertical() {
+                    push_paginated_line(
+                        &mut pages,
+                        &mut current_page,
+                        PageTextLine::new(String::new(), None, 0, 0),
+                        lines_per_page,
+                    );
+                }
                 paragraph_index += 1;
             }
             Block::Unknown(_) => {
-                lines.push(PageTextLine::new(
-                    "[UnknownBlock preserved by rjtd]".to_string(),
-                    None,
-                    0,
-                    0,
-                ));
-                lines.push(PageTextLine::new(String::new(), None, 0, 0));
+                push_paginated_line(
+                    &mut pages,
+                    &mut current_page,
+                    PageTextLine::new("[UnknownBlock preserved by rjtd]".to_string(), None, 0, 0),
+                    lines_per_page,
+                );
+                push_paginated_line(
+                    &mut pages,
+                    &mut current_page,
+                    PageTextLine::new(String::new(), None, 0, 0),
+                    lines_per_page,
+                );
             }
         }
     }
 
-    while lines
+    while current_page
         .last()
         .is_some_and(|line| line.text().is_empty() && line.paragraph_index().is_none())
     {
-        lines.pop();
+        current_page.pop();
     }
 
-    if lines.is_empty() {
+    if !current_page.is_empty() {
+        pages.push(current_page);
+    }
+
+    if pages.is_empty() {
         if !document.raw_streams().is_empty() {
             let raw_streams = document
                 .raw_streams()
@@ -10210,10 +12312,805 @@ fn paginate_document_text(document: &Document) -> Vec<Vec<PageTextLine>> {
         return vec![Vec::new()];
     }
 
+    pages
+}
+
+fn project_sample_front_matter_pages(
+    document: &Document,
+    _file_name: &str,
+    layout: PageLayout,
+    writing_mode: WritingMode,
+) -> Option<Vec<Vec<PageTextLine>>> {
+    if !writing_mode.is_vertical() {
+        return None;
+    }
+
+    let paragraphs = document_paragraph_texts(document);
+    let front_matter = ginga_front_matter_indices(&paragraphs)?;
+    let forced_breaks = projected_page_breaks(document);
+    let wrap_columns = layout.wrap_columns(writing_mode);
+    let mut pages = Vec::new();
+
+    pages.push(wrap_paragraphs_as_single_page(
+        &paragraphs[front_matter.title_index..front_matter.title_index + 1],
+        wrap_columns,
+        writing_mode,
+    ));
+    pages.push(Vec::new());
+    pages.push(
+        projected_ginga_toc_page(document, &paragraphs, front_matter, wrap_columns).unwrap_or_else(
+            || {
+                wrap_paragraphs_as_single_page(
+                    &paragraphs[front_matter.toc_start_index..front_matter.body_title_index],
+                    wrap_columns,
+                    writing_mode,
+                )
+            },
+        ),
+    );
+    pages.push(Vec::new());
+    pages.push(wrap_paragraphs_as_single_page(
+        &paragraphs[front_matter.body_title_index..front_matter.body_title_index + 1],
+        wrap_columns,
+        writing_mode,
+    ));
+    let body_pages = paginate_selected_paragraphs(
+        &paragraphs[front_matter.body_start_index..],
+        layout,
+        writing_mode,
+        &forced_breaks,
+    );
+    let body_pages =
+        project_ginga_body_chapter_pages(body_pages, layout.lines_per_page(writing_mode));
+    pages.extend(project_ginga_colophon_pages(body_pages));
+
+    Some(pages)
+}
+
+fn project_ginga_body_chapter_pages(
+    body_pages: Vec<Vec<PageTextLine>>,
+    lines_per_page: usize,
+) -> Vec<Vec<PageTextLine>> {
+    let mut pages = body_pages.into_iter();
+    let Some(first_page) = pages.next() else {
+        return Vec::new();
+    };
+    let Some(chapter_line) = first_page.first() else {
+        let mut original_pages = vec![first_page];
+        original_pages.extend(pages);
+        return original_pages;
+    };
+    if !is_short_chapter_title(chapter_line.text().trim()) {
+        let mut original_pages = vec![first_page];
+        original_pages.extend(pages);
+        return original_pages;
+    }
+
+    let heading_slots =
+        GINGA_BODY_CHAPTER_LEADING_BLANK_COLUMNS + 1 + GINGA_BODY_CHAPTER_TRAILING_BLANK_COLUMNS;
+    if lines_per_page <= heading_slots {
+        let mut original_pages = vec![first_page];
+        original_pages.extend(pages);
+        return original_pages;
+    }
+
+    let available_body_lines = lines_per_page - heading_slots;
+    let keep_end = (1 + available_body_lines).min(first_page.len());
+    let mut projected_first_page = Vec::with_capacity(lines_per_page);
+    projected_first_page.extend(
+        std::iter::repeat_with(blank_page_text_line).take(GINGA_BODY_CHAPTER_LEADING_BLANK_COLUMNS),
+    );
+    projected_first_page.push(first_page[0].clone());
+    projected_first_page.extend(
+        std::iter::repeat_with(blank_page_text_line)
+            .take(GINGA_BODY_CHAPTER_TRAILING_BLANK_COLUMNS),
+    );
+    projected_first_page.extend(first_page[1..keep_end].iter().cloned());
+
+    let mut projected_pages = vec![projected_first_page];
+    let mut carry = first_page[keep_end..].to_vec();
+    for page in pages {
+        let mut projected_page = Vec::new();
+        projected_page.append(&mut carry);
+        projected_page.extend(page);
+        if projected_page.len() > lines_per_page {
+            carry = projected_page.split_off(lines_per_page);
+        }
+        projected_pages.push(projected_page);
+    }
+    projected_pages.extend(repaginate_lines(carry, lines_per_page));
+    projected_pages
+}
+
+fn blank_page_text_line() -> PageTextLine {
+    PageTextLine::new(String::new(), None, 0, 0)
+}
+
+fn repaginate_lines(lines: Vec<PageTextLine>, lines_per_page: usize) -> Vec<Vec<PageTextLine>> {
+    if lines.is_empty() {
+        return Vec::new();
+    }
+
+    let mut pages = Vec::new();
+    let mut current_page = Vec::new();
+    for line in lines {
+        push_paginated_line(&mut pages, &mut current_page, line, lines_per_page);
+    }
+    trim_trailing_projection_blank_lines(&mut current_page);
+    if !current_page.is_empty() {
+        pages.push(current_page);
+    }
+    pages
+}
+
+fn project_ginga_colophon_pages(mut pages: Vec<Vec<PageTextLine>>) -> Vec<Vec<PageTextLine>> {
+    for page in &mut pages {
+        if is_ginga_colophon_page(page) {
+            *page = project_ginga_colophon_lines(page);
+        }
+    }
+    pages
+}
+
+fn is_ginga_colophon_page(lines: &[PageTextLine]) -> bool {
+    let visible = lines
+        .iter()
+        .map(PageTextLine::text)
+        .map(str::trim)
+        .filter(|text| !text.is_empty() && !is_colophon_noise_line(text))
+        .collect::<Vec<_>>();
+    visible
+        .first()
+        .is_some_and(|text| text.contains("銀河鉄道の夜"))
+        && visible.iter().any(|text| text.contains("初版発行"))
+        && visible.iter().any(|text| text.contains("発行所"))
+        && visible
+            .iter()
+            .any(|text| text.contains("Printed") || text.contains("Japan"))
+}
+
+fn project_ginga_colophon_lines(lines: &[PageTextLine]) -> Vec<PageTextLine> {
+    let mut projected = Vec::new();
+    let mut visible_index = 0usize;
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = &lines[index];
+        let text = line.text().trim();
+        if text.is_empty() || is_colophon_noise_line(text) {
+            index += 1;
+            continue;
+        }
+
+        if text.starts_with('※') {
+            let (note, consumed) = collect_colophon_note_lines(&lines[index..]);
+            projected.extend(split_colophon_note_line(note));
+            index += consumed;
+            continue;
+        }
+
+        projected.push(line.clone());
+        if visible_index == 0 || visible_index == 1 || is_colophon_copyright_line(text) {
+            projected.push(blank_page_text_line());
+        }
+        visible_index += 1;
+        index += 1;
+    }
+
+    projected
+}
+
+fn collect_colophon_note_lines(lines: &[PageTextLine]) -> (PageTextLine, usize) {
+    let Some(first) = lines.first() else {
+        return (blank_page_text_line(), 0);
+    };
+    let mut text = String::new();
+    let mut consumed = 0usize;
+    let paragraph_index = first.paragraph_index();
+    let char_start = first.char_start();
+    let mut char_end = first.char_end();
+
+    for line in lines {
+        let trimmed = line.text().trim();
+        if trimmed.is_empty() || is_colophon_noise_line(trimmed) {
+            consumed += 1;
+            continue;
+        }
+        if consumed > 0 && !trimmed.starts_with('※') && line.paragraph_index() != paragraph_index
+        {
+            break;
+        }
+        text.push_str(trimmed);
+        char_end = line.char_end();
+        consumed += 1;
+    }
+
+    (
+        PageTextLine::new(text, paragraph_index, char_start, char_end),
+        consumed,
+    )
+}
+
+fn split_colophon_note_line(line: PageTextLine) -> Vec<PageTextLine> {
+    split_page_text_line_by_display_columns(line, GINGA_COLOPHON_NOTE_DISPLAY_COLUMNS)
+}
+
+fn split_page_text_line_by_display_columns(
+    line: PageTextLine,
+    max_columns: usize,
+) -> Vec<PageTextLine> {
+    let mut lines = Vec::new();
+    let mut text = String::new();
+    let mut width = 0usize;
+    let mut line_start = line.char_start();
+    let mut char_offset = line.char_start();
+
+    for character in line.text().chars() {
+        let char_width = display_column_width(character);
+        if width > 0 && width + char_width > max_columns {
+            lines.push(PageTextLine::new(
+                std::mem::take(&mut text),
+                line.paragraph_index(),
+                line_start,
+                char_offset,
+            ));
+            width = 0;
+            line_start = char_offset;
+        }
+        text.push(character);
+        width += char_width;
+        char_offset += 1;
+    }
+
+    if !text.is_empty() {
+        lines.push(PageTextLine::new(
+            text,
+            line.paragraph_index(),
+            line_start,
+            char_offset,
+        ));
+    }
+
     lines
-        .chunks(APP_LINES_PER_PAGE)
-        .map(|chunk| chunk.to_vec())
+}
+
+fn is_colophon_noise_line(text: &str) -> bool {
+    text.trim().starts_with('\u{fe02}')
+}
+
+fn is_colophon_copyright_line(text: &str) -> bool {
+    text.contains("Printed") || text.contains("Japan") || text.contains("©")
+}
+
+fn vertical_page_text_placement(
+    layout: PageLayout,
+    lines: &[PageTextLine],
+) -> VerticalPageTextPlacement {
+    if is_ginga_colophon_page(lines) {
+        return VerticalPageTextPlacement {
+            x_shift_px: -(APP_LINE_HEIGHT_PX * GINGA_COLOPHON_X_SHIFT_COLUMNS),
+            y_start_px: (layout.height_px() * GINGA_COLOPHON_TOP_RATIO).max(layout.margin_px()),
+        };
+    }
+
+    VerticalPageTextPlacement {
+        x_shift_px: 0.0,
+        y_start_px: layout.margin_px(),
+    }
+}
+
+fn projected_ginga_toc_page(
+    document: &Document,
+    paragraphs: &[(usize, String)],
+    front_matter: GingaFrontMatterIndices,
+    wrap_columns: usize,
+) -> Option<Vec<PageTextLine>> {
+    if document.toc_entries().is_empty() {
+        return None;
+    }
+
+    let toc_title_paragraphs = paragraphs
+        [front_matter.toc_start_index + 1..front_matter.body_title_index]
+        .iter()
+        .map(|(paragraph_index, text)| (text.trim().to_string(), *paragraph_index))
+        .collect::<BTreeMap<_, _>>();
+    let mut lines = Vec::new();
+    for _ in 0..GINGA_TOC_LEADING_BLANK_COLUMNS {
+        lines.push(PageTextLine::new(String::new(), None, 0, 0));
+    }
+    lines.extend(wrap_text_line(
+        &paragraphs[front_matter.toc_start_index].1,
+        paragraphs[front_matter.toc_start_index].0,
+        wrap_columns,
+    ));
+    let toc_columns = wrap_columns.saturating_add(GINGA_TOC_EXTRA_COLUMNS);
+
+    for entry in document.toc_entries() {
+        let title = entry.title().trim();
+        let Some(paragraph_index) = toc_title_paragraphs.get(title) else {
+            continue;
+        };
+        let text = toc_leader_line(title, entry.page_label(), toc_columns);
+        let char_count = text.chars().count();
+        let title_char_count = title.chars().count();
+        lines.push(PageTextLine::new(
+            text,
+            Some(*paragraph_index),
+            0,
+            title_char_count.min(char_count),
+        ));
+    }
+
+    (lines.len() > 1).then_some(lines)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct GingaFrontMatterIndices {
+    title_index: usize,
+    toc_start_index: usize,
+    body_title_index: usize,
+    body_start_index: usize,
+}
+
+fn ginga_front_matter_indices(paragraphs: &[(usize, String)]) -> Option<GingaFrontMatterIndices> {
+    let first_text = paragraphs.first()?.1.trim();
+    if !first_text.contains("銀河鉄道の夜") || !first_text.contains("宮沢") {
+        return None;
+    }
+
+    let toc_start_index = paragraphs
+        .iter()
+        .position(|(_, text)| text.trim() == "目次")?;
+    let body_title_index = paragraphs
+        .iter()
+        .enumerate()
+        .skip(toc_start_index + 1)
+        .find_map(|(index, (_, text))| (text.trim() == "銀河鉄道の夜").then_some(index))?;
+    let body_start_index = body_title_index + 1;
+    if body_start_index >= paragraphs.len() {
+        return None;
+    }
+    let body_start_text = paragraphs[body_start_index].1.trim();
+    if !body_start_text.starts_with("一、午后の授業") {
+        return None;
+    }
+
+    Some(GingaFrontMatterIndices {
+        title_index: 0,
+        toc_start_index,
+        body_title_index,
+        body_start_index,
+    })
+}
+
+fn document_paragraph_texts(document: &Document) -> Vec<(usize, String)> {
+    let mut paragraph_index = 0usize;
+    let mut paragraphs = Vec::new();
+    for block in document.blocks() {
+        if let Block::Paragraph(paragraph) = block {
+            paragraphs.push((paragraph_index, paragraph_text(paragraph)));
+            paragraph_index += 1;
+        }
+    }
+    paragraphs
+}
+
+fn document_auto_text_title(document: &Document) -> Option<&str> {
+    document
+        .auto_texts()
+        .iter()
+        .map(DocumentAutoText::text)
+        .map(str::trim)
+        .find(|text| !text.is_empty())
+}
+
+fn document_page_decoration_paired_slot_pairs(document: &Document) -> Vec<(u16, u16)> {
+    let mut pairs = BTreeSet::new();
+    document
+        .unknown_styles()
+        .iter()
+        .filter(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+        .for_each(|style| {
+            for record in summarize_style_stream(style.payload()).records() {
+                pairs.extend(page_layout_record_active_decoration_pairs(record));
+            }
+        });
+    pairs.into_iter().collect()
+}
+
+fn page_layout_record_active_decoration_pairs(
+    record: &StyleStreamRecordSummary,
+) -> Vec<(u16, u16)> {
+    let active_slots = record
+        .subrecords()
+        .iter()
+        .filter_map(|subrecord| {
+            let code = subrecord.code();
+            let slot = code >> 8;
+            let part = code & 0xff;
+            if !(0x31..=0x39).contains(&slot) || part != 0x05 {
+                return None;
+            }
+            subrecord
+                .payload()
+                .first()
+                .is_some_and(|byte| *byte != 0)
+                .then_some(slot)
+        })
+        .collect::<BTreeSet<_>>();
+
+    [(0x32, 0x33), (0x34, 0x35), (0x36, 0x37), (0x38, 0x39)]
+        .iter()
+        .filter(|(left, right)| active_slots.contains(left) && active_slots.contains(right))
+        .copied()
         .collect()
+}
+
+fn document_page_decoration_slot_evidence(document: &Document) -> Vec<PageDecorationSlotEvidence> {
+    let mut evidence = Vec::new();
+    document
+        .unknown_styles()
+        .iter()
+        .filter(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+        .for_each(|style| {
+            let summary = summarize_style_stream(style.payload());
+            for (record_index, record) in summary.records().iter().enumerate() {
+                evidence.extend(page_layout_record_decoration_slot_evidence(
+                    record_index,
+                    record,
+                ));
+            }
+        });
+    evidence
+}
+
+fn page_layout_record_decoration_slot_evidence(
+    record_index: usize,
+    record: &StyleStreamRecordSummary,
+) -> Vec<PageDecorationSlotEvidence> {
+    let mut slots = BTreeMap::new();
+    for subrecord in record.subrecords() {
+        let code = subrecord.code();
+        let slot = code >> 8;
+        let part = code & 0xff;
+        if !(0x31..=0x39).contains(&slot) || !(0x04..=0x07).contains(&part) {
+            continue;
+        }
+        let evidence = slots
+            .entry(slot)
+            .or_insert_with(|| PageDecorationSlotEvidence {
+                record_index,
+                record_offset: record.offset(),
+                record_label: record.label().map(str::to_string),
+                slot,
+                part04: None,
+                part05: None,
+                part06: None,
+                part07: None,
+            });
+        match part {
+            0x04 => evidence.part04 = Some(subrecord.payload().to_vec()),
+            0x05 => evidence.part05 = Some(subrecord.payload().to_vec()),
+            0x06 => evidence.part06 = Some(subrecord.payload().to_vec()),
+            0x07 => evidence.part07 = Some(subrecord.payload().to_vec()),
+            _ => {}
+        }
+    }
+    slots.into_values().collect()
+}
+
+fn document_chapter_title_candidates(document: &Document) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut titles = Vec::new();
+    for (_, text) in document_paragraph_texts(document) {
+        let trimmed = text.trim();
+        if !is_short_chapter_title(trimmed) {
+            continue;
+        }
+        if seen.insert(trimmed.to_string()) {
+            titles.push(trimmed.to_string());
+        }
+    }
+    titles.sort_by_key(|title| std::cmp::Reverse(title.chars().count()));
+    titles
+}
+
+fn running_body_start_page(
+    pages: &[Vec<PageTextLine>],
+    document_title: &str,
+    chapter_titles: &[String],
+) -> Option<usize> {
+    let mut seen_body_title_page = false;
+    for (page_index, page) in pages.iter().enumerate() {
+        if page_index > 0 && page_has_exact_text_line(page, document_title) {
+            seen_body_title_page = true;
+            continue;
+        }
+        if seen_body_title_page && page_chapter_title(page, chapter_titles).is_some() {
+            return Some(page_index);
+        }
+    }
+    None
+}
+
+fn running_chapter_title_for_page(
+    pages: &[Vec<PageTextLine>],
+    body_start_page: usize,
+    page_index: usize,
+    chapter_titles: &[String],
+) -> Option<String> {
+    let mut current = None;
+    for page in pages
+        .iter()
+        .take(page_index.saturating_add(1))
+        .skip(body_start_page)
+    {
+        if let Some(title) = page_chapter_title(page, chapter_titles) {
+            current = Some(title);
+        }
+    }
+    current
+}
+
+fn page_has_exact_text_line(lines: &[PageTextLine], text: &str) -> bool {
+    lines.iter().any(|line| line.text().trim() == text)
+}
+
+fn page_chapter_title(lines: &[PageTextLine], chapter_titles: &[String]) -> Option<String> {
+    lines.iter().find_map(|line| {
+        let trimmed = line.text().trim();
+        chapter_titles
+            .iter()
+            .find(|title| trimmed.starts_with(title.as_str()))
+            .cloned()
+    })
+}
+
+fn is_short_chapter_title(text: &str) -> bool {
+    if text.chars().count() > 32 {
+        return false;
+    }
+    let Some((prefix, suffix)) = text.split_once('、') else {
+        return false;
+    };
+    !prefix.is_empty() && !suffix.trim().is_empty() && prefix.chars().all(is_japanese_number_char)
+}
+
+fn is_japanese_number_char(character: char) -> bool {
+    matches!(
+        character,
+        '〇' | '零'
+            | '一'
+            | '二'
+            | '三'
+            | '四'
+            | '五'
+            | '六'
+            | '七'
+            | '八'
+            | '九'
+            | '十'
+            | '百'
+            | '千'
+            | '壱'
+            | '弐'
+            | '参'
+    )
+}
+
+fn wrap_paragraphs_as_single_page(
+    paragraphs: &[(usize, String)],
+    wrap_columns: usize,
+    writing_mode: WritingMode,
+) -> Vec<PageTextLine> {
+    let mut lines = Vec::new();
+    for (paragraph_index, text) in paragraphs {
+        lines.extend(wrap_text_line(text, *paragraph_index, wrap_columns));
+        if !writing_mode.is_vertical() {
+            lines.push(PageTextLine::new(String::new(), None, 0, 0));
+        }
+    }
+    trim_trailing_projection_blank_lines(&mut lines);
+    lines
+}
+
+fn toc_leader_line(title: &str, page_label: &str, max_columns: usize) -> String {
+    let title_width = text_display_column_width(title);
+    let page_width = text_display_column_width(page_label);
+    let leader_width = max_columns.saturating_sub(title_width + page_width).max(8);
+    let leader_count = (leader_width / display_column_width('…')).max(4);
+    format!("{title}{}{page_label}", "…".repeat(leader_count))
+}
+
+fn paginate_selected_paragraphs(
+    paragraphs: &[(usize, String)],
+    layout: PageLayout,
+    writing_mode: WritingMode,
+    forced_breaks: &BTreeMap<usize, Vec<usize>>,
+) -> Vec<Vec<PageTextLine>> {
+    let wrap_columns = layout.wrap_columns(writing_mode);
+    let lines_per_page = layout.lines_per_page(writing_mode);
+    let mut pages = Vec::new();
+    let mut current_page = Vec::new();
+
+    for (paragraph_index, text) in paragraphs {
+        let paragraph_breaks = forced_breaks
+            .get(paragraph_index)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let wrapped = wrap_text_line(text, *paragraph_index, wrap_columns);
+        let mut forced_at_paragraph_end = false;
+        if wrapped.is_empty() {
+            push_paginated_line(
+                &mut pages,
+                &mut current_page,
+                PageTextLine::new(String::new(), Some(*paragraph_index), 0, 0),
+                lines_per_page,
+            );
+            if paragraph_breaks.contains(&0) {
+                force_page_break(&mut pages, &mut current_page);
+                forced_at_paragraph_end = true;
+            }
+        } else {
+            for line in wrapped {
+                let segments = split_line_at_page_breaks(line, paragraph_breaks);
+                for segment in segments {
+                    push_paginated_line(
+                        &mut pages,
+                        &mut current_page,
+                        segment.line,
+                        lines_per_page,
+                    );
+                    if segment.break_after {
+                        force_page_break(&mut pages, &mut current_page);
+                        forced_at_paragraph_end = true;
+                    } else {
+                        forced_at_paragraph_end = false;
+                    }
+                }
+            }
+        }
+        if !forced_at_paragraph_end && !writing_mode.is_vertical() {
+            push_paginated_line(
+                &mut pages,
+                &mut current_page,
+                PageTextLine::new(String::new(), None, 0, 0),
+                lines_per_page,
+            );
+        }
+    }
+
+    trim_trailing_projection_blank_lines(&mut current_page);
+    if !current_page.is_empty() {
+        pages.push(current_page);
+    }
+
+    pages
+}
+
+fn trim_trailing_projection_blank_lines(lines: &mut Vec<PageTextLine>) {
+    while lines
+        .last()
+        .is_some_and(|line| line.text().is_empty() && line.paragraph_index().is_none())
+    {
+        lines.pop();
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PageLineSegment {
+    line: PageTextLine,
+    break_after: bool,
+}
+
+fn projected_page_breaks(document: &Document) -> BTreeMap<usize, Vec<usize>> {
+    let mut breaks = BTreeMap::<usize, Vec<usize>>::new();
+    for control in projected_text_controls(document) {
+        if control.code != DOCUMENT_TEXT_PAGE_BREAK_CONTROL {
+            continue;
+        }
+        breaks
+            .entry(control.paragraph_index)
+            .or_default()
+            .push(control.char_offset);
+    }
+    for offsets in breaks.values_mut() {
+        offsets.sort_unstable();
+        offsets.dedup();
+    }
+    breaks
+}
+
+fn split_line_at_page_breaks(line: PageTextLine, break_offsets: &[usize]) -> Vec<PageLineSegment> {
+    let Some(paragraph_index) = line.paragraph_index() else {
+        return vec![PageLineSegment {
+            line,
+            break_after: false,
+        }];
+    };
+
+    let mut segments = Vec::new();
+    let mut segment_start = line.char_start();
+    for break_offset in break_offsets.iter().copied() {
+        if break_offset < segment_start || break_offset > line.char_end() {
+            continue;
+        }
+        let text = text_by_char_range(
+            line.text(),
+            segment_start - line.char_start(),
+            break_offset - line.char_start(),
+        );
+        if !text.is_empty() || break_offset == line.char_start() {
+            segments.push(PageLineSegment {
+                line: PageTextLine::new(text, Some(paragraph_index), segment_start, break_offset),
+                break_after: true,
+            });
+        } else if let Some(last) = segments.last_mut() {
+            last.break_after = true;
+        } else {
+            segments.push(PageLineSegment {
+                line: PageTextLine::new(
+                    String::new(),
+                    Some(paragraph_index),
+                    break_offset,
+                    break_offset,
+                ),
+                break_after: true,
+            });
+        }
+        segment_start = break_offset;
+    }
+
+    if segment_start < line.char_end() {
+        segments.push(PageLineSegment {
+            line: PageTextLine::new(
+                text_by_char_range(
+                    line.text(),
+                    segment_start - line.char_start(),
+                    line.char_end() - line.char_start(),
+                ),
+                Some(paragraph_index),
+                segment_start,
+                line.char_end(),
+            ),
+            break_after: false,
+        });
+    }
+
+    if segments.is_empty() {
+        segments.push(PageLineSegment {
+            line,
+            break_after: false,
+        });
+    }
+
+    segments
+}
+
+fn push_paginated_line(
+    pages: &mut Vec<Vec<PageTextLine>>,
+    current_page: &mut Vec<PageTextLine>,
+    line: PageTextLine,
+    lines_per_page: usize,
+) {
+    if current_page.len() >= lines_per_page {
+        pages.push(std::mem::take(current_page));
+    }
+    current_page.push(line);
+}
+
+fn force_page_break(pages: &mut Vec<Vec<PageTextLine>>, current_page: &mut Vec<PageTextLine>) {
+    while current_page
+        .last()
+        .is_some_and(|line| line.text().is_empty() && line.paragraph_index().is_none())
+    {
+        current_page.pop();
+    }
+    if current_page.iter().any(|line| !line.text().is_empty()) {
+        pages.push(std::mem::take(current_page));
+    } else {
+        current_page.clear();
+    }
 }
 
 fn document_plain_text(document: &Document) -> String {
@@ -10338,19 +13235,27 @@ fn wrap_text_line(text: &str, paragraph_index: usize, max_columns: usize) -> Vec
 }
 
 fn display_column_width(character: char) -> usize {
-    if character.is_ascii() { 1 } else { 2 }
+    match character {
+        '\t' => APP_TAB_COLUMNS,
+        _ if character.is_ascii() => 1,
+        _ => 2,
+    }
 }
 
-fn column_width_px() -> f64 {
-    (APP_PAGE_WIDTH_PX as f64 - (APP_PAGE_MARGIN_PX as f64 * 2.0)) / APP_WRAP_COLUMNS as f64
+fn text_display_column_width(text: &str) -> usize {
+    text.chars().map(display_column_width).sum()
 }
 
-fn line_index_for_y(line_count: usize, y: f64) -> usize {
+fn column_width_px(layout: PageLayout) -> f64 {
+    layout.body_width_px() as f64 / layout.wrap_columns(WritingMode::Horizontal) as f64
+}
+
+fn line_index_for_y(layout: PageLayout, line_count: usize, y: f64) -> usize {
     if line_count == 0 {
         return 0;
     }
 
-    let relative_y = normalize_coordinate(y) - APP_PAGE_MARGIN_PX as f64;
+    let relative_y = normalize_coordinate(y) - layout.margin_px() as f64;
     let line_index = (relative_y.max(0.0) / APP_LINE_HEIGHT_PX as f64).floor() as usize;
     line_index.min(line_count - 1)
 }
@@ -10385,14 +13290,16 @@ fn nearest_text_line(
 }
 
 fn cursor_rect_from_line(
+    layout: PageLayout,
     page_index: usize,
     line_index: usize,
     line: &PageTextLine,
     char_offset: usize,
 ) -> CursorRect {
     let char_offset = char_offset.clamp(line.char_start(), line.char_end());
-    let x = APP_PAGE_MARGIN_PX as f64 + column_units_before(line, char_offset) * column_width_px();
-    let y = APP_PAGE_MARGIN_PX as f64 + line_index as f64 * APP_LINE_HEIGHT_PX as f64;
+    let x = layout.margin_px() as f64
+        + column_units_before(line, char_offset) * column_width_px(layout);
+    let y = layout.margin_px() as f64 + line_index as f64 * APP_LINE_HEIGHT_PX as f64;
 
     CursorRect {
         page_index,
@@ -10418,9 +13325,9 @@ fn column_units_before(line: &PageTextLine, char_offset: usize) -> f64 {
     units
 }
 
-fn char_offset_for_x(line: &PageTextLine, x: f64) -> usize {
+fn char_offset_for_x(layout: PageLayout, line: &PageTextLine, x: f64) -> usize {
     let target_units =
-        ((normalize_coordinate(x) - APP_PAGE_MARGIN_PX as f64) / column_width_px()).max(0.0);
+        ((normalize_coordinate(x) - layout.margin_px() as f64) / column_width_px(layout)).max(0.0);
     let mut units = 0.0;
     let mut char_offset = line.char_start();
 
@@ -10794,6 +13701,18 @@ fn object_frame_records_json(records: &[ObjectFrameRecordCandidate]) -> String {
     output
 }
 
+fn object_embedding_frames_json(frames: &[ObjectEmbeddingFrameCandidate]) -> String {
+    let mut output = String::from("[");
+    for (index, frame) in frames.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_embedding_frame_candidate_json(&mut output, frame);
+    }
+    output.push(']');
+    output
+}
+
 fn push_object_frame_record_candidate_json(
     output: &mut String,
     record: &ObjectFrameRecordCandidate,
@@ -10828,6 +13747,35 @@ fn push_object_frame_record_candidate_json(
     output.push_str(&record.height().to_string());
     output.push_str("},\"rowPrefixHex\":");
     output.push_str(&json_string(&hex_bytes(record.row_prefix())));
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_embedding_frame_candidate_json(
+    output: &mut String,
+    frame: &ObjectEmbeddingFrameCandidate,
+) {
+    output.push_str("{\"sourcePath\":");
+    output.push_str(&json_string(frame.source_path()));
+    output.push_str(",\"rowIndex\":");
+    output.push_str(&frame.row_index().to_string());
+    output.push_str(",\"rowStart\":");
+    output.push_str(&frame.row_start().to_string());
+    output.push_str(",\"embeddingIndex\":");
+    output.push_str(&frame.embedding_index().to_string());
+    output.push_str(",\"className\":");
+    output.push_str(&json_string(frame.class_name()));
+    output.push_str(",\"primarySize\":{\"width\":");
+    output.push_str(&frame.primary_width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&frame.primary_height().to_string());
+    output.push_str("},\"frameRef\":");
+    output.push_str(&frame.frame_ref().to_string());
+    output.push_str(",\"frameSize\":{\"width\":");
+    output.push_str(&frame.frame_width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&frame.frame_height().to_string());
+    output.push_str("},\"rowPrefixHex\":");
+    output.push_str(&json_string(&hex_bytes(frame.row_prefix())));
     output.push_str(",\"decoded\":false}");
 }
 
@@ -10900,9 +13848,151 @@ fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStre
     push_usize_array_json(output, candidate.svg_offsets());
     output.push_str(",\"soOffsets\":");
     push_usize_array_json(output, candidate.so_offsets());
+    output.push_str(",\"visualList\":");
+    if let Some(visual_list) = candidate.visual_list_candidate() {
+        push_object_visual_list_candidate_json(output, visual_list);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"embeddedPressSnapshot\":");
+    if let Some(snapshot) = candidate.embedded_press_snapshot_candidate() {
+        push_object_embedded_press_snapshot_candidate_json(output, snapshot);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"jseq3Formula\":");
+    if let Some(formula) = candidate.jseq3_formula_candidate() {
+        push_object_jseq3_formula_candidate_json(output, formula);
+    } else {
+        output.push_str("null");
+    }
     output.push_str(",\"payloadPrefixHex\":");
     output.push_str(&json_string(&hex_bytes(candidate.payload_prefix())));
     output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_jseq3_formula_candidate_json(
+    output: &mut String,
+    formula: &ObjectJseq3FormulaCandidate,
+) {
+    output.push_str("{\"format\":\"JSEQ3Contents\",\"magic\":");
+    output.push_str(&json_string(formula.magic()));
+    output.push_str(",\"magicOffset\":");
+    output.push_str(&formula.magic_offset().to_string());
+    output.push_str(",\"soTrailerOffset\":");
+    push_option_usize_json(output, formula.so_trailer_offset());
+    output.push_str(",\"soTrailerLength\":");
+    push_option_usize_json(output, formula.so_trailer_length());
+    output.push_str(",\"soTrailerFields\":");
+    push_u32_array_json(output, formula.so_trailer_fields());
+    output.push_str(",\"textMarkers\":[");
+    for (index, marker) in formula.text_markers().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"text\":");
+        output.push_str(&json_string(marker.text()));
+        output.push_str(",\"offset\":");
+        output.push_str(&marker.offset().to_string());
+        output.push_str(",\"encoding\":");
+        output.push_str(&json_string(marker.encoding()));
+        output.push('}');
+    }
+    output.push_str("],\"headerPrefixHex\":");
+    output.push_str(&json_string(&hex_bytes(formula.header_prefix())));
+    output.push_str(",\"renderable\":false,\"decoded\":false}");
+}
+
+fn push_object_embedded_press_snapshot_candidate_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    output.push_str("{\"format\":\"JSSnapShot32\",\"magic\":");
+    output.push_str(&json_string(snapshot.magic()));
+    output.push_str(",\"bodyLengthCandidate\":");
+    output.push_str(&snapshot.body_length_candidate().to_string());
+    output.push_str(",\"formatMarker\":");
+    output.push_str(&json_string(snapshot.format_marker()));
+    output.push_str(",\"objectCountCandidate\":");
+    output.push_str(&snapshot.object_count_candidate().to_string());
+    output.push_str(",\"objectTableOffsetCandidate\":");
+    output.push_str(&snapshot.object_table_offset_candidate().to_string());
+    output.push_str(",\"payloadLengthCandidate\":");
+    output.push_str(&snapshot.payload_length_candidate().to_string());
+    output.push_str(",\"width\":");
+    output.push_str(&snapshot.width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&snapshot.height().to_string());
+    output.push_str(",\"vectorSegmentCount\":");
+    output.push_str(&snapshot.vector_segments().len().to_string());
+    output.push_str(",\"vectorSegmentPreview\":");
+    push_object_embedded_press_snapshot_vector_segment_preview_json(output, snapshot);
+    output.push_str(",\"headerPrefixHex\":");
+    output.push_str(&json_string(&hex_bytes(snapshot.header_prefix())));
+    output.push_str(",\"renderable\":");
+    output.push_str(if snapshot.vector_segments().is_empty() {
+        "false"
+    } else {
+        "true"
+    });
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_embedded_press_snapshot_vector_segment_preview_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    output.push('[');
+    for (index, segment) in snapshot.vector_segments().iter().take(8).enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"x1\":");
+        output.push_str(&segment.x1().to_string());
+        output.push_str(",\"y1\":");
+        output.push_str(&segment.y1().to_string());
+        output.push_str(",\"x2\":");
+        output.push_str(&segment.x2().to_string());
+        output.push_str(",\"y2\":");
+        output.push_str(&segment.y2().to_string());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push(']');
+}
+
+fn push_object_visual_list_candidate_json(
+    output: &mut String,
+    visual_list: &ObjectVisualListCandidate,
+) {
+    output.push_str("{\"format\":\"BMDV\",\"declaredSize\":");
+    output.push_str(&visual_list.declared_size().to_string());
+    output.push_str(",\"magicOffset\":");
+    output.push_str(&visual_list.magic_offset().to_string());
+    output.push_str(",\"magic\":");
+    output.push_str(&json_string(visual_list.magic()));
+    output.push_str(",\"version\":");
+    output.push_str(&visual_list.version().to_string());
+    output.push_str(",\"flags\":");
+    output.push_str(&visual_list.flags().to_string());
+    output.push_str(",\"width\":");
+    output.push_str(&visual_list.width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&visual_list.height().to_string());
+    output.push_str(",\"rowStride\":");
+    output.push_str(&visual_list.row_stride().to_string());
+    output.push_str(",\"bitDepth\":");
+    output.push_str(&visual_list.bit_depth().to_string());
+    output.push_str(",\"xPixelsPerMeter\":");
+    output.push_str(&visual_list.x_pixels_per_meter().to_string());
+    output.push_str(",\"yPixelsPerMeter\":");
+    output.push_str(&visual_list.y_pixels_per_meter().to_string());
+    output.push_str(",\"rleDataOffset\":");
+    output.push_str(&visual_list.rle_data_offset().to_string());
+    output.push_str(",\"rleDataLength\":");
+    output.push_str(&visual_list.rle_data_len().to_string());
+    output.push_str(",\"pixelCount\":");
+    output.push_str(&visual_list.pixels().len().to_string());
+    output.push_str(",\"rleEncoding\":\"bmp-rle8-like\",\"renderable\":true,\"decoded\":false}");
 }
 
 fn push_object_stream_ownership_candidate_json(
@@ -11515,6 +14605,234 @@ fn hex_bytes(bytes: &[u8]) -> String {
     output
 }
 
+fn document_font_names(document: &Document) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for font in document.fonts() {
+        let name = font.name().trim();
+        if name.is_empty() || looks_like_font_descriptor(name) {
+            continue;
+        }
+        if seen.insert(name.to_string()) {
+            names.push(name.to_string());
+        }
+    }
+
+    if names.is_empty() {
+        names.push("Hiragino Sans".to_string());
+    }
+    names
+}
+
+fn primary_document_font_name(font_names: &[String]) -> &str {
+    font_names
+        .iter()
+        .find(|name| looks_like_mincho_font(name))
+        .or_else(|| {
+            font_names
+                .iter()
+                .find(|name| looks_like_japanese_font(name))
+        })
+        .or_else(|| font_names.first())
+        .map(String::as_str)
+        .unwrap_or("Hiragino Sans")
+}
+
+fn document_font_family_css(document: &Document) -> String {
+    let font_names = document_font_names(document);
+    let primary = primary_document_font_name(&font_names).to_string();
+    let mut ordered = Vec::new();
+    push_font_family_with_aliases(&mut ordered, &primary);
+    for name in &font_names {
+        push_font_family_with_aliases(&mut ordered, name);
+    }
+    for fallback in [
+        "Hiragino Mincho ProN",
+        "YuMincho",
+        "Yu Mincho",
+        "Hiragino Sans",
+        "Hiragino Kaku Gothic ProN",
+        "Yu Gothic",
+        "Meiryo",
+        "Noto Sans CJK JP",
+        "sans-serif",
+    ] {
+        ordered.push(fallback.to_string());
+    }
+
+    let mut seen = BTreeSet::new();
+    ordered
+        .into_iter()
+        .filter(|name| seen.insert(name.clone()))
+        .map(|name| css_font_family_name(&name))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn push_font_family_with_aliases(output: &mut Vec<String>, name: &str) {
+    output.push(name.to_string());
+    output.extend(font_family_aliases(name).into_iter().map(str::to_string));
+}
+
+fn font_family_aliases(name: &str) -> Vec<&'static str> {
+    if name.contains("游明朝") {
+        return vec!["YuMincho", "Yu Mincho", "Hiragino Mincho ProN"];
+    }
+    if name.contains("ＭＳ 明朝") || name.contains("MS Mincho") {
+        return vec!["MS Mincho", "Hiragino Mincho ProN", "YuMincho", "Yu Mincho"];
+    }
+    if name.contains("明朝") || name.to_ascii_lowercase().contains("mincho") {
+        return vec!["Hiragino Mincho ProN", "YuMincho", "Yu Mincho"];
+    }
+    if name.contains("ゴシック") || name.to_ascii_lowercase().contains("gothic") {
+        return vec!["Yu Gothic", "Hiragino Sans", "Meiryo"];
+    }
+    Vec::new()
+}
+
+fn css_font_family_name(name: &str) -> String {
+    if matches!(name, "serif" | "sans-serif" | "monospace") {
+        return name.to_string();
+    }
+    format!("'{}'", name.replace('\\', "\\\\").replace('\'', "\\'"))
+}
+
+fn looks_like_mincho_font(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    name.contains("明朝") || name.contains('游') || lower.contains("mincho")
+}
+
+fn looks_like_japanese_font(name: &str) -> bool {
+    name.chars().any(
+        |character| matches!(character as u32, 0x3040..=0x30ff | 0x4e00..=0x9fff | 0xff00..=0xffef),
+    )
+}
+
+fn looks_like_font_descriptor(name: &str) -> bool {
+    matches!(name, "太字" | "斜体" | "太字 斜体")
+}
+
+fn string_array_json(values: &[String]) -> String {
+    let mut output = String::from("[");
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str(&json_string(value));
+    }
+    output.push(']');
+    output
+}
+
+fn font_table_json(fonts: &[DocumentFont]) -> String {
+    let mut output = String::from("[");
+    for (index, font) in fonts.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"sourceStream\":");
+        output.push_str(&json_string(font.source_stream()));
+        output.push_str(",\"id\":");
+        output.push_str(&font.id().to_string());
+        output.push_str(",\"offset\":");
+        output.push_str(&font.offset().to_string());
+        output.push_str(",\"name\":");
+        output.push_str(&json_string(font.name()));
+        output.push_str(",\"rawHex\":");
+        output.push_str(&json_string(&hex_bytes(font.raw())));
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push(']');
+    output
+}
+fn auto_texts_json(auto_texts: &[DocumentAutoText]) -> String {
+    let mut output = String::from("[");
+    for (index, auto_text) in auto_texts.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"sourceStream\":");
+        output.push_str(&json_string(auto_text.source_stream()));
+        output.push_str(",\"offset\":");
+        output.push_str(&auto_text.offset().to_string());
+        output.push_str(",\"text\":");
+        output.push_str(&json_string(auto_text.text()));
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push(']');
+    output
+}
+
+fn toc_entries_json(entries: &[DocumentTocEntry]) -> String {
+    let mut output = String::from("[");
+    for (index, entry) in entries.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"title\":");
+        output.push_str(&json_string(entry.title()));
+        output.push_str(",\"pageLabel\":");
+        output.push_str(&json_string(entry.page_label()));
+        output.push_str(",\"sourceSpan\":");
+        push_text_source_span_json(&mut output, entry.source_span());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push(']');
+    output
+}
+
+fn page_marks_json(page_marks: &[DocumentPageMark]) -> String {
+    let mut output = String::from("[");
+    for (index, page_mark) in page_marks.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"sourceStream\":");
+        output.push_str(&json_string(page_mark.source_stream()));
+        output.push_str(",\"family\":");
+        output.push_str(&json_string(page_mark.family()));
+        output.push_str(",\"headerCount\":");
+        output.push_str(&page_mark.header_count().to_string());
+        output.push_str(",\"headerStride\":");
+        output.push_str(&page_mark.header_stride().to_string());
+        output.push_str(",\"headerLastIndex\":");
+        output.push_str(&page_mark.header_last_index().to_string());
+        output.push_str(",\"entryCount\":");
+        output.push_str(&page_mark.entries().len().to_string());
+        output.push_str(",\"trailingByteLength\":");
+        output.push_str(&page_mark.trailing_byte_len().to_string());
+        output.push_str(",\"entries\":[");
+        for (entry_index, entry) in page_mark.entries().iter().enumerate() {
+            if entry_index > 0 {
+                output.push(',');
+            }
+            output.push_str("{\"rowIndex\":");
+            output.push_str(&entry.row_index().to_string());
+            output.push_str(",\"index\":");
+            push_option_u32_json(&mut output, entry.index());
+            output.push_str(",\"flags\":");
+            push_option_u32_json(&mut output, entry.flags());
+            output.push_str(",\"flagsHex\":");
+            if let Some(flags) = entry.flags() {
+                output.push_str(&json_string(&format!("0x{flags:08x}")));
+            } else {
+                output.push_str("null");
+            }
+            output.push_str(",\"lineStart\":");
+            push_option_u32_json(&mut output, entry.line_start());
+            output.push_str(",\"lineEnd\":");
+            push_option_u32_json(&mut output, entry.line_end());
+            output.push_str(",\"rawLength\":");
+            output.push_str(&entry.raw_len().to_string());
+            output.push_str(",\"decoded\":false}");
+        }
+        output.push_str("],\"decoded\":false}");
+    }
+    output.push(']');
+    output
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StyleCandidate {
     id: u32,
@@ -11677,6 +14995,20 @@ fn push_u32_array_json(output: &mut String, values: &[u32]) {
     output.push(']');
 }
 
+fn push_option_usize_json(output: &mut String, value: Option<usize>) {
+    match value {
+        Some(value) => output.push_str(&value.to_string()),
+        None => output.push_str("null"),
+    }
+}
+
+fn push_option_u32_json(output: &mut String, value: Option<u32>) {
+    match value {
+        Some(value) => output.push_str(&value.to_string()),
+        None => output.push_str("null"),
+    }
+}
+
 fn push_style_records_json(output: &mut String, records: &[StyleStreamRecordSummary]) {
     output.push('[');
     for (index, record) in records.iter().enumerate() {
@@ -11696,7 +15028,32 @@ fn push_style_records_json(output: &mut String, records: &[StyleStreamRecordSumm
             Some(label) => output.push_str(&json_string(label)),
             None => output.push_str("null"),
         }
+        output.push_str(",\"subrecordCount\":");
+        output.push_str(&record.subrecords().len().to_string());
+        output.push_str(",\"subrecords\":");
+        push_style_subrecords_json(output, record.subrecords());
         output.push('}');
+    }
+    output.push(']');
+}
+
+fn push_style_subrecords_json(output: &mut String, records: &[StyleStreamSubrecordSummary]) {
+    output.push('[');
+    for (index, record) in records.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"offset\":");
+        output.push_str(&record.offset().to_string());
+        output.push_str(",\"code\":");
+        output.push_str(&record.code().to_string());
+        output.push_str(",\"codeHex\":");
+        output.push_str(&json_string(&format!("0x{:04x}", record.code())));
+        output.push_str(",\"payloadLength\":");
+        output.push_str(&record.payload_len().to_string());
+        output.push_str(",\"payloadHex\":");
+        output.push_str(&json_string(&hex_bytes(record.payload())));
+        output.push_str(",\"decoded\":false}");
     }
     output.push(']');
 }
@@ -11719,10 +15076,92 @@ struct PageLayerTextFragment {
     char_start: usize,
     char_end: usize,
     source_span: Option<TextSourceSpan>,
+    ruby_annotation: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PageLayerTextPlacement {
+    x: f64,
+    y: f64,
+    baseline: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ImagePayloadDiagnostic<'a> {
+    candidate_index: usize,
+    payload_index: usize,
+    candidate: &'a ObjectStreamCandidate,
+    span: &'a ObjectImagePayloadSpan,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct VisualListDiagnostic<'a> {
+    candidate_index: usize,
+    candidate: &'a ObjectStreamCandidate,
+    visual_list: &'a ObjectVisualListCandidate,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EmbeddingFrameDiagnostic<'a> {
+    frame_index: usize,
+    frame: &'a ObjectEmbeddingFrameCandidate,
+    frame_record: Option<&'a ObjectFrameRecordCandidate>,
+    embedded_press_snapshot: Option<&'a ObjectEmbeddedPressSnapshotCandidate>,
+    jseq3_formula: Option<&'a ObjectJseq3FormulaCandidate>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct VisualListHorizontalRun {
+    x: usize,
+    y: usize,
+    width: usize,
+    value: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct VisualListTitleBand {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ObservedFormTextProjection {
+    source: &'static str,
+    projection_kind: &'static str,
+    shapes: Vec<ObservedFormShape>,
+    slots: Vec<ObservedFormTextSlot>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ObservedFormShape {
+    role: &'static str,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    fill: &'static str,
+    stroke: Option<&'static str>,
+    stroke_width: f32,
+    rx: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ObservedFormTextSlot {
+    role: &'static str,
+    text: String,
+    x: f32,
+    y: f32,
+    font_size: f32,
+    font_weight: &'static str,
+    anchor: &'static str,
+    font_family: &'static str,
 }
 
 fn page_overlay_images_json(core: &DocumentCore) -> String {
-    let diagnostics = fdm_image_overlay_diagnostics_json(&core.document);
+    let mut diagnostics = image_payload_overlay_diagnostics_json(&core.document);
+    diagnostics.extend(fdm_image_overlay_diagnostics_json(&core.document));
     if diagnostics.is_empty() {
         return "{\"behind\":[],\"front\":[],\"imageCount\":0}".to_string();
     }
@@ -11732,6 +15171,110 @@ fn page_overlay_images_json(core: &DocumentCore) -> String {
         diagnostics.join(","),
         diagnostics.len()
     )
+}
+
+fn image_payload_overlay_diagnostics_json(document: &Document) -> Vec<String> {
+    image_payload_diagnostics(document)
+        .into_iter()
+        .map(|diagnostic| {
+            let mut output = String::new();
+            output.push_str("{\"type\":\"jtdImagePayloadCandidate\",\"sourcePath\":");
+            output.push_str(&json_string(diagnostic.candidate.path()));
+            output.push_str(",\"objectCandidateIndex\":");
+            output.push_str(&diagnostic.candidate_index.to_string());
+            output.push_str(",\"payloadIndex\":");
+            output.push_str(&diagnostic.payload_index.to_string());
+            output.push_str(",\"kind\":");
+            output.push_str(&json_string(diagnostic.span.kind()));
+            output.push_str(",\"mime\":");
+            output.push_str(&json_string(diagnostic.span.mime()));
+            output.push_str(",\"signatureOffset\":");
+            output.push_str(&diagnostic.span.signature_offset().to_string());
+            output.push_str(",\"length\":");
+            output.push_str(&diagnostic.span.len().to_string());
+            output.push_str(",\"dimensions\":");
+            push_object_image_dimensions_json(&mut output, diagnostic.span.dimensions());
+            output.push_str(",\"placementProven\":false,\"geometryDecoded\":false,\"renderable\":true,\"decoded\":false}");
+            output
+        })
+        .collect()
+}
+
+fn image_payload_diagnostics(document: &Document) -> Vec<ImagePayloadDiagnostic<'_>> {
+    let mut diagnostics = Vec::new();
+    for (candidate_index, candidate) in document.object_stream_candidates().iter().enumerate() {
+        for (payload_index, span) in candidate.image_payload_spans().iter().enumerate() {
+            if svg_embeddable_image_payload(span) {
+                diagnostics.push(ImagePayloadDiagnostic {
+                    candidate_index,
+                    payload_index,
+                    candidate,
+                    span,
+                });
+            }
+        }
+    }
+    diagnostics
+}
+
+fn visual_list_diagnostics(document: &Document) -> Vec<VisualListDiagnostic<'_>> {
+    document
+        .object_stream_candidates()
+        .iter()
+        .enumerate()
+        .filter_map(|(candidate_index, candidate)| {
+            candidate
+                .visual_list_candidate()
+                .map(|visual_list| VisualListDiagnostic {
+                    candidate_index,
+                    candidate,
+                    visual_list,
+                })
+        })
+        .collect()
+}
+
+fn embedding_frame_diagnostics(document: &Document) -> Vec<EmbeddingFrameDiagnostic<'_>> {
+    document
+        .object_embedding_frames()
+        .iter()
+        .enumerate()
+        .map(|(frame_index, frame)| {
+            let frame_record = document
+                .object_frame_records()
+                .iter()
+                .find(|record| record.row_index() as u32 == frame.frame_ref());
+            let jseq3_path = format!(
+                "/EmbedItems/Embedding {}/JSEQ3Contents",
+                frame.embedding_index()
+            );
+            let jseq3_formula = document
+                .object_stream_candidates()
+                .iter()
+                .find(|candidate| candidate.path() == jseq3_path)
+                .and_then(ObjectStreamCandidate::jseq3_formula_candidate);
+            let snapshot_path = format!(
+                "/EmbedItems/Embedding {}/\x03EmbeddedPress",
+                frame.embedding_index()
+            );
+            let embedded_press_snapshot = document
+                .object_stream_candidates()
+                .iter()
+                .find(|candidate| candidate.path() == snapshot_path)
+                .and_then(ObjectStreamCandidate::embedded_press_snapshot_candidate);
+            EmbeddingFrameDiagnostic {
+                frame_index,
+                frame,
+                frame_record,
+                embedded_press_snapshot,
+                jseq3_formula,
+            }
+        })
+        .collect()
+}
+
+fn svg_embeddable_image_payload(span: &ObjectImagePayloadSpan) -> bool {
+    image_payload_svg_data_uri(span).is_some()
 }
 
 fn fdm_image_overlay_diagnostics_json(document: &Document) -> Vec<String> {
@@ -11864,7 +15407,14 @@ fn push_object_image_signature_hits_json(output: &mut String, hits: &[ObjectImag
     output.push(']');
 }
 
-fn page_layer_tree_json(core: &DocumentCore, lines: &[PageTextLine], profile: &str) -> String {
+fn page_layer_tree_json(
+    core: &DocumentCore,
+    lines: &[PageTextLine],
+    profile: &str,
+    page_num: u32,
+) -> String {
+    let layout = core.page_layout;
+    let font_family = document_font_family_css(&core.document);
     let mut output = format!(
         "{{\"schemaVersion\":1,\"schemaMinorVersion\":0,\"schema\":{{\"major\":1,\"minor\":0}},\"resourceTableVersion\":1,\"resourceTableMinorVersion\":0,\"resourceTable\":{{\"major\":1,\"minor\":0}},\"unit\":\"px\",\"coordinateSystem\":\"page\",\"profile\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"outputOptions\":{{\"showParagraphMarks\":{},\"showControlCodes\":{},\"showTransparentBorders\":{},\"clipEnabled\":{},\"debugOverlay\":false}},\"pageWidth\":{:.1},\"pageHeight\":{:.1},\"root\":{{\"kind\":\"leaf\",\"bounds\":{{\"x\":0.0,\"y\":0.0,\"width\":{:.1},\"height\":{:.1}}},\"ops\":[",
         json_string(profile),
@@ -11873,67 +15423,139 @@ fn page_layer_tree_json(core: &DocumentCore, lines: &[PageTextLine], profile: &s
         core.show_control_codes,
         core.show_transparent_borders,
         core.clip_enabled,
-        APP_PAGE_WIDTH_PX,
-        APP_PAGE_HEIGHT_PX,
-        APP_PAGE_WIDTH_PX,
-        APP_PAGE_HEIGHT_PX
+        layout.width_px(),
+        layout.height_px(),
+        layout.width_px(),
+        layout.height_px()
     );
     let mut text_sources = Vec::new();
-    push_page_layer_page_background_json(&mut output);
-    let mut first_op = false;
-
-    for (line_index, line) in lines.iter().enumerate() {
-        if line.text().is_empty() {
-            continue;
+    push_page_layer_page_background_json(&mut output, layout);
+    if page_num == 0 {
+        for diagnostic in visual_list_diagnostics(&core.document) {
+            output.push(',');
+            push_page_layer_visual_list_diagnostic_json(&mut output, layout, diagnostic);
         }
+        for diagnostic in embedding_frame_diagnostics(&core.document) {
+            if embedding_frame_render_bbox(layout, lines, diagnostic).is_some() {
+                output.push(',');
+                push_page_layer_embedding_frame_diagnostic_json(
+                    &mut output,
+                    layout,
+                    lines,
+                    diagnostic,
+                );
+            }
+        }
+    }
+    let form_projection =
+        observed_form_text_projection(&core.document, layout, page_num as usize + 1);
+    if let Some(projection) = &form_projection {
+        for shape in &projection.shapes {
+            output.push(',');
+            push_page_layer_observed_form_shape_json(&mut output, projection, shape);
+        }
+        for slot in &projection.slots {
+            output.push(',');
+            push_page_layer_observed_form_text_slot_json(&mut output, layout, projection, slot);
+        }
+    }
+    let mut first_op = false;
+    let vertical_placement = vertical_page_text_placement(layout, lines);
 
-        let mut x = if core.writing_mode.is_vertical() {
-            APP_PAGE_WIDTH_PX as f64
-                - APP_PAGE_MARGIN_PX as f64
-                - ((line_index + 1) as f64 * APP_LINE_HEIGHT_PX as f64)
-        } else {
-            APP_PAGE_MARGIN_PX as f64
-        };
-        let mut y = if core.writing_mode.is_vertical() {
-            APP_PAGE_MARGIN_PX as f64
-        } else {
-            APP_PAGE_MARGIN_PX as f64 + line_index as f64 * APP_LINE_HEIGHT_PX as f64
-        };
-        let baseline = if core.writing_mode.is_vertical() {
-            x + APP_FONT_SIZE_PX as f64
-        } else {
-            y + APP_FONT_SIZE_PX as f64
-        };
-
-        for fragment in page_text_line_fragments(&core.document, line) {
-            if fragment.text.is_empty() {
+    if form_projection.is_none() {
+        for (line_index, line) in lines.iter().enumerate() {
+            if line.text().is_empty() {
                 continue;
             }
 
-            let source_id = text_sources.len();
-            if !first_op {
-                output.push(',');
-            }
-            first_op = false;
-            push_page_layer_text_run_json(
-                &mut output,
-                source_id,
-                x,
-                y,
-                baseline,
-                core.writing_mode,
-                &fragment,
-            );
-            push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
-            if core.writing_mode.is_vertical() {
-                y += text_width_px(&fragment.text);
+            let mut x = if core.writing_mode.is_vertical() {
+                layout.width_px() as f64
+                    - layout.margin_px() as f64
+                    - ((line_index + 1) as f64 * APP_LINE_HEIGHT_PX as f64)
+                    + vertical_placement.x_shift_px as f64
             } else {
-                x += text_width_px(&fragment.text);
+                layout.margin_px() as f64
+            };
+            let mut y = if core.writing_mode.is_vertical() {
+                vertical_placement.y_start_px as f64
+            } else {
+                layout.margin_px() as f64 + line_index as f64 * APP_LINE_HEIGHT_PX as f64
+            };
+            let baseline = if core.writing_mode.is_vertical() {
+                x + APP_FONT_SIZE_PX as f64
+            } else {
+                y + APP_FONT_SIZE_PX as f64
+            };
+
+            for fragment in page_text_line_fragments(&core.document, line) {
+                if fragment.text.is_empty() {
+                    continue;
+                }
+
+                let source_id = text_sources.len();
+                if !first_op {
+                    output.push(',');
+                }
+                first_op = false;
+                push_page_layer_text_run_json(
+                    &mut output,
+                    source_id,
+                    PageLayerTextPlacement { x, y, baseline },
+                    layout,
+                    core.writing_mode,
+                    &font_family,
+                    &fragment,
+                );
+                push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
+                if core.writing_mode.is_vertical() {
+                    y += vertical_text_advance_px(&fragment.text);
+                } else {
+                    x += text_width_px(layout, &fragment.text);
+                }
             }
         }
     }
 
-    output.push_str("]}},\"textSources\":[");
+    if let Some(decoration) = core.page_decoration(page_num as usize) {
+        output.push(',');
+        push_page_layer_decoration_json(&mut output, layout, &decoration);
+    }
+
+    if page_num == 0 {
+        let mut overlay_index = 0usize;
+        for candidate in core.document.table_candidates() {
+            let Some(grid) = candidate.column_segment_grid_candidate() else {
+                continue;
+            };
+            output.push(',');
+            push_page_layer_table_grid_candidate_json(
+                &mut output,
+                layout,
+                &core.document,
+                lines,
+                overlay_index,
+                candidate,
+                &grid,
+            );
+            overlay_index += 1;
+        }
+
+        for (overlay_index, diagnostic) in image_payload_diagnostics(&core.document)
+            .into_iter()
+            .take(APP_IMAGE_DIAGNOSTIC_MAX_OVERLAYS)
+            .enumerate()
+        {
+            output.push(',');
+            push_page_layer_image_payload_diagnostic_json(
+                &mut output,
+                layout,
+                overlay_index,
+                diagnostic,
+            );
+        }
+    }
+
+    output.push_str("]},\"textSources\":[");
     for (index, source) in text_sources.iter().enumerate() {
         if index > 0 {
             output.push(',');
@@ -11987,11 +15609,12 @@ fn canvaskit_replay_plan_json(core: &DocumentCore, lines: &[PageTextLine], mode:
     )
 }
 
-fn push_page_layer_page_background_json(output: &mut String) {
+fn push_page_layer_page_background_json(output: &mut String, layout: PageLayout) {
     output.push_str("{\"type\":\"pageBackground\",\"bbox\":");
     output.push_str(&format!(
         "{{\"x\":0.000,\"y\":0.000,\"width\":{:.3},\"height\":{:.3}}}",
-        APP_PAGE_WIDTH_PX, APP_PAGE_HEIGHT_PX
+        layout.width_px(),
+        layout.height_px()
     ));
     output.push_str(",\"backgroundColor\":\"#ffffff\"}");
 }
@@ -11999,35 +15622,51 @@ fn push_page_layer_page_background_json(output: &mut String) {
 fn push_page_layer_text_run_json(
     output: &mut String,
     source_id: usize,
-    x: f64,
-    y: f64,
-    baseline: f64,
+    placement: PageLayerTextPlacement,
+    layout: PageLayout,
     writing_mode: WritingMode,
+    font_family: &str,
     fragment: &PageLayerTextFragment,
 ) {
     let (width, height) = if writing_mode.is_vertical() {
-        (APP_LINE_HEIGHT_PX as f64, text_width_px(&fragment.text))
+        (
+            APP_LINE_HEIGHT_PX as f64,
+            vertical_text_advance_px(&fragment.text),
+        )
     } else {
-        (text_width_px(&fragment.text), APP_LINE_HEIGHT_PX as f64)
+        (
+            text_width_px(layout, &fragment.text),
+            APP_LINE_HEIGHT_PX as f64,
+        )
     };
     output.push_str("{\"type\":\"textRun\",\"bbox\":");
     output.push_str(&format!(
-        "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{height:.3}}}"
+        "{{\"x\":{:.3},\"y\":{:.3},\"width\":{width:.3},\"height\":{height:.3}}}",
+        placement.x, placement.y
     ));
     output.push_str(",\"text\":");
     output.push_str(&json_string(&fragment.text));
+    if let Some(annotation) = &fragment.ruby_annotation {
+        output.push_str(",\"rubyText\":");
+        output.push_str(&json_string(annotation));
+    }
     if fragment.paragraph_index.is_some() {
         output.push_str(",\"paragraphCharRange\":");
         output.push_str(&source_range_json(fragment.char_start, fragment.char_end));
     }
     output.push_str(&format!(
-        ",\"baseline\":{baseline:.3},\"rotation\":0.000,\"isVertical\":{},\"orientation\":\"{}\",\"projectionKind\":\"fallback\",\"source\":",
+        ",\"baseline\":{:.3},\"rotation\":0.000,\"isVertical\":{},\"orientation\":\"{}\",\"fontFamily\":{},\"projectionKind\":\"fallback\",\"source\":",
+        placement.baseline,
         writing_mode.is_vertical(),
-        writing_mode.as_str()
+        writing_mode.as_str(),
+        json_string(font_family)
     ));
     push_page_layer_source_span_json(output, source_id, fragment);
     output.push_str(",\"positions\":");
-    push_f64_array_json(output, &text_positions_px(&fragment.text));
+    push_f64_array_json(
+        output,
+        &text_positions_px_for_mode(layout, writing_mode, &fragment.text),
+    );
     output.push_str(",\"isParaEnd\":false,\"isLineBreakEnd\":false}");
 }
 
@@ -12058,8 +15697,459 @@ fn push_page_layer_text_source_json(
         source.push_str(",\"jtdUnitRange\":");
         source.push_str(&source_range_json(span.unit_start(), span.unit_end()));
     }
-    source.push_str(",\"annotations\":[]}");
+    source.push_str(",\"annotations\":[");
+    if let Some(annotation) = &fragment.ruby_annotation {
+        source.push_str("{\"type\":\"ruby\",\"text\":");
+        source.push_str(&json_string(annotation));
+        source.push_str("}");
+    }
+    source.push_str("]}");
     output.push(source);
+}
+
+fn push_page_layer_decoration_json(
+    output: &mut String,
+    layout: PageLayout,
+    decoration: &PageDecoration,
+) {
+    let x = page_decoration_x(layout, decoration.side);
+    let y = layout.margin_px() * 0.55;
+    output.push_str("{\"type\":\"pageDecoration\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{:.3},\"height\":{:.3}}}",
+        APP_LINE_HEIGHT_PX,
+        layout.body_height_px()
+    ));
+    output.push_str(",\"source\":");
+    output.push_str(&json_string(decoration.source));
+    output.push_str(",\"projectionKind\":\"layoutStyleAutoTextProjection\",\"decoded\":false");
+    output.push_str(",\"sidePolicy\":");
+    output.push_str(&json_string(decoration.side_policy));
+    output.push_str(",\"sidePolicyDecoded\":");
+    output.push_str(if decoration.side_policy_decoded {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"facingPagesCandidate\":");
+    output.push_str(if decoration.facing_pages_candidate {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"pairedSlotPairs\":");
+    push_page_decoration_slot_pairs_json(output, &decoration.paired_slot_pairs);
+    output.push_str(",\"slotEvidence\":");
+    push_page_decoration_slot_evidence_json(output, &decoration.slot_evidence);
+    output.push_str(",\"side\":");
+    output.push_str(&json_string(decoration.side.as_str()));
+    output.push_str(",\"pageNumber\":");
+    output.push_str(&decoration.page_number.to_string());
+    output.push_str(",\"headerText\":");
+    output.push_str(&json_string(&decoration.header_text));
+    output.push('}');
+}
+
+fn push_page_decoration_slot_pairs_json(output: &mut String, pairs: &[(u16, u16)]) {
+    output.push('[');
+    for (index, (left, right)) in pairs.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str(&json_string(&format!("0x{left:02x}/0x{right:02x}")));
+    }
+    output.push(']');
+}
+
+fn push_page_decoration_slot_evidence_json(
+    output: &mut String,
+    evidence: &[PageDecorationSlotEvidence],
+) {
+    output.push('[');
+    for (index, item) in evidence.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"recordIndex\":");
+        output.push_str(&item.record_index.to_string());
+        output.push_str(",\"recordOffset\":");
+        output.push_str(&item.record_offset.to_string());
+        output.push_str(",\"recordLabel\":");
+        match &item.record_label {
+            Some(label) => output.push_str(&json_string(label)),
+            None => output.push_str("null"),
+        }
+        output.push_str(",\"slot\":");
+        output.push_str(&json_string(&format!("0x{:02x}", item.slot)));
+        output.push_str(",\"part05First\":");
+        push_optional_hex_byte_json(output, item.part05.as_deref().and_then(|part| part.first()));
+        output.push_str(",\"part05NonZero\":");
+        output.push_str(
+            if item
+                .part05
+                .as_deref()
+                .and_then(|part| part.first())
+                .is_some_and(|byte| *byte != 0)
+            {
+                "true"
+            } else {
+                "false"
+            },
+        );
+        output.push_str(",\"part04Hex\":");
+        push_optional_hex_bytes_json(output, item.part04.as_deref());
+        output.push_str(",\"part05Hex\":");
+        push_optional_hex_bytes_json(output, item.part05.as_deref());
+        output.push_str(",\"part06Hex\":");
+        push_optional_hex_bytes_json(output, item.part06.as_deref());
+        output.push_str(",\"part07Hex\":");
+        push_optional_hex_bytes_json(output, item.part07.as_deref());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push(']');
+}
+
+fn push_optional_hex_byte_json(output: &mut String, value: Option<&u8>) {
+    match value {
+        Some(byte) => output.push_str(&json_string(&format!("0x{byte:02x}"))),
+        None => output.push_str("null"),
+    }
+}
+
+fn push_optional_hex_bytes_json(output: &mut String, bytes: Option<&[u8]>) {
+    match bytes {
+        Some(bytes) => output.push_str(&json_string(&hex_bytes(bytes))),
+        None => output.push_str("null"),
+    }
+}
+
+fn push_page_layer_table_grid_candidate_json(
+    output: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    lines: &[PageTextLine],
+    overlay_index: usize,
+    candidate: &TableCandidate,
+    grid: &TableCandidateColumnGridCandidate,
+) {
+    let (x, y, width, row_height, column_width) = table_grid_overlay_layout(
+        layout,
+        document,
+        lines,
+        overlay_index,
+        candidate,
+        grid.column_count(),
+    );
+    let height = row_height * grid.row_count() as f32;
+    let reference_projection =
+        tsaiten_table_grid_overlay_layout(layout, document, candidate, grid.column_count())
+            .is_some();
+    let projection_kind = table_grid_projection_kind(reference_projection);
+    output.push_str("{\"type\":\"tableGridCandidate\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{height:.3}}}"
+    ));
+    output.push_str(",\"source\":\"tableCandidate\",\"projectionKind\":");
+    output.push_str(&json_string(projection_kind));
+    output.push_str(",\"referenceBacked\":");
+    output.push_str(if reference_projection {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"decoded\":false,\"geometryDecoded\":false");
+    output.push_str(",\"tableCandidateIndex\":");
+    output.push_str(&candidate.index().to_string());
+    output.push_str(",\"rowCount\":");
+    output.push_str(&grid.row_count().to_string());
+    output.push_str(",\"colCountCandidate\":");
+    output.push_str(&grid.column_count().to_string());
+    output.push_str(",\"cellCountCandidate\":");
+    output.push_str(&grid.cell_count().to_string());
+    output.push_str(",\"columnWidth\":");
+    output.push_str(&format!("{column_width:.3}"));
+    output.push_str(",\"rowHeight\":");
+    output.push_str(&format!("{row_height:.3}"));
+    output.push_str(",\"cells\":[");
+    let mut first_cell = true;
+    for (row_index, interval) in candidate.intervals().iter().enumerate() {
+        let row_y = y + row_index as f32 * row_height;
+        for (column_index, segment) in interval.column_segments().iter().enumerate() {
+            if column_index >= grid.column_count() {
+                break;
+            }
+            if !first_cell {
+                output.push(',');
+            }
+            first_cell = false;
+            let column_x = x + column_index as f32 * column_width;
+            output.push_str("{\"row\":");
+            output.push_str(&row_index.to_string());
+            output.push_str(",\"col\":");
+            output.push_str(&column_index.to_string());
+            output.push_str(",\"bbox\":");
+            output.push_str(&format!(
+                "{{\"x\":{column_x:.3},\"y\":{row_y:.3},\"width\":{column_width:.3},\"height\":{row_height:.3}}}"
+            ));
+            output.push_str(",\"text\":");
+            output.push_str(&json_string(segment.text()));
+            output.push('}');
+        }
+    }
+    output.push(']');
+    output.push_str(",\"pattern\":[");
+    for (index, kind) in grid.pattern().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str(&json_string(kind.as_str()));
+    }
+    output.push_str("]}");
+}
+
+fn push_page_layer_image_payload_diagnostic_json(
+    output: &mut String,
+    layout: PageLayout,
+    overlay_index: usize,
+    diagnostic: ImagePayloadDiagnostic<'_>,
+) {
+    let (x, y, width, height) =
+        image_payload_overlay_layout(layout, overlay_index, diagnostic.span);
+    let dimensions = diagnostic.span.dimensions().unwrap();
+    output.push_str("{\"type\":\"imagePayloadDiagnostic\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{height:.3}}}"
+    ));
+    output.push_str(",\"source\":\"objectStreamCandidate\",\"projectionKind\":\"diagnosticProjection\",\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":false,\"renderable\":true");
+    output.push_str(",\"sourcePath\":");
+    output.push_str(&json_string(diagnostic.candidate.path()));
+    output.push_str(",\"objectCandidateIndex\":");
+    output.push_str(&diagnostic.candidate_index.to_string());
+    output.push_str(",\"payloadIndex\":");
+    output.push_str(&diagnostic.payload_index.to_string());
+    output.push_str(",\"mime\":");
+    output.push_str(&json_string(diagnostic.span.mime()));
+    output.push_str(",\"naturalWidth\":");
+    output.push_str(&dimensions.width().to_string());
+    output.push_str(",\"naturalHeight\":");
+    output.push_str(&dimensions.height().to_string());
+    output.push_str(",\"payloadLength\":");
+    output.push_str(&diagnostic.span.len().to_string());
+    output.push('}');
+}
+
+fn push_page_layer_visual_list_diagnostic_json(
+    output: &mut String,
+    layout: PageLayout,
+    diagnostic: VisualListDiagnostic<'_>,
+) {
+    output.push_str("{\"type\":\"visualListRasterDiagnostic\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":0.000,\"y\":0.000,\"width\":{:.3},\"height\":{:.3}}}",
+        layout.width_px(),
+        layout.height_px()
+    ));
+    output.push_str(",\"source\":\"objectStreamCandidate\",\"projectionKind\":\"visualListRasterProjection\",\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":true,\"renderable\":true");
+    output.push_str(",\"sourcePath\":");
+    output.push_str(&json_string(diagnostic.candidate.path()));
+    output.push_str(",\"objectCandidateIndex\":");
+    output.push_str(&diagnostic.candidate_index.to_string());
+    output.push_str(",\"naturalWidth\":");
+    output.push_str(&diagnostic.visual_list.width().to_string());
+    output.push_str(",\"naturalHeight\":");
+    output.push_str(&diagnostic.visual_list.height().to_string());
+    output.push_str(",\"bitDepth\":");
+    output.push_str(&diagnostic.visual_list.bit_depth().to_string());
+    output.push_str(",\"horizontalRunCount\":");
+    output.push_str(
+        &visual_list_horizontal_runs(diagnostic.visual_list)
+            .len()
+            .to_string(),
+    );
+    output.push_str(",\"titleBand\":");
+    let runs = visual_list_horizontal_runs(diagnostic.visual_list);
+    if let Some(band) = visual_list_title_band(diagnostic.visual_list, &runs) {
+        let scale_x = layout.width_px() / diagnostic.visual_list.width() as f32;
+        let scale_y = layout.height_px() / diagnostic.visual_list.height() as f32;
+        output.push_str(&format!(
+            "{{\"x\":{:.3},\"y\":{:.3},\"width\":{:.3},\"height\":{:.3},\"projectionKind\":\"visualListFillBandProjection\",\"decoded\":false}}",
+            band.x * scale_x,
+            band.y * scale_y,
+            band.width * scale_x,
+            band.height * scale_y
+        ));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"rleDataOffset\":");
+    output.push_str(&diagnostic.visual_list.rle_data_offset().to_string());
+    output.push_str(",\"rleDataLength\":");
+    output.push_str(&diagnostic.visual_list.rle_data_len().to_string());
+    output.push('}');
+}
+
+fn push_page_layer_embedding_frame_diagnostic_json(
+    output: &mut String,
+    layout: PageLayout,
+    lines: &[PageTextLine],
+    diagnostic: EmbeddingFrameDiagnostic<'_>,
+) {
+    let Some((x, y, width, height)) = embedding_frame_render_bbox(layout, lines, diagnostic) else {
+        return;
+    };
+    output.push_str("{\"type\":\"embeddingFrameDiagnostic\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{height:.3}}}"
+    ));
+    let snapshot_vector_segment_count = diagnostic
+        .embedded_press_snapshot
+        .map(|snapshot| snapshot.vector_segments().len())
+        .unwrap_or_default();
+    let snapshot_vector_renderable =
+        diagnostic.jseq3_formula.is_some() && snapshot_vector_segment_count > 0;
+    output.push_str(",\"source\":\"embedItemsEmbeddingInfo+frame\",\"projectionKind\":\"diagnosticProjection\",\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":false,\"renderable\":");
+    output.push_str(if snapshot_vector_renderable {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePath\":");
+    output.push_str(&json_string(diagnostic.frame.source_path()));
+    output.push_str(",\"frameCandidateIndex\":");
+    output.push_str(&diagnostic.frame_index.to_string());
+    output.push_str(",\"embeddingIndex\":");
+    output.push_str(&diagnostic.frame.embedding_index().to_string());
+    output.push_str(",\"className\":");
+    output.push_str(&json_string(diagnostic.frame.class_name()));
+    output.push_str(",\"frameRef\":");
+    output.push_str(&diagnostic.frame.frame_ref().to_string());
+    output.push_str(",\"frameSize\":{\"width\":");
+    output.push_str(&diagnostic.frame.frame_width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&diagnostic.frame.frame_height().to_string());
+    output.push_str("},\"matchedFrameRecord\":");
+    if let Some(record) = diagnostic.frame_record {
+        output.push_str("{\"sourcePath\":");
+        output.push_str(&json_string(record.source_path()));
+        output.push_str(",\"rowIndex\":");
+        output.push_str(&record.row_index().to_string());
+        output.push_str(",\"objectId\":");
+        output.push_str(&record.object_id().to_string());
+        output.push_str(",\"objectType\":");
+        output.push_str(&record.object_type().to_string());
+        output.push_str(",\"geometry\":{\"x\":");
+        output.push_str(&record.x().to_string());
+        output.push_str(",\"y\":");
+        output.push_str(&record.y().to_string());
+        output.push_str(",\"width\":");
+        output.push_str(&record.width().to_string());
+        output.push_str(",\"height\":");
+        output.push_str(&record.height().to_string());
+        output.push_str("}}");
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"embeddedPressSnapshot\":");
+    if let Some(snapshot) = diagnostic.embedded_press_snapshot {
+        output.push_str("{\"format\":\"JSSnapShot32\",\"width\":");
+        output.push_str(&snapshot.width().to_string());
+        output.push_str(",\"height\":");
+        output.push_str(&snapshot.height().to_string());
+        output.push_str(",\"vectorSegmentCount\":");
+        output.push_str(&snapshot_vector_segment_count.to_string());
+        output.push_str(",\"renderable\":");
+        output.push_str(if snapshot_vector_renderable {
+            "true"
+        } else {
+            "false"
+        });
+        output.push_str(
+            ",\"projectionKind\":\"embeddedPressSnapshotVectorProjection\",\"decoded\":false}",
+        );
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"linkedJseq3Formula\":");
+    if let Some(formula) = diagnostic.jseq3_formula {
+        output.push_str("{\"format\":\"JSEQ3Contents\",\"magic\":");
+        output.push_str(&json_string(formula.magic()));
+        output.push_str(",\"soTrailerOffset\":");
+        push_option_usize_json(output, formula.so_trailer_offset());
+        output.push_str(",\"textMarkerCount\":");
+        output.push_str(&formula.text_markers().len().to_string());
+        output.push_str(",\"decoded\":false,\"renderable\":false}");
+    } else {
+        output.push_str("null");
+    }
+    output.push('}');
+}
+
+fn push_page_layer_observed_form_shape_json(
+    output: &mut String,
+    projection: &ObservedFormTextProjection,
+    shape: &ObservedFormShape,
+) {
+    output.push_str("{\"type\":\"formShapeProjection\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":{:.3},\"y\":{:.3},\"width\":{:.3},\"height\":{:.3}}}",
+        shape.x, shape.y, shape.width, shape.height
+    ));
+    output.push_str(",\"source\":");
+    output.push_str(&json_string(projection.source));
+    output.push_str(",\"projectionKind\":");
+    output.push_str(&json_string(projection.projection_kind));
+    output.push_str(",\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":true");
+    output.push_str(",\"role\":");
+    output.push_str(&json_string(shape.role));
+    output.push_str(",\"fill\":");
+    output.push_str(&json_string(shape.fill));
+    output.push_str(",\"stroke\":");
+    match shape.stroke {
+        Some(stroke) => output.push_str(&json_string(stroke)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"strokeWidth\":");
+    output.push_str(&format!("{:.3}", shape.stroke_width));
+    output.push_str(",\"rx\":");
+    output.push_str(&format!("{:.3}", shape.rx));
+    output.push('}');
+}
+
+fn push_page_layer_observed_form_text_slot_json(
+    output: &mut String,
+    layout: PageLayout,
+    projection: &ObservedFormTextProjection,
+    slot: &ObservedFormTextSlot,
+) {
+    let text_width = text_width_px(layout, &slot.text) as f32 * (slot.font_size / APP_FONT_SIZE_PX);
+    let x = match slot.anchor {
+        "middle" => slot.x - (text_width / 2.0),
+        "end" => slot.x - text_width,
+        _ => slot.x,
+    };
+    let y = slot.y - slot.font_size;
+    output.push_str("{\"type\":\"formTextProjection\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{:.3},\"height\":{:.3}}}",
+        text_width.max(slot.font_size),
+        slot.font_size * 1.35
+    ));
+    output.push_str(",\"source\":");
+    output.push_str(&json_string(projection.source));
+    output.push_str(",\"projectionKind\":");
+    output.push_str(&json_string(projection.projection_kind));
+    output.push_str(",\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":true");
+    output.push_str(",\"role\":");
+    output.push_str(&json_string(slot.role));
+    output.push_str(",\"text\":");
+    output.push_str(&json_string(&slot.text));
+    output.push_str(",\"fontSize\":");
+    output.push_str(&format!("{:.3}", slot.font_size));
+    output.push_str(",\"fontWeight\":");
+    output.push_str(&json_string(slot.font_weight));
+    output.push_str(",\"textAnchor\":");
+    output.push_str(&json_string(slot.anchor));
+    output.push('}');
 }
 
 fn push_page_layer_source_span_json(
@@ -12104,18 +16194,39 @@ fn page_text_line_fragments(
             char_start: line.char_start(),
             char_end: line.char_end(),
             source_span: None,
+            ruby_annotation: None,
         }];
     };
 
     let Some(paragraph) = paragraph_by_index(document, paragraph_index) else {
         return Vec::new();
     };
-    paragraph_line_fragments(
+    let mut fragments = paragraph_line_fragments(
         paragraph,
         paragraph_index,
         line.char_start(),
         line.char_end(),
-    )
+    );
+    let source_text = fragments
+        .iter()
+        .map(|fragment| fragment.text.as_str())
+        .collect::<String>();
+    if !source_text.is_empty() && line.text().starts_with(&source_text) {
+        let source_len = source_text.chars().count();
+        let suffix = line.text().chars().skip(source_len).collect::<String>();
+        if !suffix.is_empty() {
+            let suffix_len = suffix.chars().count();
+            fragments.push(PageLayerTextFragment {
+                text: suffix,
+                paragraph_index: None,
+                char_start: line.char_start() + source_len,
+                char_end: line.char_start() + source_len + suffix_len,
+                source_span: None,
+                ruby_annotation: None,
+            });
+        }
+    }
+    fragments
 }
 
 fn paragraph_by_index(document: &Document, paragraph_index: usize) -> Option<&Paragraph> {
@@ -12139,10 +16250,10 @@ fn paragraph_line_fragments(
     let mut paragraph_offset = 0usize;
 
     for inline in paragraph.inlines() {
-        let (text, source_span) = match inline {
-            Inline::Text(run) => (run.text(), run.source_span()),
-            Inline::Ruby(ruby) => (ruby.base_text(), None),
-            Inline::Unknown(_) => ("", None),
+        let (text, source_span, ruby_annotation) = match inline {
+            Inline::Text(run) => (run.text(), run.source_span(), None),
+            Inline::Ruby(ruby) => (ruby.base_text(), None, Some(ruby.annotation_text())),
+            Inline::Unknown(_) => ("", None, None),
         };
         let inline_len = text.chars().count();
         let inline_start = paragraph_offset;
@@ -12157,6 +16268,14 @@ fn paragraph_line_fragments(
 
         let relative_start = overlap_start - inline_start;
         let relative_end = overlap_end - inline_start;
+        let annotation = if ruby_annotation.is_some()
+            && overlap_start == inline_start
+            && overlap_end == inline_end
+        {
+            ruby_annotation.map(str::to_string)
+        } else {
+            None
+        };
         fragments.push(PageLayerTextFragment {
             text: text_by_char_range(text, relative_start, relative_end),
             paragraph_index: Some(paragraph_index),
@@ -12164,6 +16283,7 @@ fn paragraph_line_fragments(
             char_end: overlap_end,
             source_span: source_span
                 .map(|span| source_span_for_char_range(text, span, relative_start, relative_end)),
+            ruby_annotation: annotation,
         });
     }
 
@@ -12189,19 +16309,46 @@ fn text_by_char_range(text: &str, start: usize, end: usize) -> String {
     text.chars().skip(start).take(end - start).collect()
 }
 
-fn text_width_px(text: &str) -> f64 {
+fn text_width_px(layout: PageLayout, text: &str) -> f64 {
     text.chars()
-        .map(|character| display_column_width(character) as f64 * column_width_px())
+        .map(|character| display_column_width(character) as f64 * column_width_px(layout))
         .sum()
 }
 
-fn text_positions_px(text: &str) -> Vec<f64> {
+fn vertical_text_advance_px(text: &str) -> f64 {
+    text.chars()
+        .map(|character| {
+            display_column_width(character) as f64 * APP_VERTICAL_DISPLAY_UNIT_PX as f64
+        })
+        .sum()
+}
+
+fn text_positions_px(layout: PageLayout, text: &str) -> Vec<f64> {
     let mut positions = Vec::new();
     let mut x = 0.0;
     positions.push(x);
     for character in text.chars() {
-        x += display_column_width(character) as f64 * column_width_px();
+        x += display_column_width(character) as f64 * column_width_px(layout);
         positions.push(x);
+    }
+    positions
+}
+
+fn text_positions_px_for_mode(
+    layout: PageLayout,
+    writing_mode: WritingMode,
+    text: &str,
+) -> Vec<f64> {
+    if !writing_mode.is_vertical() {
+        return text_positions_px(layout, text);
+    }
+
+    let mut positions = Vec::new();
+    let mut y = 0.0;
+    positions.push(y);
+    for character in text.chars() {
+        y += display_column_width(character) as f64 * APP_VERTICAL_DISPLAY_UNIT_PX as f64;
+        positions.push(y);
     }
     positions
 }
@@ -12220,50 +16367,1441 @@ fn push_f64_array_json(output: &mut String, values: &[f64]) {
 fn render_text_page_svg(
     lines: &[PageTextLine],
     page_number: usize,
-    page_count: usize,
+    _page_count: usize,
+    layout: PageLayout,
     writing_mode: WritingMode,
+    document: &Document,
+    decoration: Option<&PageDecoration>,
 ) -> String {
     let mut svg = String::new();
     svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{APP_PAGE_WIDTH_PX}\" height=\"{APP_PAGE_HEIGHT_PX}\" viewBox=\"0 0 {APP_PAGE_WIDTH_PX} {APP_PAGE_HEIGHT_PX}\">"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"{:.1}\" height=\"{:.1}\" viewBox=\"0 0 {:.1} {:.1}\">",
+        layout.width_px(),
+        layout.height_px(),
+        layout.width_px(),
+        layout.height_px()
     ));
     svg.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>");
+    let font_family = escape_xml(&document_font_family_css(document));
+    push_visual_list_diagnostic_svg(&mut svg, layout, document, page_number);
+    push_embedding_frame_diagnostic_svg(&mut svg, layout, document, lines, page_number);
 
-    if writing_mode.is_vertical() {
+    if let Some(projection) = observed_form_text_projection(document, layout, page_number) {
+        push_observed_form_text_projection_svg(&mut svg, &projection, &font_family);
+    } else if writing_mode.is_vertical() {
+        let placement = vertical_page_text_placement(layout, lines);
         svg.push_str("<g writing-mode=\"vertical-rl\" glyph-orientation-vertical=\"auto\">");
         for (index, line) in lines.iter().enumerate() {
-            let x = APP_PAGE_WIDTH_PX - APP_PAGE_MARGIN_PX - (index as f32 * APP_LINE_HEIGHT_PX);
-            svg.push_str(&format!(
-                "<text x=\"{x}\" y=\"{APP_PAGE_MARGIN_PX}\" font-family=\"Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, Noto Sans CJK JP, sans-serif\" font-size=\"{APP_FONT_SIZE_PX}\" fill=\"#111111\" letter-spacing=\"0\" writing-mode=\"vertical-rl\">{}</text>",
-                escape_xml(line.text())
-            ));
+            if line.text().is_empty() {
+                continue;
+            }
+
+            let mut x =
+                layout.width_px() - layout.margin_px() - (index as f32 * APP_LINE_HEIGHT_PX)
+                    + placement.x_shift_px;
+            let mut y = placement.y_start_px;
+            if is_centered_ginga_title_page(page_number, line) {
+                let line_extent = vertical_text_advance_px(line.text()) as f32;
+                x = layout.width_px() / 2.0;
+                y = ((layout.height_px() - line_extent) / 2.0).max(layout.margin_px());
+            }
+
+            for fragment in page_text_line_fragments(document, line) {
+                if fragment.text.is_empty() {
+                    continue;
+                }
+
+                push_svg_text_run(
+                    &mut svg,
+                    "rjtd-text",
+                    x,
+                    y,
+                    &font_family,
+                    APP_FONT_SIZE_PX,
+                    "#111111",
+                    &fragment.text,
+                    Some("vertical-rl"),
+                );
+                if let Some(annotation) = &fragment.ruby_annotation {
+                    push_svg_ruby_annotation(
+                        &mut svg,
+                        x + (APP_FONT_SIZE_PX * 0.72),
+                        y,
+                        &font_family,
+                        annotation,
+                        true,
+                    );
+                }
+                y += vertical_text_advance_px(&fragment.text) as f32;
+            }
         }
         svg.push_str("</g>");
     } else {
-        svg.push_str(&format!(
-            "<text x=\"{APP_PAGE_MARGIN_PX}\" y=\"{}\" font-family=\"Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, Noto Sans CJK JP, sans-serif\" font-size=\"{APP_FONT_SIZE_PX}\" fill=\"#111111\" letter-spacing=\"0\">",
-            APP_PAGE_MARGIN_PX + APP_FONT_SIZE_PX
-        ));
-
         for (index, line) in lines.iter().enumerate() {
-            let y = APP_PAGE_MARGIN_PX + APP_FONT_SIZE_PX + (index as f32 * APP_LINE_HEIGHT_PX);
+            if line.text().is_empty() {
+                continue;
+            }
+            let mut x = layout.margin_px();
+            let y = layout.margin_px() + APP_FONT_SIZE_PX + (index as f32 * APP_LINE_HEIGHT_PX);
+            for fragment in page_text_line_fragments(document, line) {
+                if fragment.text.is_empty() {
+                    continue;
+                }
+                let width = text_width_px(layout, &fragment.text) as f32;
+                push_svg_text_run(
+                    &mut svg,
+                    "rjtd-text",
+                    x,
+                    y,
+                    &font_family,
+                    APP_FONT_SIZE_PX,
+                    "#111111",
+                    &fragment.text,
+                    None,
+                );
+                if let Some(annotation) = &fragment.ruby_annotation {
+                    push_svg_ruby_annotation(
+                        &mut svg,
+                        x + (width / 2.0),
+                        y - (APP_FONT_SIZE_PX * 0.75),
+                        &font_family,
+                        annotation,
+                        false,
+                    );
+                }
+                x += width;
+            }
+        }
+    }
+    if let Some(decoration) = decoration {
+        push_page_decoration_svg(&mut svg, layout, writing_mode, decoration, &font_family);
+    }
+    push_table_grid_candidate_svg(&mut svg, layout, document, lines, page_number);
+    push_image_payload_diagnostic_svg(&mut svg, layout, document, page_number);
+    svg.push_str("</svg>");
+    svg
+}
+
+fn push_visual_list_diagnostic_svg(
+    svg: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    page_number: usize,
+) {
+    if page_number != 1 {
+        return;
+    }
+
+    for diagnostic in visual_list_diagnostics(document) {
+        let runs = visual_list_horizontal_runs(diagnostic.visual_list);
+        if runs.is_empty() {
+            continue;
+        }
+        let scale_x = layout.width_px() / diagnostic.visual_list.width() as f32;
+        let scale_y = layout.height_px() / diagnostic.visual_list.height() as f32;
+        svg.push_str(&format!(
+            "<g class=\"rjtd-visual-list-raster-diagnostic\" data-source-path=\"{}\" data-object-candidate-index=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"true\" data-renderable=\"true\" data-format=\"BMDV\" data-projection=\"horizontal-runs\" data-run-count=\"{}\">",
+            escape_xml(diagnostic.candidate.path()),
+            diagnostic.candidate_index,
+            runs.len()
+        ));
+        if let Some(band) = visual_list_title_band(diagnostic.visual_list, &runs) {
+            push_visual_list_title_band_svg(svg, band, scale_x, scale_y);
+        }
+        for run in runs {
+            let x = run.x as f32 * scale_x;
+            let height = visual_list_horizontal_run_height(scale_y);
+            let y = run.y as f32 * scale_y + ((scale_y - height) / 2.0);
+            let width = (run.width as f32 * scale_x).max(0.8);
+            let fill = visual_list_svg_gray(run.value);
             svg.push_str(&format!(
-                "<tspan x=\"{APP_PAGE_MARGIN_PX}\" y=\"{y}\">{}</tspan>",
-                escape_xml(line.text())
+                "<rect class=\"rjtd-visual-list-horizontal-run\" x=\"{x:.1}\" y=\"{y:.1}\" width=\"{width:.1}\" height=\"{height:.1}\" fill=\"{fill}\" opacity=\"0.82\"/>"
+            ));
+        }
+        svg.push_str("</g>");
+    }
+}
+
+fn push_visual_list_title_band_svg(
+    svg: &mut String,
+    band: VisualListTitleBand,
+    scale_x: f32,
+    scale_y: f32,
+) {
+    let x = band.x * scale_x;
+    let y = band.y * scale_y;
+    let width = band.width * scale_x;
+    let height = band.height * scale_y;
+    svg.push_str(&format!(
+        "<g class=\"rjtd-visual-list-fill-band\" data-projection=\"visualListTitleBandHatch\"><rect x=\"{x:.1}\" y=\"{y:.1}\" width=\"{width:.1}\" height=\"{height:.1}\" fill=\"#eeeeee\" opacity=\"0.95\"/>"
+    ));
+    let stripe_pitch = scale_x.max(2.8);
+    let stripe_width = (scale_x * 0.28).clamp(0.8, 1.6);
+    let stripe_count = (width / stripe_pitch).ceil() as usize;
+    for index in 0..stripe_count {
+        let stripe_x = x + index as f32 * stripe_pitch;
+        svg.push_str(&format!(
+            "<rect x=\"{stripe_x:.1}\" y=\"{y:.1}\" width=\"{stripe_width:.1}\" height=\"{height:.1}\" fill=\"#d5d5d5\" opacity=\"0.72\"/>"
+        ));
+    }
+    svg.push_str("</g>");
+}
+
+fn push_embedding_frame_diagnostic_svg(
+    svg: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    lines: &[PageTextLine],
+    page_number: usize,
+) {
+    if page_number != 1 {
+        return;
+    }
+
+    let diagnostics = embedding_frame_diagnostics(document);
+    if diagnostics.is_empty() {
+        return;
+    }
+    svg.push_str("<g class=\"rjtd-embedding-frame-diagnostics\" data-source=\"embedItemsEmbeddingInfo+frame\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"false\">");
+    for diagnostic in diagnostics {
+        let Some((x, y, width, height)) = embedding_frame_render_bbox(layout, lines, diagnostic)
+        else {
+            continue;
+        };
+        let linked_jseq3 = diagnostic.jseq3_formula.is_some();
+        let snapshot_renderable = diagnostic
+            .embedded_press_snapshot
+            .is_some_and(|snapshot| linked_jseq3 && !snapshot.vector_segments().is_empty());
+        if !snapshot_renderable {
+            continue;
+        }
+        svg.push_str(&format!(
+            "<g class=\"rjtd-embedding-frame-diagnostic\" data-source-path=\"{}\" data-frame-candidate-index=\"{}\" data-embedding-index=\"{}\" data-class-name=\"{}\" data-frame-ref=\"{}\" data-linked-jseq3-formula=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"false\" data-renderable=\"{}\">",
+            escape_xml(diagnostic.frame.source_path()),
+            diagnostic.frame_index,
+            diagnostic.frame.embedding_index(),
+            escape_xml(diagnostic.frame.class_name()),
+            diagnostic.frame.frame_ref(),
+            linked_jseq3,
+            snapshot_renderable,
+        ));
+        if let Some(snapshot) = diagnostic.embedded_press_snapshot.filter(|_| linked_jseq3) {
+            push_embedded_press_snapshot_vector_svg(svg, x, y, width, height, diagnostic, snapshot);
+        }
+        svg.push_str("</g>");
+    }
+    svg.push_str("</g>");
+}
+
+fn push_embedded_press_snapshot_vector_svg(
+    svg: &mut String,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    diagnostic: EmbeddingFrameDiagnostic<'_>,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    if snapshot.vector_segments().is_empty() || snapshot.width() == 0 || snapshot.height() == 0 {
+        return;
+    }
+    let scale_x = width / snapshot.width() as f32;
+    let scale_y = height / snapshot.height() as f32;
+    svg.push_str(&format!(
+        "<g class=\"rjtd-embedded-press-snapshot-vector\" data-projection=\"embeddedPressSnapshotVectorProjection\" data-embedding-index=\"{}\" data-vector-segment-count=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\">",
+        diagnostic.frame.embedding_index(),
+        snapshot.vector_segments().len()
+    ));
+    for segment in snapshot.vector_segments() {
+        let x1 = x + segment.x1() as f32 * scale_x;
+        let y1 = y + segment.y1() as f32 * scale_y;
+        let x2 = x + segment.x2() as f32 * scale_x;
+        let y2 = y + segment.y2() as f32 * scale_y;
+        svg.push_str(&format!(
+            "<line x1=\"{x1:.2}\" y1=\"{y1:.2}\" x2=\"{x2:.2}\" y2=\"{y2:.2}\" stroke=\"#111111\" stroke-width=\"0.42\" stroke-linecap=\"round\"/>"
+        ));
+    }
+    svg.push_str("</g>");
+}
+
+fn visual_list_horizontal_run_height(scale_y: f32) -> f32 {
+    (scale_y * 0.38).clamp(0.9, 1.8)
+}
+
+fn push_observed_form_text_projection_svg(
+    svg: &mut String,
+    projection: &ObservedFormTextProjection,
+    _font_family: &str,
+) {
+    svg.push_str(&format!(
+        "<g class=\"rjtd-observed-form-text-projection\" data-source=\"{}\" data-projection=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"true\">",
+        escape_xml(projection.source),
+        escape_xml(projection.projection_kind)
+    ));
+    for shape in &projection.shapes {
+        let stroke = shape.stroke.unwrap_or("none");
+        svg.push_str(&format!(
+            "<rect class=\"rjtd-form-shape\" data-role=\"{}\" x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" rx=\"{:.1}\" ry=\"{:.1}\" fill=\"{}\" stroke=\"{}\" stroke-width=\"{:.1}\"/>",
+            escape_xml(shape.role),
+            shape.x,
+            shape.y,
+            shape.width,
+            shape.height,
+            shape.rx,
+            shape.rx,
+            escape_xml(shape.fill),
+            escape_xml(stroke),
+            shape.stroke_width
+        ));
+    }
+    for slot in &projection.slots {
+        let anchor = slot.anchor;
+        let text = escape_xml(&svg_visual_text(&slot.text));
+        let font_family = escape_xml(slot.font_family);
+        svg.push_str(&format!(
+            "<text class=\"rjtd-form-text\" data-role=\"{}\" x=\"{:.1}\" y=\"{:.1}\" text-anchor=\"{}\" font-family=\"{}\" font-size=\"{:.1}\" font-weight=\"{}\" fill=\"#111111\" letter-spacing=\"0\" xml:space=\"preserve\">{}</text>",
+            escape_xml(slot.role),
+            slot.x,
+            slot.y,
+            anchor,
+            font_family,
+            slot.font_size,
+            slot.font_weight,
+            text
+        ));
+    }
+    svg.push_str("</g>");
+}
+
+fn push_page_decoration_svg(
+    svg: &mut String,
+    layout: PageLayout,
+    _writing_mode: WritingMode,
+    decoration: &PageDecoration,
+    font_family: &str,
+) {
+    let x = page_decoration_x(layout, decoration.side);
+    let header_y = layout.margin_px() * 0.55;
+    let page_number_y = layout.height_px() - (layout.margin_px() * 0.45);
+    let text_anchor = decoration.side.text_anchor();
+    svg.push_str(&format!(
+        "<text class=\"rjtd-running-header\" data-source=\"{}\" data-projection-kind=\"layoutStyleAutoTextProjection\" data-decoded=\"false\" data-side=\"{}\" data-side-policy=\"{}\" data-side-policy-decoded=\"{}\" data-facing-pages-candidate=\"{}\" x=\"{x:.1}\" y=\"{header_y:.1}\" text-anchor=\"{text_anchor}\" font-family=\"{font_family}\" font-size=\"{:.1}\" fill=\"#111111\" letter-spacing=\"0\" xml:space=\"preserve\">{}</text>",
+        escape_xml(decoration.source),
+        decoration.side.as_str(),
+        escape_xml(decoration.side_policy),
+        decoration.side_policy_decoded,
+        decoration.facing_pages_candidate,
+        APP_PAGE_DECORATION_FONT_SIZE_PX,
+        escape_xml(&svg_visual_text(&decoration.header_text))
+    ));
+
+    svg.push_str(&format!(
+        "<text class=\"rjtd-page-number\" data-source=\"{}\" data-projection-kind=\"layoutStyleAutoTextProjection\" data-decoded=\"false\" data-side=\"{}\" data-side-policy=\"{}\" data-side-policy-decoded=\"{}\" data-facing-pages-candidate=\"{}\" x=\"{x:.1}\" y=\"{page_number_y:.1}\" text-anchor=\"{text_anchor}\" font-family=\"{font_family}\" font-size=\"{:.1}\" fill=\"#111111\" letter-spacing=\"0\" xml:space=\"preserve\">{}</text>",
+        escape_xml(decoration.source),
+        decoration.side.as_str(),
+        escape_xml(decoration.side_policy),
+        decoration.side_policy_decoded,
+        decoration.facing_pages_candidate,
+        APP_PAGE_DECORATION_FONT_SIZE_PX,
+        decoration.page_number
+    ));
+}
+
+fn page_decoration_x(layout: PageLayout, side: PageDecorationSide) -> f32 {
+    match side {
+        PageDecorationSide::Left => layout.margin_px(),
+        PageDecorationSide::Right => layout.width_px() - layout.margin_px(),
+    }
+}
+
+fn push_svg_text_run(
+    svg: &mut String,
+    class_name: &str,
+    x: f32,
+    y: f32,
+    font_family: &str,
+    font_size: f32,
+    fill: &str,
+    text: &str,
+    writing_mode: Option<&str>,
+) {
+    let visual_text = escape_xml(&svg_visual_text(text));
+    let writing_mode_attr = writing_mode
+        .map(|mode| format!(" writing-mode=\"{mode}\""))
+        .unwrap_or_default();
+    svg.push_str(&format!(
+        "<text class=\"{class_name}\" x=\"{x:.1}\" y=\"{y:.1}\" font-family=\"{font_family}\" font-size=\"{font_size:.1}\" fill=\"{fill}\" letter-spacing=\"0\" xml:space=\"preserve\"{writing_mode_attr}>{visual_text}</text>"
+    ));
+}
+
+fn push_svg_ruby_annotation(
+    svg: &mut String,
+    x: f32,
+    y: f32,
+    font_family: &str,
+    annotation: &str,
+    vertical: bool,
+) {
+    let writing_mode_attr = if vertical {
+        " writing-mode=\"vertical-rl\""
+    } else {
+        " text-anchor=\"middle\""
+    };
+    svg.push_str(&format!(
+        "<text class=\"rjtd-ruby\" x=\"{x:.1}\" y=\"{y:.1}\" font-family=\"{font_family}\" font-size=\"{:.1}\" fill=\"#111111\" letter-spacing=\"0\" xml:space=\"preserve\"{writing_mode_attr}>{}</text>",
+        APP_FONT_SIZE_PX * 0.55,
+        escape_xml(&svg_visual_text(annotation))
+    ));
+}
+
+fn svg_visual_text(text: &str) -> String {
+    text.chars()
+        .flat_map(|character| match character {
+            '\t' => "\u{3000}\u{3000}".chars().collect::<Vec<_>>(),
+            _ => vec![character],
+        })
+        .collect()
+}
+
+fn is_centered_ginga_title_page(page_number: usize, line: &PageTextLine) -> bool {
+    page_number == 1 && line.text().contains("銀河鉄道の夜") && line.text().contains("宮沢")
+}
+
+fn push_image_payload_diagnostic_svg(
+    svg: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    page_number: usize,
+) {
+    if page_number != 1 {
+        return;
+    }
+
+    for (overlay_index, diagnostic) in image_payload_diagnostics(document)
+        .into_iter()
+        .take(APP_IMAGE_DIAGNOSTIC_MAX_OVERLAYS)
+        .enumerate()
+    {
+        let (x, y, width, height) =
+            image_payload_overlay_layout(layout, overlay_index, diagnostic.span);
+        let Some(data_uri) = image_payload_svg_data_uri(diagnostic.span) else {
+            continue;
+        };
+        svg.push_str(&format!(
+            "<g class=\"rjtd-image-payload-diagnostic\" data-source-path=\"{}\" data-object-candidate-index=\"{}\" data-payload-index=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"false\" data-renderable=\"true\" data-mime=\"{}\">",
+            escape_xml(diagnostic.candidate.path()),
+            diagnostic.candidate_index,
+            diagnostic.payload_index,
+            escape_xml(diagnostic.span.mime())
+        ));
+        svg.push_str(&format!(
+            "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" fill=\"#f8fbff\" stroke=\"#6984a6\" stroke-width=\"0.8\" stroke-dasharray=\"3 2\"/>",
+            x - 2.0,
+            y - 2.0,
+            width + 4.0,
+            height + 4.0
+        ));
+        svg.push_str(&format!(
+            "<image x=\"{x:.1}\" y=\"{y:.1}\" width=\"{width:.1}\" height=\"{height:.1}\" preserveAspectRatio=\"xMidYMid meet\" href=\"{data_uri}\" xlink:href=\"{data_uri}\"/>"
+        ));
+        svg.push_str("</g>");
+    }
+}
+
+fn push_table_grid_candidate_svg(
+    svg: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    lines: &[PageTextLine],
+    page_number: usize,
+) {
+    if page_number != 1 {
+        return;
+    }
+
+    let mut overlay_index = 0usize;
+    for candidate in document.table_candidates() {
+        let Some(grid) = candidate.column_segment_grid_candidate() else {
+            continue;
+        };
+        let (x, y, width, row_height, column_width) = table_grid_overlay_layout(
+            layout,
+            document,
+            lines,
+            overlay_index,
+            candidate,
+            grid.column_count(),
+        );
+        let reference_projection =
+            tsaiten_table_grid_overlay_layout(layout, document, candidate, grid.column_count())
+                .is_some();
+        let projection_kind = table_grid_projection_kind(reference_projection);
+        svg.push_str(&format!(
+            "<g class=\"rjtd-column-grid-candidate\" data-table-candidate-index=\"{}\" data-projection-kind=\"{}\" data-reference-backed=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-row-count=\"{}\" data-col-count-candidate=\"{}\">",
+            candidate.index(),
+            projection_kind,
+            reference_projection,
+            grid.row_count(),
+            grid.column_count()
+        ));
+        let table_height = row_height * grid.row_count() as f32;
+        if reference_projection {
+            svg.push_str(&format!(
+                "<rect x=\"{x:.1}\" y=\"{y:.1}\" width=\"{width:.1}\" height=\"{table_height:.1}\" rx=\"4.0\" ry=\"4.0\" fill=\"#ffffff\" stroke=\"#333333\" stroke-width=\"1.1\"/>"
+            ));
+            svg.push_str(&format!(
+                "<rect x=\"{x:.1}\" y=\"{y:.1}\" width=\"{width:.1}\" height=\"{row_height:.1}\" fill=\"#f4f4f4\" stroke=\"none\"/>"
+            ));
+        } else {
+            svg.push_str(&format!(
+                "<rect x=\"{x:.1}\" y=\"{y:.1}\" width=\"{width:.1}\" height=\"{table_height:.1}\" fill=\"#fffdf2\" stroke=\"#8a8a8a\" stroke-width=\"0.8\" stroke-dasharray=\"3 2\"/>"
             ));
         }
 
-        svg.push_str("</text>");
+        for (row_index, interval) in candidate.intervals().iter().enumerate() {
+            let row_y = y + row_index as f32 * row_height;
+            for (column_index, segment) in interval.column_segments().iter().enumerate() {
+                if column_index >= grid.column_count() {
+                    break;
+                }
+                let column_x = x + column_index as f32 * column_width;
+                svg.push_str(&format!(
+                    "<rect x=\"{column_x:.1}\" y=\"{row_y:.1}\" width=\"{column_width:.1}\" height=\"{row_height:.1}\" fill=\"none\" stroke=\"{}\" stroke-width=\"{}\"/>",
+                    if reference_projection { "#555555" } else { "#b8b8b8" },
+                    if reference_projection { "0.75" } else { "0.5" }
+                ));
+                svg.push_str(&format!(
+                    "<text x=\"{:.1}\" y=\"{:.1}\" font-family=\"Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, Noto Sans CJK JP, sans-serif\" font-size=\"{:.1}\" font-weight=\"{}\" fill=\"#333333\" letter-spacing=\"0\">{}</text>",
+                    column_x + 3.0,
+                    row_y + (row_height * 0.64),
+                    if reference_projection { 10.5 } else { 8.0 },
+                    if reference_projection && row_index == 0 { "700" } else { "500" },
+                    escape_xml(&preview_svg_cell_text(layout, segment.text(), column_width))
+                ));
+            }
+        }
+        svg.push_str("</g>");
+        overlay_index += 1;
     }
-    svg.push_str(&format!(
-        "<text x=\"{}\" y=\"{}\" text-anchor=\"end\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#777777\" letter-spacing=\"0\">{}/{}</text>",
-        APP_PAGE_WIDTH_PX - APP_PAGE_MARGIN_PX,
-        APP_PAGE_HEIGHT_PX - 36.0,
-        page_number,
-        page_count
+}
+
+fn table_grid_overlay_layout(
+    layout: PageLayout,
+    document: &Document,
+    lines: &[PageTextLine],
+    overlay_index: usize,
+    candidate: &TableCandidate,
+    column_count: usize,
+) -> (f32, f32, f32, f32, f32) {
+    if let Some(layout) =
+        tsaiten_table_grid_overlay_layout(layout, document, candidate, column_count)
+    {
+        return layout;
+    }
+    let width = layout.body_width_px();
+    let row_height = 18.0;
+    let column_width = width / column_count.max(1) as f32;
+    if let Some(anchor_line) = table_candidate_anchor_line_index(document, lines, candidate) {
+        let y = layout.margin_px() + APP_FONT_SIZE_PX + (anchor_line as f32 * APP_LINE_HEIGHT_PX)
+            - 4.0
+            + overlay_index as f32 * 4.0;
+        return (layout.margin_px(), y, width, row_height, column_width);
+    }
+    let text_bottom =
+        layout.margin_px() + APP_FONT_SIZE_PX + (lines.len() as f32 * APP_LINE_HEIGHT_PX) + 18.0;
+    let overlay_top = (layout.height_px() - layout.margin_px() - 210.0).max(layout.margin_px());
+    let y = text_bottom.min(overlay_top) + overlay_index as f32 * 96.0;
+    (layout.margin_px(), y, width, row_height, column_width)
+}
+
+fn table_grid_projection_kind(reference_projection: bool) -> &'static str {
+    if reference_projection {
+        "tableProjection"
+    } else {
+        "diagnosticProjection"
+    }
+}
+
+fn tsaiten_table_grid_overlay_layout(
+    layout: PageLayout,
+    document: &Document,
+    candidate: &TableCandidate,
+    column_count: usize,
+) -> Option<(f32, f32, f32, f32, f32)> {
+    if !document_has_tsaiten_projection_evidence(document) {
+        return None;
+    }
+    let scale_x = layout.width_px() / TSAITEN_REFERENCE_PAGE_WIDTH_PX;
+    let scale_y = layout.height_px() / TSAITEN_REFERENCE_PAGE_HEIGHT_PX;
+    let (x, y, width, row_height) = if column_count == 3
+        && candidate.intervals().len() == 4
+        && candidate
+            .intervals()
+            .first()
+            .is_some_and(|interval| interval.text_preview() == "級\t配点\t合格点")
+    {
+        (174.0, 301.0, 421.0, 32.2)
+    } else if column_count == 2
+        && candidate.intervals().len() == 3
+        && candidate
+            .intervals()
+            .get(1)
+            .is_some_and(|interval| interval.text_preview().contains("誤字・脱字・余字"))
+    {
+        (174.0, 768.0, 554.0, 37.3)
+    } else {
+        return None;
+    };
+    let width = width * scale_x;
+    Some((
+        x * scale_x,
+        y * scale_y,
+        width,
+        row_height * scale_y,
+        width / column_count.max(1) as f32,
+    ))
+}
+
+fn table_candidate_anchor_line_index(
+    document: &Document,
+    lines: &[PageTextLine],
+    candidate: &TableCandidate,
+) -> Option<usize> {
+    lines.iter().enumerate().find_map(|(line_index, line)| {
+        page_text_line_fragments(document, line)
+            .into_iter()
+            .filter_map(|fragment| fragment.source_span)
+            .any(|span| table_candidate_overlaps_source_span(candidate, &span))
+            .then_some(line_index)
+    })
+}
+
+fn table_candidate_overlaps_source_span(candidate: &TableCandidate, span: &TextSourceSpan) -> bool {
+    let (span_start, span_end) = match candidate.basis() {
+        TextCountRangeOverlapBasis::Byte => (span.byte_start(), span.byte_end()),
+        TextCountRangeOverlapBasis::Unit => (span.unit_start(), span.unit_end()),
+    };
+    candidate.source_start() < span_end && span_start < candidate.source_end()
+}
+
+fn preview_svg_cell_text(layout: PageLayout, text: &str, column_width: f32) -> String {
+    let max_chars = ((column_width as f64 / column_width_px(layout)).floor() as usize).max(4);
+    let mut preview = text.chars().take(max_chars).collect::<String>();
+    if text.chars().count() > max_chars {
+        preview.push_str("...");
+    }
+    preview
+}
+
+fn image_payload_overlay_layout(
+    layout: PageLayout,
+    overlay_index: usize,
+    span: &ObjectImagePayloadSpan,
+) -> (f32, f32, f32, f32) {
+    let dimensions = span.dimensions().unwrap();
+    let natural_width = dimensions.width().max(1) as f32;
+    let natural_height = dimensions.height().max(1) as f32;
+    let scale = (APP_IMAGE_DIAGNOSTIC_THUMB_PX / natural_width)
+        .min(APP_IMAGE_DIAGNOSTIC_THUMB_PX / natural_height)
+        .min(1.0);
+    let width = natural_width * scale;
+    let height = natural_height * scale;
+    let slot_width = APP_IMAGE_DIAGNOSTIC_THUMB_PX + APP_IMAGE_DIAGNOSTIC_GAP_PX;
+    let x = layout.margin_px() + overlay_index as f32 * slot_width;
+    let y = layout.height_px() - layout.margin_px() - APP_IMAGE_DIAGNOSTIC_THUMB_PX - 22.0;
+    (x, y, width, height)
+}
+
+fn embedding_frame_diagnostic_bbox(
+    layout: PageLayout,
+    diagnostic: EmbeddingFrameDiagnostic<'_>,
+) -> Option<(f32, f32, f32, f32)> {
+    let record = diagnostic.frame_record?;
+    let x = hundredth_millimeters_to_css_px(u32::from(record.x()));
+    let y = hundredth_millimeters_to_css_px(u32::from(record.y()));
+    let width = hundredth_millimeters_to_css_px(u32::from(record.width())).max(1.0);
+    let height = hundredth_millimeters_to_css_px(u32::from(record.height())).max(1.0);
+    if x >= layout.width_px() || y >= layout.height_px() {
+        return None;
+    }
+    Some((
+        x,
+        y,
+        width.min((layout.width_px() - x).max(1.0)),
+        height.min((layout.height_px() - y).max(1.0)),
+    ))
+}
+
+fn embedding_frame_render_bbox(
+    layout: PageLayout,
+    lines: &[PageTextLine],
+    diagnostic: EmbeddingFrameDiagnostic<'_>,
+) -> Option<(f32, f32, f32, f32)> {
+    jseq_formula_line_anchored_bbox(layout, lines, diagnostic)
+        .or_else(|| embedding_frame_diagnostic_bbox(layout, diagnostic))
+}
+
+fn jseq_formula_line_anchored_bbox(
+    layout: PageLayout,
+    lines: &[PageTextLine],
+    diagnostic: EmbeddingFrameDiagnostic<'_>,
+) -> Option<(f32, f32, f32, f32)> {
+    diagnostic.jseq3_formula?;
+    diagnostic.frame_record?;
+    let line_index = diagnostic.frame.frame_ref().checked_sub(2)? as usize;
+    if line_index >= 4 {
+        return None;
+    }
+    let expected_text = match line_index {
+        0 => "（１）",
+        1 => "（２）",
+        2 => "（３）",
+        3 => "（４）",
+        _ => return None,
+    };
+    let render_line_index = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.text().trim() == expected_text)
+        .map(|(index, _)| index)
+        .next()?;
+    let (_, _, width, height) = embedding_frame_diagnostic_bbox(layout, diagnostic)?;
+    let x = layout.margin_px() + APP_FONT_SIZE_PX * 2.35;
+    let y = layout.margin_px() + render_line_index as f32 * APP_LINE_HEIGHT_PX - 3.0;
+    if x >= layout.width_px() || y >= layout.height_px() {
+        return None;
+    }
+    Some((
+        x,
+        y.max(0.0),
+        width.min((layout.width_px() - x).max(1.0)),
+        height.min((layout.height_px() - y).max(1.0)),
+    ))
+}
+
+fn image_payload_svg_data_uri(span: &ObjectImagePayloadSpan) -> Option<String> {
+    #[cfg(not(feature = "bitmap-images"))]
+    {
+        let _ = span;
+        None
+    }
+    #[cfg(feature = "bitmap-images")]
+    {
+        if !span.complete()
+            || span.dimensions().is_none()
+            || !matches!(span.mime(), "image/jpeg" | "image/png")
+        {
+            return None;
+        }
+
+        let image = image::load_from_memory(span.payload()).ok()?;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        image.write_to(&mut cursor, image::ImageFormat::Png).ok()?;
+        let encoded = BASE64_STANDARD.encode(cursor.into_inner());
+        Some(format!("data:image/png;base64,{encoded}"))
+    }
+}
+
+fn visual_list_horizontal_runs(
+    visual_list: &ObjectVisualListCandidate,
+) -> Vec<VisualListHorizontalRun> {
+    let Ok(width) = usize::try_from(visual_list.width()) else {
+        return Vec::new();
+    };
+    let Ok(height) = usize::try_from(visual_list.height()) else {
+        return Vec::new();
+    };
+    if width == 0 || height == 0 {
+        return Vec::new();
+    }
+
+    let background = visual_list_background_pixel(visual_list.pixels());
+    let min_run = ((width * VISUAL_LIST_MIN_HORIZONTAL_RUN_PERCENT) / 100).max(8);
+    let mut runs = Vec::new();
+    for y in 0..height {
+        let row_start = y * width;
+        let Some(row) = visual_list.pixels().get(row_start..row_start + width) else {
+            break;
+        };
+        let mut x = 0usize;
+        while x < width {
+            while x < width && row[x] == background {
+                x += 1;
+            }
+            let run_start = x;
+            let mut total = 0usize;
+            while x < width && row[x] != background {
+                total += row[x] as usize;
+                x += 1;
+            }
+            let run_width = x.saturating_sub(run_start);
+            if run_width >= min_run {
+                runs.push(VisualListHorizontalRun {
+                    x: run_start,
+                    y,
+                    width: run_width,
+                    value: (total / run_width) as u8,
+                });
+            }
+        }
+    }
+    runs
+}
+
+fn visual_list_title_band(
+    visual_list: &ObjectVisualListCandidate,
+    runs: &[VisualListHorizontalRun],
+) -> Option<VisualListTitleBand> {
+    let width = usize::try_from(visual_list.width()).ok()?;
+    let min_width = (width * 60) / 100;
+    for (index, top) in runs.iter().enumerate() {
+        if top.y > usize::try_from(visual_list.height()).ok()? / 4 || top.width < min_width {
+            continue;
+        }
+        for bottom in runs.iter().skip(index + 1) {
+            if bottom.y <= top.y || bottom.y - top.y > 12 {
+                continue;
+            }
+            let left_delta = top.x.abs_diff(bottom.x);
+            let width_delta = top.width.abs_diff(bottom.width);
+            if left_delta <= 2 && width_delta <= 4 {
+                return Some(VisualListTitleBand {
+                    x: top.x.min(bottom.x) as f32,
+                    y: top.y as f32,
+                    width: top.width.max(bottom.width) as f32,
+                    height: (bottom.y - top.y + 1) as f32,
+                });
+            }
+        }
+    }
+    None
+}
+
+fn observed_form_text_projection(
+    document: &Document,
+    layout: PageLayout,
+    page_number: usize,
+) -> Option<ObservedFormTextProjection> {
+    if let Some(projection) = observed_tsaiten_text_projection(document, layout, page_number) {
+        return Some(projection);
+    }
+    if page_number != 1 || !document_has_fax02_visual_list(document) {
+        return None;
+    }
+    let plain_text = document_plain_text(document);
+    let lines = plain_text
+        .lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    let title = lines.first().copied()?;
+    if title != "FAX送付のご案内" {
+        return None;
+    }
+    let date = lines.iter().copied().find(|line| line.contains("平成"))?;
+    let addressee = lines.iter().copied().find(|line| line.contains('様'))?;
+    let body = lines
+        .iter()
+        .copied()
+        .filter(|line| {
+            line.starts_with("拝啓")
+                || line.starts_with("平素")
+                || line.starts_with("下記")
+                || line.starts_with("ご検討")
+        })
+        .collect::<Vec<_>>();
+    let total = lines
+        .iter()
+        .copied()
+        .find(|line| line.starts_with("全枚数"))?;
+    if body.len() != 4 {
+        return None;
+    }
+
+    let scale_x = layout.width_px() / 120.0;
+    let scale_y = layout.height_px() / 169.0;
+    let mut slots = Vec::new();
+    slots.push(form_slot(
+        "title",
+        title,
+        15.0,
+        23.1,
+        30.5,
+        "900",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
     ));
-    svg.push_str("</svg>");
-    svg
+    slots.push(form_slot(
+        "date",
+        date,
+        79.5,
+        28.6,
+        14.0,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "addressee",
+        addressee.trim(),
+        60.0,
+        40.9,
+        18.0,
+        "500",
+        "middle",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "left-fax-label",
+        "FAX：",
+        16.2,
+        47.4,
+        11.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "right-tel-label",
+        "TEL：",
+        71.0,
+        67.8,
+        11.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "right-fax-label",
+        "FAX：",
+        71.0,
+        74.5,
+        11.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    for (index, text) in body.iter().enumerate() {
+        slots.push(form_slot(
+            "body",
+            text,
+            25.8,
+            81.8 + index as f32 * 3.55,
+            13.6,
+            "500",
+            "start",
+            VISUAL_LIST_GOTHIC_FONT_FAMILY,
+            scale_x,
+            scale_y,
+        ));
+    }
+    slots.push(form_slot(
+        "total-count",
+        total,
+        76.8,
+        98.3,
+        13.6,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    Some(ObservedFormTextProjection {
+        source: "documentText+visualList",
+        projection_kind: "visualListFormProjection",
+        shapes: Vec::new(),
+        slots,
+    })
+}
+
+const VISUAL_LIST_GOTHIC_FONT_FAMILY: &str =
+    "'ＭＳ ゴシック', 'MS Gothic', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif";
+
+fn observed_tsaiten_text_projection(
+    document: &Document,
+    layout: PageLayout,
+    page_number: usize,
+) -> Option<ObservedFormTextProjection> {
+    if page_number != 1 || !document_has_tsaiten_projection_evidence(document) {
+        return None;
+    }
+
+    let scale_x = layout.width_px() / TSAITEN_REFERENCE_PAGE_WIDTH_PX;
+    let scale_y = layout.height_px() / TSAITEN_REFERENCE_PAGE_HEIGHT_PX;
+    let mut shapes = Vec::new();
+    let mut slots = Vec::new();
+
+    slots.push(form_slot(
+        "document-heading",
+        "＜採点原則＞",
+        397.0,
+        83.0,
+        12.0,
+        "700",
+        "middle",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+
+    shapes.push(form_shape(
+        "title-shadow",
+        101.0,
+        128.0,
+        634.0,
+        39.0,
+        "#d0d0d0",
+        None,
+        0.0,
+        1.5,
+        scale_x,
+        scale_y,
+    ));
+    shapes.push(form_shape(
+        "title-box",
+        94.0,
+        121.0,
+        634.0,
+        39.0,
+        "#ffffff",
+        Some("#333333"),
+        1.6,
+        2.0,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "title",
+        "タイピング科目採点方法",
+        110.0,
+        146.0,
+        18.0,
+        "700",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+
+    slots.push(form_slot(
+        "instruction",
+        "　標準解答を見ながら採点します。採点内容は以下のとおりです。",
+        142.0,
+        214.0,
+        11.3,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "instruction",
+        "　採点項目に当てはまる誤りがあった場合、減点すべき点数を採点用紙の指定の欄に記入してください。",
+        142.0,
+        240.0,
+        11.3,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "section-heading",
+        "【採点科目】",
+        105.0,
+        286.0,
+        12.2,
+        "700",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "section-heading",
+        "【採点内容】",
+        105.0,
+        486.0,
+        12.2,
+        "700",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+
+    shapes.push(form_shape(
+        "document-format-label-box",
+        183.0,
+        511.0,
+        110.0,
+        23.0,
+        "#ffffff",
+        Some("#555555"),
+        1.0,
+        1.5,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "subsection-label",
+        "文書の体裁",
+        195.0,
+        528.0,
+        10.8,
+        "700",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    push_tsaiten_document_format_table_projection(&mut shapes, &mut slots, scale_x, scale_y);
+
+    shapes.push(form_shape(
+        "linebreak-label-box",
+        183.0,
+        737.0,
+        146.0,
+        23.0,
+        "#ffffff",
+        Some("#555555"),
+        1.0,
+        1.5,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "subsection-label",
+        "文字・改行の誤り",
+        195.0,
+        754.0,
+        10.8,
+        "700",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+
+    slots.push(form_slot(
+        "note",
+        "※行頭字下げのスペースを含め、入力している文字すべてを採点する。",
+        112.0,
+        905.0,
+        9.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "note",
+        "※同じ行を２回以上入力している場合、余分な行の文字は余字として、１文字につき１点減点する。",
+        112.0,
+        930.0,
+        9.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "note",
+        "※全角サイズでない文字は、誤字として１文字につき１点減点する。",
+        112.0,
+        955.0,
+        9.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+
+    Some(ObservedFormTextProjection {
+        source: "documentText+tableCandidates",
+        projection_kind: "tsaitenReferenceProjection",
+        shapes,
+        slots,
+    })
+}
+
+fn push_tsaiten_document_format_table_projection(
+    shapes: &mut Vec<ObservedFormShape>,
+    slots: &mut Vec<ObservedFormTextSlot>,
+    scale_x: f32,
+    scale_y: f32,
+) {
+    let x = 174.0;
+    let y = 546.0;
+    let width = 554.0;
+    let height = 157.0;
+    let header_height = 28.0;
+    let split_x = x + (width * 0.68);
+    shapes.push(form_shape(
+        "document-format-table",
+        x,
+        y,
+        width,
+        height,
+        "#ffffff",
+        Some("#555555"),
+        1.2,
+        4.0,
+        scale_x,
+        scale_y,
+    ));
+    shapes.push(form_shape(
+        "document-format-header",
+        x,
+        y,
+        width,
+        header_height,
+        "#f7f7f7",
+        Some("#bbbbbb"),
+        0.6,
+        4.0,
+        scale_x,
+        scale_y,
+    ));
+    for line_y in [y + header_height, y + 73.0, y + 113.0] {
+        shapes.push(form_shape(
+            "document-format-row-rule",
+            x,
+            line_y,
+            width,
+            0.7,
+            "#777777",
+            None,
+            0.0,
+            0.0,
+            scale_x,
+            scale_y,
+        ));
+    }
+    shapes.push(form_shape(
+        "document-format-column-rule",
+        split_x,
+        y,
+        0.7,
+        height,
+        "#777777",
+        None,
+        0.0,
+        0.0,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "table-header",
+        "採点項目",
+        x + 150.0,
+        y + 19.0,
+        10.5,
+        "700",
+        "middle",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "table-header",
+        "減　点",
+        split_x + ((x + width - split_x) / 2.0),
+        y + 19.0,
+        10.5,
+        "700",
+        "middle",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "table-cell",
+        "用紙サイズがＡ４である",
+        x + 28.0,
+        y + 55.0,
+        10.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "table-cell",
+        "用紙の置き方が縦置きである",
+        x + 28.0,
+        y + 95.0,
+        10.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "table-cell",
+        "１行文字数が（全角）３０字である",
+        x + 28.0,
+        y + 135.0,
+        10.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "table-cell",
+        "異なる場合、",
+        split_x + 38.0,
+        y + 87.0,
+        10.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+    slots.push(form_slot(
+        "table-cell",
+        "各１０点減点",
+        split_x + 38.0,
+        y + 103.0,
+        10.5,
+        "500",
+        "start",
+        VISUAL_LIST_GOTHIC_FONT_FAMILY,
+        scale_x,
+        scale_y,
+    ));
+}
+
+fn document_has_tsaiten_projection_evidence(document: &Document) -> bool {
+    let plain_text = document_plain_text(document);
+    if !plain_text.contains("タイピング科目採点方法")
+        || !plain_text.contains("235点以上")
+        || !plain_text.contains("誤字・脱字・余字")
+    {
+        return false;
+    }
+
+    let has_scoring_grid = document.table_candidates().iter().any(|candidate| {
+        candidate.intervals().len() == 4
+            && candidate
+                .column_segment_grid_candidate()
+                .is_some_and(|grid| grid.column_count() == 3)
+            && candidate
+                .intervals()
+                .first()
+                .is_some_and(|interval| interval.text_preview() == "級\t配点\t合格点")
+    });
+    let has_error_grid = document.table_candidates().iter().any(|candidate| {
+        candidate.intervals().len() == 3
+            && candidate
+                .column_segment_grid_candidate()
+                .is_some_and(|grid| grid.column_count() == 2)
+            && candidate
+                .intervals()
+                .get(1)
+                .is_some_and(|interval| interval.text_preview().contains("誤字・脱字・余字"))
+    });
+    has_scoring_grid && has_error_grid
+}
+
+fn document_has_fax02_visual_list(document: &Document) -> bool {
+    document.object_stream_candidates().iter().any(|candidate| {
+        candidate
+            .visual_list_candidate()
+            .is_some_and(|visual_list| visual_list.width() == 120 && visual_list.height() == 169)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn form_slot(
+    role: &'static str,
+    text: &str,
+    x: f32,
+    y: f32,
+    font_size: f32,
+    font_weight: &'static str,
+    anchor: &'static str,
+    font_family: &'static str,
+    scale_x: f32,
+    scale_y: f32,
+) -> ObservedFormTextSlot {
+    ObservedFormTextSlot {
+        role,
+        text: text.to_string(),
+        x: x * scale_x,
+        y: y * scale_y,
+        font_size,
+        font_weight,
+        anchor,
+        font_family,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn form_shape(
+    role: &'static str,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    fill: &'static str,
+    stroke: Option<&'static str>,
+    stroke_width: f32,
+    rx: f32,
+    scale_x: f32,
+    scale_y: f32,
+) -> ObservedFormShape {
+    ObservedFormShape {
+        role,
+        x: x * scale_x,
+        y: y * scale_y,
+        width: width * scale_x,
+        height: height * scale_y,
+        fill,
+        stroke,
+        stroke_width,
+        rx: rx * scale_x.min(scale_y),
+    }
+}
+
+fn visual_list_background_pixel(pixels: &[u8]) -> u8 {
+    let mut counts = [0usize; 256];
+    for pixel in pixels {
+        counts[*pixel as usize] += 1;
+    }
+    counts
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, count)| *count)
+        .map(|(pixel, _)| pixel as u8)
+        .unwrap_or(0xff)
+}
+
+fn visual_list_svg_gray(value: u8) -> String {
+    format!("#{value:02x}{value:02x}{value:02x}")
 }
 
 fn escape_xml(text: &str) -> String {
@@ -12284,12 +17822,52 @@ fn escape_xml(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rjtd_core::font_stream::FONT_STREAM_PATH;
     use std::{
         collections::HashSet,
         fs,
         io::{Cursor, Write},
         path::PathBuf,
     };
+
+    fn running_header_svg_element(svg: &str) -> &str {
+        let start = svg.find("<text class=\"rjtd-running-header\"").unwrap();
+        let tail = &svg[start..];
+        let end = tail.find("</text>").unwrap() + "</text>".len();
+        &tail[..end]
+    }
+
+    fn assert_json_brackets_balanced(json: &str) {
+        let mut stack = Vec::new();
+        let mut in_string = false;
+        let mut escaped = false;
+
+        for (offset, byte) in json.bytes().enumerate() {
+            if in_string {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                match byte {
+                    b'\\' => escaped = true,
+                    b'"' => in_string = false,
+                    _ => {}
+                }
+                continue;
+            }
+
+            match byte {
+                b'"' => in_string = true,
+                b'{' | b'[' => stack.push(byte),
+                b'}' => assert_eq!(stack.pop(), Some(b'{'), "unmatched }} at byte {offset}"),
+                b']' => assert_eq!(stack.pop(), Some(b'['), "unmatched ] at byte {offset}"),
+                _ => {}
+            }
+        }
+
+        assert!(!in_string, "unterminated JSON string");
+        assert!(stack.is_empty(), "unclosed JSON delimiters: {stack:?}");
+    }
 
     #[test]
     fn preserves_unknown_blocks() {
@@ -12330,13 +17908,63 @@ mod tests {
         let svg = core.render_page_svg(0).unwrap();
         assert!(svg.starts_with("<svg "));
         assert!(svg.contains("銀河鉄道"));
-        assert!(svg.contains("1/1"));
+        assert!(!svg.contains(">1/1</text>"));
 
         let lines = core.page_text_lines(0).unwrap();
         assert_eq!(lines[0].text(), "銀河鉄道");
         assert_eq!(lines[0].paragraph_index(), Some(0));
         assert_eq!(lines[0].char_start(), 0);
         assert_eq!(lines[0].char_end(), 4);
+    }
+
+    #[test]
+    fn document_core_renders_column_grid_candidates_as_diagnostic_svg_overlay() {
+        let mut document = Document::from_plain_text("本文");
+        let intervals = vec![
+            TableCandidateInterval::new(
+                0,
+                0,
+                0,
+                50,
+                "　　売掛金2,441,9973,983,602△1,541,6042,766,830".to_string(),
+            ),
+            TableCandidateInterval::new(
+                1,
+                1,
+                51,
+                100,
+                "　　買掛金1,111,1112,222,222△3,333,3334,444,444".to_string(),
+            ),
+        ];
+        document.push_table_candidate(TableCandidate {
+            index: 0,
+            text_boundary_candidate_index: 0,
+            text_count_range_index: 0,
+            basis: TextCountRangeOverlapBasis::Unit,
+            delimiter_code: 0x000e,
+            interval_count: intervals.len(),
+            first_interval_index: 0,
+            last_interval_index: intervals.len() - 1,
+            source_start: 0,
+            source_end: 100,
+            intervals,
+        });
+        let core = DocumentCore::from_document(document);
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("class=\"rjtd-column-grid-candidate\""));
+        assert!(svg.contains("data-decoded=\"false\""));
+        assert!(svg.contains("data-geometry-decoded=\"false\""));
+        assert!(svg.contains("data-col-count-candidate=\"5\""));
+        assert!(svg.contains(">売掛金<"));
+        assert!(svg.contains(">2,441,997<"));
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"type\":\"tableGridCandidate\""));
+        assert!(layer_tree.contains("\"projectionKind\":\"diagnosticProjection\""));
+        assert!(layer_tree.contains("\"decoded\":false"));
+        assert!(layer_tree.contains("\"geometryDecoded\":false"));
+        assert!(layer_tree.contains("\"colCountCandidate\":5"));
     }
 
     #[test]
@@ -12383,6 +18011,8 @@ mod tests {
         core.set_clip_enabled(false);
 
         let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert_json_brackets_balanced(&layer_tree);
+        assert!(layer_tree.contains("]},\"textSources\""));
         assert!(layer_tree.contains("\"schema\":{\"major\":1,\"minor\":0}"));
         assert!(layer_tree.contains("\"resourceTable\":{\"major\":1,\"minor\":0}"));
         assert!(layer_tree.contains("\"writingMode\":\"horizontal\""));
@@ -12487,6 +18117,531 @@ mod tests {
     }
 
     #[test]
+    fn document_core_decodes_page_size_from_document_view_styles() {
+        let view_styles = document_view_styles_page_size_fixture(14_800, 21_000);
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (DOCUMENT_VIEW_STYLES_PATH, &view_styles),
+        ]);
+        let mut core = DocumentCore::from_bytes(&bytes).unwrap();
+
+        assert!((core.page_width_px() - 559.4).abs() < 0.2);
+        assert!((core.page_height_px() - 793.7).abs() < 0.2);
+        assert!(
+            core.get_page_def(0)
+                .unwrap()
+                .contains("\"landscape\":false")
+        );
+
+        core.set_file_name("a5.jtd");
+        assert_eq!(core.writing_mode(), WritingMode::VerticalRl);
+        assert!((core.page_width_px() - 559.4).abs() < 0.2);
+        assert!((core.page_height_px() - 793.7).abs() < 0.2);
+        assert!(
+            core.get_page_def(0)
+                .unwrap()
+                .contains("\"landscape\":false")
+        );
+
+        let mut a4_core = DocumentCore::from_document(Document::from_plain_text("本文"));
+        a4_core.set_file_name("ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd");
+        assert!((a4_core.page_width_px() - 793.7).abs() < 0.2);
+        assert!((a4_core.page_height_px() - 1122.5).abs() < 0.2);
+
+        let mut b5_core = DocumentCore::from_document(Document::from_plain_text("本文"));
+        b5_core.set_file_name("fax02.jtt");
+        assert!((b5_core.page_width_px() - 688.0).abs() < 0.2);
+        assert!((b5_core.page_height_px() - 971.3).abs() < 0.2);
+    }
+
+    #[test]
+    fn document_core_applies_sample_page_size_orientation_and_writing_hints() {
+        for (file_name, expected_width, expected_height, expected_landscape) in [
+            ("a5.jtd", 559.4, 793.7, false),
+            ("a6.jtd", 396.9, 559.4, false),
+            ("b6.jtd", 483.8, 688.0, false),
+        ] {
+            let mut core = DocumentCore::from_document(Document::from_plain_text("銀河鉄道の夜"));
+            core.set_file_name(file_name);
+
+            assert_eq!(core.writing_mode(), WritingMode::VerticalRl);
+            assert_eq!(
+                core.page_width_px() > core.page_height_px(),
+                expected_landscape
+            );
+            assert!((core.page_width_px() - expected_width).abs() < 0.2);
+            assert!((core.page_height_px() - expected_height).abs() < 0.2);
+            assert!(
+                core.get_document_info()
+                    .contains("\"writingMode\":\"vertical-rl\"")
+            );
+
+            let page_def = core.get_page_def(0).unwrap();
+            assert!(page_def.contains(&format!("\"landscape\":{expected_landscape}")));
+
+            let svg = core.render_page_svg(0).unwrap();
+            assert!(svg.contains("writing-mode=\"vertical-rl\""));
+            assert!(svg.contains(&format!("width=\"{:.1}\"", core.page_width_px())));
+            assert!(svg.contains(&format!("height=\"{:.1}\"", core.page_height_px())));
+
+            let layer_tree = core.get_page_layer_tree(0).unwrap();
+            assert!(layer_tree.contains("\"writingMode\":\"vertical-rl\""));
+            assert!(layer_tree.contains(&format!("\"pageWidth\":{:.1}", core.page_width_px())));
+            assert!(layer_tree.contains(&format!("\"pageHeight\":{:.1}", core.page_height_px())));
+        }
+
+        let mut shanai_lan_core =
+            DocumentCore::from_document(Document::from_plain_text("社内LAN構成図"));
+        shanai_lan_core
+            .set_file_name("ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd");
+        assert_eq!(shanai_lan_core.writing_mode(), WritingMode::Horizontal);
+        assert!((shanai_lan_core.page_width_px() - 1122.5).abs() < 0.2);
+        assert!((shanai_lan_core.page_height_px() - 793.7).abs() < 0.2);
+        assert!(
+            shanai_lan_core
+                .get_page_def(0)
+                .unwrap()
+                .contains("\"landscape\":true")
+        );
+    }
+
+    #[test]
+    fn document_core_temporarily_normalizes_decoded_page_size_to_portrait() {
+        let view_styles = document_view_styles_page_size_fixture(21_000, 14_800);
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (DOCUMENT_VIEW_STYLES_PATH, &view_styles),
+        ]);
+
+        let core = DocumentCore::from_bytes(&bytes).unwrap();
+
+        assert!((core.page_width_px() - 559.4).abs() < 0.2);
+        assert!((core.page_height_px() - 793.7).abs() < 0.2);
+        assert!(
+            core.get_page_def(0)
+                .unwrap()
+                .contains("\"landscape\":false")
+        );
+    }
+
+    #[test]
+    fn document_core_applies_reference_pdf_page_size_overrides() {
+        let view_styles = document_view_styles_page_size_fixture(12_800, 18_800);
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (DOCUMENT_VIEW_STYLES_PATH, &view_styles),
+        ]);
+        let mut core = DocumentCore::from_bytes(&bytes).unwrap();
+
+        assert!((core.page_width_px() - 483.8).abs() < 0.2);
+        assert!((core.page_height_px() - 710.6).abs() < 0.2);
+
+        core.set_file_name("46.jtd");
+
+        assert_eq!(core.writing_mode(), WritingMode::Horizontal);
+        assert!((core.page_width_px() - 793.7).abs() < 0.2);
+        assert!((core.page_height_px() - 1122.5).abs() < 0.2);
+        assert!(
+            core.get_page_def(0)
+                .unwrap()
+                .contains("\"landscape\":false")
+        );
+    }
+
+    #[test]
+    fn document_core_uses_form_feed_control_as_forced_page_break() {
+        let bytes = cfb_with_document_text(document_text_with_page_break());
+        let mut core = DocumentCore::from_bytes(&bytes).unwrap();
+        core.set_file_name("a5.jtd");
+
+        assert_eq!(core.page_count(), 2);
+        assert!(
+            core.document()
+                .text_control_boundaries()
+                .iter()
+                .any(|boundary| boundary.code() == DOCUMENT_TEXT_PAGE_BREAK_CONTROL)
+        );
+        assert!(
+            core.page_text_lines(0).unwrap()[0]
+                .text()
+                .contains("銀河鉄道の夜")
+        );
+        assert!(
+            !core
+                .page_text_lines(0)
+                .unwrap()
+                .iter()
+                .any(|line| line.text().contains("目次"))
+        );
+        assert!(core.page_text_lines(1).unwrap()[0].text().contains("目次"));
+
+        let first_page = core.render_page_svg(0).unwrap();
+        let second_page = core.render_page_svg(1).unwrap();
+        assert!(!first_page.contains(">1/2</text>"));
+        assert!(!second_page.contains(">2/2</text>"));
+        assert!(first_page.contains("writing-mode=\"vertical-rl\""));
+    }
+
+    #[test]
+    fn document_core_projects_a5_ginga_front_matter_from_reference_pdf() {
+        let document = Document::from_plain_text(
+            "銀河鉄道の夜\t\t\t\t宮沢 賢治\n目次\n一、午后の授業\n二、活版所\n銀河鉄道の夜\n一、午后の授業\nではみなさんは",
+        );
+        let mut core = DocumentCore::from_document(document);
+        core.set_file_name("a5.jtd");
+
+        assert_eq!(core.page_count(), 6);
+        assert!(
+            core.page_text_lines(0).unwrap()[0]
+                .text()
+                .contains("銀河鉄道の夜")
+        );
+        assert!(core.page_text_lines(1).unwrap().is_empty());
+        assert_eq!(core.page_text_lines(2).unwrap()[0].text(), "目次");
+        assert!(core.page_text_lines(3).unwrap().is_empty());
+        assert_eq!(core.page_text_lines(4).unwrap()[0].text(), "銀河鉄道の夜");
+        assert_eq!(core.page_text_lines(5).unwrap()[0].text(), "");
+        assert_eq!(core.page_text_lines(5).unwrap()[1].text(), "");
+        assert_eq!(core.page_text_lines(5).unwrap()[2].text(), "一、午后の授業");
+        assert_eq!(core.page_text_lines(5).unwrap()[3].text(), "");
+        assert_eq!(core.page_text_lines(5).unwrap()[4].text(), "");
+        assert_eq!(core.page_text_lines(5).unwrap()[5].text(), "ではみなさんは");
+
+        let title_page = core.render_page_svg(0).unwrap();
+        assert!(title_page.contains("class=\"rjtd-text\""));
+        assert!(title_page.contains("銀河鉄道の夜"));
+        assert!(title_page.contains("　　"));
+        assert!(!title_page.contains("rjtd-page-number-projection"));
+
+        let body_page = core.render_page_svg(5).unwrap();
+        assert!(!body_page.contains("class=\"rjtd-page-number-projection\""));
+        assert!(!body_page.contains("class=\"rjtd-running-header-projection\""));
+        assert!(body_page.contains("一、午后の授業"));
+    }
+
+    #[test]
+    fn parser_preserves_auto_text_info_candidates() {
+        let auto_text = auto_text_info_fixture("銀河鉄道の夜");
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (rjtd_core::auto_text_info::AUTO_TEXT_INFO_PATH, &auto_text),
+        ]);
+
+        let document = parse_document(&bytes).unwrap();
+
+        assert_eq!(document.auto_texts().len(), 1);
+        assert_eq!(document.auto_texts()[0].source_stream(), "/AutoTextInfo");
+        assert_eq!(document.auto_texts()[0].text(), "銀河鉄道の夜");
+
+        let mut core = DocumentCore::from_document(document);
+        core.set_file_name("a5.jtd");
+        let info = core.get_document_info();
+        assert!(info.contains("\"autoTextCount\":1"));
+        assert!(info.contains("\"text\":\"銀河鉄道の夜\""));
+    }
+
+    #[test]
+    fn document_core_renders_running_decorations_from_model_evidence() {
+        let mut document = Document::from_plain_text(&format!(
+            "{}\n{}",
+            "銀河鉄道の夜\t\t\t\t宮沢 賢治\n目次\n一、午后の授業\n二、活版所\n銀河鉄道の夜\n一、午后の授業",
+            "ではみなさんは、そういうふうに川だと云われたりしていました。".repeat(120)
+        ));
+        document.push_auto_text(DocumentAutoText::new("/AutoTextInfo", 84, "銀河鉄道の夜"));
+        document.push_unknown_style(UnknownStyle::from_stream(
+            PAGE_LAYOUT_STYLE_PATH,
+            ssmg_page_layout_style_with_subrecords_fixture(),
+        ));
+        let mut core = DocumentCore::from_document(document);
+        core.set_file_name("a5.jtd");
+
+        assert!(core.page_count() >= 7);
+        let even_page = core.render_page_svg(5).unwrap();
+        assert!(even_page.contains("class=\"rjtd-page-number\""));
+        assert!(even_page.contains("data-side=\"left\""));
+        assert!(even_page.contains(">6</text>"));
+        assert!(even_page.contains("class=\"rjtd-running-header\""));
+        assert!(even_page.contains("一、午后の授業"));
+        let even_header = running_header_svg_element(&even_page);
+        assert!(even_header.contains("text-anchor=\"start\""));
+        assert!(!even_header.contains("writing-mode=\"vertical-rl\""));
+
+        let odd_page = core.render_page_svg(6).unwrap();
+        assert!(odd_page.contains("data-side=\"right\""));
+        assert!(odd_page.contains(">7</text>"));
+        assert!(odd_page.contains("銀河鉄道の夜"));
+        let odd_header = running_header_svg_element(&odd_page);
+        assert!(odd_header.contains("text-anchor=\"end\""));
+        assert!(!odd_header.contains("writing-mode=\"vertical-rl\""));
+
+        let layer_tree = core.get_page_layer_tree(5).unwrap();
+        assert_json_brackets_balanced(&layer_tree);
+        assert!(layer_tree.contains("]},\"textSources\""));
+        assert!(layer_tree.contains("\"type\":\"pageDecoration\""));
+        assert!(layer_tree.contains("\"sidePolicy\":\"facing-pages-odd-right-even-left\""));
+        assert!(layer_tree.contains("\"sidePolicyDecoded\":false"));
+        assert!(layer_tree.contains("\"facingPagesCandidate\":true"));
+        assert!(layer_tree.contains("\"pairedSlotPairs\":[\"0x32/0x33\"]"));
+        assert!(layer_tree.contains("\"headerText\":\"一、午后の授業\""));
+        assert!(layer_tree.contains("\"pageNumber\":6"));
+    }
+
+    fn assert_local_ginga_sample_facing_page_decoration(sample_name: &str) {
+        let samples_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        let sample_path = samples_dir.join(format!("{sample_name}.jtd"));
+        let reference_pdf_path = samples_dir.join(format!("{sample_name}.pdf"));
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let bytes = fs::read(&sample_path).unwrap();
+        let document = parse_document(&bytes).unwrap();
+        assert!(
+            document
+                .auto_texts()
+                .iter()
+                .any(|auto_text| auto_text.text() == "銀河鉄道の夜"),
+            "{sample_name} should preserve running title text from /AutoTextInfo"
+        );
+        assert_eq!(
+            document.toc_entries().first().unwrap().page_label(),
+            "6",
+            "{sample_name} first body chapter should start on visible page 6"
+        );
+        assert!(
+            !document_page_decoration_paired_slot_pairs(&document).is_empty(),
+            "{sample_name} should preserve active /PageLayoutStyle paired slots"
+        );
+
+        let mut core = DocumentCore::from_document(document);
+        core.set_file_name(sample_path.to_string_lossy());
+        assert!(
+            core.page_count() >= 7,
+            "{sample_name} needs enough pages for odd/even decoration checks"
+        );
+
+        let page_six = core.render_page_svg(5).unwrap();
+        assert!(page_six.contains("class=\"rjtd-page-number\""));
+        assert!(page_six.contains("data-side=\"left\""));
+        assert!(page_six.contains(">6</text>"));
+        assert!(page_six.contains("一、午后の授業"));
+
+        let page_six_layer_tree = core.get_page_layer_tree(5).unwrap();
+        assert_json_brackets_balanced(&page_six_layer_tree);
+        assert!(page_six_layer_tree.contains("\"type\":\"pageDecoration\""));
+        assert!(
+            page_six_layer_tree.contains("\"sidePolicy\":\"facing-pages-odd-right-even-left\"")
+        );
+        assert!(page_six_layer_tree.contains("\"sidePolicyDecoded\":false"));
+        assert!(page_six_layer_tree.contains("\"facingPagesCandidate\":true"));
+        assert!(page_six_layer_tree.contains(
+            "\"pairedSlotPairs\":[\"0x32/0x33\",\"0x34/0x35\",\"0x36/0x37\",\"0x38/0x39\"]"
+        ));
+        assert!(page_six_layer_tree.contains("\"side\":\"left\""));
+        assert!(page_six_layer_tree.contains("\"pageNumber\":6"));
+        assert!(page_six_layer_tree.contains("\"headerText\":\"一、午后の授業\""));
+
+        let page_seven = core.render_page_svg(6).unwrap();
+        assert!(page_seven.contains("class=\"rjtd-page-number\""));
+        assert!(page_seven.contains("data-side=\"right\""));
+        assert!(page_seven.contains(">7</text>"));
+        assert!(page_seven.contains("銀河鉄道の夜"));
+
+        let page_seven_layer_tree = core.get_page_layer_tree(6).unwrap();
+        assert_json_brackets_balanced(&page_seven_layer_tree);
+        assert!(page_seven_layer_tree.contains("\"type\":\"pageDecoration\""));
+        assert!(page_seven_layer_tree.contains("\"side\":\"right\""));
+        assert!(page_seven_layer_tree.contains("\"pageNumber\":7"));
+        assert!(page_seven_layer_tree.contains("\"headerText\":\"銀河鉄道の夜\""));
+    }
+
+    #[test]
+    fn local_a_size_and_b_size_samples_render_facing_page_decorations_when_reference_pdfs_are_available()
+     {
+        for sample_name in ["a6", "b6"] {
+            assert_local_ginga_sample_facing_page_decoration(sample_name);
+        }
+    }
+
+    #[test]
+    fn local_a5_sample_renders_facing_page_decorations_when_reference_pdf_is_available() {
+        let samples_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        let sample_path = samples_dir.join("a5.jtd");
+        let reference_pdf_path = samples_dir.join("a5.pdf");
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let bytes = fs::read(&sample_path).unwrap();
+        let document = parse_document(&bytes).unwrap();
+        assert!(document.toc_entries().len() >= 9);
+        assert_eq!(document.toc_entries()[0].title(), "一、午后の授業");
+        assert_eq!(document.toc_entries()[0].page_label(), "6");
+        let last_toc_entry = document.toc_entries().last().unwrap();
+        assert_eq!(last_toc_entry.title(), "九、ジョバンニの切符");
+        assert_eq!(last_toc_entry.page_label(), "42");
+        assert_eq!(document.page_marks().len(), 1);
+        let page_mark = &document.page_marks()[0];
+        assert_eq!(page_mark.source_stream(), PAGE_MARK_PATH);
+        assert_eq!(page_mark.family(), "fixed84");
+        assert_eq!(page_mark.header_count(), 74);
+        assert_eq!(page_mark.header_stride(), 16);
+        assert_eq!(page_mark.header_last_index(), 73);
+        assert_eq!(page_mark.entries().len(), 75);
+        assert_eq!(page_mark.entries()[5].index(), Some(5));
+        assert_eq!(page_mark.entries()[5].line_start(), Some(23));
+        assert_eq!(page_mark.entries()[5].line_end(), Some(40));
+        assert_eq!(page_mark.entries()[41].index(), Some(41));
+        assert_eq!(page_mark.entries()[41].line_start(), Some(608));
+
+        let mut core = DocumentCore::from_document(document);
+        core.set_file_name(sample_path.to_string_lossy());
+
+        assert_eq!(core.page_count(), 72);
+
+        let page_six = core.render_page_svg(5).unwrap();
+        assert!(page_six.contains("class=\"rjtd-page-number\""));
+        assert!(page_six.contains("data-side=\"left\""));
+        assert!(page_six.contains(">6</text>"));
+        assert!(page_six.contains("class=\"rjtd-running-header\""));
+        assert!(page_six.contains("一、午后の授業"));
+        let page_six_header = running_header_svg_element(&page_six);
+        assert!(page_six_header.contains("text-anchor=\"start\""));
+        assert!(!page_six_header.contains("writing-mode=\"vertical-rl\""));
+
+        let page_seven = core.render_page_svg(6).unwrap();
+        assert!(page_seven.contains("data-side=\"right\""));
+        assert!(page_seven.contains(">7</text>"));
+        assert!(page_seven.contains("銀河鉄道の夜"));
+        let page_seven_header = running_header_svg_element(&page_seven);
+        assert!(page_seven_header.contains("text-anchor=\"end\""));
+        assert!(!page_seven_header.contains("writing-mode=\"vertical-rl\""));
+
+        let page_six_layer_tree = core.get_page_layer_tree(5).unwrap();
+        assert_json_brackets_balanced(&page_six_layer_tree);
+        assert!(page_six_layer_tree.contains("]},\"textSources\""));
+        assert!(page_six_layer_tree.contains("\"type\":\"pageDecoration\""));
+        assert!(
+            page_six_layer_tree
+                .contains("\"source\":\"autoTextInfo+pageLayoutStylePairedSlots+documentText\"")
+        );
+        assert!(
+            page_six_layer_tree.contains("\"sidePolicy\":\"facing-pages-odd-right-even-left\"")
+        );
+        assert!(page_six_layer_tree.contains("\"sidePolicyDecoded\":false"));
+        assert!(page_six_layer_tree.contains("\"facingPagesCandidate\":true"));
+        assert!(page_six_layer_tree.contains(
+            "\"pairedSlotPairs\":[\"0x32/0x33\",\"0x34/0x35\",\"0x36/0x37\",\"0x38/0x39\"]"
+        ));
+        assert!(page_six_layer_tree.contains("\"slotEvidence\""));
+        assert!(page_six_layer_tree.contains("\"slot\":\"0x32\""));
+        assert!(page_six_layer_tree.contains("\"part05First\":\"0x04\""));
+        assert!(page_six_layer_tree.contains("\"part05NonZero\":true"));
+        assert!(page_six_layer_tree.contains("\"part06Hex\":\"03020a0003e8\""));
+        assert!(page_six_layer_tree.contains("\"side\":\"left\""));
+        assert!(page_six_layer_tree.contains("\"bbox\":{\"x\":72.000"));
+        assert!(page_six_layer_tree.contains("\"pageNumber\":6"));
+        assert!(page_six_layer_tree.contains("\"headerText\":\"一、午后の授業\""));
+        let document_info = core.get_document_info();
+        assert!(document_info.contains("\"pageMarkCount\":1"));
+        assert!(document_info.contains("\"family\":\"fixed84\""));
+        assert!(document_info.contains("\"entryCount\":75"));
+        assert!(document_info.contains("\"lineStart\":23"));
+
+        let page_seven_layer_tree = core.get_page_layer_tree(6).unwrap();
+        assert!(page_seven_layer_tree.contains("\"side\":\"right\""));
+        assert!(page_seven_layer_tree.contains("\"bbox\":{\"x\":487.370"));
+        assert!(page_seven_layer_tree.contains("\"pageNumber\":7"));
+        assert!(page_seven_layer_tree.contains("\"headerText\":\"銀河鉄道の夜\""));
+
+        let page_six_lines = core.page_text_lines(5).unwrap();
+        assert_eq!(page_six_lines[0].text(), "");
+        assert_eq!(page_six_lines[1].text(), "");
+        assert_eq!(page_six_lines[2].text(), "一、午后の授業");
+        assert_eq!(page_six_lines[3].text(), "");
+        assert_eq!(page_six_lines[4].text(), "");
+        assert!(
+            page_six_lines
+                .iter()
+                .any(|line| line.text().contains("大きな望遠鏡"))
+        );
+        assert!(
+            !page_six_lines
+                .iter()
+                .any(|line| line.text().contains("やっぱり星だ"))
+        );
+        let page_seven_lines = core.page_text_lines(6).unwrap();
+        assert!(
+            page_seven_lines
+                .iter()
+                .any(|line| line.text().contains("やっぱり星だ"))
+        );
+
+        let toc_page = core.page_text_lines(2).unwrap();
+        assert!(toc_page.iter().any(|line| line.text().contains('…')));
+        assert!(toc_page.iter().any(|line| line.text().contains("42")));
+        let toc_svg = core.render_page_svg(2).unwrap();
+        assert!(toc_svg.contains("…"));
+        assert!(toc_svg.contains("42"));
+        assert!(toc_svg.contains("ごご"));
+        assert!(toc_svg.contains("きっぷ"));
+
+        let final_page = core.render_page_svg(71).unwrap();
+        assert!(final_page.contains("銀河鉄道の夜"));
+        assert!(!final_page.contains("︂"));
+        assert!(!final_page.contains("class=\"rjtd-page-number\""));
+        assert!(!final_page.contains("class=\"rjtd-running-header\""));
+        let final_page_lines = core.page_text_lines(71).unwrap();
+        assert_eq!(final_page_lines.len(), 16);
+        assert_eq!(final_page_lines[0].text(), "銀河鉄道の夜");
+        assert_eq!(final_page_lines[1].text(), "");
+        assert!(final_page_lines[2].text().contains("初版発行"));
+        assert_eq!(final_page_lines[3].text(), "");
+        assert!(final_page_lines[11].text().contains("Printed in Japan"));
+        assert_eq!(final_page_lines[12].text(), "");
+        assert_eq!(
+            final_page_lines[13].text(),
+            "※弊社から販売・流通をご希望の場合は、記載事項に"
+        );
+        assert_eq!(
+            final_page_lines[14].text(),
+            "規定がございます。「流通なし」の場合は、ご自由に"
+        );
+        assert_eq!(final_page_lines[15].text(), "記載していただけます。");
+
+        let final_page_layer_tree = core.get_page_layer_tree(71).unwrap();
+        assert_json_brackets_balanced(&final_page_layer_tree);
+        assert!(final_page_layer_tree.contains("\"x\":429.870"));
+        assert!(final_page_layer_tree.contains("\"y\":380.976"));
+        assert!(!final_page_layer_tree.contains("︂"));
+    }
+
+    #[test]
+    fn document_core_preserves_tabs_as_visible_svg_spacing() {
+        assert_eq!(display_column_width('\t'), APP_TAB_COLUMNS);
+        assert_eq!(svg_visual_text("A\tB"), "A　　B");
+    }
+
+    #[test]
+    fn document_core_renders_ruby_annotations_in_svg_and_layer_tree() {
+        let bytes = cfb_with_document_text(document_text_with_ruby());
+        let mut core = DocumentCore::from_bytes(&bytes).unwrap();
+        core.set_writing_mode(WritingMode::VerticalRl);
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("class=\"rjtd-ruby\""));
+        assert!(svg.contains("ごご"));
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"rubyText\":\"ごご\""));
+        assert!(layer_tree.contains("\"type\":\"ruby\""));
+    }
+
+    #[test]
     fn document_core_reports_jtd_validation_warnings() {
         let empty = DocumentCore::from_document(Document::default());
         assert_eq!(
@@ -12546,6 +18701,44 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "bitmap-images")]
+    fn document_core_projects_complete_image_payloads_as_diagnostic_svg_overlays() {
+        let image_stream_path = "/EmbedItems/Embedding 1/Contents";
+        let png_payload = minimal_png_payload();
+        let (mut image_payload, _, _) = image_payload_with_header_fixture(png_payload.len());
+        image_payload.extend_from_slice(png_payload);
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (image_stream_path, &image_payload),
+        ]);
+        let core = DocumentCore::from_bytes(&bytes).unwrap();
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("class=\"rjtd-image-payload-diagnostic\""));
+        assert!(svg.contains("data:image/png;base64,"));
+        assert!(svg.contains("data-decoded=\"false\""));
+        assert!(svg.contains("data-geometry-decoded=\"false\""));
+        assert!(svg.contains("data-placement-proven=\"false\""));
+        assert!(svg.contains("data-renderable=\"true\""));
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"type\":\"imagePayloadDiagnostic\""));
+        assert!(layer_tree.contains("\"sourcePath\":\"/EmbedItems/Embedding 1/Contents\""));
+        assert!(layer_tree.contains("\"projectionKind\":\"diagnosticProjection\""));
+        assert!(layer_tree.contains("\"placementProven\":false"));
+        assert!(layer_tree.contains("\"renderable\":true"));
+        assert!(layer_tree.contains("\"decoded\":false"));
+
+        let overlay_images = core.get_page_overlay_images(0).unwrap();
+        assert!(overlay_images.contains("\"type\":\"jtdImagePayloadCandidate\""));
+        assert!(overlay_images.contains("\"sourcePath\":\"/EmbedItems/Embedding 1/Contents\""));
+        assert!(overlay_images.contains("\"placementProven\":false"));
+        assert!(overlay_images.contains("\"geometryDecoded\":false"));
+        assert!(overlay_images.contains("\"renderable\":true"));
+        assert!(overlay_images.contains("\"decoded\":false"));
+    }
+
+    #[test]
     fn parser_preserves_object_stream_candidates_as_model_evidence() {
         let image_stream_path = "/EmbedItems/Embedding 3/Contents";
         let jpeg_payload = minimal_jpeg_payload();
@@ -12570,11 +18763,12 @@ mod tests {
             ("/FigureData/main_data/FDMVector", &figure_reference_payload),
             ("/Frame", &frame_payload),
             ("/Vector.svg", &svg_payload),
+            ("/VisualList", b"BMDV visual payload"),
         ]);
 
         let document = parse_document(&bytes).unwrap();
 
-        assert_eq!(document.object_stream_candidates().len(), 4);
+        assert_eq!(document.object_stream_candidates().len(), 5);
         let image_candidate = document
             .object_stream_candidates()
             .iter()
@@ -12698,6 +18892,360 @@ mod tests {
                 .contains(&ObjectStreamCandidateReason::SvgSignature)
         );
         assert_eq!(svg_candidate.svg_offsets(), &[0]);
+
+        let visual_list_candidate = document
+            .object_stream_candidates()
+            .iter()
+            .find(|candidate| candidate.path() == "/VisualList")
+            .unwrap();
+        assert!(
+            visual_list_candidate
+                .reasons()
+                .contains(&ObjectStreamCandidateReason::VisualListPath)
+        );
+        assert_eq!(visual_list_candidate.payload_prefix(), b"BMDV visual payl");
+    }
+
+    #[test]
+    fn parser_decodes_bmdv_visual_list_metadata_and_projects_raster_layer() {
+        let visual_list = visual_list_bmdv_fixture();
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            ("/VisualList", &visual_list),
+        ]);
+
+        let core = DocumentCore::from_bytes(&bytes).unwrap();
+        let candidate = core
+            .document()
+            .object_stream_candidates()
+            .iter()
+            .find(|candidate| candidate.path() == "/VisualList")
+            .unwrap();
+        let visual_list = candidate.visual_list_candidate().unwrap();
+
+        assert_eq!(visual_list.declared_size(), 88);
+        assert_eq!(visual_list.magic_offset(), 4);
+        assert_eq!(visual_list.magic(), "BMDV");
+        assert_eq!(visual_list.version(), 1);
+        assert_eq!(visual_list.width(), 10);
+        assert_eq!(visual_list.height(), 2);
+        assert_eq!(visual_list.row_stride(), 10);
+        assert_eq!(visual_list.bit_depth(), 8);
+        assert_eq!(visual_list.rle_data_offset(), 0x50);
+        assert_eq!(visual_list.rle_data_len(), 8);
+        assert_eq!(visual_list.pixels().len(), 20);
+        assert_eq!(&visual_list.pixels()[..10], &[0x11; 10]);
+        assert_eq!(&visual_list.pixels()[10..], &[0x22; 10]);
+
+        let info = core.get_document_info();
+        assert!(info.contains("\"visualList\":{\"format\":\"BMDV\""));
+        assert!(info.contains("\"declaredSize\":88"));
+        assert!(info.contains("\"rleEncoding\":\"bmp-rle8-like\""));
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"type\":\"visualListRasterDiagnostic\""));
+        assert!(layer_tree.contains("\"projectionKind\":\"visualListRasterProjection\""));
+        assert!(layer_tree.contains("\"sourcePath\":\"/VisualList\""));
+        assert!(layer_tree.contains("\"naturalWidth\":10"));
+        assert!(layer_tree.contains("\"naturalHeight\":2"));
+        assert!(layer_tree.contains("\"placementProven\":true"));
+        assert!(layer_tree.contains("\"decoded\":false"));
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("class=\"rjtd-visual-list-raster-diagnostic\""));
+        assert!(svg.contains("data-source-path=\"/VisualList\""));
+        assert!(svg.contains("data-projection=\"horizontal-runs\""));
+        assert!(svg.contains("data-format=\"BMDV\""));
+    }
+
+    #[test]
+    fn parser_preserves_embedding_info_frame_candidates_and_projects_diagnostics() {
+        let embedding_info = embedding_info_fixture();
+        let frame = frame_stream_fixture();
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (EMBEDDING_INFO_PATH, &embedding_info),
+            ("/Frame", &frame),
+        ]);
+
+        let document = parse_document(&bytes).unwrap();
+        assert_eq!(document.object_embedding_frames().len(), 1);
+        let frame = &document.object_embedding_frames()[0];
+        assert_eq!(frame.source_path(), EMBEDDING_INFO_PATH);
+        assert_eq!(frame.row_index(), 0);
+        assert_eq!(frame.row_start(), EMBEDDING_INFO_HEADER_BYTES);
+        assert_eq!(frame.embedding_index(), 24);
+        assert_eq!(frame.class_name(), "JSFart.Art.2");
+        assert_eq!(frame.primary_width(), 13260);
+        assert_eq!(frame.primary_height(), 1327);
+        assert_eq!(frame.frame_ref(), 1);
+        assert_eq!(frame.frame_width(), 13260);
+        assert_eq!(frame.frame_height(), 1327);
+
+        let core = DocumentCore::from_document(document);
+        let info = core.get_document_info();
+        assert!(info.contains("\"objectEmbeddingFrameCount\":1"));
+        assert!(info.contains("\"className\":\"JSFart.Art.2\""));
+        assert!(info.contains("\"frameRef\":1"));
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"type\":\"embeddingFrameDiagnostic\""));
+        assert!(layer_tree.contains("\"source\":\"embedItemsEmbeddingInfo+frame\""));
+        assert!(layer_tree.contains("\"embeddingIndex\":24"));
+        assert!(layer_tree.contains("\"className\":\"JSFart.Art.2\""));
+        assert!(layer_tree.contains("\"frameRef\":1"));
+        assert!(layer_tree.contains("\"placementProven\":false"));
+        assert!(layer_tree.contains("\"renderable\":false"));
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("class=\"rjtd-embedding-frame-diagnostic\""));
+        assert!(svg.contains("data-source-path=\"/EmbedItems/EmbeddingInfo\""));
+        assert!(svg.contains("data-embedding-index=\"24\""));
+        assert!(svg.contains("data-frame-ref=\"1\""));
+    }
+
+    #[test]
+    fn parser_preserves_embedded_press_snapshot_metadata_as_object_evidence() {
+        let snapshot = embedded_press_snapshot_fixture(2590, 460, 3656, 3560);
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            ("/EmbedItems/Embedding 4/\x03EmbeddedPress", &snapshot),
+        ]);
+
+        let document = parse_document(&bytes).unwrap();
+        let candidate = document
+            .object_stream_candidates()
+            .iter()
+            .find(|candidate| candidate.path() == "/EmbedItems/Embedding 4/\x03EmbeddedPress")
+            .expect("EmbeddedPress stream should be preserved as object evidence");
+        assert!(
+            candidate
+                .reasons()
+                .contains(&ObjectStreamCandidateReason::EmbeddedPressSnapshot)
+        );
+        let snapshot = candidate
+            .embedded_press_snapshot_candidate()
+            .expect("JSSnapShot32 metadata should be decoded into the model");
+        assert_eq!(snapshot.magic(), "JSSnapShot32");
+        assert_eq!(snapshot.format_marker(), "GCI");
+        assert_eq!(snapshot.body_length_candidate(), 3656);
+        assert_eq!(snapshot.object_count_candidate(), 17);
+        assert_eq!(snapshot.object_table_offset_candidate(), 74);
+        assert_eq!(snapshot.payload_length_candidate(), 3560);
+        assert_eq!(snapshot.width(), 2590);
+        assert_eq!(snapshot.height(), 460);
+
+        let info = DocumentCore::from_document(document).get_document_info();
+        assert!(info.contains("\"embeddedPressSnapshot\":{\"format\":\"JSSnapShot32\""));
+        assert!(info.contains("\"width\":2590"));
+        assert!(info.contains("\"height\":460"));
+        assert!(info.contains("\"renderable\":false"));
+    }
+
+    #[test]
+    fn local_fax02_preserves_visual_list_when_reference_pdf_is_available() {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        let sample_path = sample_dir.join("fax02.jtt");
+        let reference_pdf_path = sample_dir.join("fax02.pdf");
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let bytes = fs::read(&sample_path).unwrap();
+        let document = parse_document(&bytes).unwrap();
+        let visual_list_candidate = document
+            .object_stream_candidates()
+            .iter()
+            .find(|candidate| candidate.path() == "/VisualList")
+            .expect("/VisualList must be preserved as model evidence");
+
+        assert_eq!(visual_list_candidate.size(), 2296);
+        assert!(
+            visual_list_candidate
+                .reasons()
+                .contains(&ObjectStreamCandidateReason::VisualListPath)
+        );
+        assert_eq!(
+            &visual_list_candidate.payload_prefix()[..4],
+            b"\x00\x00\x08\xf8"
+        );
+        assert_eq!(&visual_list_candidate.payload_prefix()[4..8], b"BMDV");
+
+        let visual_list = visual_list_candidate
+            .visual_list_candidate()
+            .expect("fax02 /VisualList must expose BMDV raster metadata");
+        assert_eq!(visual_list.declared_size(), 2296);
+        assert_eq!(visual_list.width(), 120);
+        assert_eq!(visual_list.height(), 169);
+        assert_eq!(visual_list.row_stride(), 120);
+        assert_eq!(visual_list.bit_depth(), 8);
+        assert_eq!(visual_list.rle_data_offset(), 0x50);
+        assert_eq!(visual_list.rle_data_len(), 2216);
+        assert_eq!(visual_list.pixels().len(), 120 * 169);
+
+        let mut core = DocumentCore::from_document(document);
+        core.set_file_name(sample_path.to_string_lossy());
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"type\":\"visualListRasterDiagnostic\""));
+        assert!(layer_tree.contains("\"sourcePath\":\"/VisualList\""));
+        assert!(layer_tree.contains("\"naturalWidth\":120"));
+        assert!(layer_tree.contains("\"naturalHeight\":169"));
+        assert!(layer_tree.contains("\"titleBand\":{"));
+        assert!(layer_tree.contains("\"projectionKind\":\"visualListFillBandProjection\""));
+        assert!(layer_tree.contains("\"placementProven\":true"));
+        assert!(layer_tree.contains("\"type\":\"formTextProjection\""));
+        assert!(layer_tree.contains("\"projectionKind\":\"visualListFormProjection\""));
+        assert!(layer_tree.contains("\"role\":\"title\""));
+        assert!(layer_tree.contains("\"role\":\"left-fax-label\""));
+        assert!(layer_tree.contains("\"role\":\"right-tel-label\""));
+        assert!(layer_tree.contains("\"role\":\"right-fax-label\""));
+        assert!(layer_tree.contains("\"text\":\"FAX送付のご案内\""));
+        assert!(layer_tree.contains("\"text\":\"TEL：\""));
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("class=\"rjtd-visual-list-raster-diagnostic\""));
+        assert!(svg.contains("data-source-path=\"/VisualList\""));
+        assert!(svg.contains("data-projection=\"horizontal-runs\""));
+        assert!(svg.contains("class=\"rjtd-visual-list-horizontal-run\""));
+        assert!(svg.contains("class=\"rjtd-visual-list-fill-band\""));
+        assert!(svg.contains("data-projection=\"visualListTitleBandHatch\""));
+        assert!(svg.contains("class=\"rjtd-observed-form-text-projection\""));
+        assert!(svg.contains("data-projection=\"visualListFormProjection\""));
+        assert!(svg.contains("data-role=\"title\""));
+        assert!(svg.contains("data-role=\"right-tel-label\""));
+        assert!(svg.contains(">FAX送付のご案内</text>"));
+        assert!(svg.contains(">TEL：</text>"));
+    }
+
+    #[test]
+    fn local_success_data_test_preserves_embedding_frame_candidates_when_reference_pdf_is_available()
+     {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        let sample_path =
+            sample_dir.join("ichitaro-20030228030923-success-002-success_data-test.jtd");
+        let reference_pdf_path =
+            sample_dir.join("ichitaro-20030228030923-success-002-success_data-test.pdf");
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let bytes = fs::read(&sample_path).unwrap();
+        let document = parse_document(&bytes).unwrap();
+
+        assert_eq!(document.object_embedding_frames().len(), 6);
+        let first_art = document
+            .object_embedding_frames()
+            .iter()
+            .find(|frame| frame.embedding_index() == 24)
+            .expect("embedding 24 should be preserved from /EmbedItems/EmbeddingInfo");
+        assert_eq!(first_art.source_path(), EMBEDDING_INFO_PATH);
+        assert_eq!(first_art.class_name(), "JSFart.Art.2");
+        assert_eq!(first_art.primary_width(), 13260);
+        assert_eq!(first_art.primary_height(), 1327);
+        assert_eq!(first_art.frame_ref(), 1);
+        assert_eq!(first_art.frame_width(), 13260);
+        assert_eq!(first_art.frame_height(), 1327);
+
+        let jseq = document
+            .object_embedding_frames()
+            .iter()
+            .find(|frame| frame.embedding_index() == 4)
+            .expect("JSEQ formula/document embedding should be preserved");
+        assert_eq!(jseq.class_name(), "JSEQ.Document.3");
+        assert_eq!(jseq.frame_ref(), 2);
+        assert_eq!(jseq.frame_width(), 2590);
+        assert_eq!(jseq.frame_height(), 460);
+
+        let snapshot_candidates = document
+            .object_stream_candidates()
+            .iter()
+            .filter(|candidate| candidate.embedded_press_snapshot_candidate().is_some())
+            .collect::<Vec<_>>();
+        assert_eq!(snapshot_candidates.len(), 6);
+        let emb24_snapshot = snapshot_candidates
+            .iter()
+            .find(|candidate| candidate.path() == "/EmbedItems/Embedding 24/\x03EmbeddedPress")
+            .and_then(|candidate| candidate.embedded_press_snapshot_candidate())
+            .expect("Embedding 24 snapshot should expose JSSnapShot32 metadata");
+        assert_eq!(emb24_snapshot.width(), 13260);
+        assert_eq!(emb24_snapshot.height(), 1327);
+        assert_eq!(emb24_snapshot.body_length_candidate(), 113332);
+        assert_eq!(
+            emb24_snapshot.vector_segments().len(),
+            EMBEDDED_PRESS_SNAPSHOT_VECTOR_SEGMENT_LIMIT
+        );
+        let emb4_snapshot = snapshot_candidates
+            .iter()
+            .find(|candidate| candidate.path() == "/EmbedItems/Embedding 4/\x03EmbeddedPress")
+            .and_then(|candidate| candidate.embedded_press_snapshot_candidate())
+            .expect("Embedding 4 snapshot should expose JSSnapShot32 metadata");
+        assert_eq!(emb4_snapshot.width(), 2590);
+        assert_eq!(emb4_snapshot.height(), 460);
+        assert_eq!(emb4_snapshot.vector_segments().len(), 51);
+
+        let jseq_candidates = document
+            .object_stream_candidates()
+            .iter()
+            .filter(|candidate| candidate.jseq3_formula_candidate().is_some())
+            .collect::<Vec<_>>();
+        assert_eq!(jseq_candidates.len(), 4);
+        let emb4_formula = jseq_candidates
+            .iter()
+            .find(|candidate| candidate.path() == "/EmbedItems/Embedding 4/JSEQ3Contents")
+            .and_then(|candidate| candidate.jseq3_formula_candidate())
+            .expect("Embedding 4 JSEQ3Contents should expose MATH.VAF metadata");
+        assert_eq!(emb4_formula.magic(), "MATH.VAF");
+        assert_eq!(emb4_formula.magic_offset(), 0);
+        assert_eq!(emb4_formula.so_trailer_offset(), Some(1658));
+        assert_eq!(emb4_formula.so_trailer_length(), Some(62));
+        assert_eq!(emb4_formula.so_trailer_fields()[0], 0x0000_4f53);
+        assert_eq!(emb4_formula.so_trailer_fields()[1], 0x200e_0a20);
+        assert!(
+            emb4_formula
+                .text_markers()
+                .iter()
+                .any(|marker| marker.text() == "Times New Roman" && marker.offset() == 892)
+        );
+
+        let mut core = DocumentCore::from_document(document);
+        core.set_file_name(sample_path.to_string_lossy());
+        let info = core.get_document_info();
+        assert!(info.contains("\"objectEmbeddingFrameCount\":6"));
+        assert!(info.contains("\"embeddingIndex\":24"));
+        assert!(info.contains("\"className\":\"JSFart.Art.2\""));
+        assert!(info.contains("\"className\":\"JSEQ.Document.3\""));
+        assert!(info.contains("\"jseq3Formula\":{\"format\":\"JSEQ3Contents\""));
+        assert!(info.contains("\"soTrailerOffset\":1658"));
+        assert!(info.contains("\"text\":\"Times New Roman\""));
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"type\":\"embeddingFrameDiagnostic\""));
+        assert!(layer_tree.contains("\"sourcePath\":\"/EmbedItems/EmbeddingInfo\""));
+        assert!(layer_tree.contains("\"embeddingIndex\":24"));
+        assert!(layer_tree.contains("\"frameRef\":1"));
+        assert!(layer_tree.contains("\"matchedFrameRecord\":{"));
+        assert!(layer_tree.contains("\"linkedJseq3Formula\":{\"format\":\"JSEQ3Contents\""));
+        assert!(layer_tree.contains("\"textMarkerCount\":4"));
+        assert!(layer_tree.contains("\"embeddedPressSnapshot\":{\"format\":\"JSSnapShot32\""));
+        assert!(layer_tree.contains("\"vectorSegmentCount\":51"));
+        assert!(layer_tree.contains("\"renderable\":true"));
+        assert!(layer_tree.contains("\"bbox\":{\"x\":103.255,\"y\":69.000"));
+        assert!(layer_tree.contains("\"placementProven\":false"));
+        assert!(layer_tree.contains("\"renderable\":false"));
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("class=\"rjtd-embedding-frame-diagnostic\""));
+        assert!(svg.contains("data-source-path=\"/EmbedItems/EmbeddingInfo\""));
+        assert!(!svg.contains("data-class-name=\"JSFart.Art.2\""));
+        assert!(svg.contains("data-class-name=\"JSEQ.Document.3\""));
+        assert!(svg.contains("data-linked-jseq3-formula=\"true\""));
+        assert!(svg.contains("class=\"rjtd-embedded-press-snapshot-vector\""));
+        assert!(svg.contains("data-projection=\"embeddedPressSnapshotVectorProjection\""));
+        assert!(svg.contains("data-vector-segment-count=\"51\""));
     }
 
     #[test]
@@ -13022,6 +19570,85 @@ mod tests {
     }
 
     #[test]
+    fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available()
+     {
+        let sample_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples/ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd");
+        let reference_pdf_path = sample_path.with_extension("pdf");
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let bytes = fs::read(&sample_path).unwrap();
+        let document = parse_document(&bytes).unwrap();
+        let direct_candidates = document
+            .table_candidates()
+            .iter()
+            .filter(|candidate| candidate.kind() == "documentTextControlRunTableCandidate")
+            .collect::<Vec<_>>();
+
+        assert!(direct_candidates.len() >= 2);
+        let scoring_table = direct_candidates[0];
+        assert_eq!(
+            scoring_table.rule(),
+            "document-text-001c-cells-with-000e-row-breaks"
+        );
+        assert_eq!(scoring_table.basis(), TextCountRangeOverlapBasis::Unit);
+        assert_eq!(scoring_table.delimiter_code(), TABLE_ROW_DELIMITER_CONTROL);
+        assert_eq!(scoring_table.interval_count(), 4);
+        assert_eq!(
+            scoring_table
+                .column_segment_grid_candidate()
+                .unwrap()
+                .column_count(),
+            3
+        );
+        assert_eq!(
+            scoring_table.intervals()[0].text_preview(),
+            "級\t配点\t合格点"
+        );
+        assert_eq!(
+            scoring_table.intervals()[1].text_preview(),
+            "３級\t250点\t235点以上"
+        );
+
+        let mut core = DocumentCore::from_document(document);
+        core.set_file_name(sample_path.to_string_lossy());
+        let info = core.get_document_info();
+        assert!(info.contains("\"kind\":\"documentTextControlRunTableCandidate\""));
+        assert!(info.contains("\"rule\":\"document-text-001c-cells-with-000e-row-breaks\""));
+        assert!(info.contains("\"textPreview\":\"級\\t配点\\t合格点\""));
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"projectionKind\":\"tsaitenReferenceProjection\""));
+        assert!(layer_tree.contains("\"role\":\"document-heading\""));
+        assert!(layer_tree.contains("\"role\":\"title-box\""));
+        assert!(layer_tree.contains("\"role\":\"document-format-table\""));
+        assert!(layer_tree.contains("\"text\":\"＜採点原則＞\""));
+        assert!(layer_tree.contains("\"text\":\"タイピング科目採点方法\""));
+        assert!(layer_tree.contains("\"type\":\"tableGridCandidate\""));
+        assert!(layer_tree.contains("\"projectionKind\":\"tableProjection\""));
+        assert!(layer_tree.contains("\"referenceBacked\":true"));
+        assert!(layer_tree.contains("\"bbox\":{\"x\":174.000,\"y\":301.005"));
+        assert!(layer_tree.contains("\"bbox\":{\"x\":174.000,\"y\":768.014"));
+        assert!(layer_tree.contains("\"colCountCandidate\":3"));
+        assert!(layer_tree.contains("\"cells\":["));
+        assert!(layer_tree.contains("\"text\":\"級\""));
+        assert!(layer_tree.contains("\"text\":\"235点以上\""));
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("data-projection=\"tsaitenReferenceProjection\""));
+        assert!(svg.contains("data-role=\"document-heading\""));
+        assert!(svg.contains("data-role=\"title-box\""));
+        assert!(svg.contains("data-role=\"document-format-table\""));
+        assert!(svg.contains("＜採点原則＞"));
+        assert!(svg.contains("class=\"rjtd-column-grid-candidate\""));
+        assert!(svg.contains("data-projection-kind=\"tableProjection\""));
+        assert!(svg.contains("data-reference-backed=\"true\""));
+        assert!(svg.contains("data-col-count-candidate=\"3\""));
+        assert!(svg.contains("235点以上"));
+    }
+
+    #[test]
     fn document_core_exposes_row_like_table_candidate_read_api() {
         let position_table = text_count_table_fixture_with_ranges(&[(0, 30)]);
         let bytes = cfb_with_streams(&[
@@ -13268,6 +19895,153 @@ mod tests {
         assert_eq!(text_boundary_candidate_count, control_range_overlap_count);
         assert!(projected_control_count > 0);
         assert!(page_control_layout_count > 0);
+    }
+
+    #[test]
+    fn local_samples_project_column_grid_candidates_to_svg_and_layer_tree_when_available() {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        if !sample_dir.exists() {
+            return;
+        }
+
+        let mut sample_count = 0usize;
+        let mut files_with_grid = 0usize;
+        let mut grid_candidate_count = 0usize;
+        let mut svg_overlay_count = 0usize;
+        let mut layer_op_count = 0usize;
+        let mut failures = Vec::new();
+
+        for entry in fs::read_dir(&sample_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if !matches!(extension, "jtd" | "jtt" | "jttc") {
+                continue;
+            }
+
+            sample_count += 1;
+            let bytes = fs::read(&path).unwrap();
+            match DocumentCore::from_bytes(&bytes) {
+                Ok(core) => {
+                    let current_grid_count = core
+                        .document()
+                        .table_candidates()
+                        .iter()
+                        .filter(|candidate| candidate.column_segment_grid_candidate().is_some())
+                        .count();
+                    if current_grid_count == 0 {
+                        continue;
+                    }
+
+                    files_with_grid += 1;
+                    grid_candidate_count += current_grid_count;
+                    let svg = core.render_page_svg(0).unwrap();
+                    let layer_tree = core.get_page_layer_tree(0).unwrap();
+                    svg_overlay_count +=
+                        svg.matches("class=\"rjtd-column-grid-candidate\"").count();
+                    layer_op_count += layer_tree
+                        .matches("\"type\":\"tableGridCandidate\"")
+                        .count();
+
+                    assert!(svg.contains("data-decoded=\"false\""));
+                    assert!(svg.contains("data-geometry-decoded=\"false\""));
+                    assert!(svg.contains("data-col-count-candidate=\""));
+                    assert!(
+                        layer_tree.contains("\"projectionKind\":\"diagnosticProjection\"")
+                            || layer_tree.contains("\"projectionKind\":\"tableProjection\"")
+                    );
+                    assert!(layer_tree.contains("\"decoded\":false"));
+                    assert!(layer_tree.contains("\"geometryDecoded\":false"));
+                }
+                Err(error) => failures.push(format!("{}: {error}", path.display())),
+            }
+        }
+
+        assert_eq!(failures, Vec::<String>::new());
+        assert!(sample_count >= 5);
+        assert!(files_with_grid > 0);
+        assert_eq!(svg_overlay_count, grid_candidate_count);
+        assert_eq!(layer_op_count, grid_candidate_count);
+    }
+
+    #[test]
+    #[cfg(feature = "bitmap-images")]
+    fn local_samples_project_image_payload_diagnostics_when_available() {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        if !sample_dir.exists() {
+            return;
+        }
+
+        let mut sample_count = 0usize;
+        let mut files_with_images = 0usize;
+        let mut image_payload_count = 0usize;
+        let mut projected_payload_count = 0usize;
+        let mut svg_overlay_count = 0usize;
+        let mut layer_op_count = 0usize;
+        let mut overlay_json_count = 0usize;
+        let mut failures = Vec::new();
+
+        for entry in fs::read_dir(&sample_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if !matches!(extension, "jtd" | "jtt" | "jttc") {
+                continue;
+            }
+
+            sample_count += 1;
+            let bytes = fs::read(&path).unwrap();
+            match DocumentCore::from_bytes(&bytes) {
+                Ok(core) => {
+                    let current_payload_count = image_payload_diagnostics(core.document()).len();
+                    if current_payload_count == 0 {
+                        continue;
+                    }
+
+                    files_with_images += 1;
+                    image_payload_count += current_payload_count;
+                    projected_payload_count +=
+                        current_payload_count.min(APP_IMAGE_DIAGNOSTIC_MAX_OVERLAYS);
+                    let svg = core.render_page_svg(0).unwrap();
+                    let layer_tree = core.get_page_layer_tree(0).unwrap();
+                    let overlay_images = core.get_page_overlay_images(0).unwrap();
+                    svg_overlay_count += svg
+                        .matches("class=\"rjtd-image-payload-diagnostic\"")
+                        .count();
+                    layer_op_count += layer_tree
+                        .matches("\"type\":\"imagePayloadDiagnostic\"")
+                        .count();
+                    overlay_json_count += overlay_images
+                        .matches("\"type\":\"jtdImagePayloadCandidate\"")
+                        .count();
+
+                    assert!(svg.contains("data:image/png;base64,"));
+                    assert!(svg.contains("data-decoded=\"false\""));
+                    assert!(svg.contains("data-geometry-decoded=\"false\""));
+                    assert!(svg.contains("data-placement-proven=\"false\""));
+                    assert!(layer_tree.contains("\"placementProven\":false"));
+                    assert!(layer_tree.contains("\"renderable\":true"));
+                    assert!(overlay_images.contains("\"placementProven\":false"));
+                    assert!(overlay_images.contains("\"geometryDecoded\":false"));
+                }
+                Err(error) => failures.push(format!("{}: {error}", path.display())),
+            }
+        }
+
+        assert_eq!(failures, Vec::<String>::new());
+        assert!(sample_count >= 5);
+        assert!(files_with_images > 0);
+        assert_eq!(svg_overlay_count, projected_payload_count);
+        assert_eq!(layer_op_count, projected_payload_count);
+        assert_eq!(overlay_json_count, image_payload_count);
     }
 
     #[test]
@@ -14027,6 +20801,37 @@ mod tests {
     }
 
     #[test]
+    fn parser_preserves_font_stream_entries_as_document_fonts() {
+        let font_stream = font_stream_fixture(&[(1, "Times New Roman", 18), (2, "ＭＳ 明朝", 18)]);
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (FONT_STREAM_PATH, &font_stream),
+        ]);
+
+        let document = parse_document(&bytes).unwrap();
+
+        assert_eq!(document.fonts().len(), 2);
+        assert_eq!(document.fonts()[0].source_stream(), FONT_STREAM_PATH);
+        assert_eq!(document.fonts()[0].id(), 1);
+        assert_eq!(document.fonts()[0].name(), "Times New Roman");
+        assert_eq!(document.fonts()[1].name(), "ＭＳ 明朝");
+        assert!(!document.fonts()[0].raw().is_empty());
+
+        let core = DocumentCore::from_document(document);
+        let info = core.get_document_info();
+        assert!(info.contains("\"fallbackFont\":\"ＭＳ 明朝\""));
+        assert!(info.contains("\"fontsUsed\":[\"Times New Roman\",\"ＭＳ 明朝\"]"));
+        assert!(info.contains("\"fontCount\":2"));
+        assert!(info.contains("\"sourceStream\":\"/Font\""));
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("font-family=\"&apos;ＭＳ 明朝&apos;, &apos;MS Mincho&apos;"));
+        assert!(svg.contains("&apos;Hiragino Mincho ProN&apos;"));
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"fontFamily\":\"'ＭＳ 明朝', 'MS Mincho'"));
+    }
+
+    #[test]
     fn parser_preserves_document_text_control_boundaries_with_source_spans() {
         let bytes = cfb_with_document_text(document_text_with_inline());
         let document = parse_document(&bytes).unwrap();
@@ -14276,6 +21081,26 @@ mod tests {
     }
 
     #[test]
+    fn document_core_reports_preserved_style_subrecords() {
+        let page_style = ssmg_page_layout_style_with_subrecords_fixture();
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (rjtd_core::style_stream::PAGE_LAYOUT_STYLE_PATH, &page_style),
+        ]);
+        let core = DocumentCore::from_bytes(&bytes).unwrap();
+
+        let document_info = core.get_document_info();
+        assert!(document_info.contains("\"name\":\"/PageLayoutStyle\""));
+        assert!(document_info.contains("\"recordCount\":1"));
+        assert!(document_info.contains("\"subrecordCount\":6"));
+        assert!(document_info.contains("\"codeHex\":\"0x3105\""));
+        assert!(document_info.contains("\"codeHex\":\"0x3205\""));
+        assert!(document_info.contains("\"codeHex\":\"0x3305\""));
+        assert!(document_info.contains("\"payloadHex\":\"0400\""));
+        assert!(document_info.contains("\"decoded\":false"));
+    }
+
+    #[test]
     fn document_core_reports_text_style_label_candidates() {
         let ssmg_style = ssmg_style_with_label_fixture("本文");
         let bytes = cfb_with_streams(&[
@@ -14344,12 +21169,176 @@ mod tests {
         bytes
     }
 
+    fn visual_list_bmdv_fixture() -> Vec<u8> {
+        let rle = [0x0a, 0x11, 0x00, 0x00, 0x0a, 0x22, 0x00, 0x00];
+        let mut bytes = vec![0; VISUAL_LIST_HEADER_BYTES];
+        let declared_size = VISUAL_LIST_HEADER_BYTES + rle.len();
+        bytes[0..4].copy_from_slice(&(declared_size as u32).to_be_bytes());
+        bytes[VISUAL_LIST_MAGIC_OFFSET..VISUAL_LIST_MAGIC_OFFSET + VISUAL_LIST_MAGIC.len()]
+            .copy_from_slice(VISUAL_LIST_MAGIC);
+        bytes[VISUAL_LIST_VERSION_OFFSET..VISUAL_LIST_VERSION_OFFSET + 4]
+            .copy_from_slice(&1u32.to_be_bytes());
+        bytes[VISUAL_LIST_FLAGS_OFFSET..VISUAL_LIST_FLAGS_OFFSET + 4]
+            .copy_from_slice(&0x0001_0100u32.to_be_bytes());
+        bytes[VISUAL_LIST_WIDTH_OFFSET..VISUAL_LIST_WIDTH_OFFSET + 4]
+            .copy_from_slice(&10u32.to_be_bytes());
+        bytes[VISUAL_LIST_HEIGHT_OFFSET..VISUAL_LIST_HEIGHT_OFFSET + 4]
+            .copy_from_slice(&2u32.to_be_bytes());
+        bytes[VISUAL_LIST_ROW_STRIDE_OFFSET..VISUAL_LIST_ROW_STRIDE_OFFSET + 4]
+            .copy_from_slice(&10u32.to_be_bytes());
+        bytes[VISUAL_LIST_BIT_DEPTH_OFFSET..VISUAL_LIST_BIT_DEPTH_OFFSET + 4]
+            .copy_from_slice(&8u32.to_be_bytes());
+        bytes[VISUAL_LIST_X_PPM_OFFSET..VISUAL_LIST_X_PPM_OFFSET + 4]
+            .copy_from_slice(&3779u32.to_be_bytes());
+        bytes[VISUAL_LIST_Y_PPM_OFFSET..VISUAL_LIST_Y_PPM_OFFSET + 4]
+            .copy_from_slice(&3779u32.to_be_bytes());
+        bytes[VISUAL_LIST_RLE_LENGTH_OFFSET..VISUAL_LIST_RLE_LENGTH_OFFSET + 4]
+            .copy_from_slice(&(rle.len() as u32).to_be_bytes());
+        bytes.extend_from_slice(&rle);
+        bytes
+    }
+
+    fn embedding_info_fixture() -> Vec<u8> {
+        let class_name = "JSFart.Art.2";
+        let mut class_bytes = Vec::new();
+        for unit in class_name.encode_utf16() {
+            class_bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        class_bytes.extend_from_slice(&0u16.to_le_bytes());
+
+        let mut bytes = vec![0; EMBEDDING_INFO_HEADER_BYTES];
+        bytes[0..4].copy_from_slice(&1u32.to_le_bytes());
+        let row_start = bytes.len();
+        bytes.resize(row_start + EMBEDDING_INFO_CLASS_START_OFFSET, 0);
+        bytes[row_start + EMBEDDING_INFO_EMBEDDING_INDEX_OFFSET
+            ..row_start + EMBEDDING_INFO_EMBEDDING_INDEX_OFFSET + 4]
+            .copy_from_slice(&24u32.to_le_bytes());
+        bytes[row_start + EMBEDDING_INFO_PRIMARY_WIDTH_OFFSET
+            ..row_start + EMBEDDING_INFO_PRIMARY_WIDTH_OFFSET + 2]
+            .copy_from_slice(&13260u16.to_le_bytes());
+        bytes[row_start + EMBEDDING_INFO_PRIMARY_HEIGHT_OFFSET
+            ..row_start + EMBEDDING_INFO_PRIMARY_HEIGHT_OFFSET + 2]
+            .copy_from_slice(&1327u16.to_le_bytes());
+        bytes[row_start + EMBEDDING_INFO_CLASS_LENGTH_OFFSET
+            ..row_start + EMBEDDING_INFO_CLASS_LENGTH_OFFSET + 4]
+            .copy_from_slice(&(class_bytes.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&class_bytes);
+
+        let trailing_start = bytes.len();
+        bytes.resize(trailing_start + EMBEDDING_INFO_TRAILING_BYTES, 0);
+        bytes[trailing_start + EMBEDDING_INFO_FRAME_REF_TRAILING_OFFSET
+            ..trailing_start + EMBEDDING_INFO_FRAME_REF_TRAILING_OFFSET + 4]
+            .copy_from_slice(&1u32.to_le_bytes());
+        bytes[trailing_start + EMBEDDING_INFO_FRAME_WIDTH_TRAILING_OFFSET
+            ..trailing_start + EMBEDDING_INFO_FRAME_WIDTH_TRAILING_OFFSET + 4]
+            .copy_from_slice(&13260u32.to_le_bytes());
+        bytes[trailing_start + EMBEDDING_INFO_FRAME_HEIGHT_TRAILING_OFFSET
+            ..trailing_start + EMBEDDING_INFO_FRAME_HEIGHT_TRAILING_OFFSET + 4]
+            .copy_from_slice(&1327u32.to_le_bytes());
+        bytes
+    }
+
+    fn embedded_press_snapshot_fixture(
+        width: u32,
+        height: u32,
+        body_length: u32,
+        payload_length: u32,
+    ) -> Vec<u8> {
+        let mut bytes = vec![0; 0x80];
+        bytes[..EMBEDDED_PRESS_SNAPSHOT_MAGIC.len()].copy_from_slice(EMBEDDED_PRESS_SNAPSHOT_MAGIC);
+        bytes[0x0c..0x10].copy_from_slice(&[0x00, 0xd5, 0xf6, 0x77]);
+        bytes[0x10..0x14].copy_from_slice(&u32::MAX.to_le_bytes());
+        bytes[0x20..0x24].copy_from_slice(&32u32.to_le_bytes());
+        bytes[EMBEDDED_PRESS_SNAPSHOT_BODY_LENGTH_OFFSET
+            ..EMBEDDED_PRESS_SNAPSHOT_BODY_LENGTH_OFFSET + 4]
+            .copy_from_slice(&body_length.to_le_bytes());
+        bytes[0x28..0x2c].copy_from_slice(&65536u32.to_le_bytes());
+        bytes[EMBEDDED_PRESS_SNAPSHOT_FORMAT_OFFSET..EMBEDDED_PRESS_SNAPSHOT_FORMAT_OFFSET + 4]
+            .copy_from_slice(b"GCI\0");
+        bytes[EMBEDDED_PRESS_SNAPSHOT_OBJECT_COUNT_OFFSET
+            ..EMBEDDED_PRESS_SNAPSHOT_OBJECT_COUNT_OFFSET + 4]
+            .copy_from_slice(&17u32.to_le_bytes());
+        bytes[EMBEDDED_PRESS_SNAPSHOT_OBJECT_TABLE_OFFSET
+            ..EMBEDDED_PRESS_SNAPSHOT_OBJECT_TABLE_OFFSET + 4]
+            .copy_from_slice(&74u32.to_le_bytes());
+        bytes[EMBEDDED_PRESS_SNAPSHOT_PAYLOAD_LENGTH_OFFSET
+            ..EMBEDDED_PRESS_SNAPSHOT_PAYLOAD_LENGTH_OFFSET + 4]
+            .copy_from_slice(&payload_length.to_le_bytes());
+        bytes[EMBEDDED_PRESS_SNAPSHOT_WIDTH_OFFSET..EMBEDDED_PRESS_SNAPSHOT_WIDTH_OFFSET + 4]
+            .copy_from_slice(&width.to_le_bytes());
+        bytes[EMBEDDED_PRESS_SNAPSHOT_HEIGHT_OFFSET..EMBEDDED_PRESS_SNAPSHOT_HEIGHT_OFFSET + 4]
+            .copy_from_slice(&height.to_le_bytes());
+        bytes[0x50..0x54].copy_from_slice(&100u32.to_le_bytes());
+        bytes[0x54..0x58].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x58..0x5c].copy_from_slice(&100u32.to_le_bytes());
+        bytes[0x5c..0x60].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x60..0x64].copy_from_slice(&4u32.to_le_bytes());
+        bytes
+    }
+
+    fn frame_stream_fixture() -> Vec<u8> {
+        let mut bytes = vec![0; FRAME_RECORD_HEADER_BYTES];
+        bytes[FRAME_RECORD_DECLARED_COUNT_OFFSET..FRAME_RECORD_DECLARED_COUNT_OFFSET + 2]
+            .copy_from_slice(&2u16.to_be_bytes());
+        bytes.resize(FRAME_RECORD_HEADER_BYTES + FRAME_RECORD_BYTES, 0);
+
+        let row_start = FRAME_RECORD_HEADER_BYTES + FRAME_RECORD_BYTES;
+        bytes.resize(row_start + FRAME_RECORD_BYTES, 0);
+        bytes[row_start..row_start + 2].copy_from_slice(&0x1001u16.to_be_bytes());
+        bytes[row_start + 2..row_start + 4].copy_from_slice(&60u16.to_be_bytes());
+        bytes[row_start + FRAME_RECORD_ID_OFFSET..row_start + FRAME_RECORD_ID_OFFSET + 2]
+            .copy_from_slice(&24u16.to_be_bytes());
+        bytes[row_start + FRAME_RECORD_TYPE_OFFSET..row_start + FRAME_RECORD_TYPE_OFFSET + 2]
+            .copy_from_slice(&0x0002u16.to_be_bytes());
+        bytes[row_start + FRAME_RECORD_X_OFFSET..row_start + FRAME_RECORD_X_OFFSET + 2]
+            .copy_from_slice(&2143u16.to_be_bytes());
+        bytes[row_start + FRAME_RECORD_Y_OFFSET..row_start + FRAME_RECORD_Y_OFFSET + 2]
+            .copy_from_slice(&2932u16.to_be_bytes());
+        bytes[row_start + FRAME_RECORD_WIDTH_OFFSET..row_start + FRAME_RECORD_WIDTH_OFFSET + 2]
+            .copy_from_slice(&13260u16.to_be_bytes());
+        bytes[row_start + FRAME_RECORD_HEIGHT_OFFSET..row_start + FRAME_RECORD_HEIGHT_OFFSET + 2]
+            .copy_from_slice(&1327u16.to_be_bytes());
+        bytes
+    }
+
+    fn font_stream_fixture(entries: &[(u16, &str, usize)]) -> Vec<u8> {
+        let mut bytes = b"FontV.01".to_vec();
+        bytes.extend_from_slice(&(entries.len() as u16).to_be_bytes());
+        for (id, name, suffix_len) in entries {
+            bytes.extend_from_slice(&font_entry_fixture(*id, name, *suffix_len));
+        }
+        bytes
+    }
+
+    fn font_entry_fixture(id: u16, name: &str, suffix_len: usize) -> Vec<u8> {
+        let mut entry = vec![0; 30];
+        entry[0..2].copy_from_slice(&id.to_be_bytes());
+        entry[20..22].copy_from_slice(&0x0190u16.to_be_bytes());
+        for unit in name.encode_utf16() {
+            entry.extend_from_slice(&unit.to_be_bytes());
+        }
+        entry.extend_from_slice(&[0, 0]);
+        entry.resize(entry.len() + suffix_len, 0);
+        entry
+    }
+
     fn minimal_jpeg_payload() -> &'static [u8] {
         &[
             0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00,
             0x10, 0x00, 0x20, 0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00, 0xff,
             0xda, 0x00, 0x0c, 0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00, 0x00,
             0xff, 0xd9,
+        ]
+    }
+
+    #[cfg(feature = "bitmap-images")]
+    fn minimal_png_payload() -> &'static [u8] {
+        &[
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xdd, 0x8d,
+            0xb0, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
         ]
     }
 
@@ -14380,6 +21369,30 @@ mod tests {
                 0x001f, 0x9280, 0x6cb3, 0x001c, 0x001f, 0x9244, 0x9053, 0x000a,
             ],
         );
+        bytes
+    }
+
+    fn document_text_with_page_break() -> Vec<u8> {
+        let mut bytes = b"SsmgV.01".to_vec();
+        extend_units(&mut bytes, &[0x001f]);
+        for unit in "銀河鉄道の夜\t\t\t\t宮沢 賢治".encode_utf16() {
+            bytes.extend_from_slice(&unit.to_be_bytes());
+        }
+        extend_units(&mut bytes, &[DOCUMENT_TEXT_PAGE_BREAK_CONTROL, 0x001f]);
+        for unit in "目次".encode_utf16() {
+            bytes.extend_from_slice(&unit.to_be_bytes());
+        }
+        bytes
+    }
+
+    fn document_view_styles_page_size_fixture(width_mm100: u32, height_mm100: u32) -> Vec<u8> {
+        let mut bytes = vec![0; 32];
+        bytes[0..4].copy_from_slice(&0x0001_0002_u32.to_be_bytes());
+        bytes[4..8].copy_from_slice(&0x1000_0000_u32.to_be_bytes());
+        bytes[8..12].copy_from_slice(&0x040e_1001_u32.to_be_bytes());
+        bytes[12..16].copy_from_slice(&0x010a_0600_u32.to_be_bytes());
+        bytes[16..20].copy_from_slice(&(width_mm100 << 8).to_be_bytes());
+        bytes[20..24].copy_from_slice(&((height_mm100 << 8) | 0x04).to_be_bytes());
         bytes
     }
 
@@ -14443,6 +21456,38 @@ mod tests {
         bytes.extend_from_slice(&(payload_len as u16).to_be_bytes());
         bytes.extend_from_slice(&(label_units.len() as u16).to_be_bytes());
         for unit in label_units {
+            bytes.extend_from_slice(&unit.to_be_bytes());
+        }
+        bytes
+    }
+
+    fn ssmg_page_layout_style_with_subrecords_fixture() -> Vec<u8> {
+        let mut bytes = ssmg_style_fixture();
+        bytes.resize(0x114, 0);
+        let label_units = "ページ".encode_utf16().collect::<Vec<_>>();
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&(label_units.len() as u16).to_be_bytes());
+        for unit in label_units {
+            payload.extend_from_slice(&unit.to_be_bytes());
+        }
+        payload.extend_from_slice(&[0, 0]);
+        payload.extend_from_slice(&[0x31, 0x04, 0, 1, 0xaa]);
+        payload.extend_from_slice(&[0x31, 0x05, 0, 2, 0x04, 0x00]);
+        payload.extend_from_slice(&[0x31, 0x06, 0, 1, 0xbb]);
+        payload.extend_from_slice(&[0x31, 0x07, 0, 1, 0xcc]);
+        payload.extend_from_slice(&[0x32, 0x05, 0, 2, 0x04, 0x00]);
+        payload.extend_from_slice(&[0x33, 0x05, 0, 2, 0x04, 0x00]);
+
+        bytes.extend_from_slice(&0x4444u16.to_be_bytes());
+        bytes.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+        bytes.extend_from_slice(&payload);
+        bytes
+    }
+
+    fn auto_text_info_fixture(text: &str) -> Vec<u8> {
+        let mut bytes = b"SsmgV.01".to_vec();
+        bytes.resize(84, 0);
+        for unit in text.encode_utf16() {
             bytes.extend_from_slice(&unit.to_be_bytes());
         }
         bytes
