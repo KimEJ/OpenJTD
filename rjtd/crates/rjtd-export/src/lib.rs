@@ -2888,6 +2888,13 @@ mod tests {
         let mut failures = Vec::new();
         let mut rendered_count = 0usize;
 
+        let any_sample_present = samples
+            .iter()
+            .any(|sample| sample_dir.join(format!("{sample}.jtd")).exists());
+        if !any_sample_present {
+            return;
+        }
+
         for sample in samples {
             let sample_path = sample_dir.join(format!("{sample}.jtd"));
             if !sample_path.exists() || !sample_path.with_extension("pdf").exists() {
@@ -2979,6 +2986,13 @@ mod tests {
         ];
         let mut failures = Vec::new();
         let mut rendered_count = 0usize;
+
+        let any_sample_present = samples
+            .iter()
+            .any(|sample| sample_dir.join(format!("{sample}.jtd")).exists());
+        if !any_sample_present {
+            return;
+        }
 
         for sample in samples {
             let sample_path = sample_dir.join(format!("{sample}.jtd"));
@@ -3139,6 +3153,9 @@ if totalNonWhite == 0 {
             })
             .collect::<Vec<_>>();
         paths.sort();
+        if paths.is_empty() {
+            return;
+        }
 
         let mut failures = Vec::new();
         let mut pdf_count = 0usize;

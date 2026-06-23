@@ -219,7 +219,7 @@ fn read_utf16be_null_string(data: &[u8], start: usize) -> Option<(String, usize)
 fn looks_like_font_name(value: &str) -> bool {
     let trimmed = value.trim();
     let char_count = trimmed.chars().count();
-    if char_count < 2 || char_count > FONT_NAME_MAX_UNITS {
+    if !(2..=FONT_NAME_MAX_UNITS).contains(&char_count) {
         return false;
     }
 
