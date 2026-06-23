@@ -829,11 +829,10 @@ impl PageLayout {
     }
 
     fn wrap_columns(self, writing_mode: WritingMode) -> usize {
-        if writing_mode.is_vertical() {
-            if let Some(wrap_columns) = self.vertical_wrap_columns_override {
+        if writing_mode.is_vertical()
+            && let Some(wrap_columns) = self.vertical_wrap_columns_override {
                 return wrap_columns.max(8);
             }
-        }
         let (extent, unit_width) = if writing_mode.is_vertical() {
             (self.body_height_px(), APP_VERTICAL_DISPLAY_UNIT_PX)
         } else {
@@ -6912,6 +6911,7 @@ pub struct ObjectJseq3FormulaCandidate {
 }
 
 impl ObjectJseq3FormulaCandidate {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         magic_offset: usize,
         so_trailer_offset: Option<usize>,
@@ -6988,6 +6988,7 @@ pub struct ObjectJsfartArtFrameCandidate {
 }
 
 impl ObjectJsfartArtFrameCandidate {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         left: u32,
         top: u32,
@@ -7391,6 +7392,7 @@ pub struct ObjectEmbeddedPressSnapshotCandidate {
 }
 
 impl ObjectEmbeddedPressSnapshotCandidate {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         body_length_candidate: u32,
         format_marker: impl Into<String>,
@@ -7788,6 +7790,7 @@ pub struct ObjectVisualListCandidate {
 }
 
 impl ObjectVisualListCandidate {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         declared_size: usize,
         version: u32,
@@ -8908,11 +8911,11 @@ impl FdmVectorGradientContext {
         }
     }
 
-    fn from_color(self) -> u32 {
+    fn start_color(self) -> u32 {
         self.from_color
     }
 
-    fn to_color(self) -> u32 {
+    fn end_color(self) -> u32 {
         self.to_color
     }
 }
@@ -11296,7 +11299,7 @@ fn embedding_frame_candidate_is_plausible(frame: &ObjectEmbeddingFrameCandidate)
 }
 
 fn decode_utf16le_c_string(bytes: &[u8]) -> Option<String> {
-    if bytes.len() % 2 != 0 {
+    if !bytes.len().is_multiple_of(2) {
         return None;
     }
     let units = bytes
@@ -11775,8 +11778,8 @@ fn fdm_raw_vector_command_candidates(vector_stream: &[u8]) -> Vec<ObjectFdmVecto
             record,
             offset + record_len,
             None,
-        ) {
-            if command.has_renderable_geometry() {
+        )
+            && command.has_renderable_geometry() {
                 let command = command.with_source_vector_relative_offset(offset);
                 let command = if let Some(source_segment) =
                     fdm_vector_command_source_segment_for_vector_offset(&segments, offset)
@@ -11787,7 +11790,6 @@ fn fdm_raw_vector_command_candidates(vector_stream: &[u8]) -> Vec<ObjectFdmVecto
                 };
                 commands.push(command);
             }
-        }
         offset += record_len.max(1);
     }
     commands
@@ -11913,6 +11915,7 @@ fn fdm_vector_nested_primitive_command_candidates(
     candidates
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fdm_vector_nested_primitive_command_candidate_at(
     parent_command_index: usize,
     nested_index: usize,
@@ -12065,9 +12068,7 @@ fn fdm_vector_prefix_color(prefix: &[u8], offset: usize) -> Option<u32> {
     if color > 0x00ff_ffff {
         return None;
     }
-    if color == 0 || color == 0x00ff_ffff || color >= 0x0001_0000 {
-        Some(color)
-    } else if fdm_vector_is_grayscale_color(color) {
+    if color == 0 || color == 0x00ff_ffff || color >= 0x0001_0000 || fdm_vector_is_grayscale_color(color) {
         Some(color)
     } else {
         None
@@ -12456,8 +12457,8 @@ fn fdm_vector_linear_gradient_colors(
         return None;
     }
     let gradient = command.gradient_colors()?;
-    let from = fdm_vector_css_color(gradient.from_color())?;
-    let to = fdm_vector_css_color(gradient.to_color())?;
+    let from = fdm_vector_css_color(gradient.start_color())?;
+    let to = fdm_vector_css_color(gradient.end_color())?;
     (from != to).then_some((from, to))
 }
 
@@ -12560,8 +12561,7 @@ fn fdm_vector_text_mask_area_ratio(
         return None;
     }
     let ratio = inner_area as f64 / outer_area as f64;
-    (ratio >= FDM_VECTOR_TEXT_MASK_MIN_INNER_AREA_RATIO
-        && ratio <= FDM_VECTOR_TEXT_MASK_MAX_INNER_AREA_RATIO)
+    (FDM_VECTOR_TEXT_MASK_MIN_INNER_AREA_RATIO..=FDM_VECTOR_TEXT_MASK_MAX_INNER_AREA_RATIO).contains(&ratio)
         .then_some(ratio)
 }
 
@@ -12756,11 +12756,9 @@ fn fdm_index_stream_for_vector<'a>(
     if let Some((path, stream)) = streams
         .iter()
         .find(|(path, _)| path.eq_ignore_ascii_case(&exact_index_path))
-    {
-        if fdm_index_vector_pair_score(stream, vector_len).is_some() {
+        && fdm_index_vector_pair_score(stream, vector_len).is_some() {
             return Some((path, stream));
         }
-    }
 
     let mut best: Option<(&String, &Vec<u8>, FdmIndexVectorPairScore)> = None;
     let mut tied_best = false;
@@ -13486,15 +13484,14 @@ fn jseq3_text_token_candidates(stream: &[u8]) -> Vec<ObjectJseq3TextTokenCandida
         let Some(unit) = read_le16_at(stream, offset) else {
             break;
         };
-        if let Some(character) = char::from_u32(u32::from(unit)) {
-            if JSEQ3_TEXT_TOKEN_CHARS.contains(character) {
+        if let Some(character) = char::from_u32(u32::from(unit))
+            && JSEQ3_TEXT_TOKEN_CHARS.contains(character) {
                 tokens.push(ObjectJseq3TextTokenCandidate::new(
                     character.to_string(),
                     offset,
                     "utf-16le",
                 ));
             }
-        }
         offset += 2;
     }
     tokens
@@ -13660,12 +13657,11 @@ fn embedded_press_snapshot_vector_paths(
                 }
             }
             EMBEDDED_PRESS_RECORD_MOVE_TO => {
-                if let Some(builder) = current.as_mut() {
-                    if let Some((x, y)) = embedded_press_path_point(payload, 0, width, height) {
+                if let Some(builder) = current.as_mut()
+                    && let Some((x, y)) = embedded_press_path_point(payload, 0, width, height) {
                         builder
                             .push(ObjectEmbeddedPressVectorPathCommandCandidate::MoveTo { x, y });
                     }
-                }
             }
             EMBEDDED_PRESS_RECORD_BEZIER_TO => {
                 if let Some(builder) = current.as_mut() {
@@ -13678,12 +13674,11 @@ fn embedded_press_snapshot_vector_paths(
                 }
             }
             EMBEDDED_PRESS_RECORD_TEXTURE_BEZIER => {
-                if let Some(builder) = current.as_mut() {
-                    if let Some(header) = embedded_press_texture_bezier_header(payload) {
+                if let Some(builder) = current.as_mut()
+                    && let Some(header) = embedded_press_texture_bezier_header(payload) {
                         builder.mark_texture(header);
                         push_embedded_press_texture_bezier_record(builder, payload, width, height);
                     }
-                }
             }
             _ => {
                 let state_record = ObjectEmbeddedPressStateRecordCandidate::new(
@@ -13803,9 +13798,7 @@ fn embedded_press_record_points(
     let mut points = Vec::with_capacity(count);
     for index in 0..count {
         let offset = points_offset + index * 8;
-        let Some(point) = embedded_press_path_point(payload, offset, width, height) else {
-            return None;
-        };
+        let point = embedded_press_path_point(payload, offset, width, height)?;
         points.push(point);
     }
     Some(points)
@@ -13940,7 +13933,7 @@ fn decode_visual_list_rle8(width: u32, height: u32, data: &[u8]) -> Option<Vec<u
         let value = data[offset + 1];
         offset += 2;
         if count != 0 {
-            row.extend(std::iter::repeat(value).take(count as usize));
+            row.extend(std::iter::repeat_n(value, count as usize));
             continue;
         }
 
@@ -13954,7 +13947,7 @@ fn decode_visual_list_rle8(width: u32, height: u32, data: &[u8]) -> Option<Vec<u
                 let dx = data[offset] as usize;
                 let dy = data[offset + 1] as usize;
                 offset += 2;
-                row.extend(std::iter::repeat(fill).take(dx));
+                row.extend(std::iter::repeat_n(fill, dx));
                 for _ in 0..dy {
                     flush_visual_list_row(&mut pixels, &mut row, width, height, fill);
                 }
@@ -13978,7 +13971,7 @@ fn decode_visual_list_rle8(width: u32, height: u32, data: &[u8]) -> Option<Vec<u
         flush_visual_list_row(&mut pixels, &mut row, width, height, fill);
     }
     while pixels.len() < total_pixels {
-        pixels.extend(std::iter::repeat(fill).take(width));
+        pixels.extend(std::iter::repeat_n(fill, width));
     }
     pixels.truncate(total_pixels);
     Some(pixels)
@@ -14004,7 +13997,7 @@ fn flush_visual_list_row(
         return;
     }
     if row.len() < width {
-        row.extend(std::iter::repeat(fill).take(width - row.len()));
+        row.extend(std::iter::repeat_n(fill, width - row.len()));
     }
     pixels.extend(row.iter().copied().take(width));
     row.clear();
@@ -14062,7 +14055,7 @@ fn push_object_path_reasons(path: &str, reasons: &mut Vec<ObjectStreamCandidateR
         push_unique_object_reason(reasons, ObjectStreamCandidateReason::TablePath);
     }
 
-    if segments.iter().any(|segment| *segment == "visuallist") {
+    if segments.contains(&"visuallist") {
         push_unique_object_reason(reasons, ObjectStreamCandidateReason::VisualListPath);
     }
 }
@@ -14728,11 +14721,10 @@ fn document_text_toc_entries(entries: &[DocumentTextMapEntry]) -> Vec<DocumentTo
             DocumentTextMapKind::ControlBoundary => {}
         }
 
-        if entry.text().contains('\n') || entry.text().contains('\r') {
-            if let Some(toc_entry) = std::mem::take(&mut row).into_toc_entry() {
+        if (entry.text().contains('\n') || entry.text().contains('\r'))
+            && let Some(toc_entry) = std::mem::take(&mut row).into_toc_entry() {
                 toc_entries.push(toc_entry);
             }
-        }
     }
 
     if let Some(toc_entry) = row.into_toc_entry() {
@@ -17740,14 +17732,12 @@ fn cursor_rect_from_line(
 
 fn column_units_before(line: &PageTextLine, char_offset: usize) -> f64 {
     let mut units = 0.0;
-    let mut current_offset = line.char_start();
 
-    for character in line.text().chars() {
+    for (current_offset, character) in (line.char_start()..).zip(line.text().chars()) {
         if current_offset >= char_offset {
             break;
         }
         units += display_column_width(character) as f64;
-        current_offset += 1;
     }
 
     units
@@ -17757,15 +17747,13 @@ fn char_offset_for_x(layout: PageLayout, line: &PageTextLine, x: f64) -> usize {
     let target_units =
         ((normalize_coordinate(x) - layout.margin_px() as f64) / column_width_px(layout)).max(0.0);
     let mut units = 0.0;
-    let mut char_offset = line.char_start();
 
-    for character in line.text().chars() {
+    for (char_offset, character) in (line.char_start()..).zip(line.text().chars()) {
         let width = display_column_width(character) as f64;
         if target_units <= units + (width / 2.0) {
             return char_offset;
         }
         units += width;
-        char_offset += 1;
     }
 
     line.char_end()
@@ -19012,7 +19000,7 @@ fn push_object_fdm_connector_candidate_json(
     output.push_str(&candidate.endpoint_dx().to_string());
     output.push_str(",\"y\":");
     output.push_str(&candidate.endpoint_dy().to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"endpointDistanceSquared\":");
     output.push_str(&candidate.endpoint_distance_squared().to_string());
     output.push_str(",\"pathPointCount\":");
@@ -21289,6 +21277,8 @@ struct ShanaiLanTextSlot {
     line_header_raw_words: [u16; 12],
 }
 
+type ShanaiLanTextSlotAttachment<'a> = (&'a ShanaiLanTextSlot, f32, (f32, f32, f32, f32));
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ShanaiLanTextCountRangeEvidence {
     index: usize,
@@ -21800,7 +21790,7 @@ fn page_layer_tree_json(
                 output.push(',');
                 push_page_layer_shanai_lan_line_rule_json(
                     &mut output,
-                    &projection,
+                    projection,
                     rule_index,
                     rule,
                     shanai_lan_text_projection.as_ref(),
@@ -22316,6 +22306,7 @@ fn push_page_layer_page_mark_separator_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_page_layer_text_run_json(
     output: &mut String,
     source_id: usize,
@@ -22400,7 +22391,7 @@ fn push_page_layer_text_source_json(
     if let Some(annotation) = &fragment.ruby_annotation {
         source.push_str("{\"type\":\"ruby\",\"text\":");
         source.push_str(&json_string(annotation));
-        source.push_str("}");
+        source.push('}');
     }
     source.push_str("]}");
     output.push(source);
@@ -24665,7 +24656,7 @@ fn push_table_grid_layout_stream_probe_json(
     output.push_str(&frame_record_count.to_string());
     output.push_str(",\"objectFrameSourceUnitLinkCount\":0");
     output.push_str(",\"directPlacementEvidence\":false");
-    output.push_str("}");
+    output.push('}');
 }
 
 fn push_table_grid_page_mark_line_mark_record_evidence_json(
@@ -26216,7 +26207,7 @@ fn push_page_layer_fdm_command_diagnostic_json(
     output.push_str(&extent.right.to_string());
     output.push_str(",\"bottom\":");
     output.push_str(&extent.bottom.to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"projectionViewport\":");
     push_fdm_projection_viewport_json(output, layout);
     output.push('}');
@@ -26374,6 +26365,7 @@ fn projected_bbox_viewport_coverage_ratio(layout: PageLayout, width: f32, height
     ((width.max(0.0) * height.max(0.0)) / viewport_area).clamp(0.0, 1.0)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_page_layer_fdm_connector_candidate_json(
     output: &mut String,
     layout: PageLayout,
@@ -26494,7 +26486,7 @@ fn push_page_layer_fdm_connector_candidate_json(
     output.push_str(&extent.right.to_string());
     output.push_str(",\"bottom\":");
     output.push_str(&extent.bottom.to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"projectionViewport\":");
     push_fdm_projection_viewport_json(output, layout);
     output.push('}');
@@ -27047,6 +27039,7 @@ fn push_fdm_connector_endpoint_owner_candidates_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_fdm_connector_endpoint_owner_candidate_array_json(
     output: &mut String,
     point: (f32, f32),
@@ -28521,12 +28514,12 @@ fn push_fdm_connector_line_rule_endpoint_match_array_json(
     output.push(']');
 }
 
-fn fdm_connector_line_rule_endpoint_matches<'a>(
-    projection: &'a ShanaiLanLineRuleProjection,
+fn fdm_connector_line_rule_endpoint_matches(
+    projection: &ShanaiLanLineRuleProjection,
     point: FdmConnectorTextGridPoint,
 ) -> Vec<(
     usize,
-    &'a ShanaiLanLineRule,
+    &ShanaiLanLineRule,
     FdmConnectorLineRuleDistance,
     &'static str,
 )> {
@@ -28597,10 +28590,10 @@ fn fdm_connector_line_rule_tier_rank(tier: &str) -> usize {
     }
 }
 
-fn fdm_connector_nearest_line_rule_match<'a>(
-    projection: &'a ShanaiLanLineRuleProjection,
+fn fdm_connector_nearest_line_rule_match(
+    projection: &ShanaiLanLineRuleProjection,
     point: FdmConnectorTextGridPoint,
-) -> Option<(usize, &'a ShanaiLanLineRule, FdmConnectorLineRuleDistance)> {
+) -> Option<(usize, &ShanaiLanLineRule, FdmConnectorLineRuleDistance)> {
     projection
         .rules
         .iter()
@@ -29093,11 +29086,11 @@ fn push_shanai_lan_line_rule_endpoint_attachment_candidate_json(
     output.push('}');
 }
 
-fn shanai_lan_nearest_text_slot_attachment(
-    text_projection: Option<&ShanaiLanTextProjection>,
+fn shanai_lan_nearest_text_slot_attachment<'a>(
+    text_projection: Option<&'a ShanaiLanTextProjection>,
     x: f32,
     y: f32,
-) -> Option<(&ShanaiLanTextSlot, f32, (f32, f32, f32, f32))> {
+) -> Option<ShanaiLanTextSlotAttachment<'a>> {
     text_projection?
         .slots
         .iter()
@@ -30003,6 +29996,7 @@ fn shanai_lan_line_mark_for_header(
         .find(|interval| interval.unit_start <= unit && unit < interval.unit_end)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_shanai_lan_vertical_anchor_line_rules(
     bytes: &[u8],
     group_offsets: &[usize],
@@ -30092,6 +30086,7 @@ fn append_shanai_lan_vertical_anchor_line_rules(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_shanai_lan_vertical_anchor_line_rule(
     bytes: &[u8],
     viewport: FdmProjectionViewport,
@@ -30478,7 +30473,7 @@ fn page_mark_separator_tail_y_centipoints(tail: &[u8]) -> Option<u16> {
                 .contains(&value)
                 .then_some(value)
         })
-        .last()
+        .next_back()
 }
 
 fn page_mark_recurring_advance_centipoints(bytes: &[u8]) -> Option<u16> {
@@ -30850,7 +30845,7 @@ fn decode_plain_layout_box_text_payload(
         }
     }
     let text = text
-        .trim_end_matches(|character| matches!(character, ' ' | '\u{3000}' | '\n' | '\r' | '\t'))
+        .trim_end_matches([' ', '\u{3000}', '\n', '\r', '\t'])
         .to_string();
     if text.trim().is_empty() {
         return None;
@@ -31029,11 +31024,10 @@ fn shanai_lan_line_header_for_text_entry(
     let search_start = entry.byte_start().saturating_sub(64);
     let mut offset = entry.byte_start().saturating_sub(2);
     while offset >= search_start && offset + 24 <= bytes.len() {
-        if let Some(header) = shanai_lan_line_header_at(bytes, offset) {
-            if header.end <= entry.byte_start() {
+        if let Some(header) = shanai_lan_line_header_at(bytes, offset)
+            && header.end <= entry.byte_start() {
                 return Some(header);
             }
-        }
         if offset < 2 {
             break;
         }
@@ -31973,6 +31967,7 @@ fn push_success_data_test_answer_sheet_line_svg(
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_answer_sheet_text_svg(
     svg: &mut String,
     text: &str,
@@ -32086,10 +32081,7 @@ fn push_jseq_formula_projection_svg(
                 svg,
                 "rjtd-jseq-formula-path",
                 path,
-                vector_x,
-                vector_y,
-                scale_x,
-                scale_y,
+                EmbeddedPressPageContext { x: vector_x, y: vector_y, scale_x, scale_y },
                 "#111111",
                 "evenodd",
                 "#111111",
@@ -32269,10 +32261,7 @@ fn push_success_data_test_title_art_path_svg(
         svg,
         "rjtd-success-data-test-title-art-path",
         path,
-        x,
-        y,
-        scale_x,
-        scale_y,
+        EmbeddedPressPageContext { x, y, scale_x, scale_y },
         "#111111",
         "evenodd",
         Some(" data-title-layer=\"front-fill\" data-title-fill-source=\"raw-embedded-press-path\""),
@@ -32518,7 +32507,7 @@ fn success_data_test_title_art_geometry_shadow_path_partition<'a>(
 fn success_data_test_title_art_halfsplit_shadow_path_partition<'a>(
     outline_paths: &[&'a ObjectEmbeddedPressVectorPathCandidate],
 ) -> Option<TitleArtShadowPathPartition<'a>> {
-    if outline_paths.len() < 2 || outline_paths.len() % 2 != 0 {
+    if outline_paths.len() < 2 || !outline_paths.len().is_multiple_of(2) {
         return None;
     }
     let shadow_path_count = outline_paths.len() / 2;
@@ -32656,11 +32645,10 @@ fn push_success_data_test_title_art_contour_side_strips(
     }
 
     let mut point_count = contour.len();
-    if let (Some(first), Some(last)) = (contour.first(), contour.last()) {
-        if (first.0 - last.0).abs() <= f32::EPSILON && (first.1 - last.1).abs() <= f32::EPSILON {
+    if let (Some(first), Some(last)) = (contour.first(), contour.last())
+        && (first.0 - last.0).abs() <= f32::EPSILON && (first.1 - last.1).abs() <= f32::EPSILON {
             point_count = point_count.saturating_sub(1);
         }
-    }
     if point_count < 2 {
         return;
     }
@@ -32760,6 +32748,7 @@ fn embedded_press_title_art_shadow_effect(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_title_art_texture_svg(
     svg: &mut String,
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
@@ -32824,10 +32813,7 @@ fn push_success_data_test_title_art_texture_svg(
             svg,
             "rjtd-success-data-test-title-art-texture-path",
             path,
-            x,
-            y,
-            scale_x,
-            scale_y,
+            EmbeddedPressPageContext { x, y, scale_x, scale_y },
             "#111111",
             "nonzero",
             Some(&embedded_press_title_art_state_word5(path).map_or_else(
@@ -32847,6 +32833,7 @@ fn push_success_data_test_title_art_texture_svg(
     svg.push_str("</g>");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_title_art_front_texture_svg(
     svg: &mut String,
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
@@ -32941,10 +32928,7 @@ fn push_success_data_test_title_art_front_texture_svg(
             svg,
             "rjtd-success-data-test-title-art-front-texture-path",
             path,
-            x,
-            y,
-            scale_x,
-            scale_y,
+            EmbeddedPressPageContext { x, y, scale_x, scale_y },
             &texture_fill,
             "nonzero",
             Some(&extra_attrs),
@@ -33498,56 +33482,45 @@ fn success_data_test_title_art_frame_stroke_width(
         .unwrap_or_else(|| ((scale_x + scale_y) / 2.0).max(1.0))
 }
 
+#[derive(Clone, Copy)]
+struct EmbeddedPressPageContext {
+    x: f32,
+    y: f32,
+    scale_x: f32,
+    scale_y: f32,
+}
+
 fn push_embedded_press_vector_path_svg(
     svg: &mut String,
     class_name: &str,
     path: &ObjectEmbeddedPressVectorPathCandidate,
-    x: f32,
-    y: f32,
-    scale_x: f32,
-    scale_y: f32,
+    ctx: EmbeddedPressPageContext,
     fill: &str,
     fill_rule: &str,
     extra_attrs: Option<&str>,
 ) {
-    push_embedded_press_vector_path_svg_with_source_offset(
-        svg,
-        class_name,
-        path,
-        x,
-        y,
-        scale_x,
-        scale_y,
-        0.0,
-        0.0,
-        fill,
-        fill_rule,
-        extra_attrs,
+    push_embedded_press_vector_path_svg_inner(
+        svg, class_name, path, ctx, 0.0, 0.0, fill, fill_rule, None, extra_attrs,
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_embedded_press_vector_path_svg_with_stroke(
     svg: &mut String,
     class_name: &str,
     path: &ObjectEmbeddedPressVectorPathCandidate,
-    x: f32,
-    y: f32,
-    scale_x: f32,
-    scale_y: f32,
+    ctx: EmbeddedPressPageContext,
     fill: &str,
     fill_rule: &str,
     stroke: &str,
     stroke_width: f32,
     extra_attrs: Option<&str>,
 ) {
-    push_embedded_press_vector_path_svg_with_source_offset_and_stroke(
+    push_embedded_press_vector_path_svg_inner(
         svg,
         class_name,
         path,
-        x,
-        y,
-        scale_x,
-        scale_y,
+        ctx,
         0.0,
         0.0,
         fill,
@@ -33557,28 +33530,24 @@ fn push_embedded_press_vector_path_svg_with_stroke(
     );
 }
 
+#[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 fn push_embedded_press_vector_path_svg_with_source_offset(
     svg: &mut String,
     class_name: &str,
     path: &ObjectEmbeddedPressVectorPathCandidate,
-    x: f32,
-    y: f32,
-    scale_x: f32,
-    scale_y: f32,
+    ctx: EmbeddedPressPageContext,
     source_offset_x: f32,
     source_offset_y: f32,
     fill: &str,
     fill_rule: &str,
     extra_attrs: Option<&str>,
 ) {
-    push_embedded_press_vector_path_svg_with_source_offset_and_stroke(
+    push_embedded_press_vector_path_svg_inner(
         svg,
         class_name,
         path,
-        x,
-        y,
-        scale_x,
-        scale_y,
+        ctx,
         source_offset_x,
         source_offset_y,
         fill,
@@ -33588,14 +33557,13 @@ fn push_embedded_press_vector_path_svg_with_source_offset(
     );
 }
 
+#[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 fn push_embedded_press_vector_path_svg_with_source_offset_and_stroke(
     svg: &mut String,
     class_name: &str,
     path: &ObjectEmbeddedPressVectorPathCandidate,
-    x: f32,
-    y: f32,
-    scale_x: f32,
-    scale_y: f32,
+    ctx: EmbeddedPressPageContext,
     source_offset_x: f32,
     source_offset_y: f32,
     fill: &str,
@@ -33603,6 +33571,34 @@ fn push_embedded_press_vector_path_svg_with_source_offset_and_stroke(
     stroke: Option<(&str, f32)>,
     extra_attrs: Option<&str>,
 ) {
+    push_embedded_press_vector_path_svg_inner(
+        svg,
+        class_name,
+        path,
+        ctx,
+        source_offset_x,
+        source_offset_y,
+        fill,
+        fill_rule,
+        stroke,
+        extra_attrs,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_embedded_press_vector_path_svg_inner(
+    svg: &mut String,
+    class_name: &str,
+    path: &ObjectEmbeddedPressVectorPathCandidate,
+    ctx: EmbeddedPressPageContext,
+    source_offset_x: f32,
+    source_offset_y: f32,
+    fill: &str,
+    fill_rule: &str,
+    stroke: Option<(&str, f32)>,
+    extra_attrs: Option<&str>,
+) {
+    let EmbeddedPressPageContext { x, y, scale_x, scale_y } = ctx;
     svg.push_str(&format!(
         "<path class=\"{}\" data-path-kind=\"{}\" d=\"",
         escape_xml(class_name),
@@ -34082,7 +34078,7 @@ fn success_data_test_top_text_line_step_px(slots: &[SuccessDataTestTextSlot]) ->
         .windows(2)
         .filter_map(|window| {
             let delta = window[1].y - window[0].y;
-            (delta >= 18.0 && delta <= 24.0).then_some(delta)
+            (18.0..=24.0).contains(&delta).then_some(delta)
         })
         .collect::<Vec<_>>();
     if deltas.is_empty() {
@@ -34367,6 +34363,7 @@ fn success_data_test_q5_fdm_projection_from_segments(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_fdm_reference_projection_svg(
     svg: &mut String,
     layout: PageLayout,
@@ -35076,6 +35073,7 @@ fn page_decoration_x(layout: PageLayout, side: PageDecorationSide) -> f32 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_svg_text_run(
     svg: &mut String,
     class_name: &str,
@@ -35741,7 +35739,7 @@ fn source_derived_table_grid_overlay_layout(
         .iter()
         .map(|header| header.extent_units.saturating_sub(header.offset_units))
         .collect::<Vec<_>>();
-    if matched_cell_span_units.iter().any(|span| *span == 0) {
+    if matched_cell_span_units.contains(&0) {
         return None;
     }
     let matched_cell_gap_units = matched_headers
@@ -36327,11 +36325,7 @@ fn success_data_test_table_grid_overlay_layout(
         .unwrap_or_else(|| candidate.max_column_segment_count().max(1));
     let column_widths =
         table_grid_line_header_column_widths_px(document, candidate, width, column_count);
-    let column_width = if column_widths.is_empty() {
-        width / column_count as f32
-    } else {
-        width / column_count as f32
-    };
+    let column_width = width / column_count as f32;
     Some(TableGridReferenceLayout {
         x: SUCCESS_DATA_TEST_ABC_TABLE_X_PX * scale_x,
         y: SUCCESS_DATA_TEST_ABC_TABLE_Y_PX * scale_y,
@@ -36416,7 +36410,7 @@ fn table_grid_line_header_column_widths_px(
         .take(column_count)
         .map(|header| header.extent_units.saturating_sub(header.offset_units))
         .collect::<Vec<_>>();
-    if span_units.iter().any(|span| *span == 0) {
+    if span_units.contains(&0) {
         return Vec::new();
     }
     let total_units = span_units.iter().map(|span| f32::from(*span)).sum::<f32>();
@@ -37050,7 +37044,7 @@ fn observed_form_text_projection(
 
     let scale_x = layout.width_px() / 120.0;
     let scale_y = layout.height_px() / 169.0;
-    let mut slots = Vec::new();
+    let mut slots = Vec::with_capacity(8 + body.len());
     slots.push(form_slot(
         "title",
         title,
@@ -37582,9 +37576,7 @@ fn success_data_test_title_art_page_number(
         return None;
     }
 
-    let Some(snapshot) = diagnostic.embedded_press_snapshot else {
-        return None;
-    };
+    let snapshot = diagnostic.embedded_press_snapshot?;
     let primary_size_matches_snapshot = u32::from(diagnostic.frame.primary_width())
         == snapshot.width()
         && u32::from(diagnostic.frame.primary_height()) == snapshot.height();
@@ -37682,7 +37674,7 @@ fn success_data_test_resolve_top_text_slots(
     let Some(bytes) = document_text_raw_stream(document) else {
         return slots
             .iter()
-            .map(|slot| success_data_test_unbacked_resolved_text_slot(slot))
+            .map(success_data_test_unbacked_resolved_text_slot)
             .collect();
     };
     let map = map_document_text(bytes);
@@ -37738,8 +37730,7 @@ fn success_data_test_next_top_text_source_match(
     entry_relative_unit_cursor: &mut usize,
     text: &str,
 ) -> Option<SuccessDataTestTextSourceMatch> {
-    for index in *entry_index..entries.len() {
-        let entry = &entries[index];
+    for (index, entry) in entries[*entry_index..].iter().enumerate().map(|(i, e)| (*entry_index + i, e)) {
         if entry.kind() != DocumentTextMapKind::TextRun {
             continue;
         }
@@ -38328,14 +38319,13 @@ fn tokenize_success_data_test_answer_sheet_tail(text: &str) -> Vec<String> {
             continue;
         }
 
-        if remaining.starts_with("ＡＢ") || remaining.starts_with("ＡＣ") {
-            if let Some(equal_index) = remaining.find('＝') {
+        if (remaining.starts_with("ＡＢ") || remaining.starts_with("ＡＣ"))
+            && let Some(equal_index) = remaining.find('＝') {
                 let end = cursor + equal_index + '＝'.len_utf8();
                 push_success_data_test_answer_sheet_token(&mut tokens, &text[cursor..end]);
                 cursor = end;
                 continue;
             }
-        }
 
         if character == '(' {
             let mut end = cursor + character.len_utf8();
@@ -38625,7 +38615,7 @@ fn success_data_test_title_art_shadow_path_count(
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
 ) -> usize {
     let outline_count = success_data_test_title_art_rendered_path_count(snapshot);
-    if outline_count > 1 && outline_count % 2 == 0 {
+    if outline_count > 1 && outline_count.is_multiple_of(2) {
         outline_count / 2
     } else {
         0
@@ -38722,13 +38712,12 @@ fn embedded_press_vector_path_sampled_contours(
                 current = Some(end);
             }
             ObjectEmbeddedPressVectorPathCommandCandidate::Close => {
-                if let (Some(start), Some(last)) = (contour_start, current) {
-                    if (start.0 - last.0).abs() > f32::EPSILON
-                        || (start.1 - last.1).abs() > f32::EPSILON
+                if let (Some(start), Some(last)) = (contour_start, current)
+                    && ((start.0 - last.0).abs() > f32::EPSILON
+                        || (start.1 - last.1).abs() > f32::EPSILON)
                     {
                         contour.push(start);
                     }
-                }
                 if contour.len() > 1 {
                     contours.push(std::mem::take(&mut contour));
                 } else {
@@ -41259,7 +41248,7 @@ mod tests {
             |segment| segment.relative_offset() == 1864
                 && segment.declared_len() == 236
                 && segment.command_count() == 4
-                && segment.command_offsets() == &[60, 94, 128, 160]
+                && segment.command_offsets() == [60, 94, 128, 160]
         ));
         assert_eq!(fdm_vector.fdm_raw_vector_commands().len(), 37);
         assert!(
