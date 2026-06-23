@@ -27,7 +27,7 @@ use rjtd_model::{
     DocumentCore, ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate, ObjectFrameRecordCandidate,
     ObjectFrameReferenceRowCandidate, ObjectImagePayloadSpan, ObjectImageSignatureHit,
     ObjectStreamCandidate as ModelObjectStreamCandidate, TableCandidate, TextBoundaryCandidate,
-    TextCountRange, TextLayoutExactEvidence, parse_document,
+    TextCountRange, TextLayoutExactEvidence, page_mark_u16_geometry_profile, parse_document,
 };
 
 const BROKEN_PIPE_EXIT: &str = "__rjtd_broken_pipe__";
@@ -568,6 +568,12 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             }
             Ok(())
         }
+        Some("line-mark-intervals") => {
+            let path = required_path(args.next(), "line-mark-intervals")?;
+            let bytes = read_file(path)?;
+            let stream = read_cfb_stream(&bytes, "/LineMark").map_err(|error| error.to_string())?;
+            write_line_mark_intervals(&stream)
+        }
         Some("line-mark-text-context") => {
             let path = required_path(args.next(), "line-mark-text-context")?;
             let bytes = read_file(path)?;
@@ -827,7 +833,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 .filter(|candidate| candidate.jseq3_formula.is_some())
                 .count();
             write_stdout_line(&format!(
-                "summary\tstreams={}\tcandidates={}\tunreadable={}\tobject-path={}\timage-path={}\tshape-path={}\ttable-path={}\tvisual-list-path={}\tvisual-list-raster={}\tembedded-press-snapshot={}\tjseq3-formula={}\tso-marker={}\timage-signature={}\tsvg-signature={}\tdecoded=false",
+                "summary\tstreams={}\tcandidates={}\tunreadable={}\tobject-path={}\timage-path={}\tshape-path={}\ttable-path={}\tvisual-list-path={}\tvisual-list-raster={}\tfigure-link={}\tembedded-press-snapshot={}\tjseq3-formula={}\tso-marker={}\timage-signature={}\tsvg-signature={}\tdecoded=false",
                 stream_count,
                 candidates.len(),
                 unreadable_count,
@@ -837,6 +843,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 object_stream_reason_count(&reason_counts, "table-path"),
                 object_stream_reason_count(&reason_counts, "visual-list-path"),
                 visual_list_raster_count,
+                object_stream_reason_count(&reason_counts, "figure-link"),
                 embedded_press_snapshot_count,
                 jseq3_formula_count,
                 object_stream_reason_count(&reason_counts, "so-marker"),
@@ -2906,7 +2913,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
 
             for candidate in document.table_candidates() {
                 write_stdout_line(&format!(
-                    "table-candidate\t{}\tkind={}\trange={}\tboundary={}\tbasis={}\tdelimiter=0x{:04x}\tintervals={}\tfirst={}\tlast={}\tsource={}-{}\tinterval-details={}\tdecoded=false",
+                    "table-candidate\t{}\tkind={}\trange={}\tboundary={}\tbasis={}\tdelimiter=0x{:04x}\tintervals={}\tfirst={}\tlast={}\tsource={}-{}\tsparse={}\tcells={}/{}/{}\tmax-columns={}\tinterval-details={}\tdecoded=false",
                     candidate.index(),
                     candidate.kind(),
                     format_model_table_source_index(candidate.text_count_range_index()),
@@ -2918,6 +2925,11 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     candidate.last_interval_index(),
                     candidate.source_start(),
                     candidate.source_end(),
+                    candidate.is_sparse_document_text_control_run_candidate(),
+                    candidate.non_empty_cell_count_candidate(),
+                    candidate.empty_cell_count_candidate(),
+                    candidate.cell_count_candidate(),
+                    candidate.max_column_segment_count(),
                     format_table_candidate_intervals(candidate)
                 ))?;
             }
@@ -3981,14 +3993,17 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 page_mark.trailing_bytes().len()
             ))?;
             for (row, entry) in page_mark.entries().iter().enumerate() {
+                let u16_fields = be16_words(entry.raw()).collect::<Vec<_>>();
+                let u16_profile = page_mark_u16_geometry_profile(&u16_fields);
                 write_stdout_line(&format!(
-                    "entry\t{}\t{}\t{}\tflags={}\tlineStart={}\tlineEnd={}",
+                    "entry\t{}\t{}\t{}\tflags={}\tlineStart={}\tlineEnd={}\tu16Class={}",
                     row,
                     format_optional_u32(entry.index()),
                     bytes_to_hex(entry.raw()),
                     format_optional_u32(entry.flags()),
                     format_optional_u32(entry.line_start()),
-                    format_optional_u32(entry.line_end())
+                    format_optional_u32(entry.line_end()),
+                    u16_profile.class_name()
                 ))?;
             }
             if !page_mark.trailing_bytes().is_empty() {
@@ -3998,6 +4013,12 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 ))?;
             }
             Ok(())
+        }
+        Some("page-mark-u16-profile") => {
+            let path = required_path(args.next(), "page-mark-u16-profile")?;
+            let bytes = read_file(path)?;
+            let page_mark = read_page_mark(&bytes).map_err(|error| error.to_string())?;
+            write_page_mark_u16_profile(&page_mark)
         }
         Some("page-mark-shape") => {
             let path = required_path(args.next(), "page-mark-shape")?;
@@ -4230,6 +4251,30 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     .map_err(|error| error.to_string())?,
             )
         }
+        Some("page-info") => {
+            let path = required_path(args.next(), "page-info")?;
+            let page_index = required_page_index(args.next(), "page-info")?;
+            let bytes = read_file(&path)?;
+            let mut core = DocumentCore::from_bytes(&bytes).map_err(|error| error.to_string())?;
+            core.set_file_name(&path);
+            write_stdout(
+                &core
+                    .get_page_info(page_index)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
+        Some("page-svg") => {
+            let path = required_path(args.next(), "page-svg")?;
+            let page_index = required_page_index(args.next(), "page-svg")?;
+            let bytes = read_file(&path)?;
+            let mut core = DocumentCore::from_bytes(&bytes).map_err(|error| error.to_string())?;
+            core.set_file_name(&path);
+            write_stdout(
+                &core
+                    .render_page_svg(page_index)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
         Some("export") => {
             let path = required_path(args.next(), "export")?;
             let options = export_options(args)?;
@@ -4360,6 +4405,7 @@ Usage:
   rjtd stream-words <file.jtd> <stream-path>
   rjtd stream-word-frequencies <file.jtd> <stream-path>
   rjtd line-mark-tags <file.jtd>
+  rjtd line-mark-intervals <file.jtd>
   rjtd line-mark-text-context <file.jtd>
   rjtd stream-dwords <file.jtd> <stream-path>
   rjtd stream-dword-frequencies <file.jtd> <stream-path>
@@ -4426,12 +4472,15 @@ Usage:
   rjtd paper-marks <file.jtd>
   rjtd paper-mark-shape <file.jtd>
   rjtd page-marks <file.jtd>
+  rjtd page-mark-u16-profile <file.jtd>
   rjtd page-mark-shape <file.jtd>
   rjtd text-map <file.jtd>
   rjtd text-position-context <file.jtd>
   rjtd text-position-line-context <file.jtd>
   rjtd text-position-delta-scan <file.jtd>
+  rjtd page-info <file.jtd> <zero-based-page-index>
   rjtd page-layer-tree <file.jtd> <zero-based-page-index>
+  rjtd page-svg <file.jtd> <zero-based-page-index>
   rjtd export <file.jtd> --format <json|md|text|html|pdf> [-o output.pdf]
 ",
     )
@@ -5093,6 +5142,9 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
     let visual_list = visual_list_candidate_from_stream(path, stream);
     let embedded_press_snapshot = embedded_press_snapshot_candidate_from_stream(stream);
     let jseq3_formula = jseq3_formula_candidate_from_stream(path, stream);
+    if figure_link_candidate_from_stream(path, stream) {
+        push_unique_reason(&mut reasons, "figure-link");
+    }
     if embedded_press_snapshot.is_some() {
         push_unique_reason(&mut reasons, "embedded-press-snapshot");
     }
@@ -5115,6 +5167,30 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
         embedded_press_snapshot,
         jseq3_formula,
         prefix_hex: format_hex_preview(stream, OBJECT_STREAM_PREFIX_PREVIEW_BYTES),
+    })
+}
+
+fn figure_link_candidate_from_stream(path: &str, stream: &[u8]) -> bool {
+    let lower = path.to_ascii_lowercase();
+    if !lower.contains("/figuredata/") || !lower.ends_with("/link") {
+        return false;
+    }
+    let header_bytes = 8usize;
+    let row_bytes = 14usize;
+    if stream.len() < header_bytes + row_bytes {
+        return false;
+    }
+    let row_payload_len = stream.len().saturating_sub(header_bytes);
+    if row_payload_len % row_bytes != 0 {
+        return false;
+    }
+    let row_count = row_payload_len / row_bytes;
+    if row_count == 0 || read_be16_candidate(stream, 6).map(usize::from) != Some(row_count) {
+        return false;
+    }
+    (0..row_count).all(|row_index| {
+        let row_start = header_bytes + row_index * row_bytes;
+        read_be16_candidate(stream, row_start + 8) == Some(0x0016)
     })
 }
 
@@ -8679,6 +8755,68 @@ fn line_mark_summary(bytes: &[u8]) -> String {
     )
 }
 
+fn write_line_mark_intervals(stream: &[u8]) -> Result<(), String> {
+    const HEADER_BYTES: usize = 18;
+    const COUNT_OFFSET: usize = 8;
+    const BASE_UNIT: usize = 16;
+    const RECORD_BYTES: usize = 4;
+
+    let words = be16_words(stream).collect::<Vec<_>>();
+    let declared_count = read_be16_candidate(stream, COUNT_OFFSET)
+        .map(usize::from)
+        .unwrap_or_default();
+    let max_records = stream.len().saturating_sub(HEADER_BYTES) / RECORD_BYTES;
+    let parsed_limit = declared_count.min(max_records);
+    let mut rows = Vec::new();
+    let mut parsed_records = 0usize;
+    let mut unit_start = BASE_UNIT;
+    for record_index in 0..parsed_limit {
+        let byte_offset = HEADER_BYTES + record_index * RECORD_BYTES;
+        let Some(delta_word) = read_be16_candidate(stream, byte_offset) else {
+            break;
+        };
+        let Some(flag_word) = read_be16_candidate(stream, byte_offset + 2) else {
+            break;
+        };
+        let delta = delta_word as i16;
+        if delta <= 0 {
+            rows.push(format!(
+                "line-mark-interval-stop\trecord={record_index}\tbyte={byte_offset}\tdelta={delta}\tflag=0x{flag_word:04x}\treason=non-positive-delta"
+            ));
+            break;
+        }
+        let unit_end = unit_start.saturating_add(delta as usize);
+        let word_index = byte_offset / 2;
+        rows.push(format!(
+            "line-mark-interval\trecord={record_index}\tbyte={byte_offset}\tword={word_index}\tdelta={delta}\tflag=0x{flag_word:04x}\tunit-start={unit_start}\tunit-end={unit_end}\tprev={}\tnext={}",
+            format_word_context(&words, word_index.saturating_sub(4), word_index),
+            format_word_context(&words, word_index + 2, (word_index + 8).min(words.len()))
+        ));
+        parsed_records += 1;
+        unit_start = unit_end;
+    }
+    let profile = if parsed_records > 0 {
+        "be16-delta-v1"
+    } else {
+        "unparsed"
+    };
+    write_stdout_line(&format!(
+        "summary\tlen={}\twords={}\tprofile={}\tdeclared-count={}\tmax-records={}\tparsed-records={}\tbase-unit={}\theader={}",
+        stream.len(),
+        words.len(),
+        profile,
+        declared_count,
+        max_records,
+        parsed_records,
+        BASE_UNIT,
+        format_word_context(&words, 0, HEADER_BYTES / 2)
+    ))?;
+    for row in rows {
+        write_stdout_line(&row)?;
+    }
+    Ok(())
+}
+
 fn page_mark_summary(bytes: &[u8]) -> String {
     let Ok(page_mark) = read_page_mark(bytes) else {
         return "missing".to_string();
@@ -8726,6 +8864,73 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
         output.push_str(&format!("{byte:02x}"));
     }
     output
+}
+
+const PAGE_MARK_U16_PROFILE_WORD_INDEXES: [usize; 8] = [10, 13, 14, 17, 18, 19, 20, 21];
+const PAGE_MARK_U16_PROFILE_CLASSES: [&str; 4] = [
+    "zero-sentinel",
+    "additive-row",
+    "additive-boundary",
+    "mixed-payload",
+];
+
+fn write_page_mark_u16_profile(page_mark: &PageMark) -> Result<(), String> {
+    let mut class_counts = BTreeMap::<&'static str, usize>::new();
+    let mut tuple_counts = BTreeMap::<(&'static str, [Option<u16>; 8]), usize>::new();
+
+    for entry in page_mark.entries() {
+        let fields = be16_words(entry.raw()).collect::<Vec<_>>();
+        let profile = page_mark_u16_geometry_profile(&fields);
+        let class_name = profile.class_name();
+        *class_counts.entry(class_name).or_insert(0) += 1;
+        let tuple = PAGE_MARK_U16_PROFILE_WORD_INDEXES.map(|index| fields.get(index).copied());
+        *tuple_counts.entry((class_name, tuple)).or_insert(0) += 1;
+    }
+
+    write_stdout_line(&format!(
+        "summary\tentries={}\tzero-sentinel={}\tadditive-row={}\tadditive-boundary={}\tmixed-payload={}\tdecoded=false",
+        page_mark.entries().len(),
+        class_counts.get("zero-sentinel").copied().unwrap_or(0),
+        class_counts.get("additive-row").copied().unwrap_or(0),
+        class_counts.get("additive-boundary").copied().unwrap_or(0),
+        class_counts.get("mixed-payload").copied().unwrap_or(0)
+    ))?;
+
+    for class_name in PAGE_MARK_U16_PROFILE_CLASSES {
+        write_stdout_line(&format!(
+            "profile\t{}\t{}",
+            class_name,
+            class_counts.get(class_name).copied().unwrap_or(0)
+        ))?;
+    }
+
+    for ((class_name, tuple), count) in tuple_counts {
+        write_stdout_line(&format!(
+            "tuple\t{}\t{}\t{}",
+            class_name,
+            count,
+            format_page_mark_u16_profile_tuple(&tuple)
+        ))?;
+    }
+
+    Ok(())
+}
+
+fn format_page_mark_u16_profile_tuple(tuple: &[Option<u16>; 8]) -> String {
+    PAGE_MARK_U16_PROFILE_WORD_INDEXES
+        .iter()
+        .zip(tuple.iter())
+        .map(|(word_index, value)| {
+            format!(
+                "w{}={}",
+                word_index,
+                value
+                    .map(|value| format!("{value}/0x{value:04x}"))
+                    .unwrap_or_else(|| "-".to_string())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\t")
 }
 
 fn page_layout_slot_parts(
@@ -9065,7 +9270,7 @@ fn format_optional_usize(value: Option<usize>) -> String {
 }
 
 fn format_model_table_source_index(value: usize) -> String {
-    if value == usize::MAX {
+    if value >= usize::MAX - 1 {
         "-".to_string()
     } else {
         value.to_string()

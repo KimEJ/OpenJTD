@@ -12,6 +12,7 @@ const EMBEDDED_DOCUMENT_TEXT_MAX_SPAN: usize = 64 * 1024;
 const TEXT_RUN_MARKER: u16 = 0x001f;
 const INLINE_TEXT_START: u16 = 0x001d;
 const INLINE_TEXT_END: u16 = 0x001e;
+const TEXT_ROW_DELIMITER: u16 = 0x000e;
 const SKIPPED_INLINE_MAX_UNITS: usize = 256;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -477,7 +478,7 @@ pub fn parse_document_text(data: &[u8]) -> ParsedDocumentText {
                 elements.push(DocumentTextElement::ControlBoundary(
                     DocumentTextControl::new(code),
                 ));
-                reading_text = false;
+                reading_text = code == TEXT_ROW_DELIMITER;
             } else if let Some(character) = char::from_u32(code as u32) {
                 run.push(character);
             }
@@ -536,7 +537,7 @@ pub fn map_document_text(data: &[u8]) -> DocumentTextMap {
             if is_control_boundary(code) || is_invalid_scalar(code) {
                 push_map_run(&mut entries, &mut run, run_start, index);
                 push_map_control(&mut entries, index, code);
-                reading_text = false;
+                reading_text = code == TEXT_ROW_DELIMITER;
             } else if let Some(character) = char::from_u32(code as u32) {
                 if run.is_empty() {
                     run_start = index;
@@ -786,6 +787,27 @@ mod tests {
         }
 
         assert_eq!(extract_document_text(&bytes), "目次");
+    }
+
+    #[test]
+    fn continues_text_after_row_delimiter_inside_text_run() {
+        let mut bytes = vec![0x00, 0x1f, 0x00, 0x0e];
+        for unit in "１，次の計算をしなさい\n".encode_utf16() {
+            bytes.extend_from_slice(&unit.to_be_bytes());
+        }
+        extend_units(&mut bytes, &[0x001c]);
+
+        assert_eq!(extract_document_text(&bytes), "１，次の計算をしなさい\n");
+
+        let map = map_document_text(&bytes);
+        assert_eq!(
+            map.entries()[0].kind(),
+            DocumentTextMapKind::ControlBoundary
+        );
+        assert_eq!(map.entries()[0].code(), Some(0x000e));
+        assert_eq!(map.entries()[1].kind(), DocumentTextMapKind::TextRun);
+        assert_eq!(map.entries()[1].unit_start(), 2);
+        assert_eq!(map.entries()[1].text(), "１，次の計算をしなさい\n");
     }
 
     #[test]

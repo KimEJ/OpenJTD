@@ -6,17 +6,24 @@ use rjtd_core::style_stream::{
 };
 use rjtd_model::{
     Block, Document, DocumentAutoText, DocumentCore, DocumentFont, DocumentPageMark,
-    DocumentTocEntry, Inline, ObjectEmbeddedPressSnapshotCandidate, ObjectEmbeddingFrameCandidate,
-    ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate, ObjectFrameRecordCandidate,
-    ObjectFrameReferenceRowCandidate, ObjectImageDimensions, ObjectImageHeaderFieldCandidates,
-    ObjectImageNumericHeaderField, ObjectImagePayloadEnvelope, ObjectImagePayloadSpan,
-    ObjectImageSourcePathCandidate, ObjectJseq3FormulaCandidate, ObjectStreamCandidate,
-    ObjectStreamOwnershipCandidate, ObjectStreamOwnershipReferenceCandidate,
+    DocumentPaperMark, DocumentTocEntry, Inline, ObjectEmbeddedPressSnapshotCandidate,
+    ObjectEmbeddedPressVectorPathCandidate, ObjectEmbeddingFrameCandidate,
+    ObjectFdmConnectorCandidate, ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate,
+    ObjectFdmTextCandidate, ObjectFdmTextIndexEntryCandidate, ObjectFdmVectorCommandCandidate,
+    ObjectFdmVectorCommandSourceSegment, ObjectFdmVectorCurveSegment, ObjectFdmVectorEllipse,
+    ObjectFdmVectorPoint, ObjectFdmVectorSegmentCandidate, ObjectFigureLinkCandidate,
+    ObjectFigureLinkRowCandidate, ObjectFrameRecordCandidate, ObjectFrameReferenceRowCandidate,
+    ObjectImageDimensions, ObjectImageHeaderFieldCandidates, ObjectImageNumericHeaderField,
+    ObjectImagePayloadEnvelope, ObjectImagePayloadSpan, ObjectImageSourcePathCandidate,
+    ObjectJseq3FormulaCandidate, ObjectJsfartArtCandidate, ObjectJsfartArtPaintCandidate,
+    ObjectStreamCandidate, ObjectStreamOwnershipCandidate, ObjectStreamOwnershipReferenceCandidate,
     ObjectVisualListCandidate, StyleRef, TableCandidate, TableCandidateColumnSegment,
     TableCandidateInterval, TextBoundaryCandidate, TextControlBoundary,
     TextCountControlRangeOverlap, TextCountRange, TextCountRangeOverlap, TextLayoutExactEvidence,
-    TextParagraphBoundaryCandidate, TextSourceSpan, UnknownObject,
+    TextParagraphBoundaryCandidate, TextSourceSpan, UnknownObject, page_mark_u16_geometry_profile,
 };
+
+const EMBEDDED_PRESS_RECORD_PAINT_STATE_82: u32 = 0x82;
 
 pub fn to_plain_text(document: &Document) -> String {
     let mut output = String::new();
@@ -209,6 +216,13 @@ pub fn to_json(document: &Document) -> String {
         }
         push_document_page_mark_json(&mut output, page_mark);
     }
+    output.push_str("],\"paperMarks\":[");
+    for (index, paper_mark) in document.paper_marks().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_document_paper_mark_json(&mut output, paper_mark);
+    }
     output.push_str("],\"rawStreams\":[");
     for (index, stream) in document.raw_streams().iter().enumerate() {
         if index > 0 {
@@ -302,6 +316,164 @@ fn push_document_page_mark_json(output: &mut String, page_mark: &DocumentPageMar
         push_option_u32_json(output, entry.line_start());
         output.push_str(",\"lineEnd\":");
         push_option_u32_json(output, entry.line_end());
+        output.push_str(",\"rawLength\":");
+        output.push_str(&entry.raw_len().to_string());
+        output.push_str(",\"rawHex\":");
+        push_json_string(output, &hex(entry.raw()));
+        output.push_str(",\"u16Fields\":");
+        push_u16_array_json(output, entry.u16_fields());
+        output.push_str(",\"u16FieldsHex\":");
+        push_u16_hex_array_json(output, entry.u16_fields());
+        output.push_str(",\"u16GeometryClass\":");
+        push_json_string(output, entry.u16_geometry_profile().class_name());
+        output.push_str(",\"u32Fields\":");
+        push_u32_array_json(output, entry.u32_fields());
+        output.push_str(",\"u32FieldsHex\":");
+        push_u32_hex_array_json(output, entry.u32_fields());
+        output.push_str(",\"u16GeometryHypotheses\":");
+        push_page_mark_u16_geometry_hypotheses_json(output, entry.u16_fields());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push_str("],\"decoded\":false}");
+}
+
+fn push_page_mark_u16_geometry_hypotheses_json(output: &mut String, fields: &[u16]) {
+    let field = |index: usize| fields.get(index).copied();
+    let word_10 = field(10);
+    let word_13 = field(13);
+    let word_14 = field(14);
+    let word_17 = field(17);
+    let word_18 = field(18);
+    let word_19 = field(19);
+    let word_21 = field(21);
+    let profile = page_mark_u16_geometry_profile(fields);
+    let word_13_plus_14 = word_13
+        .zip(word_14)
+        .and_then(|(left, right)| left.checked_add(right));
+    let word_21_minus_13 = word_21
+        .zip(word_13)
+        .and_then(|(full, primary)| full.checked_sub(primary));
+    let selected_field_indexes = [10usize, 13, 14, 17, 18, 19, 20, 21];
+
+    output.push_str("{\"source\":\"/PageMark\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"profile\":");
+    push_json_string(output, profile.class_name());
+    output.push_str(",\"selectedFields\":[");
+    for (index, word_index) in selected_field_indexes.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"wordIndex\":");
+        output.push_str(&word_index.to_string());
+        output.push_str(",\"value\":");
+        push_option_u16_json(output, field(*word_index));
+        output.push_str(",\"hex\":");
+        push_option_u16_hex_json(output, field(*word_index));
+        output.push('}');
+    }
+    output.push(']');
+    output.push_str(",\"word10EqualsWord13\":");
+    output.push_str(if word_10.zip(word_13).is_some_and(|(a, b)| a == b) {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"word17EqualsWord18\":");
+    output.push_str(if word_17.zip(word_18).is_some_and(|(a, b)| a == b) {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"word18EqualsWord19\":");
+    output.push_str(if word_18.zip(word_19).is_some_and(|(a, b)| a == b) {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"word20Is0x00ff\":");
+    output.push_str(if profile.word20_is_00ff() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"word13PlusWord14\":");
+    push_option_u16_json(output, word_13_plus_14);
+    output.push_str(",\"word13PlusWord14EqualsWord21\":");
+    output.push_str(
+        if word_13_plus_14
+            .zip(word_21)
+            .is_some_and(|(sum, word_21)| sum == word_21)
+        {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"word21MinusWord13\":");
+    push_option_u16_json(output, word_21_minus_13);
+    output.push_str(",\"word21MinusWord13EqualsWord14\":");
+    output.push_str(
+        if word_21_minus_13
+            .zip(word_14)
+            .is_some_and(|(difference, word_14)| difference == word_14)
+        {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"word19EqualsWord13\":");
+    output.push_str(if word_19.zip(word_13).is_some_and(|(a, b)| a == b) {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"selectedFieldsAllZero\":");
+    output.push_str(if profile.selected_fields_all_zero() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"nonZeroAdditiveUnitCandidate\":");
+    output.push_str(if profile.non_zero_additive_unit_candidate() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"layoutComparisons\":null");
+    output.push_str(
+        ",\"renderPromotionContribution\":\"page-mark-u16-horizontal-geometry-candidate-only\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    push_json_string(output, "page-mark-u16-geometry-semantics-unproven");
+    output.push('}');
+}
+
+fn push_document_paper_mark_json(output: &mut String, paper_mark: &DocumentPaperMark) {
+    output.push_str("{\"sourceStream\":");
+    push_json_string(output, paper_mark.source_stream());
+    output.push_str(",\"headerCount\":");
+    output.push_str(&paper_mark.header_count().to_string());
+    output.push_str(",\"headerStride\":");
+    output.push_str(&paper_mark.header_stride().to_string());
+    output.push_str(",\"headerLastIndex\":");
+    output.push_str(&paper_mark.header_last_index().to_string());
+    output.push_str(",\"entryCount\":");
+    output.push_str(&paper_mark.entries().len().to_string());
+    output.push_str(",\"entries\":[");
+    for (index, entry) in paper_mark.entries().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"rowIndex\":");
+        output.push_str(&entry.row_index().to_string());
+        output.push_str(",\"index\":");
+        output.push_str(&entry.index().to_string());
+        output.push_str(",\"flags\":");
+        output.push_str(&entry.flags().to_string());
+        output.push_str(",\"flagsHex\":");
+        push_json_string(output, &format!("0x{:08x}", entry.flags()));
         output.push_str(",\"rawLength\":");
         output.push_str(&entry.raw_len().to_string());
         output.push_str(",\"decoded\":false}");
@@ -494,12 +666,56 @@ fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStre
         }
         push_object_frame_reference_row_candidate_json(output, row);
     }
-    output.push_str("],\"fdmIndexEntries\":[");
+    output.push_str("],\"figureLink\":");
+    if let Some(link) = candidate.figure_link_candidate() {
+        push_object_figure_link_candidate_json(output, link);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"fdmIndexEntries\":[");
     for (index, entry) in candidate.fdm_index_entry_candidates().iter().enumerate() {
         if index > 0 {
             output.push(',');
         }
         push_object_fdm_index_entry_candidate_json(output, entry);
+    }
+    output.push_str("],\"fdmTextIndexEntries\":[");
+    for (index, entry) in candidate
+        .fdm_text_index_entry_candidates()
+        .iter()
+        .enumerate()
+    {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_fdm_text_index_entry_candidate_json(output, entry);
+    }
+    output.push_str("],\"fdmRawVectorSegmentCount\":");
+    output.push_str(&candidate.fdm_raw_vector_segments().len().to_string());
+    output.push_str(",\"fdmRawVectorSegments\":[");
+    for (index, segment) in candidate.fdm_raw_vector_segments().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_fdm_vector_segment_candidate_json(output, segment);
+    }
+    output.push_str("],\"fdmRawVectorCommandCount\":");
+    output.push_str(&candidate.fdm_raw_vector_commands().len().to_string());
+    output.push_str(",\"fdmRawVectorCommands\":[");
+    for (index, command) in candidate.fdm_raw_vector_commands().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_fdm_vector_command_candidate_json(output, command);
+    }
+    output.push_str("],\"fdmTextCount\":");
+    output.push_str(&candidate.fdm_text_candidates().len().to_string());
+    output.push_str(",\"fdmTextCandidates\":[");
+    for (index, text) in candidate.fdm_text_candidates().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_fdm_text_candidate_json(output, text);
     }
     output.push_str("],\"imageSignatures\":[");
     for (index, hit) in candidate.image_signature_hits().iter().enumerate() {
@@ -541,8 +757,133 @@ fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStre
     } else {
         output.push_str("null");
     }
+    output.push_str(",\"jsfartArt\":");
+    if let Some(art) = candidate.jsfart_art_candidate() {
+        push_object_jsfart_art_candidate_json(output, art);
+    } else {
+        output.push_str("null");
+    }
     output.push_str(",\"payloadPrefixHex\":");
     push_json_string(output, &hex(candidate.payload_prefix()));
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_figure_link_candidate_json(output: &mut String, link: &ObjectFigureLinkCandidate) {
+    output.push_str("{\"headerWordsBe\":");
+    push_u16_array_json(output, link.header_words_be());
+    output.push_str(",\"declaredRowCountCandidate\":");
+    push_option_u16_json(output, link.declared_row_count_candidate());
+    output.push_str(",\"rowStride\":");
+    output.push_str(&link.row_stride().to_string());
+    output.push_str(",\"rowCount\":");
+    output.push_str(&link.rows().len().to_string());
+    output.push_str(",\"rows\":[");
+    for (index, row) in link.rows().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_figure_link_row_candidate_json(output, row);
+    }
+    output.push_str("],\"geometryDecoded\":false,\"decoded\":false}");
+}
+
+fn push_object_figure_link_row_candidate_json(
+    output: &mut String,
+    row: &ObjectFigureLinkRowCandidate,
+) {
+    output.push_str("{\"rowIndex\":");
+    output.push_str(&row.row_index().to_string());
+    output.push_str(",\"rowStart\":");
+    output.push_str(&row.row_start().to_string());
+    output.push_str(",\"wordsBe\":");
+    push_u16_array_json(output, row.words_be());
+    output.push_str(",\"groupIndexCandidate\":");
+    push_option_u16_json(output, row.group_index_candidate());
+    output.push_str(",\"sourceIdCandidate\":");
+    push_option_u16_json(output, row.source_id_candidate());
+    output.push_str(",\"relationKindCandidate\":");
+    push_option_u16_json(output, row.relation_kind_candidate());
+    output.push_str(",\"relationKindCandidateHex\":");
+    push_option_u16_hex_json(output, row.relation_kind_candidate());
+    output.push_str(",\"targetRowIndexCandidate\":");
+    push_option_u16_json(output, row.target_row_index_candidate());
+    output.push_str(",\"rowHex\":");
+    push_json_string(output, &hex(row.row()));
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_jsfart_art_candidate_json(output: &mut String, art: &ObjectJsfartArtCandidate) {
+    output.push_str("{\"format\":\"JSFart2Contents\",\"magic\":");
+    push_json_string(output, art.magic());
+    output.push_str(",\"magicOffset\":");
+    output.push_str(&art.magic_offset().to_string());
+    output.push_str(",\"width\":");
+    output.push_str(&art.width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&art.height().to_string());
+    output.push_str(",\"frameCandidate\":");
+    if let Some(frame) = art.frame_candidate() {
+        output.push_str("{\"left\":");
+        output.push_str(&frame.left().to_string());
+        output.push_str(",\"top\":");
+        output.push_str(&frame.top().to_string());
+        output.push_str(",\"right\":");
+        output.push_str(&frame.right().to_string());
+        output.push_str(",\"bottom\":");
+        output.push_str(&frame.bottom().to_string());
+        output.push_str(",\"contentLeft\":");
+        output.push_str(&frame.content_left().to_string());
+        output.push_str(",\"contentTop\":");
+        output.push_str(&frame.content_top().to_string());
+        output.push_str(",\"contentRight\":");
+        output.push_str(&frame.content_right().to_string());
+        output.push_str(",\"contentBottom\":");
+        output.push_str(&frame.content_bottom().to_string());
+        output.push_str(",\"cornerRadiusX\":");
+        output.push_str(&frame.corner_radius_x().to_string());
+        output.push_str(",\"cornerRadiusY\":");
+        output.push_str(&frame.corner_radius_y().to_string());
+        output.push_str(",\"strokeWidthCandidate\":");
+        push_option_u32_json(output, frame.stroke_width_candidate());
+        output.push('}');
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"paintCandidate\":");
+    if let Some(paint) = art.paint_candidate() {
+        push_object_jsfart_art_paint_candidate_json(output, paint);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"headerPrefixHex\":");
+    push_json_string(output, &hex(art.header_prefix()));
+    output.push_str(",\"renderable\":false,\"decoded\":false}");
+}
+
+fn push_object_jsfart_art_paint_candidate_json(
+    output: &mut String,
+    paint: &ObjectJsfartArtPaintCandidate,
+) {
+    output.push_str("{\"styleWord1\":");
+    output.push_str(&paint.style_word_1().to_string());
+    output.push_str(",\"styleWord1Hex\":");
+    push_json_string(output, &format!("0x{:08x}", paint.style_word_1()));
+    output.push_str(",\"styleWord2\":");
+    output.push_str(&paint.style_word_2().to_string());
+    output.push_str(",\"styleWord2Hex\":");
+    push_json_string(output, &format!("0x{:08x}", paint.style_word_2()));
+    output.push_str(",\"paintColorCandidate\":");
+    output.push_str(&paint.paint_color_candidate().to_string());
+    output.push_str(",\"paintColorCandidateHex\":");
+    push_json_string(output, &format!("0x{:08x}", paint.paint_color_candidate()));
+    output.push_str(",\"paintFlagCandidate\":");
+    output.push_str(&paint.paint_flag_candidate().to_string());
+    output.push_str(",\"paintFlagCandidateHex\":");
+    push_json_string(output, &format!("0x{:08x}", paint.paint_flag_candidate()));
+    output.push_str(",\"effectWordCandidate\":");
+    output.push_str(&paint.effect_word_candidate().to_string());
+    output.push_str(",\"effectWordCandidateHex\":");
+    push_json_string(output, &format!("0x{:08x}", paint.effect_word_candidate()));
     output.push_str(",\"decoded\":false}");
 }
 
@@ -600,6 +941,14 @@ fn push_object_embedded_press_snapshot_candidate_json(
     output.push_str(&snapshot.height().to_string());
     output.push_str(",\"vectorSegmentCount\":");
     output.push_str(&snapshot.vector_segments().len().to_string());
+    output.push_str(",\"vectorPathCount\":");
+    output.push_str(&snapshot.vector_paths().len().to_string());
+    output.push_str(",\"textureBezierHeaderSummary\":");
+    push_embedded_press_texture_bezier_header_summary_json(output, snapshot);
+    output.push_str(",\"paintStateTransitions\":");
+    push_embedded_press_paint_state_transitions_json(output, snapshot);
+    output.push_str(",\"stateRecordSummary\":");
+    push_embedded_press_state_record_summary_json(output, snapshot);
     output.push_str(",\"vectorSegmentPreview\":");
     push_object_embedded_press_snapshot_vector_segment_preview_json(output, snapshot);
     output.push_str(",\"headerPrefixHex\":");
@@ -633,6 +982,251 @@ fn push_object_embedded_press_snapshot_vector_segment_preview_json(
         output.push_str(",\"decoded\":false}");
     }
     output.push(']');
+}
+
+fn push_embedded_press_texture_bezier_header_summary_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    let mut path_count = 0usize;
+    let mut first_header = None;
+    let mut homogeneous = true;
+    for path in snapshot.vector_paths() {
+        let Some(header) = path.texture_bezier_header() else {
+            continue;
+        };
+        path_count += 1;
+        match first_header {
+            Some(first) if first != header => homogeneous = false,
+            None => first_header = Some(header),
+            _ => {}
+        }
+    }
+
+    let Some(header) = first_header else {
+        output.push_str("null");
+        return;
+    };
+    output.push_str("{\"pathCount\":");
+    output.push_str(&path_count.to_string());
+    output.push_str(",\"pointCount\":");
+    output.push_str(&header.point_count().to_string());
+    output.push_str(",\"byteCount\":");
+    output.push_str(&header.byte_count().to_string());
+    output.push_str(",\"flags\":");
+    output.push_str(&header.flags().to_string());
+    output.push_str(",\"flagsHex\":");
+    push_json_string(output, &format!("0x{:08x}", header.flags()));
+    output.push_str(",\"homogeneous\":");
+    output.push_str(if homogeneous { "true" } else { "false" });
+    output.push('}');
+}
+
+fn push_embedded_press_paint_state_transitions_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    let mut ranges = Vec::new();
+    let mut current_48_word0 = None;
+    let mut current_70_word0 = None;
+    let mut current_70_word3 = None;
+    let mut current_82_word5 = None;
+
+    for (path_index, path) in snapshot.vector_paths().iter().enumerate() {
+        if let Some(value) = embedded_press_path_state_word(path, 0x48, 0) {
+            current_48_word0 = Some(value);
+        }
+        if let Some(value) = embedded_press_path_state_word(path, 0x70, 0) {
+            current_70_word0 = Some(value);
+        }
+        if let Some(value) = embedded_press_path_state_word(path, 0x70, 3) {
+            current_70_word3 = Some(value);
+        }
+        if let Some(value) =
+            embedded_press_path_state_word(path, EMBEDDED_PRESS_RECORD_PAINT_STATE_82, 5)
+        {
+            current_82_word5 = Some(value);
+        }
+
+        let key = (
+            path.kind(),
+            current_48_word0,
+            current_70_word0,
+            current_70_word3,
+            current_82_word5,
+        );
+        match ranges.last_mut() {
+            Some((_, end, known_key)) if *known_key == key => *end = path_index,
+            _ => ranges.push((path_index, path_index, key)),
+        }
+    }
+
+    output.push('[');
+    for (range_index, (start, end, key)) in ranges.iter().enumerate() {
+        if range_index > 0 {
+            output.push(',');
+        }
+        let paths = &snapshot.vector_paths()[*start..=*end];
+        let explicit_state_path_count = paths
+            .iter()
+            .filter(|path| !path.state_records().is_empty())
+            .count();
+        let texture_header_count = paths
+            .iter()
+            .filter(|path| path.texture_bezier_header().is_some())
+            .count();
+
+        output.push_str("{\"pathKind\":");
+        push_json_string(output, key.0.as_str());
+        output.push_str(",\"startPathIndex\":");
+        output.push_str(&start.to_string());
+        output.push_str(",\"endPathIndex\":");
+        output.push_str(&end.to_string());
+        output.push_str(",\"pathCount\":");
+        output.push_str(&(end - start + 1).to_string());
+        output.push_str(",\"explicitStatePathCount\":");
+        output.push_str(&explicit_state_path_count.to_string());
+        output.push_str(",\"inheritedStatePathCount\":");
+        output.push_str(&(end - start + 1 - explicit_state_path_count).to_string());
+        output.push_str(",\"textureBezierHeaderCount\":");
+        output.push_str(&texture_header_count.to_string());
+        output.push_str(",\"currentState\":{\"record48Word0\":");
+        push_option_u32_hex_json(output, key.1);
+        output.push_str(",\"record70Word0\":");
+        push_option_u32_hex_json(output, key.2);
+        output.push_str(",\"record70Word3\":");
+        push_option_u32_hex_json(output, key.3);
+        output.push_str(",\"record82Word5\":");
+        push_option_u32_hex_json(output, key.4);
+        output.push_str("},\"explicitStateValues\":{\"record48Word0\":");
+        push_u32_hex_array_json(
+            output,
+            &embedded_press_path_state_word_values(paths, 0x48, 0),
+        );
+        output.push_str(",\"record70Word0\":");
+        push_u32_hex_array_json(
+            output,
+            &embedded_press_path_state_word_values(paths, 0x70, 0),
+        );
+        output.push_str(",\"record70Word3\":");
+        push_u32_hex_array_json(
+            output,
+            &embedded_press_path_state_word_values(paths, 0x70, 3),
+        );
+        output.push_str(",\"record82Word5\":");
+        push_u32_hex_array_json(
+            output,
+            &embedded_press_path_state_word_values(paths, EMBEDDED_PRESS_RECORD_PAINT_STATE_82, 5),
+        );
+        output.push_str("},\"decoded\":false}");
+    }
+    output.push(']');
+}
+
+fn embedded_press_path_state_word(
+    path: &ObjectEmbeddedPressVectorPathCandidate,
+    record_type: u32,
+    word_index: usize,
+) -> Option<u32> {
+    path.state_records()
+        .iter()
+        .rev()
+        .find(|record| record.record_type() == record_type)
+        .and_then(|record| record.payload_le32_words().get(word_index).copied())
+}
+
+fn embedded_press_path_state_word_values(
+    paths: &[ObjectEmbeddedPressVectorPathCandidate],
+    record_type: u32,
+    word_index: usize,
+) -> Vec<u32> {
+    paths
+        .iter()
+        .filter_map(|path| embedded_press_path_state_word(path, record_type, word_index))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn push_u32_hex_array_json(output: &mut String, values: &[u32]) {
+    output.push('[');
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_json_string(output, &format!("0x{value:08x}"));
+    }
+    output.push(']');
+}
+
+fn push_embedded_press_state_record_summary_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    let mut type_counts = std::collections::BTreeMap::<u32, usize>::new();
+    let mut state_record_count = 0usize;
+    for path in snapshot.vector_paths() {
+        for record in path.state_records() {
+            state_record_count += 1;
+            *type_counts.entry(record.record_type()).or_default() += 1;
+        }
+    }
+
+    output.push_str("{\"pathCount\":");
+    output.push_str(&snapshot.vector_paths().len().to_string());
+    output.push_str(",\"stateRecordCount\":");
+    output.push_str(&state_record_count.to_string());
+    output.push_str(",\"recordTypes\":[");
+    for (index, (record_type, count)) in type_counts.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"recordType\":");
+        output.push_str(&record_type.to_string());
+        output.push_str(",\"recordTypeHex\":");
+        push_json_string(output, &format!("0x{record_type:08x}"));
+        output.push_str(",\"count\":");
+        output.push_str(&count.to_string());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push_str("],\"paintState82Preview\":[");
+
+    let mut preview_count = 0usize;
+    for (path_index, path) in snapshot.vector_paths().iter().enumerate() {
+        for (record_index, record) in path.state_records().iter().enumerate() {
+            if record.record_type() != 0x82 || preview_count >= 8 {
+                continue;
+            }
+            let words = record.payload_le32_words();
+            if preview_count > 0 {
+                output.push(',');
+            }
+            output.push_str("{\"pathIndex\":");
+            output.push_str(&path_index.to_string());
+            output.push_str(",\"pathKind\":");
+            push_json_string(output, path.kind().as_str());
+            output.push_str(",\"recordIndex\":");
+            output.push_str(&record_index.to_string());
+            output.push_str(",\"offset\":");
+            output.push_str(&record.offset().to_string());
+            output.push_str(",\"payloadWordCount\":");
+            output.push_str(&words.len().to_string());
+            output.push_str(",\"payloadLe32WordsPreview\":");
+            let preview_len = words.len().min(8);
+            push_u32_array_json(output, &words[..preview_len]);
+            output.push_str(",\"word3Candidate\":");
+            push_option_u32_json(output, words.get(3).copied());
+            output.push_str(",\"word3CandidateHex\":");
+            push_option_u32_hex_json(output, words.get(3).copied());
+            output.push_str(",\"word5Candidate\":");
+            push_option_u32_json(output, words.get(5).copied());
+            output.push_str(",\"word5CandidateHex\":");
+            push_option_u32_hex_json(output, words.get(5).copied());
+            output.push_str(",\"decoded\":false}");
+            preview_count += 1;
+        }
+    }
+    output.push_str("],\"decoded\":false}");
 }
 
 fn push_object_visual_list_candidate_json(
@@ -781,7 +1375,34 @@ fn push_object_fdm_index_entry_candidate_json(
     });
     output.push_str(",\"vectorPrefixHex\":");
     push_json_string(output, &hex(entry.vector_prefix()));
-    output.push_str(",\"imageSignatures\":[");
+    output.push_str(",\"vectorCommandCount\":");
+    output.push_str(&entry.vector_commands().len().to_string());
+    output.push_str(",\"vectorCommandBboxCount\":");
+    output.push_str(
+        &entry
+            .vector_commands()
+            .iter()
+            .filter(|command| command.bbox().is_some())
+            .count()
+            .to_string(),
+    );
+    output.push_str(",\"vectorCommands\":[");
+    for (index, command) in entry.vector_commands().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_fdm_vector_command_candidate_json(output, command);
+    }
+    output.push_str("],\"connectorCandidateCount\":");
+    output.push_str(&entry.connector_candidates().len().to_string());
+    output.push_str(",\"connectorCandidates\":[");
+    for (index, candidate) in entry.connector_candidates().iter().copied().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_object_fdm_connector_candidate_json(output, candidate);
+    }
+    output.push_str("],\"imageSignatures\":[");
     for (index, hit) in entry.image_signature_hits().iter().enumerate() {
         if index > 0 {
             output.push(',');
@@ -804,6 +1425,346 @@ fn push_object_fdm_index_entry_candidate_json(
         output.push('}');
     }
     output.push_str("],\"decoded\":false}");
+}
+
+fn push_object_fdm_connector_candidate_json(
+    output: &mut String,
+    candidate: ObjectFdmConnectorCandidate,
+) {
+    output.push_str("{\"commandIndex\":");
+    output.push_str(&candidate.command_index().to_string());
+    output.push_str(",\"relativeOffset\":");
+    output.push_str(&candidate.relative_offset().to_string());
+    output.push_str(",\"markerHex\":");
+    push_json_string(output, &hex(&candidate.marker()));
+    output.push_str(",\"primitiveKind\":");
+    push_json_string(output, candidate.primitive_kind());
+    output.push_str(",\"styleWord\":");
+    output.push_str(&candidate.style_word().to_string());
+    output.push_str(",\"styleWordHex\":");
+    push_json_string(output, &format!("0x{:04x}", candidate.style_word()));
+    output.push_str(",\"fillColor\":");
+    push_fdm_vector_optional_color_json(output, candidate.fill_color());
+    output.push_str(",\"strokeColor\":");
+    push_fdm_vector_optional_color_json(output, candidate.stroke_color());
+    output.push_str(",\"candidateBasis\":");
+    push_json_string(output, candidate.basis());
+    output.push_str(",\"sourceEndpoints\":");
+    push_fdm_connector_candidate_source_endpoints_json(output, candidate);
+    output.push_str(",\"sourceBbox\":");
+    push_object_fdm_index_bbox_json(output, candidate.source_bbox());
+    output.push_str(",\"sourceSpan\":");
+    output.push_str(&candidate.source_span().to_string());
+    output.push_str(",\"endpointDelta\":{\"x\":");
+    output.push_str(&candidate.endpoint_dx().to_string());
+    output.push_str(",\"y\":");
+    output.push_str(&candidate.endpoint_dy().to_string());
+    output.push_str("}");
+    output.push_str(",\"endpointDistanceSquared\":");
+    output.push_str(&candidate.endpoint_distance_squared().to_string());
+    output.push_str(",\"pathPointCount\":");
+    output.push_str(&candidate.path_point_count().to_string());
+    output.push_str(",\"pathSegmentCount\":");
+    output.push_str(&candidate.path_segment_count().to_string());
+    output.push_str(",\"orthogonalSegmentCount\":");
+    output.push_str(&candidate.orthogonal_segment_count().to_string());
+    output.push_str(",\"diagonalSegmentCount\":");
+    output.push_str(&candidate.diagonal_segment_count().to_string());
+    output.push_str(",\"curveSegmentCount\":");
+    output.push_str(&candidate.curve_segment_count().to_string());
+    output.push_str(",\"compoundChildOffsetCount\":");
+    output.push_str(&candidate.compound_child_offset_count().to_string());
+    output.push_str(",\"axisAligned\":");
+    output.push_str(if candidate.axis_aligned() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"orientation\":");
+    push_json_string(output, candidate.orientation());
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_fdm_connector_candidate_source_endpoints_json(
+    output: &mut String,
+    candidate: ObjectFdmConnectorCandidate,
+) {
+    output.push_str("{\"start\":");
+    push_fdm_vector_point_json(output, candidate.source_start());
+    output.push_str(",\"end\":");
+    push_fdm_vector_point_json(output, candidate.source_end());
+    output.push('}');
+}
+
+fn push_object_fdm_vector_command_candidate_json(
+    output: &mut String,
+    command: &ObjectFdmVectorCommandCandidate,
+) {
+    output.push_str("{\"commandIndex\":");
+    output.push_str(&command.command_index().to_string());
+    output.push_str(",\"relativeOffset\":");
+    output.push_str(&command.relative_offset().to_string());
+    output.push_str(",\"sourceVectorRelativeOffset\":");
+    push_option_usize_json(output, command.source_vector_relative_offset());
+    output.push_str(",\"sourceSegment\":");
+    if let Some(source_segment) = command.source_segment() {
+        push_object_fdm_vector_command_source_segment_json(output, source_segment);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"recordLength\":");
+    output.push_str(&command.record_len().to_string());
+    output.push_str(",\"declaredRecordLength\":");
+    output.push_str(&command.declared_record_len().to_string());
+    output.push_str(",\"styleWord\":");
+    output.push_str(&command.style_word().to_string());
+    output.push_str(",\"styleWordHex\":");
+    push_json_string(output, &format!("0x{:04x}", command.style_word()));
+    output.push_str(",\"markerHex\":");
+    push_json_string(output, &hex(command.marker()));
+    output.push_str(",\"primitiveKind\":");
+    push_json_string(output, fdm_vector_primitive_kind(command));
+    output.push_str(",\"fillColor\":");
+    push_fdm_vector_optional_color_json(output, command.fill_color());
+    output.push_str(",\"strokeColor\":");
+    push_fdm_vector_optional_color_json(output, command.stroke_color());
+    output.push_str(",\"bbox\":");
+    if let Some(bbox) = command.bbox() {
+        push_object_fdm_index_bbox_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"pathPointCount\":");
+    output.push_str(&command.path_points().len().to_string());
+    output.push_str(",\"pathClosed\":");
+    output.push_str(if fdm_vector_path_is_closed(command.path_points()) {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"pathPoints\":");
+    push_fdm_vector_points_json(output, command.path_points());
+    output.push_str(",\"pathBbox\":");
+    if let Some(bbox) = fdm_vector_path_points_bbox(command.path_points()) {
+        push_object_fdm_index_bbox_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"curveSegmentCount\":");
+    output.push_str(&command.curve_segments().len().to_string());
+    output.push_str(",\"curveSegments\":");
+    push_fdm_vector_curve_segments_json(output, command.curve_segments());
+    output.push_str(",\"ellipse\":");
+    if let Some(ellipse) = command.ellipse() {
+        push_fdm_vector_ellipse_json(output, ellipse);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"compoundChildOffsets\":");
+    push_u16_array_json(output, command.compound_child_offsets());
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_fdm_vector_command_source_segment_json(
+    output: &mut String,
+    source_segment: ObjectFdmVectorCommandSourceSegment,
+) {
+    output.push_str("{\"relativeOffset\":");
+    output.push_str(&source_segment.relative_offset().to_string());
+    output.push_str(",\"localOffset\":");
+    output.push_str(&source_segment.local_offset().to_string());
+    output.push_str(",\"declaredLength\":");
+    output.push_str(&source_segment.declared_len().to_string());
+    output.push_str(",\"commandCount\":");
+    output.push_str(&source_segment.command_count().to_string());
+    output.push_str(",\"commandIndex\":");
+    output.push_str(&source_segment.command_index().to_string());
+    output.push_str(",\"commandOffset\":");
+    output.push_str(&source_segment.command_offset().to_string());
+    output.push('}');
+}
+
+fn push_fdm_vector_points_json(output: &mut String, points: &[ObjectFdmVectorPoint]) {
+    output.push('[');
+    for (index, point) in points.iter().copied().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_fdm_vector_point_json(output, point);
+    }
+    output.push(']');
+}
+
+fn push_fdm_vector_point_json(output: &mut String, point: ObjectFdmVectorPoint) {
+    output.push_str("{\"x\":");
+    output.push_str(&point.x().to_string());
+    output.push_str(",\"y\":");
+    output.push_str(&point.y().to_string());
+    output.push('}');
+}
+
+fn push_fdm_vector_curve_segments_json(
+    output: &mut String,
+    segments: &[ObjectFdmVectorCurveSegment],
+) {
+    output.push('[');
+    for (index, segment) in segments.iter().copied().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"control1\":");
+        push_fdm_vector_point_json(output, segment.control_1());
+        output.push_str(",\"control2\":");
+        push_fdm_vector_point_json(output, segment.control_2());
+        output.push('}');
+    }
+    output.push(']');
+}
+
+fn push_fdm_vector_ellipse_json(output: &mut String, ellipse: ObjectFdmVectorEllipse) {
+    output.push_str("{\"center\":");
+    push_fdm_vector_point_json(output, ellipse.center());
+    output.push_str(",\"radiusX\":");
+    output.push_str(&ellipse.radius_x().to_string());
+    output.push_str(",\"radiusY\":");
+    output.push_str(&ellipse.radius_y().to_string());
+    output.push_str(",\"color\":");
+    push_fdm_vector_optional_color_json(output, ellipse.color());
+    output.push('}');
+}
+
+fn push_fdm_vector_optional_color_json(output: &mut String, color: Option<u32>) {
+    match color.and_then(fdm_vector_css_color) {
+        Some(color) => push_json_string(output, &color),
+        None => output.push_str("null"),
+    }
+}
+
+fn push_object_fdm_vector_segment_candidate_json(
+    output: &mut String,
+    segment: &ObjectFdmVectorSegmentCandidate,
+) {
+    output.push_str("{\"relativeOffset\":");
+    output.push_str(&segment.relative_offset().to_string());
+    output.push_str(",\"declaredLength\":");
+    output.push_str(&segment.declared_len().to_string());
+    output.push_str(",\"commandCount\":");
+    output.push_str(&segment.command_count().to_string());
+    output.push_str(",\"commandOffsets\":");
+    push_u16_array_json(output, segment.command_offsets());
+    output.push_str(",\"bbox\":");
+    if let Some(bbox) = segment.bbox() {
+        push_object_fdm_index_bbox_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"sourceSpanCandidate\":{\"width\":");
+    output.push_str(&segment.source_width().to_string());
+    output.push_str(",\"height\":");
+    output.push_str(&segment.source_height().to_string());
+    output.push_str("},\"decoded\":false}");
+}
+
+fn push_object_fdm_text_candidate_json(output: &mut String, candidate: &ObjectFdmTextCandidate) {
+    output.push_str("{\"text\":");
+    push_json_string(output, candidate.text());
+    output.push_str(",\"textOffset\":");
+    output.push_str(&candidate.text_offset().to_string());
+    output.push_str(",\"markerOffset\":");
+    output.push_str(&candidate.marker_offset().to_string());
+    output.push_str(",\"rawTextHex\":");
+    push_json_string(output, &hex(candidate.raw_text()));
+    output.push_str(",\"bbox\":");
+    if let Some(bbox) = candidate.bbox() {
+        push_object_fdm_index_bbox_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_fdm_text_index_entry_candidate_json(
+    output: &mut String,
+    candidate: &ObjectFdmTextIndexEntryCandidate,
+) {
+    output.push_str("{\"indexPath\":");
+    push_json_string(output, candidate.index_path());
+    output.push_str(",\"textPath\":");
+    push_json_string(output, candidate.text_path());
+    output.push_str(",\"rowIndex\":");
+    output.push_str(&candidate.row_index().to_string());
+    output.push_str(",\"indexOffset\":");
+    output.push_str(&candidate.index_offset().to_string());
+    output.push_str(",\"textRecordOffset\":");
+    output.push_str(&candidate.text_record_offset().to_string());
+    output.push_str(",\"kind\":");
+    output.push_str(&candidate.kind().to_string());
+    output.push_str(",\"kindHex\":");
+    push_json_string(output, &format!("0x{:04x}", candidate.kind()));
+    output.push_str(",\"validTextRecordOffset\":");
+    output.push_str(if candidate.valid_text_record_offset() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"bbox\":");
+    push_object_fdm_index_bbox_json(output, candidate.bbox());
+    output.push_str(",\"textRecordBbox\":");
+    if let Some(bbox) = candidate.text_record_bbox() {
+        push_object_fdm_index_bbox_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"textRecordPrefixHex\":");
+    push_json_string(output, &hex(candidate.text_record_prefix()));
+    output.push_str(",\"decoded\":false}");
+}
+
+fn fdm_vector_path_points_bbox(points: &[ObjectFdmVectorPoint]) -> Option<ObjectFdmIndexBbox> {
+    let first = *points.first()?;
+    let mut left = first.x();
+    let mut top = first.y();
+    let mut right = first.x();
+    let mut bottom = first.y();
+
+    for point in points.iter().copied().skip(1) {
+        left = left.min(point.x());
+        top = top.min(point.y());
+        right = right.max(point.x());
+        bottom = bottom.max(point.y());
+    }
+
+    Some(ObjectFdmIndexBbox::new(left, top, right, bottom))
+}
+
+fn fdm_vector_path_is_closed(points: &[ObjectFdmVectorPoint]) -> bool {
+    points.len() >= 2 && points.first() == points.last()
+}
+
+fn fdm_vector_primitive_kind(command: &ObjectFdmVectorCommandCandidate) -> &'static str {
+    if command.ellipse().is_some() {
+        "ellipse"
+    } else if !command.curve_segments().is_empty() {
+        "cubicBezier"
+    } else if fdm_vector_marker_is_bezier_curve(command.marker()) {
+        "quadraticBezier"
+    } else {
+        "polyline"
+    }
+}
+
+fn fdm_vector_marker_is_bezier_curve(marker: &[u8; 4]) -> bool {
+    marker == b"\xff\x00\x09\x60" || marker == b"\x00\x00\x09\x60" || marker == b"\x01\x00\x09\x60"
+}
+
+fn fdm_vector_css_color(color: u32) -> Option<String> {
+    if color > 0x00ff_ffff {
+        return None;
+    }
+    let blue = (color >> 16) & 0xff;
+    let green = (color >> 8) & 0xff;
+    let red = color & 0xff;
+    Some(format!("#{red:02x}{green:02x}{blue:02x}"))
 }
 
 fn push_object_fdm_index_bbox_json(output: &mut String, bbox: ObjectFdmIndexBbox) {
@@ -1103,7 +2064,11 @@ fn push_table_candidate_json(output: &mut String, candidate: &TableCandidate) {
     output.push_str(",\"sourceEnd\":");
     output.push_str(&candidate.source_end().to_string());
     output.push_str(",\"intervals\":");
-    push_table_candidate_intervals_json(output, candidate.intervals(), candidate.is_row_like());
+    push_table_candidate_intervals_json(
+        output,
+        candidate.intervals(),
+        candidate.is_row_like() || candidate.is_sparse_document_text_control_run_candidate(),
+    );
     output.push_str(",\"cellLike\":");
     output.push_str(if candidate.is_cell_like() {
         "true"
@@ -1122,9 +2087,177 @@ fn push_table_candidate_json(output: &mut String, candidate: &TableCandidate) {
     } else {
         output.push_str("null");
     }
+    output.push_str(",\"sparse\":");
+    output.push_str(
+        if candidate.is_sparse_document_text_control_run_candidate() {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"cellCountCandidate\":");
+    output.push_str(&candidate.cell_count_candidate().to_string());
+    output.push_str(",\"emptyCellCountCandidate\":");
+    output.push_str(&candidate.empty_cell_count_candidate().to_string());
+    output.push_str(",\"nonEmptyCellCountCandidate\":");
+    output.push_str(&candidate.non_empty_cell_count_candidate().to_string());
+    output.push_str(",\"sparseObservedTable\":");
+    if candidate.is_sparse_document_text_control_run_candidate() {
+        push_sparse_observed_table_json(output, candidate);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"sparseTopologyCandidate\":");
+    if let Some(topology) = candidate.sparse_topology_candidate() {
+        push_sparse_topology_candidate_json(output, candidate, &topology);
+    } else {
+        output.push_str("null");
+    }
     output.push_str(",\"rule\":");
     push_json_string(output, candidate.rule());
     output.push_str(",\"decoded\":false}");
+}
+
+fn push_sparse_observed_table_json(output: &mut String, candidate: &TableCandidate) {
+    output.push_str("{\"source\":\"sparseDocumentTextControlRows\",\"tableCandidateIndex\":");
+    output.push_str(&candidate.index().to_string());
+    output.push_str(",\"rowCount\":");
+    output.push_str(&candidate.intervals().len().to_string());
+    output.push_str(",\"maxColumnCountCandidate\":");
+    output.push_str(&candidate.max_column_segment_count().to_string());
+    output.push_str(",\"cellCountCandidate\":");
+    output.push_str(&candidate.cell_count_candidate().to_string());
+    output.push_str(",\"emptyCellCountCandidate\":");
+    output.push_str(&candidate.empty_cell_count_candidate().to_string());
+    output.push_str(",\"nonEmptyCellCountCandidate\":");
+    output.push_str(&candidate.non_empty_cell_count_candidate().to_string());
+    output.push_str(",\"rows\":");
+    push_sparse_table_rows_json(output, candidate.intervals());
+    output.push_str(",\"topologyCandidate\":");
+    if let Some(topology) = candidate.sparse_topology_candidate() {
+        push_sparse_topology_candidate_json(output, candidate, &topology);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"geometryDecoded\":false,\"decoded\":false}");
+}
+
+fn push_sparse_topology_candidate_json(
+    output: &mut String,
+    candidate: &TableCandidate,
+    topology: &rjtd_model::TableCandidateSparseTopologyCandidate,
+) {
+    output.push_str("{\"source\":\"sparseDocumentTextControlRows\",\"tableCandidateIndex\":");
+    output.push_str(&candidate.index().to_string());
+    output.push_str(",\"rowCount\":");
+    output.push_str(&topology.row_count().to_string());
+    output.push_str(",\"maxColumnCountCandidate\":");
+    output.push_str(&topology.max_column_count().to_string());
+    output.push_str(",\"cellCountCandidate\":");
+    output.push_str(&topology.cell_count().to_string());
+    output.push_str(",\"emptyCellCountCandidate\":");
+    output.push_str(&topology.empty_cell_count().to_string());
+    output.push_str(",\"nonEmptyCellCountCandidate\":");
+    output.push_str(&topology.non_empty_cell_count().to_string());
+    output.push_str(",\"rows\":[");
+    for (index, row) in topology.rows().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"index\":");
+        output.push_str(&row.index().to_string());
+        output.push_str(",\"sourceIntervalIndex\":");
+        output.push_str(&row.source_interval_index().to_string());
+        output.push_str(",\"sourceStart\":");
+        output.push_str(&row.source_start().to_string());
+        output.push_str(",\"sourceEnd\":");
+        output.push_str(&row.source_end().to_string());
+        output.push_str(",\"cellCount\":");
+        output.push_str(&row.cell_count().to_string());
+        output.push_str(",\"emptyCellCount\":");
+        output.push_str(&row.empty_cell_count().to_string());
+        output.push_str(",\"nonEmptyCellCount\":");
+        output.push_str(&row.non_empty_cell_count().to_string());
+        output.push_str(",\"firstNonEmptyColumnIndex\":");
+        push_option_usize_json(output, row.first_non_empty_column_index());
+        output.push_str(",\"lastNonEmptyColumnIndex\":");
+        push_option_usize_json(output, row.last_non_empty_column_index());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push_str("],\"columns\":[");
+    for (index, column) in topology.columns().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"index\":");
+        output.push_str(&column.index().to_string());
+        output.push_str(",\"observedCellCount\":");
+        output.push_str(&column.observed_cell_count().to_string());
+        output.push_str(",\"emptyCellCount\":");
+        output.push_str(&column.empty_cell_count().to_string());
+        output.push_str(",\"nonEmptyCellCount\":");
+        output.push_str(&column.non_empty_cell_count().to_string());
+        output.push_str(",\"firstNonEmptyRowIndex\":");
+        push_option_usize_json(output, column.first_non_empty_row_index());
+        output.push_str(",\"lastNonEmptyRowIndex\":");
+        push_option_usize_json(output, column.last_non_empty_row_index());
+        output.push_str(",\"sourceStart\":");
+        push_option_usize_json(output, column.source_start());
+        output.push_str(",\"sourceEnd\":");
+        push_option_usize_json(output, column.source_end());
+        output.push_str(",\"decoded\":false}");
+    }
+    output.push_str("],\"geometryDecoded\":false,\"decoded\":false}");
+}
+
+fn push_sparse_table_rows_json(output: &mut String, rows: &[TableCandidateInterval]) {
+    output.push('[');
+    for (row_array_index, row) in rows.iter().enumerate() {
+        if row_array_index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"index\":");
+        output.push_str(&row.index().to_string());
+        output.push_str(",\"sourceIntervalIndex\":");
+        output.push_str(&row.source_interval_index().to_string());
+        output.push_str(",\"sourceStart\":");
+        output.push_str(&row.source_start().to_string());
+        output.push_str(",\"sourceEnd\":");
+        output.push_str(&row.source_end().to_string());
+        output.push_str(",\"textPreview\":");
+        push_json_string(output, row.text_preview());
+        output.push_str(",\"cellCount\":");
+        output.push_str(&row.column_segments().len().to_string());
+        output.push_str(",\"cells\":[");
+        for (cell_array_index, cell) in row.column_segments().iter().enumerate() {
+            if cell_array_index > 0 {
+                output.push(',');
+            }
+            output.push_str("{\"index\":");
+            output.push_str(&cell.index().to_string());
+            output.push_str(",\"kind\":");
+            push_json_string(output, cell.kind().as_str());
+            output.push_str(",\"charStart\":");
+            output.push_str(&cell.char_start().to_string());
+            output.push_str(",\"charEnd\":");
+            output.push_str(&cell.char_end().to_string());
+            output.push_str(",\"sourceStart\":");
+            push_option_usize_json(output, cell.source_start());
+            output.push_str(",\"sourceEnd\":");
+            push_option_usize_json(output, cell.source_end());
+            output.push_str(",\"text\":");
+            push_json_string(output, cell.text());
+            output.push_str(",\"empty\":");
+            output.push_str(if cell.text().is_empty() {
+                "true"
+            } else {
+                "false"
+            });
+            output.push_str(",\"decoded\":false}");
+        }
+        output.push_str("],\"decoded\":false}");
+    }
+    output.push(']');
 }
 
 fn push_observed_table_json(output: &mut String, candidate: &TableCandidate) {
@@ -1244,6 +2377,10 @@ fn push_table_candidate_column_segments_json(
         output.push_str(&segment.char_start().to_string());
         output.push_str(",\"charEnd\":");
         output.push_str(&segment.char_end().to_string());
+        output.push_str(",\"sourceStart\":");
+        push_option_usize_json(output, segment.source_start());
+        output.push_str(",\"sourceEnd\":");
+        push_option_usize_json(output, segment.source_end());
         output.push_str(",\"text\":");
         push_json_string(output, segment.text());
         output.push_str(",\"charCount\":");
@@ -1355,9 +2492,30 @@ fn push_option_usize_json(output: &mut String, value: Option<usize>) {
     }
 }
 
+fn push_option_u16_json(output: &mut String, value: Option<u16>) {
+    match value {
+        Some(value) => output.push_str(&value.to_string()),
+        None => output.push_str("null"),
+    }
+}
+
+fn push_option_u16_hex_json(output: &mut String, value: Option<u16>) {
+    match value {
+        Some(value) => push_json_string(output, &format!("0x{value:04x}")),
+        None => output.push_str("null"),
+    }
+}
+
 fn push_option_u32_json(output: &mut String, value: Option<u32>) {
     match value {
         Some(value) => output.push_str(&value.to_string()),
+        None => output.push_str("null"),
+    }
+}
+
+fn push_option_u32_hex_json(output: &mut String, value: Option<u32>) {
+    match value {
+        Some(value) => push_json_string(output, &format!("0x{value:08x}")),
         None => output.push_str("null"),
     }
 }
@@ -1418,6 +2576,17 @@ fn push_u16_array_json(output: &mut String, values: &[u16]) {
             output.push(',');
         }
         output.push_str(&value.to_string());
+    }
+    output.push(']');
+}
+
+fn push_u16_hex_array_json(output: &mut String, values: &[u16]) {
+    output.push('[');
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_json_string(output, &format!("0x{value:04x}"));
     }
     output.push(']');
 }
@@ -1533,13 +2702,13 @@ fn svgs_to_pdf(svg_pages: &[String]) -> Result<Vec<u8>, String> {
         return Err("no pages to export".to_string());
     }
 
-    use pdf_writer::{Finish, Pdf, Ref};
-    use std::collections::HashMap;
-
     let options = usvg::Options {
         fontdb: std::sync::Arc::new(create_fontdb()),
         ..Default::default()
     };
+
+    use pdf_writer::{Finish, Pdf, Ref};
+    use std::collections::HashMap;
 
     let mut alloc = Ref::new(1);
     let catalog_ref = alloc.bump();
@@ -1589,6 +2758,7 @@ fn svgs_to_pdf(svg_pages: &[String]) -> Result<Vec<u8>, String> {
     }
 
     let mut pdf = Pdf::new();
+    pdf.set_version(1, 4);
     pdf.catalog(catalog_ref).pages(page_tree_ref);
     pdf.pages(page_tree_ref)
         .count(page_refs.len() as i32)
@@ -1611,13 +2781,21 @@ fn svgs_to_pdf(svg_pages: &[String]) -> Result<Vec<u8>, String> {
         page.contents(content_ref);
 
         let mut resources = page.resources();
+        resources.proc_sets_all();
         resources.x_objects().pair(svg_name, svg_ref);
         resources.finish();
         page.finish();
 
         let mut content = pdf_writer::Content::new();
+        content.save_state();
+        content.set_fill_rgb(1.0, 1.0, 1.0);
+        content.rect(0.0, 0.0, page_data.width, page_data.height);
+        content.fill_nonzero();
+        content.restore_state();
+        content.save_state();
         content.transform([page_data.width, 0.0, 0.0, page_data.height, 0.0, 0.0]);
         content.x_object(svg_name);
+        content.restore_state();
         pdf.stream(content_ref, &content.finish());
     }
 
@@ -1643,7 +2821,7 @@ mod tests {
         ObjectStreamCandidateReason, Paragraph, RawStream, RubyAnnotation, StyleRef,
         TextControlBoundary, TextRun, UnknownBlock, UnknownObject, UnknownStyle, parse_document,
     };
-    use std::{fs, path::PathBuf};
+    use std::{fs, path::PathBuf, process::Command};
 
     #[test]
     fn exports_markdown_from_document_model() {
@@ -1661,9 +2839,16 @@ mod tests {
     fn exports_pdf_from_document_model() {
         let document = Document::from_plain_text("銀河鉄道\n午后の授業");
         let pdf = to_pdf(&document).unwrap();
+        let pdf_text = String::from_utf8_lossy(&pdf);
 
-        assert!(pdf.starts_with(b"%PDF-"));
+        assert!(pdf.starts_with(b"%PDF-1.4"));
         assert!(pdf.windows(5).any(|window| window == b"/Page"));
+        assert!(pdf_text.contains("/MediaBox [0 0 "));
+        assert!(pdf_text.contains("1 1 1 rg\n0 0 "));
+        assert!(pdf_text.contains(" re\nf\nQ\nq\n"));
+        assert!(pdf_text.contains("/S1 Do"));
+        assert!(pdf_text.contains("/Subtype /Form"));
+        assert!(pdf_text.contains("/Producer (rjtd)"));
         assert!(pdf.ends_with(b"%%EOF"));
     }
 
@@ -1674,11 +2859,264 @@ mod tests {
         let pdf = to_pdf_with_file_name(&document, "a5.jtd").unwrap();
         let pdf_text = String::from_utf8_lossy(&pdf);
 
-        assert!(pdf.starts_with(b"%PDF-"));
+        assert!(pdf.starts_with(b"%PDF-1.4"));
         assert!(pdf_text.contains("/MediaBox [0 0 419."));
         assert!(pdf_text.contains(" 595."));
+        assert!(pdf_text.contains("1 1 1 rg\n0 0 419."));
+        assert!(pdf_text.contains(" re\nf\nQ\nq\n"));
+        assert!(pdf_text.contains("q\n419."));
+        assert!(pdf_text.contains("/S1 Do\nQ"));
+        assert!(!pdf_text.contains("/Group <<"));
+        assert!(!pdf_text.contains("/S /Transparency"));
         assert!(pdf.ends_with(b"%%EOF"));
     }
+
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
+    #[test]
+    fn local_complex_pdfs_rasterize_with_macos_sips_when_available() {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        if !sample_dir.exists() {
+            return;
+        }
+
+        let samples = [
+            "ichitaro-20030228030923-success-002-success_data-test",
+            "ichitaro-20030315134715-success-001-success_data-shanai_lan",
+        ];
+        let mut failures = Vec::new();
+        let mut rendered_count = 0usize;
+
+        for sample in samples {
+            let sample_path = sample_dir.join(format!("{sample}.jtd"));
+            if !sample_path.exists() || !sample_path.with_extension("pdf").exists() {
+                continue;
+            }
+
+            let result = fs::read(&sample_path)
+                .map_err(|error| error.to_string())
+                .and_then(|bytes| parse_document(&bytes).map_err(|error| error.to_string()))
+                .and_then(|document| {
+                    to_pdf_with_file_name(&document, &sample_path.to_string_lossy())
+                });
+            let pdf = match result {
+                Ok(pdf) => pdf,
+                Err(error) => {
+                    failures.push(format!("{}: {error}", sample_path.display()));
+                    continue;
+                }
+            };
+
+            let temp_dir = std::env::temp_dir()
+                .join(format!("rjtd-sips-smoke-{}-{sample}", std::process::id()));
+            if let Err(error) = fs::create_dir_all(&temp_dir) {
+                failures.push(format!("{}: create temp dir failed: {error}", sample));
+                continue;
+            }
+            let pdf_path = temp_dir.join("sample.pdf");
+            let png_path = temp_dir.join("sample.png");
+            if let Err(error) = fs::write(&pdf_path, &pdf) {
+                failures.push(format!("{}: write temp pdf failed: {error}", sample));
+                let _ = fs::remove_dir_all(&temp_dir);
+                continue;
+            }
+
+            let output = match Command::new("sips")
+                .arg("-s")
+                .arg("format")
+                .arg("png")
+                .arg(&pdf_path)
+                .arg("--out")
+                .arg(&png_path)
+                .output()
+            {
+                Ok(output) => output,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+                Err(error) => {
+                    failures.push(format!("{}: run sips failed: {error}", sample));
+                    let _ = fs::remove_dir_all(&temp_dir);
+                    continue;
+                }
+            };
+
+            if !output.status.success() {
+                failures.push(format!(
+                    "{}: sips failed with status {:?}: {}",
+                    sample,
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stderr)
+                ));
+            } else if fs::metadata(&png_path)
+                .map(|metadata| metadata.len() == 0)
+                .unwrap_or(true)
+            {
+                failures.push(format!("{}: sips did not create a non-empty PNG", sample));
+            } else {
+                rendered_count += 1;
+            }
+
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+
+        assert_eq!(failures, Vec::<String>::new());
+        assert!(rendered_count >= 1);
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
+    #[test]
+    fn local_complex_pdfs_render_visible_content_with_macos_pdfkit_when_available() {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        if !sample_dir.exists() {
+            return;
+        }
+
+        let samples = [
+            "ichitaro-20030228030923-success-002-success_data-test",
+            "ichitaro-20030315134715-success-001-success_data-shanai_lan",
+        ];
+        let mut failures = Vec::new();
+        let mut rendered_count = 0usize;
+
+        for sample in samples {
+            let sample_path = sample_dir.join(format!("{sample}.jtd"));
+            if !sample_path.exists() || !sample_path.with_extension("pdf").exists() {
+                continue;
+            }
+
+            let result = fs::read(&sample_path)
+                .map_err(|error| error.to_string())
+                .and_then(|bytes| parse_document(&bytes).map_err(|error| error.to_string()))
+                .and_then(|document| {
+                    to_pdf_with_file_name(&document, &sample_path.to_string_lossy())
+                });
+            let pdf = match result {
+                Ok(pdf) => pdf,
+                Err(error) => {
+                    failures.push(format!("{}: {error}", sample_path.display()));
+                    continue;
+                }
+            };
+
+            let temp_dir = std::env::temp_dir()
+                .join(format!("rjtd-pdfkit-smoke-{}-{sample}", std::process::id()));
+            if let Err(error) = fs::create_dir_all(&temp_dir) {
+                failures.push(format!("{}: create temp dir failed: {error}", sample));
+                continue;
+            }
+            let pdf_path = temp_dir.join("sample.pdf");
+            let module_cache_path = temp_dir.join("swift-module-cache");
+            if let Err(error) = fs::create_dir_all(&module_cache_path) {
+                failures.push(format!(
+                    "{}: create Swift module cache failed: {error}",
+                    sample
+                ));
+                let _ = fs::remove_dir_all(&temp_dir);
+                continue;
+            }
+            if let Err(error) = fs::write(&pdf_path, &pdf) {
+                failures.push(format!("{}: write temp pdf failed: {error}", sample));
+                let _ = fs::remove_dir_all(&temp_dir);
+                continue;
+            }
+
+            let output = match Command::new("swift")
+                .env("CLANG_MODULE_CACHE_PATH", &module_cache_path)
+                .arg("-e")
+                .arg(PDFKIT_VISIBLE_CONTENT_SWIFT)
+                .arg(&pdf_path)
+                .output()
+            {
+                Ok(output) => output,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+                Err(error) => {
+                    failures.push(format!(
+                        "{}: run Swift PDFKit check failed: {error}",
+                        sample
+                    ));
+                    let _ = fs::remove_dir_all(&temp_dir);
+                    continue;
+                }
+            };
+
+            if !output.status.success() {
+                failures.push(format!(
+                    "{}: PDFKit visible-content check failed with status {:?}: stdout={} stderr={}",
+                    sample,
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                ));
+            } else {
+                rendered_count += 1;
+            }
+
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+
+        assert_eq!(failures, Vec::<String>::new());
+        assert!(rendered_count >= 1);
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
+    const PDFKIT_VISIBLE_CONTENT_SWIFT: &str = r#"
+import CoreGraphics
+import Foundation
+import PDFKit
+
+let path = CommandLine.arguments[1]
+guard let document = PDFDocument(url: URL(fileURLWithPath: path)) else {
+    fputs("PDFKit could not load document\n", stderr)
+    exit(2)
+}
+if document.pageCount == 0 {
+    fputs("PDFKit loaded zero pages\n", stderr)
+    exit(3)
+}
+
+var totalNonWhite = 0
+for pageIndex in 0..<min(document.pageCount, 2) {
+    guard let page = document.page(at: pageIndex) else {
+        continue
+    }
+    let box = page.bounds(for: .mediaBox)
+    let width = max(1, Int(box.width.rounded(.up)))
+    let height = max(1, Int(box.height.rounded(.up)))
+    var bytes = [UInt8](repeating: 255, count: width * height * 4)
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+        data: &bytes,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: width * 4,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+        fputs("Could not create CGContext\n", stderr)
+        exit(4)
+    }
+    context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    page.draw(with: .mediaBox, to: context)
+
+    var byteIndex = 0
+    while byteIndex < bytes.count {
+        if bytes[byteIndex] < 245 || bytes[byteIndex + 1] < 245 || bytes[byteIndex + 2] < 245 {
+            totalNonWhite += 1
+        }
+        byteIndex += 4
+    }
+}
+
+print("pages \(document.pageCount) nonWhiteFirst2 \(totalNonWhite)")
+if totalNonWhite == 0 {
+    fputs("PDFKit rendered no visible non-white pixels\n", stderr)
+    exit(5)
+}
+"#;
 
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
@@ -1731,6 +3169,18 @@ mod tests {
                     }
                     if !pdf.windows(12).any(|window| window == b"/CIDFontType") {
                         failures.push(format!("{}: missing CID font resource", path.display()));
+                    }
+                    if pdf.windows(9).any(|window| window == b"/Group <<") {
+                        failures.push(format!(
+                            "{}: page-level transparency group can blank in Preview/PDFKit",
+                            path.display()
+                        ));
+                    }
+                    if pdf.windows(15).any(|window| window == b"/S /Transparency") {
+                        failures.push(format!(
+                            "{}: page-level transparency group can blank in Preview/PDFKit",
+                            path.display()
+                        ));
                     }
                     if path
                         .file_name()
@@ -1786,7 +3236,7 @@ mod tests {
 
         assert_eq!(
             to_json(&document),
-            "{\"metadata\":{\"title\":\"sample\"},\"blocks\":[{\"type\":\"paragraph\",\"style\":null,\"inlines\":[{\"type\":\"text\",\"text\":\"hello\\n\\\"\",\"style\":null}]}],\"unknownStyles\":[],\"unknownObjects\":[],\"objectStreamCandidates\":[],\"objectFrameRecords\":[],\"objectEmbeddingFrames\":[],\"textCountRanges\":[],\"textControlBoundaries\":[],\"textBoundaryCandidates\":[],\"textParagraphBoundaryCandidates\":[],\"tableCandidates\":[],\"autoTextCandidates\":[],\"tocEntries\":[],\"pageMarks\":[],\"rawStreams\":[],\"fonts\":[]}"
+            "{\"metadata\":{\"title\":\"sample\"},\"blocks\":[{\"type\":\"paragraph\",\"style\":null,\"inlines\":[{\"type\":\"text\",\"text\":\"hello\\n\\\"\",\"style\":null}]}],\"unknownStyles\":[],\"unknownObjects\":[],\"objectStreamCandidates\":[],\"objectFrameRecords\":[],\"objectEmbeddingFrames\":[],\"textCountRanges\":[],\"textControlBoundaries\":[],\"textBoundaryCandidates\":[],\"textParagraphBoundaryCandidates\":[],\"tableCandidates\":[],\"autoTextCandidates\":[],\"tocEntries\":[],\"pageMarks\":[],\"paperMarks\":[],\"rawStreams\":[],\"fonts\":[]}"
         );
     }
 
@@ -2036,6 +3486,12 @@ mod tests {
         assert!(json.contains("\"entryCount\":75"));
         assert!(json.contains("\"lineStart\":23"));
         assert!(json.contains("\"lineEnd\":40"));
+        assert!(json.contains("\"paperMarks\":["));
+        assert!(json.contains("\"sourceStream\":\"/PaperMark\""));
+        assert!(json.contains("\"headerCount\":74"));
+        assert!(json.contains("\"headerStride\":12"));
+        assert!(json.contains("\"entryCount\":75"));
+        assert!(json.contains("\"flagsHex\":\"0x00010010\""));
         assert!(json.contains("\"decoded\":false"));
     }
 
@@ -2056,6 +3512,21 @@ mod tests {
         let document = parse_document(&fs::read(sample_path).unwrap()).unwrap();
         let json = to_json(&document);
 
+        assert!(json.contains("\"pageMarks\":["));
+        assert!(json.contains("\"rawLength\":84,\"rawHex\":\"00000000000100000000000000000027"));
+        assert!(json.contains("\"u16Fields\":[0,0,1,0,0,0,0,39,0,0,370,0"));
+        assert!(json.contains("\"u16FieldsHex\":[\"0x0000\",\"0x0000\",\"0x0001\",\"0x0000\""));
+        assert!(json.contains("\"u16GeometryClass\":\"additive-boundary\""));
+        assert!(json.contains("\"u32Fields\":[0,65536,0,39,0,24248320,370,12124160"));
+        assert!(json.contains(
+            "\"u32FieldsHex\":[\"0x00000000\",\"0x00010000\",\"0x00000000\",\"0x00000027\""
+        ));
+        assert!(json.contains(
+            "\"u16GeometryHypotheses\":{\"source\":\"/PageMark\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"profile\":\"additive-boundary\""
+        ));
+        assert!(json.contains(
+            "\"word20Is0x00ff\":true,\"word13PlusWord14\":555,\"word13PlusWord14EqualsWord21\":true,\"word21MinusWord13\":185,\"word21MinusWord13EqualsWord14\":true,\"word19EqualsWord13\":true,\"selectedFieldsAllZero\":false,\"nonZeroAdditiveUnitCandidate\":true,\"layoutComparisons\":null"
+        ));
         assert!(json.contains("\"objectEmbeddingFrames\":["));
         assert!(json.contains("\"sourcePath\":\"/EmbedItems/EmbeddingInfo\""));
         assert!(json.contains("\"embeddingIndex\":24"));
@@ -2066,6 +3537,45 @@ mod tests {
         assert!(json.contains("\"bodyLengthCandidate\":113332"));
         assert!(json.contains("\"width\":13260"));
         assert!(json.contains("\"height\":1327"));
+        assert!(json.contains("\"textureBezierHeaderSummary\":{\"pathCount\":530,\"pointCount\":13,\"byteCount\":104,\"flags\":1,\"flagsHex\":\"0x00000001\",\"homogeneous\":true}"));
+        assert!(json.contains("\"paintStateTransitions\":["));
+        assert!(json.contains(
+            "\"pathKind\":\"outline\",\"startPathIndex\":0,\"endPathIndex\":10,\"pathCount\":11"
+        ));
+        assert!(json.contains(
+            "\"currentState\":{\"record48Word0\":\"0x00000001\",\"record70Word0\":\"0x0000002c\",\"record70Word3\":\"0x0000000a\",\"record82Word5\":\"0x0000002f\"}"
+        ));
+        assert!(json.contains(
+            "\"pathKind\":\"texture\",\"startPathIndex\":11,\"endPathIndex\":540,\"pathCount\":530"
+        ));
+        assert!(json.contains(
+            "\"pathKind\":\"outline\",\"startPathIndex\":541,\"endPathIndex\":551,\"pathCount\":11"
+        ));
+        assert!(json.contains("\"stateRecordSummary\":{\"pathCount\":"));
+        assert!(json.contains("\"recordTypeHex\":\"0x00000082\""));
+        assert!(json.contains("\"paintState82Preview\":[{"));
+        assert!(json.contains("\"word3CandidateHex\":"));
+        assert!(json.contains("\"word5CandidateHex\":"));
+        assert!(json.contains("\"jsfartArt\":{\"format\":\"JSFart2Contents\""));
+        assert!(json.contains("\"magic\":\"MSTUDIO.OCX\""));
+        assert!(
+            json.contains(
+                "\"frameCandidate\":{\"left\":0,\"top\":0,\"right\":13260,\"bottom\":1327"
+            )
+        );
+        assert!(json.contains(
+            "\"contentLeft\":114,\"contentTop\":105,\"contentRight\":13145,\"contentBottom\":1159"
+        ));
+        assert!(json.contains("\"strokeWidthCandidate\":100"));
+        assert!(json.contains(
+            "\"paintCandidate\":{\"styleWord1\":34869296,\"styleWord1Hex\":\"0x02141030\""
+        ));
+        assert!(json.contains(
+            "\"paintColorCandidate\":16777215,\"paintColorCandidateHex\":\"0x00ffffff\""
+        ));
+        assert!(
+            json.contains("\"effectWordCandidate\":10,\"effectWordCandidateHex\":\"0x0000000a\"")
+        );
         assert!(json.contains("\"embeddingIndex\":4"));
         assert!(json.contains("\"className\":\"JSEQ.Document.3\""));
         assert!(json.contains("\"jseq3Formula\":{\"format\":\"JSEQ3Contents\""));
@@ -2073,5 +3583,95 @@ mod tests {
         assert!(json.contains("\"soTrailerOffset\":1658"));
         assert!(json.contains("\"soTrailerLength\":62"));
         assert!(json.contains("\"text\":\"Times New Roman\""));
+        assert!(json.contains("\"path\":\"/FigureData/ExpandData/main_data/Link\""));
+        assert!(json.contains("\"figureLink\":{\"headerWordsBe\":[11,1,0,15]"));
+        assert!(json.contains("\"declaredRowCountCandidate\":15"));
+        assert!(json.contains("\"rowStride\":14"));
+        assert!(json.contains("\"rowCount\":15"));
+        assert!(json.contains("\"relationKindCandidateHex\":\"0x0016\""));
+        assert!(json.contains("\"path\":\"/FigureData/main_data/FDMVector\""));
+        assert!(json.contains("\"fdmRawVectorSegmentCount\":5"));
+        assert!(json.contains("\"fdmRawVectorCommandCount\":37"));
+        assert!(json.contains("\"sourceVectorRelativeOffset\":208,\"sourceSegment\":null"));
+        assert!(json.contains(
+            "\"sourceVectorRelativeOffset\":1992,\"sourceSegment\":{\"relativeOffset\":1864,\"localOffset\":128,\"declaredLength\":236,\"commandCount\":4,\"commandIndex\":2,\"commandOffset\":128}"
+        ));
+        assert!(json.contains("\"primitiveKind\":\"cubicBezier\""));
+        assert!(json.contains("\"primitiveKind\":\"ellipse\""));
+        assert!(json.contains("\"curveSegmentCount\":1"));
+        assert!(
+            json.contains("\"ellipse\":{\"center\":{\"x\":-11280,\"y\":-10792},\"radiusX\":556")
+        );
+        assert!(json.contains("\"path\":\"/FigureData/ExpandData/main_data/Data/FDMText\""));
+        assert!(json.contains("\"fdmTextCount\":15"));
+        assert!(json.contains("\"fdmTextIndexEntries\":["));
+        assert!(json.contains("\"text\":\"９㎝\""));
+        assert!(json.contains("\"textRecordOffset\":6584"));
+        assert!(json.contains("\"kind\":\"sparseDocumentTextControlRunTableCandidate\""));
+        assert!(json.contains("\"rule\":\"sparse-document-text-001c-cells-with-000e-row-breaks\""));
+        assert!(json.contains("\"textPreview\":\"\\t\\t\\t(1)表面積の比"));
+        assert!(
+            json.contains("\"sparseObservedTable\":{\"source\":\"sparseDocumentTextControlRows\"")
+        );
+        assert!(
+            json.contains("\"topologyCandidate\":{\"source\":\"sparseDocumentTextControlRows\"")
+        );
+        assert!(
+            json.contains(
+                "\"sparseTopologyCandidate\":{\"source\":\"sparseDocumentTextControlRows\""
+            )
+        );
+        assert!(json.contains("\"columns\":["));
+        assert!(json.contains("\"firstNonEmptyColumnIndex\":3"));
+        assert!(json.contains("\"emptyCellCountCandidate\":136"));
+        assert!(json.contains("\"rows\":["));
+        assert!(json.contains("\"cells\":["));
+        assert!(json.contains("\"empty\":true"));
+        assert!(json.contains("\"sourceStart\":2902"));
+        assert!(json.contains("\"sourceEnd\":5419"));
+        assert!(json.contains("\"geometryDecoded\":false"));
+    }
+
+    #[test]
+    fn local_shanai_lan_exports_fdm_vector_command_diagnostics_when_reference_pdf_is_available() {
+        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples");
+        let sample_path =
+            sample_dir.join("ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd");
+        let reference_pdf_path =
+            sample_dir.join("ichitaro-20030315134715-success-001-success_data-shanai_lan.pdf");
+        if !sample_path.exists() || !reference_pdf_path.exists() {
+            return;
+        }
+
+        let document = parse_document(&fs::read(sample_path).unwrap()).unwrap();
+        let json = to_json(&document);
+
+        assert!(json.contains("\"path\":\"/FigureData/main_data/FDMVector\""));
+        assert!(json.contains("\"fdmIndexEntries\":["));
+        assert!(json.contains("\"vectorCommandCount\":"));
+        assert!(json.contains("\"vectorCommandBboxCount\":"));
+        assert!(json.contains("\"vectorCommands\":[{"));
+        assert!(json.contains("\"connectorCandidateCount\":"));
+        assert!(json.contains("\"connectorCandidates\":[{"));
+        assert!(json.contains("\"candidateBasis\":\"long-open-source-path\""));
+        assert!(json.contains("\"sourceEndpoints\":{\"start\":{\"x\":"));
+        assert!(json.contains("\"sourceSpan\":"));
+        assert!(json.contains("\"endpointDistanceSquared\":"));
+        assert!(json.contains("\"fillColor\":"));
+        assert!(json.contains("\"strokeColor\":"));
+        assert!(json.contains("\"pathSegmentCount\":"));
+        assert!(json.contains("\"orthogonalSegmentCount\":"));
+        assert!(json.contains("\"diagonalSegmentCount\":"));
+        assert!(json.contains("\"compoundChildOffsetCount\":"));
+        assert!(json.contains("\"axisAligned\":"));
+        assert!(json.contains("\"orientation\":\"horizontal\""));
+        assert!(json.contains("\"markerHex\":\"00000960\""));
+        assert!(json.contains("\"primitiveKind\":\"cubicBezier\""));
+        assert!(json.contains("\"pathPoints\":[{\"x\":"));
+        assert!(json.contains("\"curveSegments\":[{\"control1\":"));
+        assert!(json.contains("\"compoundChildOffsets\":["));
+        assert!(json.contains("\"decoded\":false"));
     }
 }

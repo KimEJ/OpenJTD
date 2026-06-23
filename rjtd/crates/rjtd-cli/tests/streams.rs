@@ -729,6 +729,17 @@ fn text_count_table_candidate_path() -> PathBuf {
     write_sample(compound.into_inner().into_inner())
 }
 
+fn sparse_table_candidate_path() -> PathBuf {
+    let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    compound
+        .create_stream("/DocumentText")
+        .unwrap()
+        .write_all(&document_text_with_sparse_table_rows())
+        .unwrap();
+
+    write_sample(compound.into_inner().into_inner())
+}
+
 fn text_count_finance_table_candidate_path() -> PathBuf {
     let document_text = document_text_with_finance_table_rows();
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
@@ -837,6 +848,23 @@ fn line_mark_tags_path() -> PathBuf {
         0x0914, 0x0000, 0x0001, 0x1002, 0x0077, 0x0002, 0x1000, 0x0074, 0x1001, 0x000d,
     ] {
         bytes.extend_from_slice(&u16::to_be_bytes(word));
+    }
+    compound
+        .create_stream("/LineMark")
+        .unwrap()
+        .write_all(&bytes)
+        .unwrap();
+
+    write_sample(compound.into_inner().into_inner())
+}
+
+fn line_mark_intervals_path() -> PathBuf {
+    let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    let mut bytes = vec![0; 18];
+    bytes[8..10].copy_from_slice(&u16::to_be_bytes(3));
+    for (delta, flag) in [(5u16, 0x0002u16), (8, 0x8002), (0, 0x0000)] {
+        bytes.extend_from_slice(&u16::to_be_bytes(delta));
+        bytes.extend_from_slice(&u16::to_be_bytes(flag));
     }
     compound
         .create_stream("/LineMark")
@@ -1323,6 +1351,66 @@ fn page_mark_path() -> PathBuf {
     write_sample(compound.into_inner().into_inner())
 }
 
+fn set_page_mark_entry_u16(entry: &mut [u8; 84], word_index: usize, value: u16) {
+    let offset = word_index * 2;
+    entry[offset..offset + 2].copy_from_slice(&u16::to_be_bytes(value));
+}
+
+fn page_mark_u16_profile_path() -> PathBuf {
+    let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    let mut page_mark = Vec::new();
+    page_mark.extend_from_slice(&3u32.to_be_bytes());
+    page_mark.extend_from_slice(&0x10u32.to_be_bytes());
+    page_mark.extend_from_slice(&2u32.to_be_bytes());
+
+    let mut zero = [0; 84];
+    zero[0..4].copy_from_slice(&0u32.to_be_bytes());
+    zero[4..8].copy_from_slice(&0x0001_0000u32.to_be_bytes());
+    page_mark.extend_from_slice(&zero);
+
+    let mut additive_row = [0; 84];
+    additive_row[0..4].copy_from_slice(&1u32.to_be_bytes());
+    additive_row[4..8].copy_from_slice(&0x0001_0000u32.to_be_bytes());
+    set_page_mark_entry_u16(&mut additive_row, 10, 353);
+    set_page_mark_entry_u16(&mut additive_row, 13, 353);
+    set_page_mark_entry_u16(&mut additive_row, 14, 246);
+    set_page_mark_entry_u16(&mut additive_row, 17, 353);
+    set_page_mark_entry_u16(&mut additive_row, 18, 353);
+    set_page_mark_entry_u16(&mut additive_row, 19, 353);
+    set_page_mark_entry_u16(&mut additive_row, 20, 8);
+    set_page_mark_entry_u16(&mut additive_row, 21, 599);
+    page_mark.extend_from_slice(&additive_row);
+
+    let mut additive_boundary = [0; 84];
+    additive_boundary[0..4].copy_from_slice(&2u32.to_be_bytes());
+    additive_boundary[4..8].copy_from_slice(&0x0001_0000u32.to_be_bytes());
+    set_page_mark_entry_u16(&mut additive_boundary, 10, 370);
+    set_page_mark_entry_u16(&mut additive_boundary, 13, 370);
+    set_page_mark_entry_u16(&mut additive_boundary, 14, 185);
+    set_page_mark_entry_u16(&mut additive_boundary, 17, 370);
+    set_page_mark_entry_u16(&mut additive_boundary, 18, 370);
+    set_page_mark_entry_u16(&mut additive_boundary, 19, 370);
+    set_page_mark_entry_u16(&mut additive_boundary, 20, 255);
+    set_page_mark_entry_u16(&mut additive_boundary, 21, 555);
+    page_mark.extend_from_slice(&additive_boundary);
+
+    let mut mixed = [0; 84];
+    mixed[0..4].copy_from_slice(&3u32.to_be_bytes());
+    mixed[4..8].copy_from_slice(&0x0001_0000u32.to_be_bytes());
+    set_page_mark_entry_u16(&mut mixed, 13, 1);
+    set_page_mark_entry_u16(&mut mixed, 14, 2);
+    set_page_mark_entry_u16(&mut mixed, 21, 4);
+    page_mark.extend_from_slice(&mixed);
+
+    compound
+        .create_stream("/PageMark")
+        .unwrap()
+        .write_all(&page_mark)
+        .unwrap();
+
+    write_sample(compound.into_inner().into_inner())
+}
+
 fn page_mark_variable_shape_path() -> PathBuf {
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
     let mut page_mark = Vec::new();
@@ -1636,6 +1724,56 @@ fn page_layer_tree_command_reports_facing_page_decoration_evidence() {
 }
 
 #[test]
+fn page_info_command_reports_page_metrics_and_mark_context() {
+    let path = tiny_cfb_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("page-info")
+        .arg(&path)
+        .arg("0")
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_json_brackets_balanced(&stdout);
+    assert!(stdout.contains("\"pageIndex\":0"));
+    assert!(stdout.contains("\"pageNumber\":1"));
+    assert!(stdout.contains("\"columns\":[{\"x\":72.0,\"width\":650.0}]"));
+    assert!(stdout.contains("\"layoutMarkEvidence\":null"));
+}
+
+#[test]
+fn page_svg_command_writes_rendered_svg_page() {
+    let path = tiny_cfb_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("page-svg")
+        .arg(&path)
+        .arg("0")
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.starts_with("<svg "));
+    assert!(stdout.contains("class=\"rjtd-text\""));
+    assert!(stdout.contains(">銀河</text>"));
+}
+
+#[test]
 fn style_candidates_command_reports_labeled_text_layout_records() {
     let path = style_stream_path();
     let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
@@ -1938,6 +2076,37 @@ fn line_mark_tags_command_reports_tag_contexts() {
         "tag\t6\t12\t0x1000\tprev=0x0001,0x1002,0x0077,0x0002\tnext=0x0074,0x1001,0x000d\n"
     ));
     assert!(stdout.contains("tag\t8\t16\t0x1001\tprev=0x0077,0x0002,0x1000,0x0074\tnext=0x000d\n"));
+}
+
+#[test]
+fn line_mark_intervals_command_reports_delta_records() {
+    let path = line_mark_intervals_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("line-mark-intervals")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains(
+        "summary\tlen=30\twords=15\tprofile=be16-delta-v1\tdeclared-count=3\tmax-records=3\tparsed-records=2\tbase-unit=16"
+    ));
+    assert!(stdout.contains(
+        "line-mark-interval\trecord=0\tbyte=18\tword=9\tdelta=5\tflag=0x0002\tunit-start=16\tunit-end=21"
+    ));
+    assert!(stdout.contains(
+        "line-mark-interval\trecord=1\tbyte=22\tword=11\tdelta=8\tflag=0x8002\tunit-start=21\tunit-end=29"
+    ));
+    assert!(stdout.contains(
+        "line-mark-interval-stop\trecord=2\tbyte=26\tdelta=0\tflag=0x0000\treason=non-positive-delta"
+    ));
 }
 
 #[test]
@@ -3511,10 +3680,35 @@ fn table_candidates_command_reports_model_interval_evidence() {
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
         concat!(
-            "table-candidate\t0\tkind=multiIntervalControlRangeTableCandidate\trange=0\tboundary=0\tbasis=byte\tdelimiter=0x001c\tintervals=2\tfirst=0\tlast=1\tsource=10-22\tinterval-details=0:source-interval=0,source=10-14,line-breaks=0,text=銀河|1:source-interval=1,source=16-22,line-breaks=0,text=鉄道\tdecoded=false\n",
-            "table-candidate\t1\tkind=multiIntervalControlRangeTableCandidate\trange=0\tboundary=1\tbasis=unit\tdelimiter=0x001c\tintervals=2\tfirst=0\tlast=1\tsource=5-11\tinterval-details=0:source-interval=0,source=5-7,line-breaks=0,text=銀河|1:source-interval=1,source=8-11,line-breaks=0,text=鉄道\tdecoded=false\n",
+            "table-candidate\t0\tkind=multiIntervalControlRangeTableCandidate\trange=0\tboundary=0\tbasis=byte\tdelimiter=0x001c\tintervals=2\tfirst=0\tlast=1\tsource=10-22\tsparse=false\tcells=0/0/0\tmax-columns=0\tinterval-details=0:source-interval=0,source=10-14,line-breaks=0,text=銀河|1:source-interval=1,source=16-22,line-breaks=0,text=鉄道\tdecoded=false\n",
+            "table-candidate\t1\tkind=multiIntervalControlRangeTableCandidate\trange=0\tboundary=1\tbasis=unit\tdelimiter=0x001c\tintervals=2\tfirst=0\tlast=1\tsource=5-11\tsparse=false\tcells=0/0/0\tmax-columns=0\tinterval-details=0:source-interval=0,source=5-7,line-breaks=0,text=銀河|1:source-interval=1,source=8-11,line-breaks=0,text=鉄道\tdecoded=false\n",
         )
     );
+}
+
+#[test]
+fn table_candidates_command_reports_sparse_document_text_table_evidence() {
+    let path = sparse_table_candidate_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("table-candidates")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains(
+        "kind=sparseDocumentTextControlRunTableCandidate\trange=-\tboundary=-\tbasis=unit"
+    ));
+    assert!(stdout.contains("\tsparse=true\tcells=4/10/14\tmax-columns=4\t"));
+    assert!(stdout.contains("text=\\t\\t(1)表面積\\t"));
+    assert!(stdout.contains("text=\\tＡＢ ＝ ｃｍ\\t"));
 }
 
 #[test]
@@ -3991,7 +4185,109 @@ fn page_marks_command_reports_header_and_raw_entries() {
             "header\t2\t16\t1\t3\nfamily\tfixed84\t84\t0\nentry\t0\t0\t0000000000010000"
         )
     );
+    assert!(stdout.contains("\tu16Class=zero-sentinel\n"));
     assert!(stdout.contains("\nentry\t2\t2\t0000000200010002"));
+}
+
+#[test]
+fn page_mark_u16_profile_command_reports_class_counts_and_tuples() {
+    let path = page_mark_u16_profile_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("page-mark-u16-profile")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.starts_with(
+        "summary\tentries=4\tzero-sentinel=1\tadditive-row=1\tadditive-boundary=1\tmixed-payload=1\tdecoded=false\n"
+    ));
+    assert!(stdout.contains("profile\tzero-sentinel\t1\n"));
+    assert!(stdout.contains("profile\tadditive-row\t1\n"));
+    assert!(stdout.contains("profile\tadditive-boundary\t1\n"));
+    assert!(stdout.contains("profile\tmixed-payload\t1\n"));
+    assert!(
+        stdout.contains("tuple\tadditive-row\t1\tw10=353/0x0161\tw13=353/0x0161\tw14=246/0x00f6")
+    );
+    assert!(
+        stdout.contains(
+            "tuple\tadditive-boundary\t1\tw10=370/0x0172\tw13=370/0x0172\tw14=185/0x00b9"
+        )
+    );
+    assert!(stdout.contains("tuple\tmixed-payload\t1\tw10=0/0x0000\tw13=1/0x0001\tw14=2/0x0002"));
+}
+
+#[test]
+fn local_pdf_backed_page_mark_u16_profiles_stay_stable_when_available() {
+    let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("rjtd-testdata/local-samples");
+    if !sample_dir.exists() {
+        return;
+    }
+
+    let cases = [
+        (
+            "a5.jtd",
+            "summary\tentries=75\tzero-sentinel=2\tadditive-row=68\tadditive-boundary=4\tmixed-payload=1\tdecoded=false",
+            "tuple\tadditive-row\t68\tw10=353/0x0161\tw13=353/0x0161\tw14=246/0x00f6",
+        ),
+        (
+            "46.jtd",
+            "summary\tentries=97\tzero-sentinel=2\tadditive-row=90\tadditive-boundary=4\tmixed-payload=1\tdecoded=false",
+            "tuple\tadditive-row\t90\tw10=353/0x0161\tw13=353/0x0161\tw14=246/0x00f6",
+        ),
+        (
+            "ichitaro-20030228030923-success-002-success_data-test.jtd",
+            "summary\tentries=2\tzero-sentinel=0\tadditive-row=0\tadditive-boundary=2\tmixed-payload=0\tdecoded=false",
+            "tuple\tadditive-boundary\t2\tw10=370/0x0172\tw13=370/0x0172\tw14=185/0x00b9",
+        ),
+    ];
+
+    let mut checked = 0usize;
+    for (file_name, expected_summary, expected_tuple_prefix) in cases {
+        let sample_path = sample_dir.join(file_name);
+        if !sample_path.exists() || !sample_path.with_extension("pdf").exists() {
+            continue;
+        }
+
+        let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+            .arg("page-mark-u16-profile")
+            .arg(&sample_path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{} stderr: {}",
+            file_name,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(
+            stdout.contains(expected_summary),
+            "{} stdout: {}",
+            file_name,
+            stdout
+        );
+        assert!(
+            stdout.contains(expected_tuple_prefix),
+            "{} stdout: {}",
+            file_name,
+            stdout
+        );
+        checked += 1;
+    }
+
+    if sample_dir.join("a5.jtd").exists() {
+        assert!(checked >= 1);
+    }
 }
 
 #[test]
@@ -4427,6 +4723,32 @@ fn document_text_with_finance_table_rows() -> Vec<u8> {
         bytes.extend_from_slice(&unit.to_be_bytes());
     }
     bytes
+}
+
+fn document_text_with_sparse_table_rows() -> Vec<u8> {
+    let mut bytes = b"SsmgV.01".to_vec();
+    extend_units(&mut bytes, &[0x001f]);
+    append_sparse_table_row(&mut bytes, &["", "", "(1)表面積", ""]);
+    append_sparse_table_row(&mut bytes, &["", "１", "", ""]);
+    append_sparse_table_row(&mut bytes, &["", "ＡＢ　＝　ｃｍ", ""]);
+    append_sparse_table_row(&mut bytes, &["", "ＡＣ　＝　ｃｍ", ""]);
+    bytes
+}
+
+fn append_sparse_table_row(bytes: &mut Vec<u8>, cells: &[&str]) {
+    for (cell_index, cell) in cells.iter().enumerate() {
+        if cell_index > 0 {
+            extend_units(bytes, &[0x001c, 0x001f]);
+        } else if !cell.is_empty() {
+            extend_units(bytes, &[0x001f]);
+        }
+        if !cell.is_empty() {
+            for unit in cell.encode_utf16() {
+                bytes.extend_from_slice(&unit.to_be_bytes());
+            }
+        }
+    }
+    extend_units(bytes, &[0x000e]);
 }
 
 fn document_text_with_skipped_inline() -> Vec<u8> {
