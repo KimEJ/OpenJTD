@@ -5181,7 +5181,7 @@ fn figure_link_candidate_from_stream(path: &str, stream: &[u8]) -> bool {
         return false;
     }
     let row_payload_len = stream.len().saturating_sub(header_bytes);
-    if row_payload_len % row_bytes != 0 {
+    if !row_payload_len.is_multiple_of(row_bytes) {
         return false;
     }
     let row_count = row_payload_len / row_bytes;
@@ -5256,7 +5256,7 @@ fn jseq3_text_marker_candidates(stream: &[u8]) -> Vec<CliJseq3TextMarkerCandidat
         let encoded = utf16le_bytes(marker);
         for offset in find_subslice_offsets(stream, &encoded) {
             candidates.push(CliJseq3TextMarkerCandidate {
-                text: *marker,
+                text: marker,
                 offset,
             });
         }
@@ -5401,7 +5401,7 @@ fn push_object_path_reasons(path: &str, reasons: &mut Vec<&'static str>) {
         push_unique_reason(reasons, "table-path");
     }
 
-    if segments.iter().any(|segment| *segment == "visuallist") {
+    if segments.contains(&"visuallist") {
         push_unique_reason(reasons, "visual-list-path");
     }
 }
