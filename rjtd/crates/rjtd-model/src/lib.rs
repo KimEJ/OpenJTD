@@ -44051,6 +44051,18 @@ mod tests {
         let mut page_control_layout_count = 0usize;
         let mut failures = Vec::new();
 
+        let no_jtd_samples = fs::read_dir(&sample_dir).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .path()
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|ext| matches!(ext, "jtd" | "jtt" | "jttc"))
+        });
+        if no_jtd_samples {
+            return;
+        }
+
         for entry in fs::read_dir(&sample_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
@@ -44134,6 +44146,18 @@ mod tests {
         let mut source_derived_layout_count = 0usize;
         let mut source_derived_svg_overlay_count = 0usize;
         let mut failures = Vec::new();
+
+        let no_jtd_samples = fs::read_dir(&sample_dir).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .path()
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|ext| matches!(ext, "jtd" | "jtt" | "jttc"))
+        });
+        if no_jtd_samples {
+            return;
+        }
 
         for entry in fs::read_dir(&sample_dir).unwrap() {
             let entry = entry.unwrap();
@@ -44243,6 +44267,18 @@ mod tests {
         let mut layer_op_count = 0usize;
         let mut overlay_json_count = 0usize;
         let mut failures = Vec::new();
+
+        let no_jtd_samples = fs::read_dir(&sample_dir).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .path()
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|ext| matches!(ext, "jtd" | "jtt" | "jttc"))
+        });
+        if no_jtd_samples {
+            return;
+        }
 
         for entry in fs::read_dir(&sample_dir).unwrap() {
             let entry = entry.unwrap();
