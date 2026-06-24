@@ -426,6 +426,37 @@ confused with `0x000e`, which is strictly a between-cell row delimiter bounded b
   document-type discriminator or encodes style IDs (short-text samples) vs physical
   coordinates (reference-statute samples). No physical unit scale is yet proven.
 
+  Extended sweep across all 14 government/academic samples confirms the `w7` value set
+  and adds two further values. Observed `w7` values (`w4=0x0026 len=17`) and their
+  associated text contexts (decoded:false):
+
+  | `w7` | `w8`/`w10` | Text context | Candidate style role |
+  | ---- | ---------- | ------------ | -------------------- |
+  | 0    | 0x0001     | Article/clause body, flush-left headings (01要綱/02案文) | Standard body paragraph |
+  | 0    | 0x0002     | Short flush-left body entries (04参照条文（組織令）) | Standard body paragraph (mixed family) |
+  | 0    | 0x0000     | Body paragraphs (02_番号利用法) | Standard body paragraph (w8=0 family) |
+  | 0    | 0x01cc     | Hanging-indent first entry or TOC heading (04参照条文) | Standard body / TOC heading |
+  | 1    | 0x0001     | Article clause continuation (02案文（整備令）) | Body continuation line |
+  | 2    | 0x0001     | Item list / appendix entries (02案文（整備令）) | Item / indent paragraph |
+  | 2    | 0x0000     | Article body (02_番号利用法) | Item / indent paragraph (w8=0) |
+  | 2    | 0x0002     | Article body (04参照条文（組織令）, 04参照条文（施行日政令）) | Item / indent paragraph (mixed family) |
+  | 3    | 0x0000     | Supplementary-provision sub-heading e.g. 「（施行期日）」 | Provision sub-heading |
+  | 4    | 0x0000     | 別表 / deeper appendix indent (02_番号, 04参照) | Deep indent / appendix |
+  | 4    | 0x0002     | Law section heading (04参照条文（組織令）) | Law section heading (mixed) |
+  | 6    | 0x0001/0x0000 | Statute title / preamble body (all 01要綱/02案文 samples) | Title / preamble style |
+  | 8    | 0x0001     | Supplementary-provision heading 「附　則」 (02案文) | Supplementary-provision heading |
+  | 10   | 0x0000     | Reason section heading 「理　由」 (02_番号利用法) | Reason heading |
+  | 492 (0x01ec) | 0x01cc | Hanging-indent law text (04参照条文, w6=1) | Hanging-indent body |
+
+  Across all `01要綱` samples `w7=6` appears on the law title or preamble and is
+  the only non-zero value (records ≤ 3 per file). Across all `02案文` samples
+  `w7=6` appears on the law title or preamble headline, `w7=8` on supplementary
+  provisions, and `w7=0` on all regular clause body paragraphs. The consistent
+  recurrence of `w7=6` for the opening title line across every `01要綱`/`02案文`
+  sample strengthens the interpretation that `w7` encodes a named paragraph-style
+  identifier, not a visual indent depth. The exact Ichitaro style names corresponding
+  to each `w7` value remain unproven (decoded:false).
+
 ## Samples Used
 
 | Sample | Records | Families observed |
