@@ -1,0 +1,53 @@
+name: Deploy Viewer to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rjtd/crates/rjtd-wasm/**'
+      - 'rjtd/crates/rjtd-core/**'
+      - 'rjtd/crates/rjtd-model/**'
+      - 'rjtd/Cargo.toml'
+      - 'rjtd/Cargo.lock'
+      - 'openjtd.github.io/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rjtd/target
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('rjtd/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-wasm-
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM
+        run: wasm-pack build --target web rjtd/crates/rjtd-wasm
+
+      - name: Copy pkg into viewer
+        run: cp -r rjtd/crates/rjtd-wasm/pkg openjtd.github.io/pkg
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy openjtd.github.io --project-name openjtd --commit-dirty=true
