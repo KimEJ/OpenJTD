@@ -415,6 +415,78 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             }
             Ok(())
         }
+        Some("paragraph-style-records") => {
+            let path = required_path(args.next(), "paragraph-style-records")?;
+            let bytes = read_file(path)?;
+            let payload =
+                read_document_text_payload(&bytes).map_err(|error| error.to_string())?;
+            let words = be16_words(payload.bytes()).collect::<Vec<_>>();
+            let mut count = 0usize;
+            let mut i = 0usize;
+            while i + 16 < words.len() {
+                // Match: 0x001c 0x0010 len 0x0000 0x0026 0x0005 [w6] [w7] [w8] [w9] [w10]
+                // followed by footer (len 0x0000 0x0010 0x001f) then text run
+                // Only match len=17 (0x0011) records with w4=0x0026 w5=0x0005
+                if words[i] != 0x001c || words[i + 1] != 0x0010 {
+                    i += 1;
+                    continue;
+                }
+                let len = words[i + 2] as usize;
+                if len != 17 {
+                    i += 1;
+                    continue;
+                }
+                if words[i + 4] != 0x0026 || words[i + 5] != 0x0005 {
+                    i += 1;
+                    continue;
+                }
+                // Verify footer: w[len-4]=len, w[len-3]=0, w[len-2]=class, w[len-1]=0x001f
+                let footer_start = i + len - 4;
+                if footer_start + 3 >= words.len() {
+                    i += 1;
+                    continue;
+                }
+                if words[footer_start] as usize != len
+                    || words[footer_start + 1] != 0x0000
+                    || words[footer_start + 2] != 0x0010
+                    || words[footer_start + 3] != 0x001f
+                {
+                    i += 1;
+                    continue;
+                }
+                let w6 = words[i + 6];
+                let w7 = words[i + 7];
+                let w8 = words[i + 8];
+                let w10 = words[i + 10];
+                // Collect following text run (words after 0x001f until next control)
+                let text_start = i + len;
+                let mut text = String::new();
+                let mut j = text_start;
+                while j < words.len().min(text_start + 64) {
+                    let ch = words[j];
+                    if ch < 0x0020 || (0xd800..=0xdfff).contains(&ch) || ch == 0xffff {
+                        break;
+                    }
+                    if let Some(c) = char::from_u32(ch as u32) {
+                        text.push(c);
+                    }
+                    j += 1;
+                }
+                write_stdout_line(&format!(
+                    "record\t{}\tword={}\tw6=0x{:04x}\tw7={}\tw8=0x{:04x}\tw10=0x{:04x}\ttext={}",
+                    count, i, w6, w7, w8, w10,
+                    text.chars().take(24).collect::<String>()
+                ))?;
+                count += 1;
+                i += len;
+                continue;
+            }
+            write_stdout_line(&format!(
+                "summary\trecords={}\tdecoded=false",
+                count
+            ))?;
+            Ok(())
+        }
         Some("cfb-map") => {
             let path = required_path(args.next(), "cfb-map")?;
             let bytes = read_file(path)?;
@@ -4398,6 +4470,7 @@ Usage:
   rjtd style-candidates <file.jtd>
   rjtd text-layout-style-records <file.jtd>
   rjtd document-view-style-groups <file.jtd>
+  rjtd paragraph-style-records <file.jtd>
   rjtd cfb-map <file.jtd>
   rjtd cfb-dir <file.jtd>
   rjtd stream-meta <file.jtd> <stream-path>

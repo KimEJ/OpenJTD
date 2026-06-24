@@ -12,8 +12,17 @@ const EMBEDDED_DOCUMENT_TEXT_MAX_SPAN: usize = 64 * 1024;
 const TEXT_RUN_MARKER: u16 = 0x001f;
 const INLINE_TEXT_START: u16 = 0x001d;
 const INLINE_TEXT_END: u16 = 0x001e;
+// 0x000e separates 0x001c/0x0030 table-cell records; reading_text stays true across it.
+// 0x000a is a within-cell/intra-paragraph line break (see RFC 0009); treated as a plain
+// text character ('\n') by is_control_boundary, which intentionally excludes 0x09/0x0a/0x0d.
 const TEXT_ROW_DELIMITER: u16 = 0x000e;
 const SKIPPED_INLINE_MAX_UNITS: usize = 256;
+
+// RFC 0009: 0x001c record class codes (decoded:false — structure proven, semantics partial)
+pub const RECORD_CLASS_INLINE_CONTEXT: u16 = 0x0000;
+pub const RECORD_CLASS_PARAGRAPH_LINE: u16 = 0x0010;
+pub const RECORD_CLASS_TABLE_SECTION_TRANSITION: u16 = 0x0020;
+pub const RECORD_CLASS_TABLE_CELL: u16 = 0x0030;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ParsedDocumentText {
