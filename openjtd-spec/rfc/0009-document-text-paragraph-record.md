@@ -32,7 +32,7 @@ w[len-1]     0x001f  record terminator / text-run start
 ```
 
 The footer `(len_echo, 0x0000, class_echo, 0x001f)` was verified against
-948 records across the `論文様式.jtd` and `03新旧（整備令）.jtd` local
+948 records across the `sample-academic.jtd` and `sample-table.jtd` local
 samples. One apparent exception at unit 22733 is a run of sequential control
 word values (`0x001d`…`0x002a`) that happens to start with `0x001c` but does
 not follow the record layout; it is not a paragraph record.
@@ -46,24 +46,24 @@ is a distinct form already handled by the current token parser. It uses the same
 
 ### Class 0x0010 — paragraph / line header
 
-The most common class across all tested samples. Found in `論文様式.jtd` (19
+The most common class across all tested samples. Found in `sample-academic.jtd` (19
 records, all len=20), and in multiple-column table samples with len ranging
 from 10 to 59.
 
-Short representative record (len=13, `03新旧（整備令）.jtd`):
+Short representative record (len=13, `sample-table.jtd`):
 
 ```text
 001c 0010 000d  0000 002e 0001 0001 ffff 0000  000d 0000 0010 001f
 ```
 
-Long representative record (len=27, `03新旧（整備令）.jtd`):
+Long representative record (len=27, `sample-table.jtd`):
 
 ```text
 001c 0010 001b  0000 008f 000f 010c 0000 0003 0023 0000 0000 007e 0023
 0000 0000 007e 0023 0000 0000 0006 ffff  001b 0000 0010 001f
 ```
 
-In `論文様式.jtd` all 19 records are len=20 with a stable payload:
+In `sample-academic.jtd` all 19 records are len=20 with a stable payload:
 
 ```text
 0000 0000 0001 0001 0026 0005 [w9] [w10] 0000 0000 0000 ffff 0000
@@ -81,7 +81,7 @@ The semantic meaning of `w10` is not decoded. The observation suggests it may
 encode an indent level or paragraph continuation flag.
 
 **Class `0x0010` sub-types (decoded:false).** The `w4` field discriminates at least
-four sub-types in `03新旧（整備令）.jtd`:
+four sub-types in `sample-table.jtd`:
 
 | w4 value | len | count | role (decoded:false) |
 | -------- | --- | ----: | -------------------- |
@@ -122,7 +122,7 @@ Appears inside table-heavy samples, one per table cell per display row. Fixed
 ```
 
 **`b0` and `b1` are cell boundary coordinates (decoded:false for scale/unit).**
-Analysis of 703 records in `03新旧（整備令）.jtd`:
+Analysis of 703 records in `sample-table.jtd`:
 
 - `b0` = left edge of cell in the table coordinate space
 - `b1` = right edge of cell; `b1 − b0` = cell width in the same units
@@ -149,7 +149,7 @@ This is the format referenced in RFC 0003 §COM Text Export Observation as the
 
 ### Class 0x0000 — inline-segment context marker (12 or 21 words)
 
-Observed in two distinct forms in `03新旧（整備令）.jtd` (92 records total).
+Observed in two distinct forms in `sample-table.jtd` (92 records total).
 
 **len=12 (14 records).** Always appears immediately after a `0x001c/0x0030` cell
 header and immediately before a `0x001c/0x0001` ruby/inline segment. Structure:
@@ -195,7 +195,7 @@ invariant only.
 
 ### Class 0x0020 — table-section transition marker (12 words)
 
-Observed 4 times in `03新旧（整備令）.jtd`. Always appears after `0x000e` (table
+Observed 4 times in `sample-table.jtd`. Always appears after `0x000e` (table
 row delimiter) and immediately before a `0x001c/0x0010` single-column paragraph:
 
 ```text
@@ -208,7 +208,7 @@ section back to normal single-column text. Semantic meaning is not decoded.
 
 ## Correlation with LineMark unit-start
 
-The `線文様式.jtd` sample (25 parsed LineMark records) shows exact correspondence
+The `sample-academic.jtd` sample (25 parsed LineMark records) shows exact correspondence
 between LineMark `unit-start` values and `0x001c` record positions in
 `/DocumentText`:
 
@@ -254,9 +254,9 @@ appears at records 1, 6, 14, 16, 18 (which do not coincide with `0x001c`
 positions). This may indicate that `flag=0x0000` marks display-line
 continuations within a paragraph rather than paragraph boundaries.
 
-### Corroboration: `02案文・理由（整備令）.jtd`
+### Corroboration: `sample-draft.jtd`
 
-The government-regulation draft sample `02案文・理由（整備令）.jtd` (43 parsed
+The law-document draft sample `sample-draft.jtd` (43 parsed
 LineMark records, `base-unit=16`) shows the same pattern at larger scale:
 25 of 43 `unit-start` values fall exactly on a `0x001c` record position.
 
@@ -323,7 +323,7 @@ principle applies.
 
 ### 0x000e Row Delimiter
 
-In `03新旧（整備令）.jtd` (a table-heavy new-vs-old comparison document), every
+In `sample-table.jtd` (a table-heavy new-vs-old comparison document), every
 `0x000e` occurrence is immediately preceded and followed by a `0x001c` record.
 The `text-control-context` diagnostic confirms that every `0x000e` has
 `prev-control=0x001c` (class `0x0030`) and `next-control=0x001c` (class `0x0030`).
@@ -346,7 +346,7 @@ were observed in the `shanai_lan` table context).
 
 ### 0x000a Line Break (decoded:false)
 
-`0x000a` appears 210 times in `03新旧（整備令）.jtd` and is present in every
+`0x000a` appears 210 times in `sample-table.jtd` and is present in every
 current sample (range: 2–4671 per file). Unlike `0x000e`, it is not confined
 to inter-cell positions between `0x0030` records. Context analysis:
 
@@ -399,24 +399,24 @@ confused with `0x000e`, which is strictly a between-cell row delimiter bounded b
   not equal to the count of `0x23`-tagged sub-entries and no clean rule has been
   found; it may encode a row-type flag (e.g. header row vs data row).
 - Class `0x0010` records of varying length appear to share a common sub-header
-  signature `0x0026 0x0005` at words `w4/w5` (seen in `論文様式.jtd` len=20 and
-  `01要綱/02案文/04参照` len=17 samples). Detailed analysis of `04参照条文（整備政令）.jtd`
+  signature `0x0026 0x0005` at words `w4/w5` (seen in `sample-academic.jtd` len=20 and
+  `sample-outline/sample-draft/sample-reference` len=17 samples). Detailed analysis of `sample-reference.jtd`
   len=17 records (142 total, `w4=0x0026 w5=0x0005`) reveals 9 distinct payload
   combinations driven by `w6`/`w7`/`w8`/`w9`/`w10`. When `w6=1` (102 records):
   `w7=0x01ec=492` and `w8=w10=0x01cc=460` are constant, forming what appears to be
   a hanging-indent group (if 1/20 mm: 24.6/23 mm; if 1/10 mm: 49.2/46 mm). When
   `w6=0` (40 records): `w7` takes 0/2/4, `w8` is mostly 0, indicating no hanging
-  indent. In `論文様式.jtd` len=20, `w10=0x0141=321` appears on indented continuation
-  lines, consistent with a ~32 mm hanging indent. In `03新旧（整備令）.jtd`, the
+  indent. In `sample-academic.jtd` len=20, `w10=0x0141=321` appears on indented continuation
+  lines, consistent with a ~32 mm hanging indent. In `sample-table.jtd`, the
   `w4=0x002e` variant (18 records, len=13) is fully constant (`w5=w6=1`, `w7=0xffff`,
   `w8=0`), suggesting uniform single-column layout. The unit scale and exact field role
   are not decoded.
-  Cross-sample analysis of 246 `w4=0x0026 len=17` records across 11 government/academic
-  samples reveals a new structural split by `(w8, w10)` magnitude: `(w8=w10=0x01cc=460)`
-  appears only in `04参照条文` (also with `w6=1`); `(w8=w10=1)` or `(w8=w10=0/2)`
-  appears in `01要綱` and `02案文` samples exclusively. The `02案文（整備令）` sample
+  Cross-sample analysis of 246 `w4=0x0026 len=17` records across 11 tested samples
+  reveals a new structural split by `(w8, w10)` magnitude: `(w8=w10=0x01cc=460)`
+  appears only in `sample-reference` (also with `w6=1`); `(w8=w10=1)` or `(w8=w10=0/2)`
+  appears in `sample-outline` and `sample-draft` samples exclusively. The `sample-draft` sample
   has 21 records and `w7` takes values 0/1/2/6/8. Correlation of `w7` with the
-  following text in `02案文（整備令）` shows the mapping is not simple visual-indent
+  following text in `sample-draft` shows the mapping is not simple visual-indent
   depth: `w7=0` appears on flush-left statute headings, clauses, and article openers;
   `w7=1` on article-clause continuation text; `w7=2` on item-list and appendix entries
   (some with one leading fullwidth space, some flush); `w7=6` on preamble body text;
@@ -426,33 +426,33 @@ confused with `0x000e`, which is strictly a between-cell row delimiter bounded b
   document-type discriminator or encodes style IDs (short-text samples) vs physical
   coordinates (reference-statute samples). No physical unit scale is yet proven.
 
-  Extended sweep across all 14 government/academic samples confirms the `w7` value set
+  Extended sweep across all 14 tested samples confirms the `w7` value set
   and adds two further values. Observed `w7` values (`w4=0x0026 len=17`) and their
   associated text contexts (decoded:false):
 
   | `w7` | `w8`/`w10` | Text context | Candidate style role |
   | ---- | ---------- | ------------ | -------------------- |
-  | 0    | 0x0001     | Article/clause body, flush-left headings (01要綱/02案文) | Standard body paragraph |
-  | 0    | 0x0002     | Short flush-left body entries (04参照条文（組織令）) | Standard body paragraph (mixed family) |
-  | 0    | 0x0000     | Body paragraphs (02_番号利用法) | Standard body paragraph (w8=0 family) |
-  | 0    | 0x01cc     | Hanging-indent first entry or TOC heading (04参照条文) | Standard body / TOC heading |
-  | 1    | 0x0001     | Article clause continuation (02案文（整備令）) | Body continuation line |
-  | 2    | 0x0001     | Item list / appendix entries (02案文（整備令）) | Item / indent paragraph |
-  | 2    | 0x0000     | Article body (02_番号利用法) | Item / indent paragraph (w8=0) |
-  | 2    | 0x0002     | Article body (04参照条文（組織令）, 04参照条文（施行日政令）) | Item / indent paragraph (mixed family) |
+  | 0    | 0x0001     | Article/clause body, flush-left headings (sample-outline/sample-draft) | Standard body paragraph |
+  | 0    | 0x0002     | Short flush-left body entries (sample-reference-b) | Standard body paragraph (mixed family) |
+  | 0    | 0x0000     | Body paragraphs (sample-draft-b) | Standard body paragraph (w8=0 family) |
+  | 0    | 0x01cc     | Hanging-indent first entry or TOC heading (sample-reference) | Standard body / TOC heading |
+  | 1    | 0x0001     | Article clause continuation (sample-draft) | Body continuation line |
+  | 2    | 0x0001     | Item list / appendix entries (sample-draft) | Item / indent paragraph |
+  | 2    | 0x0000     | Article body (sample-draft-b) | Item / indent paragraph (w8=0) |
+  | 2    | 0x0002     | Article body (sample-reference-b, sample-reference-c) | Item / indent paragraph (mixed family) |
   | 3    | 0x0000     | Supplementary-provision sub-heading e.g. 「（施行期日）」 | Provision sub-heading |
-  | 4    | 0x0000     | 別表 / deeper appendix indent (02_番号, 04参照) | Deep indent / appendix |
-  | 4    | 0x0002     | Law section heading (04参照条文（組織令）) | Law section heading (mixed) |
-  | 6    | 0x0001/0x0000 | Statute title / preamble body (all 01要綱/02案文 samples) | Title / preamble style |
-  | 8    | 0x0001     | Supplementary-provision heading 「附　則」 (02案文) | Supplementary-provision heading |
-  | 10   | 0x0000     | Reason section heading 「理　由」 (02_番号利用法) | Reason heading |
-  | 492 (0x01ec) | 0x01cc | Hanging-indent law text (04参照条文, w6=1) | Hanging-indent body |
+  | 4    | 0x0000     | 別表 / deeper appendix indent (sample-draft-b, sample-reference) | Deep indent / appendix |
+  | 4    | 0x0002     | Law section heading (sample-reference-b) | Law section heading (mixed) |
+  | 6    | 0x0001/0x0000 | Statute title / preamble body (all sample-outline/sample-draft samples) | Title / preamble style |
+  | 8    | 0x0001     | Supplementary-provision heading 「附　則」 (sample-draft) | Supplementary-provision heading |
+  | 10   | 0x0000     | Reason section heading 「理　由」 (sample-draft-b) | Reason heading |
+  | 492 (0x01ec) | 0x01cc | Hanging-indent law text (sample-reference, w6=1) | Hanging-indent body |
 
-  Across all `01要綱` samples `w7=6` appears on the law title or preamble and is
-  the only non-zero value (records ≤ 3 per file). Across all `02案文` samples
+  Across all `sample-outline` samples `w7=6` appears on the law title or preamble and is
+  the only non-zero value (records ≤ 3 per file). Across all `sample-draft` samples
   `w7=6` appears on the law title or preamble headline, `w7=8` on supplementary
   provisions, and `w7=0` on all regular clause body paragraphs. The consistent
-  recurrence of `w7=6` for the opening title line across every `01要綱`/`02案文`
+  recurrence of `w7=6` for the opening title line across every `sample-outline`/`sample-draft`
   sample strengthens the interpretation that `w7` encodes a named paragraph-style
   identifier, not a visual indent depth. The exact Ichitaro style names corresponding
   to each `w7` value remain unproven (decoded:false).
@@ -461,7 +461,7 @@ confused with `0x000e`, which is strictly a between-cell row delimiter bounded b
 
 | Sample | Records | Families observed |
 | --- | ---: | --- |
-| `論文様式.jtd` | 19 | `0x0010 len=20` only |
-| `03新旧（整備令）.jtd` | 1039 | `0x0010` (all len), `0x0030 len=12`, `0x0000 len=12/21`, `0x0020 len=12` |
-| `02案文・理由（整備令）.jtd` | 33 | `0x0010`, `0x0030 len=12` |
-| `04参照条文（整備政令）.jtd` | 504 | `0x0010`, `0x0030 len=12`, `0x0000 len=12` |
+| `sample-academic.jtd` | 19 | `0x0010 len=20` only |
+| `sample-table.jtd` | 1039 | `0x0010` (all len), `0x0030 len=12`, `0x0000 len=12/21`, `0x0020 len=12` |
+| `sample-draft.jtd` | 33 | `0x0010`, `0x0030 len=12` |
+| `sample-reference.jtd` | 504 | `0x0010`, `0x0030 len=12`, `0x0000 len=12` |
