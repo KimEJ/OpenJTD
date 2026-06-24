@@ -445,7 +445,28 @@ pub fn extract_document_text(data: &[u8]) -> String {
     parse_document_text(data).plain_text()
 }
 
+// SsmgV.01 segment-count field: w[9]=0x0001 means a single raw-text TextV.01 segment
+// with no paragraph records; w[9]=0x0002 is the normal paragraph-record format.
+const SSMG_RAW_TEXT_SEGMENT_COUNT: u16 = 0x0001;
+const SSMG_HEADER_WORDS: usize = 10; // SsmgV.01 (4) + header (4) + segment-count (2)
+const TEXT_SEGMENT_NAME: &[u8; 8] = b"TextV.01";
+
 pub fn parse_document_text(data: &[u8]) -> ParsedDocumentText {
+    // SsmgV.01 w[9]=0x0001: single raw-text segment (no 0x001f paragraph markers).
+    // Layout: SsmgV.01 header (10 words) + TextV.01 name (4 words) + length (2 words) + text.
+    if data.starts_with(DOCUMENT_TEXT_MAGIC) {
+        let units: Vec<u16> = data
+            .chunks_exact(2)
+            .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+            .collect();
+        if units.get(9) == Some(&SSMG_RAW_TEXT_SEGMENT_COUNT)
+            && data.get(SSMG_HEADER_WORDS * 2..)
+                .is_some_and(|rest| rest.starts_with(TEXT_SEGMENT_NAME))
+        {
+            return parse_raw_text_segment(&units);
+        }
+    }
+
     let units = data
         .chunks_exact(2)
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
@@ -560,6 +581,35 @@ pub fn map_document_text(data: &[u8]) -> DocumentTextMap {
 
     push_map_run(&mut entries, &mut run, run_start, units.len());
     DocumentTextMap::new(entries)
+}
+
+// Parse a SsmgV.01 w[9]=0x0001 raw-text segment: TextV.01 header (14..16) gives
+// the word count, then the text follows as plain UTF-16BE with no 0x001f markers.
+fn parse_raw_text_segment(units: &[u16]) -> ParsedDocumentText {
+    // Layout: SSMG_HEADER_WORDS=10 + TextV.01 name (4) + length field (2) = 16 words header
+    const HEADER_WORDS: usize = SSMG_HEADER_WORDS + 4 + 2;
+    let length = match units.get(SSMG_HEADER_WORDS + 4 + 1) {
+        Some(&len) => len as usize,
+        None => return ParsedDocumentText::default(),
+    };
+    let text_start = HEADER_WORDS;
+    let text_end = text_start.saturating_add(length).min(units.len());
+    let mut run = String::new();
+    for &code in &units[text_start..text_end] {
+        if code == 0x0000 {
+            break;
+        }
+        if !is_invalid_scalar(code)
+            && let Some(character) = char::from_u32(code as u32)
+        {
+            run.push(character);
+        }
+    }
+    if run.is_empty() {
+        ParsedDocumentText::default()
+    } else {
+        ParsedDocumentText::new(vec![DocumentTextElement::TextRun(run)])
+    }
 }
 
 fn push_run(elements: &mut Vec<DocumentTextElement>, run: &mut String) {
@@ -1073,6 +1123,37 @@ mod tests {
         for unit in units {
             bytes.extend_from_slice(&unit.to_be_bytes());
         }
+    }
+
+    #[test]
+    fn parses_raw_text_segment_format_without_paragraph_markers() {
+        // SsmgV.01 w[9]=0x0001 + TextV.01 + length + raw UTF-16BE text (no 0x001f markers)
+        // This matches the te.jtd format where text is stored directly in a TextV.01 segment.
+        let text_content: Vec<u16> = "te\nsto\nて".encode_utf16().collect();
+        let length = text_content.len() as u16;
+        let mut payload: Vec<u8> = Vec::new();
+        // SsmgV.01 header (10 words): magic + 4 header words + segment-count=1
+        let header: &[u16] = &[0x5373, 0x6d67, 0x562e, 0x3031, 0x0000, 0x0001, 0x0000, 0x0100, 0x0000, 0x0001];
+        for w in header {
+            payload.extend_from_slice(&w.to_be_bytes());
+        }
+        // TextV.01 segment name: 8 ASCII bytes → 4 big-endian u16 words (0x5465 0x7874 0x562e 0x3031)
+        for w in &[0x5465_u16, 0x7874, 0x562e, 0x3031] {
+            payload.extend_from_slice(&w.to_be_bytes());
+        }
+        // Length field: word[14]=0x0000, word[15]=length (matches te.jtd layout)
+        payload.extend_from_slice(&0x0000_u16.to_be_bytes());
+        payload.extend_from_slice(&length.to_be_bytes());
+        // Text content
+        for w in &text_content {
+            payload.extend_from_slice(&w.to_be_bytes());
+        }
+
+        let parsed = parse_document_text(&payload);
+        let text = parsed.plain_text();
+        assert!(text.contains("te"), "should contain 'te' but got: {text:?}");
+        assert!(text.contains("sto"), "should contain 'sto' but got: {text:?}");
+        assert!(text.contains('て'), "should contain 'て' but got: {text:?}");
     }
 
     fn cfb_with_stream(path: &str, payload: &[u8]) -> Vec<u8> {
