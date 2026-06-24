@@ -190,6 +190,14 @@ principle applies.
   logical/physical line hypothesis but not proven.
 - No multi-column sample was used to test whether table-cell `0x001c` records
   differ structurally from paragraph `0x001c` records within the same family.
+- Class `0x0010` records of varying length appear to share a common sub-header
+  signature `0x0026 0x0005` at words `w4/w5` (seen in `論文様式.jtd` len=20 and
+  `01要綱/02案文/04参照` len=17 samples). The len=17 variant shows variant fields
+  `w6/w7/w8/w9/w10`; in `04参照条文（整備政令）` the repeated value `0x01cc = 460`
+  could be a 1/10 mm indent unit (46 mm). In `論文様式.jtd` len=20, `w10=0x0141=321`
+  appears on indented continuation lines, which is consistent with a ~32 mm first-line
+  or hanging indent. These are layout-unit candidates only; the unit scale and field
+  role are not decoded.
 
 ## Samples Used
 
