@@ -509,13 +509,13 @@ Prerequisites:
 
 Immediate tasks:
 
-- [ ] Verify `wasm-pack build --target web rjtd/crates/rjtd-wasm` compiles and identify any WASM-incompatible dependencies (`std::fs`, desktop-only `image` crate features, etc.).
-- [ ] Add `cfg(target_arch = "wasm32")` guards as needed to make the WASM build pass (I/O stubs, `image` crate feature gating, etc.).
-- [ ] Create a minimal HTML frontend in `openjtd.github.io/` (file drop → `HwpDocument.new(bytes)` → `renderPageSvg()` injected into a `<div>`, MVP only).
-- [ ] Add page navigation UI (previous/next buttons, page number display).
-- [ ] Add a `plainText()` output tab as a baseline for text search.
-- [ ] Package `wasm-pack` artifacts (`.wasm` + JS glue) alongside the HTML for deployment to Cloudflare Pages (static files only, no Workers required).
-- [ ] Set up a Cloudflare Pages GitHub Actions pipeline for automatic build and deploy when `rjtd-wasm` source is updated.
+- [x] Verify `wasm-pack build --target web rjtd/crates/rjtd-wasm` compiles and identify any WASM-incompatible dependencies (`std::fs`, desktop-only `image` crate features, etc.).
+- [x] Add `cfg(target_arch = "wasm32")` guards as needed to make the WASM build pass (I/O stubs, `image` crate feature gating, etc.).
+- [x] Create a minimal HTML frontend in `openjtd.github.io/` (file drop → `HwpDocument.new(bytes)` → `renderPageSvg()` injected into a `<div>`, MVP only).
+- [x] Add page navigation UI (previous/next buttons, page number display).
+- [x] Add a `plainText()` output tab as a baseline for text search.
+- [x] Package `wasm-pack` artifacts (`.wasm` + JS glue) alongside the HTML for deployment to Cloudflare Pages (static files only, no Workers required).
+- [x] Set up a Cloudflare Pages GitHub Actions pipeline for automatic build and deploy when `rjtd-wasm` source is updated.
 
 Constraints:
 - Files must be processed entirely in-browser; nothing is uploaded to a server (privacy requirement).

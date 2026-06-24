@@ -482,7 +482,7 @@ Immediate tasks:
 - [x] ページナビゲーション UI（前ページ・次ページボタン、ページ番号表示）を追加する。
 - [x] `plainText()` 出力タブを追加する。
 - [x] `wasm-pack` 成果物（`.wasm` + JS glue）と HTML を Cloudflare Pages にデプロイする。
-- [ ] Cloudflare Pages の GitHub Actions デプロイパイプラインを設定し、`rjtd-wasm` ソース更新時に自動ビルド・デプロイできるようにする。
+- [x] Cloudflare Pages の GitHub Actions デプロイパイプラインを設定し、`rjtd-wasm` ソース更新時に自動ビルド・デプロイできるようにする。
 
 Constraints:
 - ファイルはブラウザ内で処理し、サーバーへ送信しない（プライバシー要件）。
