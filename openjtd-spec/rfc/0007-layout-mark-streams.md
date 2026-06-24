@@ -285,6 +285,42 @@ All 24 `MarkV.01` entry offsets in those three samples are outside the `/LineMar
 
 `rjtd text-position-count-fields <file>` exposes the remaining `TCntV.01` tail as positional `u16be` fields, and `rjtd text-position-count-field-deltas <file>` compares the chosen range span with the tail `t1..t2` span. In the current samples, all 89 rows have `t2 >= t1`, but no row has `t2 - t1` equal to the chosen range span. `rjtd text-position-count-tail-context <file>` also shows that `t1/t2` has a stronger `/DocumentText` UTF-16 unit hit pattern than byte hit pattern, though it is not universal. `rjtd text-position-count-tail-delta-scan <file>` raises unit hits most around delta 29/30, but text hits peak elsewhere. `rjtd text-position-count-tail-delta-groups <file>` then splits that aggregate signal into tail-pattern groups: one major `be0` pattern prefers `+29`, shifted patterns prefer `+30/+31`, and a major `0x0202` pattern is spread across many best deltas. `rjtd text-position-count-tail-row-deltas <file>` confirms the major `0x0202` pattern remains spread across many row-level best deltas. `rjtd text-position-count-tail-row-context <file>` shows that `0x0202` chosen ranges often touch later body byte ranges while best-delta tail fields usually touch early heading/date text. `rjtd text-position-count-range-preview <file>` then shows that `0x0202` chosen byte ranges often overlap real `/DocumentText` text entries even though they are not direct layout-stream coordinates. `rjtd text-position-count-range-boundaries <file>` adds that the major `0x0202` byte ranges mostly contain whole `/DocumentText` map entries and repeatedly include `0x001c`/`0x000e` controls. `rjtd text-control-context <file>` then shows `0x001c` as a high-frequency delimiter candidate and `0x000e` as more control-cluster or inline-adjacent. This keeps `TCntV.01` tail fields promising and makes `/DocumentText` control-delimited byte intervals the next target for chosen-range analysis, but rejects treating `t1/t2` as a simple duplicate of the chosen range.
 
+## LineMark Header Word 0 Variation
+
+The samples available in 2026-06-24 expose two `LineMark` header word 0 values:
+
+| Value | Samples |
+| --- | --- |
+| `0x0914` | `46.jtd`, `a5.jtd`, `b6.jtd` (Ginga vertical samples, RFC 0007 original set) |
+| `0x090b` | All 10 government-document local samples (`01要綱`, `02案文`, `03新旧`, `04参照`) |
+| `0x0912` | `論文様式.jtd` (A4 horizontal academic paper template) |
+
+All three values share the `0x0900` family prefix. The lower byte differs:
+`0x14 = 20`, `0x0b = 11`, `0x12 = 18`. The difference between Ginga vertical
+and A4 horizontal samples (`0x0914` vs `0x0912`) is 2; the difference between
+Ginga and government documents (`0x0914` vs `0x090b`) is 9. The meaning of the
+lower byte is not decoded.
+
+## LineMark to DocumentText 0x001c Correlation
+
+RFC 0009 established that every `0x001c` in `/DocumentText` is the opener of a
+self-describing paragraph/layout record (class, length, payload, footer). The
+`be16-delta-v1` LineMark profile emits one record per display line, while
+`0x001c` marks logical paragraphs (which can wrap to multiple display lines).
+
+In `論文様式.jtd` (25 LineMark records, 19 `0x001c` records), 14 of the 25
+LineMark `unit-start` values fall exactly on a `0x001c` record position; the
+remaining 11 fall inside text runs or at the `0x0000` document terminator.
+LineMark records whose `flag=0x0000` tend to fall inside text runs without a
+corresponding `0x001c`, which is consistent with continuation lines in a wrapped
+paragraph.
+
+In `03新旧（整備令）.jtd` (157 parsed LineMark records), the `0x001c` records
+include table-cell class `0x0030` (703 records) and paragraph class `0x0010`
+(151 records), reflecting the table-heavy structure of the new-vs-old comparison
+document. The LineMark delta values are correspondingly smaller and more varied
+compared to the simple paragraph-only `論文様式.jtd`.
+
 ## Known Gaps
 
 - No `LineMark` record parser exists yet.
@@ -294,6 +330,7 @@ All 24 `MarkV.01` entry offsets in those three samples are outside the `/LineMar
 - The relationship between these streams and `MarkV.01` / `TCntV.01` is not decoded; current evidence rejects direct Mark-entry-to-LineMark-word indexing and direct `TCntV.01` range-to-layout-stream offsets.
 - Small malformed samples can expose inventory entries whose mini-stream chains are not safely readable; `stream-meta` should be used before interpreting small layout streams.
 - `/LineMark` has tag-like values (`0x1000`, `0x1001`, `0x1002`) whose semantics are unknown; current tag-context evidence does not make the immediate next word a unique family discriminator or prove direct `DocumentText` coordinates.
+- The semantic meaning of the LineMark header word 0 (`0x0914` / `0x090b` / `0x0912`) is not decoded; it may encode document type, writing direction, or another document-level property.
 
 ## Next Steps
 

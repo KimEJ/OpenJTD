@@ -283,6 +283,28 @@ three samples の all 24 `MarkV.01` entry offsets は `/LineMark` word range 外
 
 `rjtd text-position-count-fields <file>` は remaining `TCntV.01` tail を positional `u16be` fields として expose し、`rjtd text-position-count-field-deltas <file>` は chosen range span と tail `t1..t2` span を比較する。current samples では all 89 rows が `t2 >= t1` だが、`t2 - t1` が chosen range span と等しい row はない。`rjtd text-position-count-tail-context <file>` は `t1/t2` が byte hit pattern より強い `/DocumentText` UTF-16 unit hit pattern を示すが universal ではない。`rjtd text-position-count-tail-delta-scan <file>` は unit hits を delta 29/30 付近で最も増やすが、text hits は elsewhere で peak する。`rjtd text-position-count-tail-delta-groups <file>` は aggregate signal を tail-pattern groups に分ける: one major `be0` pattern は `+29`、shifted patterns は `+30/+31`、major `0x0202` pattern は many best deltas に分散する。`rjtd text-position-count-tail-row-deltas <file>` は major `0x0202` pattern が row-level best deltas でも分散したままであることを確認する。`rjtd text-position-count-tail-row-context <file>` は `0x0202` chosen ranges が later body byte ranges に触れることが多く、best-delta tail fields は early heading/date text に触れることが多いと示す。`rjtd text-position-count-range-preview <file>` は `0x0202` chosen byte ranges が direct layout-stream coordinates ではないにもかかわらず real `/DocumentText` text entries と overlap することを示す。`rjtd text-position-count-range-boundaries <file>` は major `0x0202` byte ranges が mostly whole `/DocumentText` map entries を含み、`0x001c`/`0x000e` controls を繰り返し含むことを追加する。`rjtd text-control-context <file>` は `0x001c` を high-frequency delimiter candidate、`0x000e` をより control-cluster or inline-adjacent と示す。これにより `TCntV.01` tail fields は有望なまま残るが、`t1/t2` を chosen range の単純な duplicate として扱うことは reject され、chosen-range analysis の次の target は `/DocumentText` control-delimited byte intervals になる。
 
+## LineMark ヘッダーワード 0 の変化
+
+2026-06-24 時点のローカルサンプルで `LineMark` ヘッダーワード 0 の値が 3 種類確認された：
+
+| 値 | サンプル |
+| --- | --- |
+| `0x0914` | `46.jtd`、`a5.jtd`、`b6.jtd`（Ginga 縦書きサンプル、RFC 0007 初期セット） |
+| `0x090b` | ローカルの行政文書サンプル 10 件すべて（`01要綱`、`02案文`、`03新旧`、`04参照`） |
+| `0x0912` | `論文様式.jtd`（A4 横書き学術論文テンプレート） |
+
+いずれも `0x0900` 系プレフィックスを共有し、下位バイトのみ異なる：
+`0x14 = 20`、`0x0b = 11`、`0x12 = 18`。Ginga 縦書きと A4 横書きの差は `2`（`0x0914` vs `0x0912`）、Ginga と行政文書の差は `9`（`0x0914` vs `0x090b`）。
+下位バイトの意味は未解読。文書種別・書字方向・その他の文書レベル属性をエンコードしている可能性がある。
+
+## LineMark と DocumentText 0x001c の相関
+
+RFC 0009 により、`/DocumentText` の各 `0x001c` が自己記述型の段落/レイアウトレコードのオープナーであることが確立された。`be16-delta-v1` LineMark プロファイルは表示行ごとに 1 レコードを出力し、`0x001c` は論理段落（複数の表示行に折り返す場合がある）をマークする。
+
+`論文様式.jtd`（LineMark レコード 25 件、`0x001c` レコード 19 件）では、25 件の LineMark `unit-start` 値のうち 14 件が `0x001c` レコード位置と完全一致する。残り 11 件はテキストラン内部または `0x0000` ドキュメントターミネーターに対応する。`flag=0x0000` を持つ LineMark レコードは `0x001c` 位置と一致しない傾向があり、折り返した段落内の続き表示行と整合する。
+
+`03新旧（整備令）.jtd`（解析済み LineMark レコード 157 件）では、`0x001c` レコードが表セルクラス `0x0030`（703 件）と段落クラス `0x0010`（151 件）を含み、新旧対照文書の表多用構造を反映している。LineMark のデルタ値も対応して小さく多様である。
+
 ## Known Gaps
 
 - `LineMark` record parser はまだ存在しない。
@@ -292,6 +314,7 @@ three samples の all 24 `MarkV.01` entry offsets は `/LineMark` word range 外
 - これらの streams と `MarkV.01` / `TCntV.01` の関係は decode されていない。current evidence は direct Mark-entry-to-LineMark-word indexing と direct `TCntV.01` range-to-layout-stream offsets を reject する。
 - small malformed samples は mini-stream chains が safely readable ではない inventory entries を expose することがある。small layout streams を解釈する前に `stream-meta` を使うべきである。
 - `/LineMark` は semantics unknown の tag-like values (`0x1000`, `0x1001`, `0x1002`) を持つ。current tag-context evidence は immediate next word を unique family discriminator にせず、direct `DocumentText` coordinates も証明しない。
+- LineMark ヘッダーワード 0 の値（`0x0914` / `0x090b` / `0x0912`）の意味は未解読。文書種別・書字方向・その他の文書レベル属性をエンコードしている可能性がある。
 
 ## Next Steps
 
