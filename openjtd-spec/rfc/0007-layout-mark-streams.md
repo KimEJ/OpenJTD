@@ -392,14 +392,15 @@ compared to the simple paragraph-only `論文様式.jtd`.
 
 ## PageLayoutStyle Observation
 
-Seven local government/academic samples expose `/PageLayoutStyle` and
+Ten local government/academic samples expose `/PageLayoutStyle` and
 `/PageLayoutStyleHeader` streams in addition to `/LineMark`/`/PageMark`/`/PaperMark`.
+(The four `04参照条文` variants and `論文様式.jtd` do not have `/PageLayoutStyle`.)
 
 **`/PageLayoutStyle` structure (initial inventory):** Starts with `SsmgV.01` magic (8
 bytes). The header words are mostly zero except for a small region around offsets
 `w5=0x0004` or `w5=0x0005`, `w7=0x0100`, `w9`=entry-count-like value,
 `w10=0x0001`, `w11=0x0002`. The first significant cluster of non-zero words starts
-at word 138. Across all seven samples, the value `0x4001` appears at word 155 or 156,
+at word 138. Across all ten samples, the value `0x4001` appears at word 155 or 156,
 followed immediately by `0x010d=269`. This `269` is one more than `0x010c=268`, which
 equals the maximum cell `b1` coordinate (table width) in `03新旧（整備令）.jtd`. The
 same value `269` appears in samples with no tables (`01要綱`, `02案文` families), so
@@ -420,17 +421,26 @@ corresponding positions in other sections); `0x07dd=2013` appears at words 285 a
 
 **`/PageLayoutStyle` slot `part06` cross-sample analysis (decoded:false):**
 Slots `0x32`–`0x39` each contain a `part06` byte sequence whose final u16 (big-endian)
-encodes a sample-specific value. In the `01要綱`/`02案文` family (A4, 13 rows/page):
-`0x32/0x33`→`0x03e8=1000`, `0x34/0x35`→`0x01c5=453`, `0x36/0x37`→`0x0258=600`,
-`0x38/0x39`→`0x0197=407`. In `03新旧（整備令）`: `0x32/0x33`→`0x0320=800` (20%
-less than `01要綱`'s 1000), `0x34/0x35`→`0x01c5=453` (identical), `0x36/0x37`→
-7-byte variant encoding two values (`0x0197=407` and `0x0305=773`), `0x38/0x39`→
-`0x019b=411` (4 more than `01要綱`'s 407). The slot-0x31 part06 in `01要綱` is
-`03002b010201ff01` (8 bytes); in `03新旧` it differs at the last u16 (`0xff01`→
-`0x2501=549`). The byte at position 1 of `part06` is `0x01` in `01要綱` but `0x00` in
-`03新旧`, which may be a format-version or layout-type flag. Physical meaning of the
-numeric values is not decoded; they may encode page-region heights or style parameters
-in the same coordinate system as `/DocumentText` `0x0030` cell coordinates.
+encodes a sample-specific value. Expanded to 10 samples (decoded:false):
+
+| Sample family | 0x32/0x33 | 0x34/0x35 | 0x36/0x37 | 0x38/0x39 | part06 byte1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `01要綱`/`02案文` | 1000 | 453 | 600 (5-byte) | 407 | `0x01` |
+| `03新旧（整備令）` | 800 | 453 | 407+773 (7-byte) | 411 | `0x00` |
+| `02_番号利用法（案文）` | 2000 | 0 | 0 (5-byte) | 0 | `0x00` |
+| `03_新旧（番号利用法）` | 1405 | 0 | 0+1397 (7-byte) | 0 | `0x00` |
+| `04_新旧（番号利用法）` | 1405 | 0 | 0+1397 (7-byte) | 0 | `0x00` |
+
+`03_新旧（番号利用法）` and `04_新旧（番号利用法）` are identical across all slots —
+consistent with being different processing stages of the same document revision.
+`0x34/0x35=453` appears only in the `01要綱`/`02案文`/`03新旧（整備令）` cluster and
+is absent from the three 番号利用法 variants. The `part06` byte at position 1 is `0x01`
+only in the `01要綱`/`02案文` family; all other samples have `0x00`.
+
+The slot-0x31 part06 in `01要綱` is `03002b010201ff01` (8 bytes); in `03新旧（整備令）`
+it differs at the last u16 (`0xff01`→`0x2501=549`). Physical meaning of the numeric
+values is not decoded; they may encode page-region heights or style parameters in the
+same coordinate system as `/DocumentText` `0x0030` cell coordinates.
 
 ## Known Gaps
 
