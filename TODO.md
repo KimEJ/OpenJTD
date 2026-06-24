@@ -267,7 +267,7 @@ Priority prework:
 - [ ] Decode the meaning of the varying MarkV.01 header value `0x0603`/`0x0610`/`0x061c`; current summary, LineMark-context, and exact-byte-search evidence weakens direct page-count, document-length, global page-style-code, or direct LineMark-entry-offset interpretations.
 - [ ] Decode the semantic meaning of the remaining fields inside 29-byte `TCntV.01` records; current `text-position-count-field-deltas` evidence shows `t1/t2` form an ordered range-like pair but not the same span as the chosen `start/end` range.
 - [ ] Determine whether `TCntV.01` mixes byte coordinates, UTF-16 unit coordinates, and layout/object-local coordinates, or whether the current token map is missing intervening record structure; tail `t1/t2` currently leans toward UTF-16 unit coordinates and delta 29/30 improve unit hits, while `0x0202` chosen ranges now show strong byte-range text/control overlap without matching the same tail coordinate behavior.
-- [ ] Decode `/DocumentText` control boundaries `0x001c` and `0x000e`; RFC 0009 proves that every `0x001c` is the opener of a self-describing variable-length record; `0x0030` `b0`/`b1` decoded as left/right cell coordinates (4-unit inter-cell gaps, max span 268); `0x0010` class has `w4`-based subtypes: `0x002e`=single-column para, `0x008f`=table-row spec (`len=w5+12`, `w6=max_b1`, `0x0023`/`0x002b` sub-entries, `0xffff` sentinel), `0x002a`=composite transition (Y-coords + inner `0x008f`), `0xffff`=null marker; remaining gaps: physical coordinate unit, precise `0x0023`/`0x002b` semantics, classes `0x0000`/`0x0020` payloads.
+- [ ] Decode `/DocumentText` control boundaries `0x001c` and `0x000e`; RFC 0009 proves the full record family: `0x0030` b0/b1=cell coordinates (4-unit gaps, max 268); `0x0010` w4-subtypes (`0x002e`=para, `0x008f`=table-row, `0x002a`=composite, `0xffff`=null); `0x0000 len=12`=inline-segment context (w4=inline-len, w6=525 constant); `0x0000 len=21`=table-cell marker (constant block + variable w8/w9/w13); `0x0020 len=12`=table→paragraph transition (w4=0x0010, w7=1); remaining gaps: physical coordinate unit, `0x0023`/`0x002b` sub-entry semantics, `w5` in `0x0000 len=12`, `w8`/`w9`/`w13` in `0x0000 len=21`.
 - [ ] Find a row-local, section-local, or record-local base offset that explains the file-specific shifts exposed by `text-boundary-layout-map`.
 - [ ] Explain why only 10 of the `iwata_file` strict boundary candidates have both line-word and page-field exact endpoint evidence while the remaining strict candidates and selected finance spans do not; since view-style group hits also appear on strict non-paragraph rows, treat them as default/flag-like until proven otherwise before constructing real paragraphs.
 - [ ] Promote `TCntV.01` `be0` and `be1-shifted` diagnostics into explicit raw-preserving record family types once the shifted leading byte is explained by a flag, prefix, version, or preceding record boundary.
@@ -491,3 +491,32 @@ Remaining:
 
 - [ ] Preserve headings, lists, tables, ruby, and layout semantics once the record parser exposes them.
 - [ ] Add HTML export after the model has stable block/inline semantics.
+
+## M5: WASM Viewer on Cloudflare Pages
+
+Goal: build `rjtd-wasm` with `wasm-pack` and deploy a static web viewer to Cloudflare Pages where users can drag-and-drop JTD files for in-browser viewing.
+
+Status: not started.
+
+Background:
+- `rjtd-wasm` is already configured as `cdylib` + `wasm-bindgen` and exposes `renderPageSvg()`, `renderPageHtml()`, `renderPageToCanvas()`, `plainText()`, `pageCount()`, and other browser-facing APIs.
+- Rendering accuracy is actively improving in M2/M3; the viewer implementation must not interfere with ongoing parser work.
+
+Prerequisites:
+- `wasm-pack --target web` build succeeds (verify WASM compatibility of `cfb` crate and other I/O dependencies).
+- `rjtd-core` reads CFB via a byte-slice interface without calling `std::fs` directly.
+
+Immediate tasks:
+
+- [ ] Verify `wasm-pack build --target web rjtd/crates/rjtd-wasm` compiles and identify any WASM-incompatible dependencies (`std::fs`, desktop-only `image` crate features, etc.).
+- [ ] Add `cfg(target_arch = "wasm32")` guards as needed to make the WASM build pass (I/O stubs, `image` crate feature gating, etc.).
+- [ ] Create a minimal HTML frontend in `openjtd.github.io/` (file drop → `HwpDocument.new(bytes)` → `renderPageSvg()` injected into a `<div>`, MVP only).
+- [ ] Add page navigation UI (previous/next buttons, page number display).
+- [ ] Add a `plainText()` output tab as a baseline for text search.
+- [ ] Package `wasm-pack` artifacts (`.wasm` + JS glue) alongside the HTML for deployment to Cloudflare Pages (static files only, no Workers required).
+- [ ] Set up a Cloudflare Pages GitHub Actions pipeline for automatic build and deploy when `rjtd-wasm` source is updated.
+
+Constraints:
+- Files must be processed entirely in-browser; nothing is uploaded to a server (privacy requirement).
+- Rendering quality depends on M2/M3 progress; the MVP may ship with `decoded:false` output.
+- Do not modify `rjtd-model` or `rjtd-core` parsing code for the viewer; the viewer adapts to the WASM API.
