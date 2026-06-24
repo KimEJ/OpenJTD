@@ -186,21 +186,21 @@ In `03新旧（整備令）.jtd` (a table-heavy new-vs-old comparison document),
 The `text-control-context` diagnostic confirms that every `0x000e` has
 `prev-control=0x001c` (class `0x0030`) and `next-control=0x001c` (class `0x0030`).
 
-This is consistent with `0x000e` acting as a **table-row delimiter** between
-class `0x0030` cell-header records:
+The `text-control-ranges` diagnostic shows that consecutive `0x000e` records are
+separated by exactly 2 bytes (1 u16 word). This means **`0x000e` itself is a
+single-word control code with no additional payload**; it acts as a raw
+one-word table-row delimiter. The pattern in a two-column new-vs-old table is:
 
 ```text
-0x001c 0x0030 ...row N cell A header...
-... cell A text ...
-0x000e  ← row delimiter between cell A and cell B
-0x001c 0x0030 ...row N cell B header...
-... cell B text ...
+[prev column text content]
+0x001c 0x0030 [12 words = cell A header] 0x001f [cell A text...]
+0x000e                                          ← 1-word row delimiter
+0x001c 0x0030 [12 words = cell B header] 0x001f [cell B text...]
 ```
 
 This corroborates the COM text export evidence in RFC 0003 §COM Text Export
 Observation (where `0x001c/0x0030` line headers and `0x000e` row delimiters
-were observed in the `shanai_lan` table context). The `0x000e` structure itself
-is not yet parsed or modeled.
+were observed in the `shanai_lan` table context).
 
 ## Known Gaps
 
@@ -213,8 +213,9 @@ is not yet parsed or modeled.
   logical/physical line hypothesis but not proven.
 - No multi-column sample was used to test whether table-cell `0x001c` records
   differ structurally from paragraph `0x001c` records within the same family.
-- The `0x000e` row delimiter between `0x001c/0x0030` cell headers is identified
-  but the record structure of `0x000e` itself (payload, length) is not decoded.
+- The `0x000e` row delimiter is confirmed as a single 1-word control code with no
+  additional payload. How the table-cell count, column widths, and cell geometry
+  are encoded elsewhere is not yet decoded.
 - Class `0x0010` records of varying length appear to share a common sub-header
   signature `0x0026 0x0005` at words `w4/w5` (seen in `論文様式.jtd` len=20 and
   `01要綱/02案文/04参照` len=17 samples). The len=17 variant shows variant fields
