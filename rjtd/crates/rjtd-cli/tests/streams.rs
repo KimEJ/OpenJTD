@@ -4611,6 +4611,48 @@ fn export_command_writes_markdown_from_document_model() {
 }
 
 #[test]
+fn export_command_writes_text_from_document_model() {
+    let path = tiny_cfb_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("export")
+        .arg(&path)
+        .arg("--format")
+        .arg("text")
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "銀河鉄道\n");
+}
+
+#[test]
+fn export_command_accepts_txt_alias() {
+    let path = tiny_cfb_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("export")
+        .arg(&path)
+        .arg("--format")
+        .arg("txt")
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "銀河鉄道\n");
+}
+
+#[test]
 fn export_command_writes_pdf_from_document_model() {
     let path = tiny_cfb_path();
     let output_path = path.with_extension("pdf");
