@@ -80,21 +80,48 @@ In `論文様式.jtd` all 19 records are len=20 with a stable payload:
 The semantic meaning of `w10` is not decoded. The observation suggests it may
 encode an indent level or paragraph continuation flag.
 
-### Class 0x0030 — short line header (12 words)
+**Table-row header substructure (decoded:false).** Records that precede sequences of
+`0x001c/0x0030` cells in `03新旧（整備令）.jtd` share a distinct header shape:
+`w4=0x008f`, `w5=(len-12)`, `w6=0x010c (268)`. The formula `len = w5 + 12` holds
+for all 154 table-row records verified in this sample. Field `w6=268` equals the
+maximum `b1` coordinate across all following cell records — consistent with `w6`
+encoding the total table width as a right-edge coordinate. Field `w8` equals the
+count of `0x0023`-tagged sub-entries in the variable payload. Two sub-entry tag
+values appear: `0x0023` (sparse values 0, 2, 6) and `0x002b` (values that
+approximate content-column widths +2). The payload ends with a `0xffff` sentinel.
+Precise semantics of sub-entry fields remain undecoded.
 
-Appears inside table-heavy samples. Fixed 12-word structure:
+### Class 0x0030 — table cell header (12 words fixed)
+
+Appears inside table-heavy samples, one per table cell per display row. Fixed
+12-word structure:
 
 ```text
 001c 0030 000c  0000 [b0] [b1] 00ff 0000  000c 0000 0030 001f
 ```
 
-Fields `b0` and `b1` vary. Representative examples:
+**`b0` and `b1` are cell boundary coordinates (decoded:false for scale/unit).**
+Analysis of 703 records in `03新旧（整備令）.jtd`:
+
+- `b0` = left edge of cell in the table coordinate space
+- `b1` = right edge of cell; `b1 − b0` = cell width in the same units
+- Cells within a row are non-overlapping and ordered left-to-right
+- Adjacent cells in the same row are separated by a gap of exactly 4 units
+
+Representative layout for the main two-column comparison table (4 cells per row):
 
 ```text
-001c 0030 000c 0000 0000 0002 00ff 0000 000c 0000 0030 001f
-001c 0030 000c 0000 0000 00c4 00ff 0000 000c 0000 0030 001f
-001c 0030 000c 0000 0000 00c8 00ff 0000 000c 0000 0030 001f
+gap  [b0, b1]   width  role
+  0  [  0,  2]      2  left border strip
+  4  [  6,130]    124  column A (改正案)
+  4  [134,258]    124  column B (現行)
+  4  [262,268]      6  right border strip
 ```
+
+Total table span = 268 (`max(b1)` = `0x010c`), which matches `w6` in the
+preceding `0x0010` row-header record. The physical unit of the coordinates is not
+decoded; 268 does not correspond to a simple mm or 1/10 mm value for the text
+area of an A4 page.
 
 This is the format referenced in RFC 0003 §COM Text Export Observation as the
 `shanai_lan` `0x001c/0x0030 line header` context.
@@ -207,7 +234,10 @@ were observed in the `shanai_lan` table context).
 - The semantic meaning of class `0x0010` payload words beyond the footer
   pattern is not decoded. The varying `w10` field likely encodes style or indent
   but has not been matched against rendered output.
-- Class `0x0030` fields `b0`/`b1` are not decoded.
+- Class `0x0030` fields `b0`/`b1` are partially decoded: `b0` is the left edge and
+  `b1` the right edge of the cell in the table coordinate space; cells are
+  non-overlapping with 4-unit inter-cell gaps. The physical unit of the coordinate
+  values is not decoded.
 - Classes `0x0000` and `0x0020` are observed but not interpreted.
 - The partial LineMark overlap (14/25 matches) is consistent with the
   logical/physical line hypothesis but not proven.
