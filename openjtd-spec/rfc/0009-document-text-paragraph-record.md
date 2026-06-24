@@ -343,10 +343,16 @@ were observed in the `shanai_lan` table context).
   samples reveals a new structural split by `(w8, w10)` magnitude: `(w8=w10=0x01cc=460)`
   appears only in `04参照条文` (also with `w6=1`); `(w8=w10=1)` or `(w8=w10=0/2)`
   appears in `01要綱` and `02案文` samples exclusively. The `02案文（整備令）` sample
-  has 21 records and `w7` takes values 0/1/2/6/8 (indent levels), all with `w8=1/w10=1`.
-  This suggests that `(w8, w10)` is either a document-type discriminator or that these
-  fields encode style IDs in short-text samples and physical coordinates in long
-  reference-statute samples. No physical unit scale is yet proven.
+  has 21 records and `w7` takes values 0/1/2/6/8. Correlation of `w7` with the
+  following text in `02案文（整備令）` shows the mapping is not simple visual-indent
+  depth: `w7=0` appears on flush-left statute headings, clauses, and article openers;
+  `w7=1` on article-clause continuation text; `w7=2` on item-list and appendix entries
+  (some with one leading fullwidth space, some flush); `w7=6` on preamble body text;
+  `w7=8` on supplementary-provision headings. This pattern is consistent with `w7`
+  encoding a paragraph-style ID rather than a visual indent count. The mapping of `w7`
+  values to Ichitaro named paragraph styles is not proven. `(w8, w10)` remains either a
+  document-type discriminator or encodes style IDs (short-text samples) vs physical
+  coordinates (reference-statute samples). No physical unit scale is yet proven.
 
 ## Samples Used
 
