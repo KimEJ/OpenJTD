@@ -438,6 +438,7 @@ Remaining:
 - [ ] redistributable samples が利用可能になったら fixture-based expected JSON outputs を追加する。
 - [ ] inner `DocumentText` structure が理解できたら、decompressed `.jttc` template text/control placeholders を meaningful model blocks に変換する。
 - [ ] `success_data-test` abc table unit range `519..924` の physical table geometry を decode し、current reference PDF `x/y/width/height` calibration を source-backed page-space origin、height、overall width、unit scale に置き換える。column widths は source line-header spans に従うようになったため、次の proof は trailing line-header candidates (`76..88`, `92..174`) plus source-backed top-text anchors が visible table placement と total width をどう決めるかに集中する。
+- [ ] style/layout streams から一太郎の縦書きフラグを decode し、現在のファイル名ヒストによる fallback に代わって model `WritingMode` を parsed evidence から設定する。`getDocumentInfo` は `writingModeCandidateFromPaperMark`（RFC 0007 §PaperMark: フラグ `0x00010011` は Ginga 縦書きサンプルにのみ出現）と `writingModeCandidateDecoded:false` を出力するようになった。候補は diagnostic-only であり、TODO 327（PaperMark flag semantics undecoded）が未解決のため `WritingMode` を自動設定しない。次のステップ：`0x00010011` が全 Ichitaro バージョンで縦書きを一意に示すことを確認してから `from_document()` で `WritingMode::VerticalRl` を自動設定する。
 
 ## M4: Markdown Export
 

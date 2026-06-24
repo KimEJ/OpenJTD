@@ -1225,14 +1225,20 @@ impl DocumentCore {
         let style_candidates = text_style_candidates(self.document.unknown_styles());
         let font_names = document_font_names(&self.document);
         let fallback_font = primary_document_font_name(&font_names);
+        let writing_mode_candidate =
+            writing_mode_candidate_from_paper_marks(self.document.paper_marks());
+        let writing_mode_candidate_str = writing_mode_candidate
+            .map(|m| format!("\"{}\"", m.as_str()))
+            .unwrap_or_else(|| "null".to_string());
         format!(
-            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
+            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
             APP_SOURCE_FORMAT,
             json_string(&self.file_name),
             self.page_count(),
             json_string(fallback_font),
             string_array_json(&font_names),
             self.writing_mode.as_str(),
+            writing_mode_candidate_str,
             self.document.blocks().len(),
             self.document.raw_streams().len(),
             self.document.unknown_styles().len(),
@@ -20144,6 +20150,24 @@ fn paper_marks_json(paper_marks: &[DocumentPaperMark]) -> String {
     }
     output.push(']');
     output
+}
+
+// RFC 0007 §PaperMark: flag 0x00010011 appears exclusively in Ginga vertical-writing
+// samples (a5/a6/b6/46) and never in horizontal samples. Not yet formally decoded
+// (TODO 327), so the result is diagnostic-only and must not gate WritingMode directly.
+fn writing_mode_candidate_from_paper_marks(
+    paper_marks: &[DocumentPaperMark],
+) -> Option<WritingMode> {
+    let has_vertical_flag = paper_marks.iter().any(|mark| {
+        mark.entries()
+            .iter()
+            .any(|entry| entry.flags() == 0x0001_0011)
+    });
+    if has_vertical_flag {
+        Some(WritingMode::VerticalRl)
+    } else {
+        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39332,6 +39356,8 @@ mod tests {
         assert!(document_info.contains("\"sectionCount\":1"));
         assert!(document_info.contains("\"writingMode\":\"horizontal\""));
         assert!(document_info.contains("\"writingModeDecoded\":false"));
+        assert!(document_info.contains("\"writingModeCandidateFromPaperMark\":null"));
+        assert!(document_info.contains("\"writingModeCandidateDecoded\":false"));
         assert!(document_info.contains("\"textControlBoundaryCount\":0"));
         assert!(document_info.contains("\"textControlBoundaries\":[]"));
 
@@ -40000,6 +40026,9 @@ mod tests {
         assert!(document_info.contains("\"sourceStream\":\"/PaperMark\""));
         assert!(document_info.contains("\"headerStride\":12"));
         assert!(document_info.contains("\"flagsHex\":\"0x00010010\""));
+        assert!(document_info
+            .contains("\"writingModeCandidateFromPaperMark\":\"vertical-rl\""));
+        assert!(document_info.contains("\"writingModeCandidateDecoded\":false"));
 
         let page_seven_layer_tree = core.get_page_layer_tree(6).unwrap();
         assert!(page_seven_layer_tree.contains("\"side\":\"right\""));
