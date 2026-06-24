@@ -179,9 +179,12 @@ header block and a variable tail:
 
 Fields `w4=0x56=86`, `w5=0x0000`, `w6=0x0406=1030`, `w7=0x0010=16` are constant
 (style/context codes, not decoded). `w8` is a flag (0 or 1). When `w8=0`, `w9`
-takes small values (0, 1, 2, 4, 5). When `w8=1`, `w9` takes large values
-(`0x025d=605` or `0x0229=553`); `w13` covaries with `w9` (`0xcd=205` or
-`0x99=153`). No physical meaning decoded.
+takes small values (0, 1, 2, 4, 5) with `w13` mostly 0 or 2. When `w8=1` (6
+occurrences), `w9` takes large values and `w13` covaries: the pair
+`(w9=0x025d=605, w13=0xcd=205)` always accompanies the cell `[b0=4, b1=132]`
+and `(w9=0x0229=553, w13=0x99=153)` always accompanies the symmetric cell
+`[b0=136, b1=264]`. In both `w8=1` pairs `w9 − w13 = 400` exactly. No
+physical meaning decoded for the coordinate relationship.
 
 ### Class 0x0020 — table-section transition marker (12 words)
 
