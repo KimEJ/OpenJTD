@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenJTD Viewer</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* デジタル庁デザインシステム トークン */
+  :root {
+    /* Key color = Blue (UI操作系) */
+    --color-key-700:   #264af4;
+    --color-key-600:   #3460fb;
+    --color-key-500:   #4979f5;
+    --color-key-100:   #d9e6ff;
+    --color-key-50:    #e8f1fe;
+
+    /* Brand color = 一太郎レッド */
+    --color-brand-900: #ce0000;
+    --color-brand-800: #ec0000;
+    --color-brand-700: #fa0000;
+    --color-brand-50:  #fdeeee;
+
+    /* Neutral */
+    --color-white:     #ffffff;
+    --color-black:     #000000;
+    --color-gray-900:  #1a1a1a;
+    --color-gray-800:  #333333;
+    --color-gray-700:  #4d4d4d;
+    --color-gray-600:  #666666;
+    --color-gray-536:  #767676;
+    --color-gray-200:  #cccccc;
+    --color-gray-100:  #e6e6e6;
+    --color-gray-50:   #f2f2f2;
+
+    /* Typography */
+    --font-sans: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-size-base: 16px;
+    --font-size-sm:   14px;
+    --line-height-body: 175%;
+
+    /* Spacing (8px unit) */
+    --sp-1: 8px;
+    --sp-2: 16px;
+    --sp-3: 24px;
+    --sp-4: 32px;
+    --sp-6: 48px;
+
+    /* Corner */
+    --radius-sm: 8px;
+    --radius-md: 16px;
+
+    /* Elevation / shadow */
+    --shadow-1: 0 1px 2px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08);
+    --shadow-2: 0 2px 4px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-body);
+    color: var(--color-gray-900);
+    background: var(--color-gray-50);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ヘッダー */
+  .site-header {
+    background: var(--color-white);
+    border-bottom: 2px solid var(--color-brand-800);
+    padding: var(--sp-2) var(--sp-3);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex-shrink: 0;
+    box-shadow: var(--shadow-1);
+  }
+  .site-header__logo {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+  }
+  .site-header__logo-mark {
+    width: 32px;
+    height: 32px;
+    background: var(--color-brand-800);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-white);
+    font-size: 18px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .site-header__title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-gray-900);
+    letter-spacing: 0.01em;
+  }
+  .site-header__subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+    margin-left: auto;
+  }
+
+  /* ドロップゾーン */
+  #drop-zone {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    margin: var(--sp-3);
+    border: 2px dashed var(--color-gray-200);
+    border-radius: var(--radius-md);
+    background: var(--color-white);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    box-shadow: var(--shadow-1);
+  }
+  #drop-zone:hover,
+  #drop-zone.drag-over {
+    border-color: var(--color-key-600);
+    background: var(--color-key-50);
+  }
+  .drop-zone__icon {
+    width: 80px;
+    height: 80px;
+    background: var(--color-brand-50);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .drop-zone__primary {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-gray-800);
+  }
+  .drop-zone__secondary {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+  }
+  .drop-zone__btn {
+    margin-top: var(--sp-1);
+    padding: 10px var(--sp-3);
+    background: var(--color-key-700);
+    color: var(--color-white);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    min-height: 44px;
+  }
+  .drop-zone__btn:hover { background: var(--color-key-600); }
+  .drop-zone__note {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-536);
+  }
+  #file-input { display: none; }
+
+  /* ビューア */
+  #viewer {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ツールバー */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: var(--sp-1) var(--sp-2);
+    background: var(--color-white);
+    border-bottom: 1px solid var(--color-gray-100);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    box-shadow: var(--shadow-1);
+  }
+  .toolbar__filename {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--color-gray-800);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .toolbar__page-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+    min-width: 72px;
+    text-align: center;
+  }
+  .toolbar__status {
+    font-size: var(--font-size-sm);
+    color: var(--color-key-700);
+  }
+
+  /* ボタン共通 */
+  .btn {
+    padding: 6px var(--sp-2);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 36px;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .btn--filled {
+    background: var(--color-key-700);
+    color: var(--color-white);
+  }
+  .btn--filled:hover { background: var(--color-key-600); }
+  .btn--filled:disabled { background: var(--color-gray-200); color: var(--color-gray-536); cursor: default; }
+
+  .btn--outline {
+    background: var(--color-white);
+    color: var(--color-key-700);
+    border: 2px solid var(--color-key-700);
+  }
+  .btn--outline:hover { background: var(--color-key-50); }
+  .btn--outline:disabled { border-color: var(--color-gray-200); color: var(--color-gray-536); cursor: default; }
+
+  .btn--ghost {
+    background: transparent;
+    color: var(--color-gray-700);
+    border: 1px solid var(--color-gray-200);
+  }
+  .btn--ghost:hover { background: var(--color-gray-50); }
+
+  /* タブ */
+  .tab-group {
+    display: flex;
+    gap: 2px;
+    background: var(--color-gray-100);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+  }
+  .tab-btn {
+    padding: 4px 14px;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    cursor: pointer;
+    background: transparent;
+    color: var(--color-gray-600);
+    min-height: 32px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab-btn:hover { color: var(--color-gray-900); }
+  .tab-btn.active {
+    background: var(--color-white);
+    color: var(--color-key-700);
+    box-shadow: var(--shadow-1);
+  }
+
+  /* コンテンツエリア */
+  #content-area {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    padding: var(--sp-3);
+    background: var(--color-gray-50);
+  }
+
+  #svg-container {
+    width: 100%;
+    max-width: 860px;
+  }
+  #svg-container svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: var(--color-white);
+    box-shadow: var(--shadow-2);
+    border-radius: var(--radius-sm);
+  }
+
+  #text-container {
+    width: 100%;
+    max-width: 860px;
+    background: var(--color-white);
+    padding: var(--sp-4);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-2);
+    white-space: pre-wrap;
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-body);
+    color: var(--color-gray-900);
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__logo">
+    <div class="site-header__logo-mark">J</div>
+    <span class="site-header__title">OpenJTD Viewer</span>
+  </div>
+  <span class="site-header__subtitle">一太郎 JTD ファイルビューア（ブラウザ内処理・サーバー送信なし）</span>
+</header>
+
+<div id="drop-zone">
+  <div class="drop-zone__icon">
+    <svg width="48" height="48" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill="#ec0000"/>
+      <text x="16" y="23" font-family="'Noto Sans JP','Hiragino Sans',sans-serif" font-size="18" font-weight="700" fill="white" text-anchor="middle">J</text>
+    </svg>
+  </div>
+  <p class="drop-zone__primary">JTD / JTT / JTTC ファイルをドロップ</p>
+  <p class="drop-zone__secondary">またはボタンからファイルを選択してください</p>
+  <button class="drop-zone__btn" onclick="document.getElementById('file-input').click()">ファイルを選択</button>
+  <p class="drop-zone__note">ファイルはブラウザ内のみで処理されます</p>
+  <input type="file" id="file-input" accept=".jtd,.jtt,.jttc">
+</div>
+
+<div id="viewer">
+  <div class="toolbar">
+    <button id="btn-prev" class="btn btn--outline">◀ 前</button>
+    <span id="page-info" class="toolbar__page-info">1 / 1</span>
+    <button id="btn-next" class="btn btn--outline">次 ▶</button>
+    <span id="filename" class="toolbar__filename"></span>
+    <span id="status" class="toolbar__status"></span>
+    <div class="tab-group">
+      <button id="tab-svg" class="tab-btn active">ページ表示</button>
+      <button id="tab-text" class="tab-btn">テキスト</button>
+    </div>
+    <button id="btn-close" class="btn btn--ghost">✕ 閉じる</button>
+  </div>
+  <div id="content-area">
+    <div id="svg-container"></div>
+    <div id="text-container" style="display:none"></div>
+  </div>
+</div>
+
+<script type="module">
+import init, { HwpDocument } from './pkg/rjtd_wasm.js';
+
+let doc = null;
+let currentPage = 0;
+let totalPages = 0;
+let currentTab = 'svg';
+
+async function loadWasm() {
+  await init();
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+function renderPage() {
+  if (!doc) return;
+  document.getElementById('page-info').textContent = `${currentPage + 1} / ${totalPages}`;
+  document.getElementById('btn-prev').disabled = currentPage === 0;
+  document.getElementById('btn-next').disabled = currentPage === totalPages - 1;
+
+  if (currentTab !== 'svg') return;
+  const svgContainer = document.getElementById('svg-container');
+  try {
+    svgContainer.innerHTML = doc.renderPageSvg(currentPage);
+  } catch (e) {
+    svgContainer.innerHTML = `<p style="color:#c00;padding:16px">レンダリングエラー: ${e}</p>`;
+  }
+}
+
+function showText() {
+  if (!doc) return;
+  document.getElementById('text-container').textContent = doc.plainText();
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  const svgContainer = document.getElementById('svg-container');
+  const textContainer = document.getElementById('text-container');
+  document.getElementById('tab-svg').classList.toggle('active', tab === 'svg');
+  document.getElementById('tab-text').classList.toggle('active', tab === 'text');
+  svgContainer.style.display = tab === 'svg' ? '' : 'none';
+  textContainer.style.display = tab === 'text' ? '' : 'none';
+  if (tab === 'svg') renderPage();
+  else showText();
+}
+
+async function openFile(file) {
+  setStatus('読み込み中…');
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  try {
+    if (doc) { doc.free(); doc = null; }
+    doc = new HwpDocument(bytes);
+    totalPages = doc.pageCount();
+    currentPage = 0;
+    document.getElementById('filename').textContent = file.name;
+    document.getElementById('drop-zone').style.display = 'none';
+    document.getElementById('viewer').style.display = 'flex';
+    setStatus('');
+    switchTab('svg');
+  } catch (e) {
+    setStatus(`エラー: ${e}`);
+  }
+}
+
+function closeViewer() {
+  if (doc) { doc.free(); doc = null; }
+  document.getElementById('viewer').style.display = 'none';
+  document.getElementById('drop-zone').style.display = 'flex';
+  document.getElementById('svg-container').innerHTML = '';
+  document.getElementById('text-container').textContent = '';
+  setStatus('');
+}
+
+// イベント
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) openFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) openFile(fileInput.files[0]);
+});
+
+document.getElementById('btn-prev').addEventListener('click', () => {
+  if (currentPage > 0) { currentPage--; renderPage(); }
+});
+document.getElementById('btn-next').addEventListener('click', () => {
+  if (currentPage < totalPages - 1) { currentPage++; renderPage(); }
+});
+document.getElementById('tab-svg').addEventListener('click', () => switchTab('svg'));
+document.getElementById('tab-text').addEventListener('click', () => switchTab('text'));
+document.getElementById('btn-close').addEventListener('click', closeViewer);
+
+loadWasm();
+</script>
+</body>
+</html>
