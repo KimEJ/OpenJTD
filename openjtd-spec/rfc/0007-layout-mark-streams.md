@@ -76,7 +76,7 @@ Analysis of the 11 government/academic samples reveals that `lineStart`/`lineEnd
 
 Consecutive `additive-boundary` entries step forward by exactly `rows_per_page` in `lineStart` — i.e. they tile the layout coordinate space in fixed page-height increments. `mixed-payload` entries at the same index carry anomalously large or internally inconsistent values and likely represent style-record slots, not body pages. `zero-sentinel` entries have `lineStart = lineEnd` and appear at the end of a group as spacer or sentinel positions. The total number of normal `additive-boundary` entries far exceeds the visible document content in short samples (e.g. `01要綱（事務局組織令）` has 130+ additive entries but only 9 text lines), suggesting that PageMark pre-allocates a fixed layout-slot grid regardless of actual content length. The physical meaning of the layout row coordinates — in particular whether row 0 is the first printable line of the document body or includes margins and headers — is not decoded.
 
-The `count_value = last_index_value + 1` invariant holds for all 14 tested samples (Ginga large + 11 new local government/academic). `/PageMark` and `/PaperMark` share the same `count_value` in every sample. The meaning of `count_value` is not decoded.
+The `count_value = last_index_value + 1` invariant holds for all 17 tested samples (Ginga large x3 + 14 local government/academic). `/PageMark` and `/PaperMark` share the same `count_value` in every sample. The meaning of `count_value` is not decoded.
 
 | Sample | header value 0 | header value 1 | header value 2 | rows | stream length formula |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -165,7 +165,7 @@ N rows of:
 
 The row count is derived from stream length as `(stream_len - 12) / 8`. The first header value is count-like but is not always equal to either `row_count` or `row_count - 1`, so the parser preserves it as an observed header value instead of assigning semantics.
 
-However, from the 11 new government/academic local samples added in 2026-06-24, a stronger invariant emerges across **all 14 currently tested samples**:
+However, from the government/academic local samples (first 11 added 2026-06-24, 3 more added later), a stronger invariant emerges across **all 17 currently tested samples**:
 
 - `header_value_2 = header_value_0 - 1` (always; `last_index_value = count_value - 1`)
 - `/PageMark` and `/PaperMark` headers share the same `count_value` in every sample
@@ -179,16 +179,26 @@ This means `count_value` and `last_index_value` are not independent — one is d
 | `b6.jtd` | 98 | 12 | 97 | 98 | `0x00010000` x90, `0x00010010` x6, `0x00010011` x2 |
 | `論文様式.jtd` | 3 | 12 | 2 | 3 | `0x00010010` x1, `0x00010000` x2 |
 | `01要綱（事務局組織令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x129, `0x00010000` x9 |
+| `01要綱（施行期日政令）.jtd` | 8 | 12 | 7 | 138 | `0x00010010` x129, `0x00010000` x9 |
+| `01要綱（整備政令）.jtd` | 6 | 12 | 5 | 138 | `0x00010010` x128, `0x00010000` x10 |
+| `02_番号利用法・住基法改正（案文）.jtd` | 9 | 12 | 8 | 9 | `0x00010010` x5, `0x00010000` x4 |
+| `02案文・理由（施行期日政令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x132, `0x00010000` x6 |
+| `02案文・理由（整備令）.jtd` | 8 | 12 | 7 | 138 | `0x00010010` x133, `0x00010000` x5 |
+| `02案文・理由（事務局組織令）.jtd` | 6 | 12 | 5 | 138 | `0x00010010` x130, `0x00010000` x8 |
+| `03_新旧（番号利用法）.jtd` | 208 | 12 | 207 | 208 | `0x00010010` x204, `0x00010000` x4 |
 | `03新旧（整備令）.jtd` | 11 | 12 | 10 | 16 | `0x00010010` x2, `0x00010000` x14 |
+| `04_新旧（番号利用法）.jtd` | 19 | 12 | 18 | 118 | `0x00010010` x112, `0x00010000` x6 |
 | `04参照条文（施行日政令）.jtd` | 7 | 12 | 6 | 158 | `0x00010010` x107, `0x00010000` x51 |
 | `04参照条文（組織令）.jtd` | 6 | 12 | 5 | 158 | `0x00010010` x105, `0x00010000` x53 |
 | `04参照条文（整備政令）.jtd` | 25 | 12 | 24 | 158 | `0x00010010` x114, `0x00010000` x44 |
 
-The `0x00010011` flag, observed in Ginga vertical samples (`46`/`a5`/`b6`), does not appear in any of the 11 new horizontal government/academic samples. The vertical samples also have a much higher ratio of `0x00010000` to `0x00010010` entries compared to the government document samples.
+The `0x00010011` flag, observed in Ginga vertical samples (`46`/`a5`/`b6`), does not appear in any of the 14 horizontal government/academic samples. The vertical samples also have a much higher ratio of `0x00010000` to `0x00010010` entries compared to the government document samples.
+
+One notable exception to the usual pattern: `03_新旧（番号利用法）.jtd` has `count_value = row_count = 208` — unlike most other government samples where `count_value` is much smaller than `row_count`. Its PaperMark is also overwhelmingly `0x00010010` (204/208), consistent with a long continuous new/old comparison table spanning many pages without section breaks.
 
 The flags `0x00010000`/`0x00010010` interleave in alternating groups — runs of consecutive `0x00010010` entries followed by runs of consecutive `0x00010000` entries. The number of such groups is not the same as `count_value`.
 
-Cross-referencing PaperMark flag runs with the `/PageMark` `lineStart`/`lineEnd` values for the corresponding entry index (same entry index, same document position) reveals a consistent structural pattern across the 11 government/academic samples. For each transition from a `0x00010010` run to a `0x00010000` run, the `lineStart` of the first `0x00010000` entry is larger than the `lineEnd` of the last `0x00010010` entry before it. The gap is approximately 30 lines in the `04参照条文` samples, 11–13 lines in the `02案文` samples. The `0x00010000` runs in `04参照条文` samples correspond to spans of `lineStart`/`lineEnd` values that span approximately 30 contiguous lines each — strongly suggesting a section of body text such as one referenced statute article.
+Cross-referencing PaperMark flag runs with the `/PageMark` `lineStart`/`lineEnd` values for the corresponding entry index (same entry index, same document position) reveals a consistent structural pattern across the 14 government/academic samples. For each transition from a `0x00010010` run to a `0x00010000` run, the `lineStart` of the first `0x00010000` entry is larger than the `lineEnd` of the last `0x00010010` entry before it. The gap is approximately 30 lines in the `04参照条文` samples, 11–13 lines in the `02案文` samples. The `0x00010000` runs in `04参照条文` samples correspond to spans of `lineStart`/`lineEnd` values that span approximately 30 contiguous lines each — strongly suggesting a section of body text such as one referenced statute article.
 
 Example from `04参照条文（施行日政令）.jtd`:
 
