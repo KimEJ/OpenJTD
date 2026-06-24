@@ -269,8 +269,8 @@ Priority prework:
 - [x] fallback body-text suppression を `success_data-test` reference table 専用ではなく、current SVG renderer が実際に描画する table candidate 全体へ generalize する。`tsaiten` の `235点以上` と `success_data-test` の `０.８` のような cells は generic fallback text layer と重複せず SVG 内で 1 回だけ現れる。
 - [x] page が observed form/text projection を持つ場合、未証明の `sourceDerivedDiagnosticProjection` table grids は visible SVG/PDF には描画しない。source-derived layout evidence は `getPageLayerTree` に保持するが、PDF-backed `tsaiten` output では 2 件の diagnostic source-derived grids が reference/form projection に重ならなくなり、中段 table text overlap を除去しつつ future source-backed promotion 用の generic table evidence は残す。
 - [ ] table semantics は named stream matching ではなく `/DocumentText` control ranges と layout/style streams から decode する。current inventory は `hyo` sample を含め named table stream を見つけていない。
-- [ ] `/PaperMark` header count-like values と `0x00010000`/`0x00010010`/`0x00010011` flags の semantic meaning を decode する。
-- [ ] parser shape を広げる前に、3 件の unsupported `/PaperMark` stride values を説明する。
+- [ ] `/PaperMark` header count-like values と `0x00010000`/`0x00010010`/`0x00010011` flags の semantic meaning を decode する。RFC 0007 §PaperMark に `count_value = last_index_value + 1` が全 14 サンプルで成立すること、`/PageMark`/`/PaperMark` が同じサンプル内で `count_value` を共有すること、`0x00010011` は Ginga 縦書きサンプルにのみ出現すること、`0x00010000`/`0x00010010` の交互グループパターンを記録済み。意味は未解読。
+- [ ] parser shape を広げる前に、3 件の unsupported `/PaperMark` stride values を説明する。RFC 0007 §PaperMark に stale/foreign payloads（CFB ディレクトリ断片、OLE/ActiveX メタデータ）として記録済み。新しい証拠なし。
 - [ ] `/LineMark` 内の `0x1000`、`0x1001`、`0x1002` tag families を decode する。current evidence では immediate next word は family discriminator ではなく payload-like で、LineMark offsets は direct text coordinates ではない。
 - [ ] MarkV.01 header の final `u16` が両 stream を持つ 3 samples で `/LineMark` tag clusters 付近に入る一方、MarkV.01 entry offsets は入らない理由を説明する。
 - [ ] embedded fragment plausibility filtering を structured object/stream boundary parsing に置き換える。

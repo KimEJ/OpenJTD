@@ -57,11 +57,19 @@ N rows of 84 raw bytes
 
 The first dword in each 84-byte row is an index-like value. The rest of the row is preserved as raw bytes because the fields are not semantically decoded yet.
 
+The `count_value = last_index_value + 1` invariant holds for all 14 tested samples (Ginga large + 11 new local government/academic). `/PageMark` and `/PaperMark` share the same `count_value` in every sample. The meaning of `count_value` is not decoded.
+
 | Sample | header value 0 | header value 1 | header value 2 | rows | stream length formula |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `46.jtd` | 96 | 16 | 95 | 97 | `12 + 97 * 84 = 8160` |
 | `a5.jtd` | 74 | 16 | 73 | 75 | `12 + 75 * 84 = 6312` |
 | `b6.jtd` | 98 | 16 | 97 | 98 | `12 + 98 * 84 = 8244` |
+| `論文様式.jtd` | 3 | 16 | 2 | 3 | `12 + 3 * 84 = 264` |
+| `01要綱（事務局組織令）.jtd` | 7 | 16 | 6 | 135 | `12 + 135 * 84 = 11352` |
+| `03新旧（整備令）.jtd` | 11 | 16 | 10 | 12 | `12 + 12 * 84 = 1020` |
+| `04参照条文（施行日政令）.jtd` | 7 | 16 | 6 | 154 | `12 + 154 * 84 = 12948` |
+| `04参照条文（組織令）.jtd` | 6 | 16 | 5 | 7 | count-plus-one-trim2, row_bytes=1852 (7 large variable entries) |
+| `04参照条文（整備政令）.jtd` | 25 | 16 | 24 | 154 | `12 + 154 * 84 = 12948` |
 
 High-frequency `u32be` values show packed coordinate-like tuples inside the raw rows, but the internal field layout is not decoded:
 
@@ -138,11 +146,28 @@ N rows of:
 
 The row count is derived from stream length as `(stream_len - 12) / 8`. The first header value is count-like but is not always equal to either `row_count` or `row_count - 1`, so the parser preserves it as an observed header value instead of assigning semantics.
 
+However, from the 11 new government/academic local samples added in 2026-06-24, a stronger invariant emerges across **all 14 currently tested samples**:
+
+- `header_value_2 = header_value_0 - 1` (always; `last_index_value = count_value - 1`)
+- `/PageMark` and `/PaperMark` headers share the same `count_value` in every sample
+
+This means `count_value` and `last_index_value` are not independent — one is derived from the other. Their shared meaning is not decoded. Possible candidates: number of distinct page-section transitions, number of page-layout regions, or an unrelated document-level counter.
+
 | Sample | header value 0 | header value 1 | header value 2 | rows | flag distribution |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `46.jtd` | 96 | 12 | 95 | 97 | `0x00010000` x89, `0x00010010` x7, `0x00010011` x1 |
 | `a5.jtd` | 74 | 12 | 73 | 75 | `0x00010000` x65, `0x00010010` x9, `0x00010011` x1 |
 | `b6.jtd` | 98 | 12 | 97 | 98 | `0x00010000` x90, `0x00010010` x6, `0x00010011` x2 |
+| `論文様式.jtd` | 3 | 12 | 2 | 3 | `0x00010010` x1, `0x00010000` x2 |
+| `01要綱（事務局組織令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x129, `0x00010000` x9 |
+| `03新旧（整備令）.jtd` | 11 | 12 | 10 | 16 | `0x00010010` x2, `0x00010000` x14 |
+| `04参照条文（施行日政令）.jtd` | 7 | 12 | 6 | 158 | `0x00010010` x107, `0x00010000` x51 |
+| `04参照条文（組織令）.jtd` | 6 | 12 | 5 | 158 | `0x00010010` x105, `0x00010000` x53 |
+| `04参照条文（整備政令）.jtd` | 25 | 12 | 24 | 158 | `0x00010010` x114, `0x00010000` x44 |
+
+The `0x00010011` flag, observed in Ginga vertical samples (`46`/`a5`/`b6`), does not appear in any of the 11 new horizontal government/academic samples. The vertical samples also have a much higher ratio of `0x00010000` to `0x00010010` entries compared to the government document samples.
+
+The flags `0x00010000`/`0x00010010` interleave in alternating groups — runs of consecutive `0x00010010` entries followed by runs of consecutive `0x00010000` entries. The number of such groups is not the same as `count_value`.
 
 `rjtd paper-marks <file>` exposes this parser-backed diagnostic. It is not wired into the document model yet because the header and flag semantics are unknown. `rjtd paper-mark-shape <file>` exposes a non-failing shape diagnostic for all observed `/PaperMark` streams.
 

@@ -136,11 +136,28 @@ N rows of:
 
 row count は stream length から `(stream_len - 12) / 8` として derive する。first header value は count-like だが、常に `row_count` または `row_count - 1` と等しいわけではないため、parser は semantics を割り当てず observed header value として保存する。
 
+ただし、2026-06-24 に追加した 11 件の行政文書・学術論文サンプルを含む**全 14 件**で、より強い不変条件が確認された：
+
+- `header_value_2 = header_value_0 - 1` （常に成立。`last_index_value = count_value - 1`）
+- `/PageMark` と `/PaperMark` のヘッダーは同じサンプル内で `count_value` が常に同一
+
+つまり `count_value` と `last_index_value` は独立していない。一方が他方から導出される。両者の共通の意味は未解読。候補：ページセクション遷移数、ページレイアウト領域数、または文書レベルの別カウンター。
+
 | Sample | header value 0 | header value 1 | header value 2 | rows | flag distribution |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `46.jtd` | 96 | 12 | 95 | 97 | `0x00010000` x89, `0x00010010` x7, `0x00010011` x1 |
 | `a5.jtd` | 74 | 12 | 73 | 75 | `0x00010000` x65, `0x00010010` x9, `0x00010011` x1 |
 | `b6.jtd` | 98 | 12 | 97 | 98 | `0x00010000` x90, `0x00010010` x6, `0x00010011` x2 |
+| `論文様式.jtd` | 3 | 12 | 2 | 3 | `0x00010010` x1, `0x00010000` x2 |
+| `01要綱（事務局組織令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x129, `0x00010000` x9 |
+| `03新旧（整備令）.jtd` | 11 | 12 | 10 | 16 | `0x00010010` x2, `0x00010000` x14 |
+| `04参照条文（施行日政令）.jtd` | 7 | 12 | 6 | 158 | `0x00010010` x107, `0x00010000` x51 |
+| `04参照条文（組織令）.jtd` | 6 | 12 | 5 | 158 | `0x00010010` x105, `0x00010000` x53 |
+| `04参照条文（整備政令）.jtd` | 25 | 12 | 24 | 158 | `0x00010010` x114, `0x00010000` x44 |
+
+`0x00010011` フラグは Ginga 縦書きサンプル（`46`/`a5`/`b6`）にのみ出現し、11 件の新規横書き行政・学術サンプルには存在しない。縦書きサンプルは横書きサンプルと比べて `0x00010000` と `0x00010010` のエントリ比率も大きく異なる。
+
+フラグ `0x00010000`/`0x00010010` は交互のグループをなして並ぶ — 連続する `0x00010010` エントリの群の後に連続する `0x00010000` エントリの群が続く。グループ数は `count_value` とは一致しない。
 
 `rjtd paper-marks <file>` はこの parser-backed diagnostic を expose する。header と flag semantics が unknown のため、document model にはまだ wire されていない。`rjtd paper-mark-shape <file>` は observed `/PaperMark` streams すべてに対する non-failing shape diagnostic を expose する。
 
