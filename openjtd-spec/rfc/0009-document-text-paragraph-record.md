@@ -80,16 +80,32 @@ In `論文様式.jtd` all 19 records are len=20 with a stable payload:
 The semantic meaning of `w10` is not decoded. The observation suggests it may
 encode an indent level or paragraph continuation flag.
 
-**Table-row header substructure (decoded:false).** Records that precede sequences of
-`0x001c/0x0030` cells in `03新旧（整備令）.jtd` share a distinct header shape:
-`w4=0x008f`, `w5=(len-12)`, `w6=0x010c (268)`. The formula `len = w5 + 12` holds
-for all 154 table-row records verified in this sample. Field `w6=268` equals the
-maximum `b1` coordinate across all following cell records — consistent with `w6`
-encoding the total table width as a right-edge coordinate. Field `w8` equals the
-count of `0x0023`-tagged sub-entries in the variable payload. Two sub-entry tag
-values appear: `0x0023` (sparse values 0, 2, 6) and `0x002b` (values that
-approximate content-column widths +2). The payload ends with a `0xffff` sentinel.
-Precise semantics of sub-entry fields remain undecoded.
+**Class `0x0010` sub-types (decoded:false).** The `w4` field discriminates at least
+four sub-types in `03新旧（整備令）.jtd`:
+
+| w4 value | len | count | role (decoded:false) |
+| -------- | --- | ----: | -------------------- |
+| `0x002e` (46)    | 13  |    18 | single-column paragraph record |
+| `0x008f` (143)   | 27–61 | 129 | table-row column-spec header |
+| `0x002a` (42)    | 37–47 |   2 | composite transition record (Y-coords + inner 0x008f sub-block) |
+| `0xffff` (65535) | 10  |     3 | null / end-of-section marker |
+
+For `w4=0x008f` records: `len = w5 + 12` (verified 129 records). `w6=268`
+equals the maximum cell `b1` coordinate in following `0x0030` rows — consistent
+with `w6` encoding the total table width. `w8` equals the count of `0x0023`-tagged
+column sub-entries in the payload. Two sub-entry tag values appear in the payload:
+`0x0023` (sparse values 0, 2, 6) and `0x002b` (values approximating content-column
+widths). The payload ends with a `0xffff` sentinel.
+
+For `w4=0x002a` records: `w7` holds the count of large-valued (`> 1000`) word
+pairs in `w8..w(8+2*w7-1)`; those values are in the thousands and may encode
+vertical Y-coordinates of horizontal rules (candidate interpretation: 1/100 mm;
+138mm and 140mm are plausible table-separator positions on an A4 page). After the
+Y-coordinate block, an inner `0x008f` sub-block encodes the following table's
+column layout with the same structure as a standalone `w4=0x008f` record.
+
+For `w4=0xffff` records: the entire payload is `(0xffff, 0x0000)` — just the
+`0xffff` sentinel and a zero — with no column entries.
 
 ### Class 0x0030 — table cell header (12 words fixed)
 
