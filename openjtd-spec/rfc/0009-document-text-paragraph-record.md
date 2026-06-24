@@ -142,23 +142,49 @@ area of an A4 page.
 This is the format referenced in RFC 0003 §COM Text Export Observation as the
 `shanai_lan` `0x001c/0x0030 line header` context.
 
-### Class 0x0000 — compact line marker (12 or 21 words)
+### Class 0x0000 — inline-segment context marker (12 or 21 words)
+
+Observed in two distinct forms in `03新旧（整備令）.jtd` (92 records total).
+
+**len=12 (14 records).** Always appears immediately after a `0x001c/0x0030` cell
+header and immediately before a `0x001c/0x0001` ruby/inline segment. Structure:
 
 ```text
-001c 0000 000c  0000 [a] [b] [c] 0000  000c 0000 0000 001f
-001c 0000 0015  0000 [a] 0000 [c] 0010 0000 0002 0000 0000
-                0000 0002 0000 0000 0000  0015 0000 0000 001f
+001c 0000 000c  0000 [w4] [w5] [w6] 0000  000c 0000 0000 001f
 ```
 
-Semantic meaning is not decoded.
+`w4=0x0007` matches the `len` field of the following `0x0001` inline record (7
+words). `w6=0x020d=525` is constant across all 14 occurrences (style/type code
+candidate). `w5` varies by label text: `0x00dc=220` (before "改正案"/"現行"
+column headers), `0x0098=152`/`0x008e=142`/`0x008c=140` (before ministry-name
+labels). The physical meaning of `w5` is not decoded.
 
-### Class 0x0020 — compact marker (12 words)
+**len=21 (77 records).** The most common `0x0000` form. Structure has a stable
+header block and a variable tail:
 
 ```text
-001c 0020 000c  0000 0010 0002 0000 0001  000c 0000 0020 001f
+001c 0000 0015  0000 0056 0000 0406 0010 [w8] [w9] 0000 0000
+                0000 [w13] 0000 0000 0000  0015 0000 0000 001f
 ```
 
-Observed sparsely. Semantic meaning is not decoded.
+Fields `w4=0x56=86`, `w5=0x0000`, `w6=0x0406=1030`, `w7=0x0010=16` are constant
+(style/context codes, not decoded). `w8` is a flag (0 or 1). When `w8=0`, `w9`
+takes small values (0, 1, 2, 4, 5). When `w8=1`, `w9` takes large values
+(`0x025d=605` or `0x0229=553`); `w13` covaries with `w9` (`0xcd=205` or
+`0x99=153`). No physical meaning decoded.
+
+### Class 0x0020 — table-section transition marker (12 words)
+
+Observed 4 times in `03新旧（整備令）.jtd`. Always appears after `0x000e` (table
+row delimiter) and immediately before a `0x001c/0x0010` single-column paragraph:
+
+```text
+001c 0020 000c  0000 0010 [w5] 0000 0001  000c 0000 0020 001f
+```
+
+`w4=0x0010=16` (class code of the following `0x0010` record), `w7=0x0001=1`
+constant. `w5=0x0002` or `0x0000`. Appears to mark the transition from a table
+section back to normal single-column text. Semantic meaning is not decoded.
 
 ## Correlation with LineMark unit-start
 
@@ -254,7 +280,12 @@ were observed in the `shanai_lan` table context).
   `b1` the right edge of the cell in the table coordinate space; cells are
   non-overlapping with 4-unit inter-cell gaps. The physical unit of the coordinate
   values is not decoded.
-- Classes `0x0000` and `0x0020` are observed but not interpreted.
+- Classes `0x0000` and `0x0020` are observed with structural patterns documented but
+  not semantically decoded: `0x0000 len=12` precedes ruby/inline segments with
+  `w4=7` (inline len) and constant `w6=525`; `0x0000 len=21` appears inside table
+  cells with a stable constant block plus varying `w8`/`w9`/`w13` fields;
+  `0x0020 len=12` marks table-to-paragraph transitions with `w4=0x0010` and
+  `w7=1`.
 - The partial LineMark overlap (14/25 matches) is consistent with the
   logical/physical line hypothesis but not proven.
 - No multi-column sample was used to test whether table-cell `0x001c` records
