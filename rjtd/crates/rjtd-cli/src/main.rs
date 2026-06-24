@@ -22,7 +22,7 @@ use rjtd_core::style_stream::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 use rjtd_export::to_pdf_with_file_name;
-use rjtd_export::{to_json, to_markdown, to_plain_text};
+use rjtd_export::{to_html, to_json, to_markdown, to_plain_text};
 use rjtd_model::{
     DocumentCore, ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate, ObjectFrameRecordCandidate,
     ObjectFrameReferenceRowCandidate, ObjectImagePayloadSpan, ObjectImageSignatureHit,
@@ -4375,7 +4375,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     }
                 }
                 "html" => {
-                    return Err("HTML export is planned after the document model matures".into());
+                    write_stdout(&to_html(&document))?;
                 }
                 other => return Err(format!("unsupported export format: {other}")),
             }

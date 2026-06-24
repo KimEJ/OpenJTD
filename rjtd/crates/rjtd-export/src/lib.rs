@@ -63,6 +63,41 @@ pub fn to_pdf_with_file_name(document: &Document, file_name: &str) -> Result<Vec
     svgs_to_pdf(&svg_pages)
 }
 
+pub fn to_html(document: &Document) -> String {
+    let mut output = String::new();
+    output.push_str("<!DOCTYPE html>\n<html lang=\"ja\">\n<head><meta charset=\"UTF-8\"></head>\n<body>\n");
+
+    for block in document.blocks() {
+        match block {
+            Block::Paragraph(paragraph) => {
+                output.push_str("<p>");
+                let mut text = String::new();
+                for inline in paragraph.inlines() {
+                    push_inline_visible_text(&mut text, inline);
+                }
+                push_html_escaped(&mut output, &text);
+                output.push_str("</p>\n");
+            }
+            Block::Unknown(_) => {}
+        }
+    }
+
+    output.push_str("</body>\n</html>\n");
+    output
+}
+
+fn push_html_escaped(output: &mut String, text: &str) {
+    for ch in text.chars() {
+        match ch {
+            '&' => output.push_str("&amp;"),
+            '<' => output.push_str("&lt;"),
+            '>' => output.push_str("&gt;"),
+            '"' => output.push_str("&quot;"),
+            _ => output.push(ch),
+        }
+    }
+}
+
 pub fn to_markdown(document: &Document) -> String {
     let mut output = String::new();
 
