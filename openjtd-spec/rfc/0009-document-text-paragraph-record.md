@@ -322,6 +322,14 @@ were observed in the `shanai_lan` table context).
   `w4=0x002e` variant (18 records, len=13) is fully constant (`w5=w6=1`, `w7=0xffff`,
   `w8=0`), suggesting uniform single-column layout. The unit scale and exact field role
   are not decoded.
+  Cross-sample analysis of 246 `w4=0x0026 len=17` records across 11 government/academic
+  samples reveals a new structural split by `(w8, w10)` magnitude: `(w8=w10=0x01cc=460)`
+  appears only in `04参照条文` (also with `w6=1`); `(w8=w10=1)` or `(w8=w10=0/2)`
+  appears in `01要綱` and `02案文` samples exclusively. The `02案文（整備令）` sample
+  has 21 records and `w7` takes values 0/1/2/6/8 (indent levels), all with `w8=1/w10=1`.
+  This suggests that `(w8, w10)` is either a document-type discriminator or that these
+  fields encode style IDs in short-text samples and physical coordinates in long
+  reference-statute samples. No physical unit scale is yet proven.
 
 ## Samples Used
 
