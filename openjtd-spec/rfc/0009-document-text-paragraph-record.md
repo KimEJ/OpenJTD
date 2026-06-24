@@ -268,7 +268,9 @@ No change to the parser is warranted until paragraph-record semantics (indent
 levels, style references, column/cell geometry) are proven. The `decoded:false`
 principle applies.
 
-## 0x000e Row Delimiter Role
+## 0x000e and 0x000a Control Codes
+
+### 0x000e Row Delimiter
 
 In `03新旧（整備令）.jtd` (a table-heavy new-vs-old comparison document), every
 `0x000e` occurrence is immediately preceded and followed by a `0x001c` record.
@@ -290,6 +292,25 @@ one-word table-row delimiter. The pattern in a two-column new-vs-old table is:
 This corroborates the COM text export evidence in RFC 0003 §COM Text Export
 Observation (where `0x001c/0x0030` line headers and `0x000e` row delimiters
 were observed in the `shanai_lan` table context).
+
+### 0x000a Line Break (decoded:false)
+
+`0x000a` appears 210 times in `03新旧（整備令）.jtd` and is present in every
+current sample (range: 2–4671 per file). Unlike `0x000e`, it is not confined
+to inter-cell positions between `0x0030` records. Context analysis:
+
+- Most common predecessor: `0x001f` (74×) — the text-run start/record terminator;
+  also follows CJK characters (字 etc.) and ASCII space `0x0020`
+- Followed in 169 of 210 cases by `0x001c 0x0030` (table cell header) and in 24
+  cases by `0x001c 0x0010` (paragraph header)
+
+This suggests `0x000a` acts as a **within-cell line break** or **intra-paragraph
+newline**, separating text runs that continue with a new `0x001c` record — either
+the next cell header (`0x0030`) or a fresh paragraph header (`0x0010`). Semantic
+meaning is not decoded; it may correspond to a soft return, a hard line break
+within a table cell, or a paragraph-level newline in non-table context. Not to be
+confused with `0x000e`, which is strictly a between-cell row delimiter bounded by
+`0x0030` records on both sides.
 
 ## Known Gaps
 
