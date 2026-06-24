@@ -491,7 +491,7 @@ Completed:
 Remaining:
 
 - [ ] Preserve headings, lists, tables, ruby, and layout semantics once the record parser exposes them.
-- [ ] Add HTML export after the model has stable block/inline semantics.
+- [x] Add HTML export after the model has stable block/inline semantics.
 
 ## M5: WASM Viewer on Cloudflare Pages
 
