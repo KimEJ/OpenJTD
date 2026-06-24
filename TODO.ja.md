@@ -218,19 +218,19 @@ Priority prework:
 - [x] `JSEQ.Document.3` embedding-frame diagnostics を matching `jseq3Formula` evidence に接続し、missing formula boxes が file data に追跡できるよう decoded-false `MATH.VAF` labels を SVG/PDF output に render する。
 - [ ] FDM または `Embedding N` image ownership candidates を page geometry や paint resources へ promote する前に、`/Frame` geometry units、page association、paint order、payload-to-image selection を decode する。
 - [ ] `embeddingFrameDiagnostic` boxes を real title art、formulas、table borders、shape paint operations に置き換える前に、`/EmbedItems/Embedding */EmbeddedPress` の `JSSnapShot32` payloads と `JSEQ.Document.3` embedded formula/document payloads を decode する。
-- [ ] unknown inline formatting/control records の背後に隠れた残り text を復元する。
-- [ ] current token layer を超えて true `DocumentText` record boundaries と control semantics を decode する。
+- [x] unknown inline formatting/control records の背後に隠れた残り text を復元する。`論文様式.jtd` のプレーンテキスト抽出は完了済み。以前「隠れたコンテンツ」として疑われた `0xff1c`/`0xff1e` は制御コードではなく U+FF1C/U+FF1E の全角不等号文字であることを確認。RFC 0009 で、現在のパーサーが `0x001c` で停止し `0x001f` で再開することにより自己記述型ヘッダーを正しくスキップしていることを文書化。
+- [ ] current token layer を超えて true `DocumentText` record boundaries と control semantics を decode する。RFC 0009 でレコードファミリーの部分解読が完了：`0x0030` b0/b1=セル境界座標、`0x0010` w4 サブタイプ、`0x0000` インラインコンテキスト/セルマーカー、`0x0020` 表→段落遷移。`0x0010 w4=0x0026 w5=0x0005` len=17 は `w6/w7/w8/w10` の組み合わせで 9 種のペイロードパターンを持つ（`w6=1` + `w7=0x1ec/w8=0x1cc` がハンギングインデントの主要グループで 93/142 件；`w4=0x002e` len=13 は単列サンプルで完全固定）。新サンプル 11 件の `w4=0x0026 len=17` 計 246 件のクロスサンプル分析で `(w8, w10)` の大きさによる構造的分割が判明：`(w8=w10=0x1cc)` は `04参照条文` 専属（常に `w6=1`）、`(w8=w10=1/2)` は `01要綱`/`02案文` 専属であり、(w8,w10) が文書種別識別子か短テキストではスタイル ID・長文参照条文では物理座標をエンコードしている可能性を示す。残課題：単位スケール確定、len=20 の `w10`、`0x0000 len=21` の w8/w9/w13。
 - [ ] `MarkV.01` delta candidates 9、29、30 が強く score する理由を説明する。現在の evidence は `unit + 29` を unique stable adjustment と扱うことを支持しない。
 - [ ] varying MarkV.01 header value `0x0603`/`0x0610`/`0x061c` の意味を decode する。current summary、LineMark-context、exact-byte-search evidence は direct page-count、document-length、global page-style-code、direct LineMark-entry-offset interpretation を弱める。
 - [ ] 29-byte `TCntV.01` records 内の remaining fields の semantic meaning を decode する。current `text-position-count-field-deltas` evidence は `t1/t2` が ordered range-like pair であるが chosen `start/end` range と同じ span ではないことを示す。
 - [ ] `TCntV.01` が byte coordinates、UTF-16 unit coordinates、layout/object-local coordinates を混在させるのか、または current token map が intervening record structure を欠いているのかを判断する。tail `t1/t2` は現時点で UTF-16 unit coordinates に寄り、delta 29/30 で unit hits は改善する。一方 `0x0202` chosen ranges は strong byte-range text/control overlap を示すが同じ tail coordinate behavior とは一致しない。
-- [ ] `/DocumentText` control boundaries `0x001c` と `0x000e` を decode する。current evidence では `0x001c` は high-frequency text/control delimiter、`0x000e` は adjacent control clusters または skipped-inline content の前に多い。
+- [ ] `/DocumentText` の `0x001c`/`0x000e` 制御境界の解読。RFC 0009 でレコードファミリー全体を文書化：`0x0030` b0/b1=セル座標；`0x0010` w4 サブタイプ（`0x002e`=段落、`0x008f`=表行、`0x002a`=複合遷移、`0xffff`=ヌル）；`0x0010 w4=0x008f` ペイロード = 4 ワードサブエントリ `[tag, v1, v2, v3]`（`0xffff` 終端）；主要ケースで `n_sub_entries = n_cells − 1` 成立；`0x23`/`0x2b`/`0x1b` タグ観測済みだが意味未解読；`0x0010 w4=0x008f` の w8 は `0x0001`/`0x0003` の 2 値のみ（n_cells=12 の全行が w8=0x0001；n_cells=4 行は大多数 w8=0x0003；行種別フラグの可能性）；`0x0000 len=12`=インラインコンテキストマーカー（w4=inline-len、w6=525 定数、w5=セル位置依存スタイルセレクタ候補）；`0x0000 len=21`=表セルマーカー（定数ブロック+可変 w8/w9/w13）—`w8=0` は小値フラグ（0/2/4/5）、`w8=1` は大値でセル固有（`w9−w13=400=(b1−b0)×3.125` 不変量；ルビ/インライン直前に出現）；`0x0020 len=12`=表→段落遷移（w4=0x0010、w7=1）。残課題：座標の物理単位、サブエントリ v3 計算式とタグ意味論、`0x0010 w4=0x008f` w8 の正確な規則、`0x0000 len=21` の w9/w13。
 - [ ] `text-boundary-layout-map` で見えた file-specific shifts を説明できる row-local、section-local、または record-local base offset を探す。
 - [ ] `iwata_file` strict boundary candidates のうち 10 件だけが line-word/page-field exact endpoint evidence を両方持ち、残りの strict candidates と selected finance spans が持たない理由を説明する。view-style group hits は strict non-paragraph rows にも現れるため、反証されるまでは default/flag-like evidence として扱い、real paragraph construction には使わない。
 - [ ] shifted leading byte が flag、prefix、version、または preceding record boundary として説明できたら、`TCntV.01` `be0` と `be1-shifted` diagnostics を explicit raw-preserving record family types に昇格する。
 - [ ] `TCntV.01` の actual coordinate target を特定する。current evidence は direct `/LineMark`、`/PageMark`、`/PaperMark` word/row/byte coordinates を rejected。
 - [ ] empty `/DocumentTextPositionTables` sample の out-of-range mini-sector が stale directory entry、malformed ministream chain、または別の storage/object boundary から復元可能なものか判断する。
-- [ ] `page-marks` がまだ support していない `/PageMark` variants の record layout を完全に証明する。
+- [x] `page-marks` がまだ support していない `/PageMark` variants の record layout を完全に証明する。RFC 0007 §PageMark Observation で 3 件の unsupported エントリ（`kaisya_annai`、`kazoku_ryoko`、`shanai_lan`）が layout rows ではなく stale/foreign payloads（CFB ディレクトリ断片、OLE/ActiveX メタデータ）であることを記録済み。miniFAT chain は完全だがバイト内容は PageMark row 構造と無関係。追加の証明は不要。
 - [x] reference `a5.pdf` で、visible page number は 6 ページから始まり、偶数ページは page number と running chapter title が左側、奇数ページは page number と document title が右側に出ること、さらに running document title が `/AutoTextInfo` text candidates と一致することを確認する。
 - [x] `PageMark` の first-field diagnostics を raw-preserving `flags`、`lineStart`、`lineEnd` values として expose し、reference PDF pagination と比較できるようにする。ただし final semantics はまだ主張しない。
 - [x] `/PageLayoutStyle` nested `31xx..39xx` slot groups を decoded-false raw evidence として調べる `rjtd page-layout-style-slots <file>` を追加する。active `paired-slot-pairs` と `facing-pages-candidate` summary fields を含め、facing-page/header/footer/page-number analysis のための観測面にする。
@@ -242,9 +242,9 @@ Priority prework:
 - [x] `rjtd page-layer-tree <file> <zero-based-page-index>` を追加し、facing-page page-number/header projection を model layer tree 経由で確認できるようにする。`side`、`sidePolicyDecoded:false`、`facingPagesCandidate:true`、`pairedSlotPairs`、`slotEvidence` を含む。
 - [x] `getPageLayerTree` の JSON framing を修正し、page-decoration evidence を machine-parseable にする。tests は balanced JSON delimiters と `root.ops` から `textSources` への boundary を確認する。
 - [x] local reference-backed export sweep で PDF text-layer preservation を保護する。generated PDFs は svg2pdf Form XObject path 内に `/ToUnicode` maps と CID font resources を保持し、path-only output へ silent regression しないことを確認する。
-- [ ] `/PageLayoutStyle` nested `31xx..39xx` slot groups の exact semantics を decode する。どの active slot pairs が facing pages、header/footer areas、page-number fields に対応するかを含む。
+- [ ] `/PageLayoutStyle` nested `31xx..39xx` slot groups の exact semantics を decode する。どの active slot pairs が facing pages、header/footer areas、page-number fields に対応するかを含む。part06 末尾 u16 クロスサンプル分析：`0x32/0x33`→1000（01要綱）vs 800（03新旧）；`0x34/0x35`→453 同値；`0x36/0x37`→600（01要綱）vs 7 バイト 2 値レコード（407+773、03新旧）；`0x38/0x39`→407 vs 411。part06 バイト 1 は 01要綱 で 0x01、03新旧 で 0x00（フォーマットバージョンフラグの可能性）。参照 PDF との物理ページ寸法・ヘッダーフッター位置の照合にはサンプル（a5.jtd 不在）が必要でブロック中。
 - [ ] current decoded-false running header/page-number projection は、source slots、page parity rules、chapter-title binding、document-title binding が current a5-style evidence を超えて証明された時点で decoded layout records に置き換える。
-- [ ] suspicious `46.pdf` は full-document regression として扱う前に replace/quarantine する。local reference は `pypdf` で text extraction が空で、144dpi first-page render もほぼ blank/title-like だが、`46.jtd`/generated output は Ginga body text を持つ。updated `a6.pdf` reference は `114` pages の Ginga text として usable で、generated `openjtd-samples/pdf-output/a6.pdf` も A6 portrait MediaBox で `114` pages になった。これは local reference-backed model test で守り、今後の vertical-layout work は filename calibration ではなく decoded `/PageMark`/`/LineMark` mapping に戻す。
+- [x] suspicious `46.pdf` は full-document regression として扱う前に replace/quarantine する。local reference は `pypdf` で text extraction が空で、144dpi first-page render もほぼ blank/title-like だが、`46.jtd`/generated output は Ginga body text を持つ。updated `a6.pdf` reference は `114` pages の Ginga text として usable で、generated `openjtd-samples/pdf-output/a6.pdf` も A6 portrait MediaBox で `114` pages になった。確認済み：`46.pdf` は現行テストで参照 PDF として使われていない。`46.jtd` はファイル名ベースのページサイズ unit test にのみ使用。regression リスクなし。
 - [ ] `SO` object/control record family field semantics を decode する。current evidence は singleton records の fields 1-4 が geometry-like tuples、repeated records が default/control constants を持つことを示すが、`packed-jseq3-like` 16-bit halves の exact meaning は未証明。
 - [x] 新しい PDF-reference `shanai_lan` sample を current fidelity sweep に追加し、A4 landscape sample hint を適用する。generated PDF は reference と同じ single A4 landscape page (`841.875x595.275` pt generated vs `841.920x595.320` pt reference) になり、未 decode の `/FigureData/main_data/FDMVector` content は fallback text を multiple pages に流すのではなく first page diagnostics として保持する。
 - [x] `shanai_lan` を最初の FDMVector/Frame rendering target として使う。`/FigureData/main_data/FDMIndex` は 1 件、parsed entries 39、image-bearing entries 2、JPEG signatures 4、frame-linked image candidates 2 件 (`row=23`, `row=33`) を持つ。`getPageLayerTree` と SVG/PDF output は reference-backed `/Frame` projection (`x/width/height ÷ 24`, `y` direct) による decoded-false `fdmFrameDiagnostic` boxes を linked rows へ expose し、`placementProven:false`、`geometryDecoded:false`、`renderable:false` のまま保持する。
@@ -269,8 +269,8 @@ Priority prework:
 - [x] fallback body-text suppression を `success_data-test` reference table 専用ではなく、current SVG renderer が実際に描画する table candidate 全体へ generalize する。`tsaiten` の `235点以上` と `success_data-test` の `０.８` のような cells は generic fallback text layer と重複せず SVG 内で 1 回だけ現れる。
 - [x] page が observed form/text projection を持つ場合、未証明の `sourceDerivedDiagnosticProjection` table grids は visible SVG/PDF には描画しない。source-derived layout evidence は `getPageLayerTree` に保持するが、PDF-backed `tsaiten` output では 2 件の diagnostic source-derived grids が reference/form projection に重ならなくなり、中段 table text overlap を除去しつつ future source-backed promotion 用の generic table evidence は残す。
 - [ ] table semantics は named stream matching ではなく `/DocumentText` control ranges と layout/style streams から decode する。current inventory は `hyo` sample を含め named table stream を見つけていない。
-- [ ] `/PaperMark` header count-like values と `0x00010000`/`0x00010010`/`0x00010011` flags の semantic meaning を decode する。
-- [ ] parser shape を広げる前に、3 件の unsupported `/PaperMark` stride values を説明する。
+- [ ] `/PaperMark` header count-like values と `0x00010000`/`0x00010010`/`0x00010011` flags の semantic meaning を decode する。RFC 0007 §PaperMark に `count_value = last_index_value + 1` が全 14 サンプルで成立すること、`/PageMark`/`/PaperMark` が同じサンプル内で `count_value` を共有すること、`0x00010011` は Ginga 縦書きサンプルにのみ出現することを記録済み。PaperMark フラグ群と同エントリインデックスの PageMark `lineStart`/`lineEnd` 照合により `0x00010000` 群が遷移ページ（セクション区切り・スペーサー）に、`0x00010010` 群が連続本文セクションに対応することを確認（`04参照条文` ではギャップ約 30 行、`02案文` では 11〜13 行）。物理的なレンダリング意味論は未解読。
+- [ ] parser shape を広げる前に、3 件の unsupported `/PaperMark` stride values を説明する。RFC 0007 §PaperMark に stale/foreign payloads（CFB ディレクトリ断片、OLE/ActiveX メタデータ）として記録済み。新しい証拠なし。
 - [ ] `/LineMark` 内の `0x1000`、`0x1001`、`0x1002` tag families を decode する。current evidence では immediate next word は family discriminator ではなく payload-like で、LineMark offsets は direct text coordinates ではない。
 - [ ] MarkV.01 header の final `u16` が両 stream を持つ 3 samples で `/LineMark` tag clusters 付近に入る一方、MarkV.01 entry offsets は入らない理由を説明する。
 - [ ] embedded fragment plausibility filtering を structured object/stream boundary parsing に置き換える。
@@ -337,7 +337,7 @@ Completed:
 - [x] A5/Ginga の first body chapter title を normal body column ではなく standalone vertical heading block として project する。Page 6 は Ichitaro reference と同じく `大きな望遠鏡...何でしょう。` で終わり、`やっぱり星だ...` は page 7 から始まり、72-page count は維持される。
 - [x] `/Font` table names を model/export JSON に保存し、PDF generation では Mincho-compatible aliases を優先する。macOS では exporter font discovery が Apple MobileAsset font directories も読むため、A5 は `ArialUnicodeMS` fallback ではなく `YuMin-Medium` を embed する。
 - [ ] `0x0101` page-label candidate の背後にある exact table-of-contents layout semantics を decode する。leader length、title/ruby binding、page-label alignment は current A5 projection では reference-backed だが `decoded:false` のまま。
-- [ ] vertical fallback display-unit heuristic を、original layout rows と `Document` text lines を結ぶ proven `/PageMark`/`/LineMark` mapping に置き換える。rows 73 と 74 は `lineStart=lineEnd` で zero-geometry sentinel-like に見えるため、visible pages として盲目的に扱わない。
+- [ ] vertical fallback display-unit heuristic を、original layout rows と `Document` text lines を結ぶ proven `/PageMark`/`/LineMark` mapping に置き換える。rows 73 と 74 は `lineStart=lineEnd` で zero-geometry sentinel-like に見えるため、visible pages として盲目的に扱わない。11 件の行政・学術サンプルから `additive-boundary` PageMark エントリのスパン `lineEnd−lineStart = ページあたり行数−1` が一定（例：30 行/ページサンプルでスパン=29）であることが判明し、`lineStart`/`lineEnd` は 0 始まりのレイアウト行番号をエンコードしているが、レイアウト行から DocumentText unit 座標へのマッピングは未解読、また PageMark は実コンテンツ行数より多くのスロットを事前確保している。
 - [x] A5 colophon/end-matter geometry を decoded-false projection で reference PDF に合わせる。Ginga colophon text と preserved layout evidence で gate し、page 72 は running headers/page numbers を suppress しつつ lower-half に colophon block を置き、title/date/copyright spacing、note の 3 vertical columns、trailing control-noise line removal を反映する。
 - [ ] suspicious reference PDFs は full-document regressions として扱う前に検証または差し替える。local `46.pdf` は document body ではなく SummaryInformation-like metadata を render しているように見える。local `a6.pdf` は現在 usable reference として扱い、generated `openjtd-samples/pdf-output/a6.pdf` も `114` pages/A6 portrait MediaBox に揃っているため、page-count regression は model/export tests で守る。
 - [x] app-core `getValidationWarnings` が empty report 固定ではなく、rhwp-shaped JTD fallback/preservation diagnostics を report するようにする。
@@ -455,3 +455,34 @@ Remaining:
 
 - [ ] record parser がそれらを expose した後、headings、lists、tables、ruby、layout semantics を保存する。
 - [ ] model が stable block/inline semantics を持った後に HTML export を追加する。
+
+## M5: WASM Viewer on Cloudflare Pages
+
+Goal: `rjtd-wasm` を `wasm-pack` でビルドし、ブラウザで JTD ファイルをドラッグ&ドロップして閲覧できる静的 Web ビューアを Cloudflare Pages にデプロイする。
+
+Status: MVP デプロイ済み（2026-06-24）。
+- https://openjtd.pages.dev
+- https://jtdview.pages.dev
+- https://jtd-438.pages.dev（初期テスト用）
+
+背景:
+- `rjtd-wasm` クレートは `cdylib` + `wasm-bindgen` 構成済みで、`renderPageSvg()`、`renderPageHtml()`、`renderPageToCanvas()`、`plainText()`、`pageCount()` などのブラウザ API を公開している。
+- レンダリング精度は M2/M3 でアクティブに更新中のため、ビューア実装はレンダリング改善を妨げない範囲に限定する。
+
+前提条件:
+- `wasm-pack` の `--target web` ビルドが通ること（`cfb` crate 等の I/O 依存を WASM で確認する）。
+- `rjtd-core` が `std::fs` を直接使わず、バイト列インターフェース経由で CFB を読める状態であること。
+
+Immediate tasks:
+
+- [x] `wasm-pack build --target web rjtd/crates/rjtd-wasm` が通るか確認し、WASM 非対応の依存（`std::fs`、`image` crate のデスクトップ feature など）を特定する。→ 追加対応不要で一発通過。
+- [x] `openjtd.github.io/` に最小限の HTML フロントエンドを作成する（ファイルドロップ → `HwpDocument.new(bytes)` → `renderPageSvg()` を `<div>` に挿入する MVP）。デジタル庁デザインシステムのカラートークン・タイポグラフィ適用済み。
+- [x] ページナビゲーション UI（前ページ・次ページボタン、ページ番号表示）を追加する。
+- [x] `plainText()` 出力タブを追加する。
+- [x] `wasm-pack` 成果物（`.wasm` + JS glue）と HTML を Cloudflare Pages にデプロイする。
+- [ ] Cloudflare Pages の GitHub Actions デプロイパイプラインを設定し、`rjtd-wasm` ソース更新時に自動ビルド・デプロイできるようにする。
+
+Constraints:
+- ファイルはブラウザ内で処理し、サーバーへ送信しない（プライバシー要件）。
+- レンダリング品質は M2/M3 の進捗に依存するため、MVP は `decoded:false` 状態のまま公開してよい。
+- `rjtd-model`、`rjtd-core` の解析コードはビューア実装のために変更しない。ビューア側が WASM API に適応する。
