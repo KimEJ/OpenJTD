@@ -1,0 +1,7 @@
+# Track WASM build artifacts for GitHub Pages deployment
+!.gitignore
+!package.json
+!rjtd_wasm.js
+!rjtd_wasm.d.ts
+!rjtd_wasm_bg.wasm
+!rjtd_wasm_bg.wasm.d.ts
