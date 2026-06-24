@@ -56,6 +56,7 @@ Priority prework:
 - [x] Report invalid or unsupported compressed payloads clearly.
 - [x] Confirm local sample inventory opens after malformed FAT fallback.
 - [x] Recover embedded `SsmgV.01`/`TextV.01` fragments when `/DocumentText` is absent.
+- [x] Parse `SsmgV.01` w[9]=`0x0001` raw-text segment format: `TextV.01` segment name (8 raw ASCII bytes) + two-word length + plain UTF-16BE, no `0x001f` paragraph markers; enables `te.jtd` text extraction.
 - [x] Confirm `rjtd cat` succeeds on all 61 current local samples.
 - [x] Add `rjtd text-tokens <file>` to inspect structured `ParsedDocumentText` output.
 - [x] Add `rjtd text-control-context <file> [control-code]` to inspect `/DocumentText` control boundaries with neighboring map entries and nearest control distances.
