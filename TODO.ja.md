@@ -56,6 +56,7 @@ Priority prework:
 - [x] invalid または unsupported compressed payloads を明確に報告する。
 - [x] malformed FAT fallback 後に local sample inventory が開けることを確認する。
 - [x] `/DocumentText` がない場合に embedded `SsmgV.01`/`TextV.01` fragments を復元する。
+- [x] `SsmgV.01` w[9]=`0x0001` 生テキストセグメント形式をパースする：`TextV.01` セグメント名（8 バイト ASCII）＋2 ワード長＋純粋 UTF-16BE（`0x001f` 段落マーカーなし）；`te.jtd` のテキスト抽出を可能にする。
 - [x] 現在の local samples 61 件すべてで `rjtd cat` が成功することを確認する。
 - [x] structured `ParsedDocumentText` output を調べる `rjtd text-tokens <file>` を追加する。
 - [x] `/DocumentText` control boundaries を neighboring map entries と nearest control distances 付きで調べる `rjtd text-control-context <file> [control-code]` を追加する。
