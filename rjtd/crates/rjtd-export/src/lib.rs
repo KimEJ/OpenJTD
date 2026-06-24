@@ -71,11 +71,9 @@ pub fn to_html(document: &Document) -> String {
         match block {
             Block::Paragraph(paragraph) => {
                 output.push_str("<p>");
-                let mut text = String::new();
                 for inline in paragraph.inlines() {
-                    push_inline_visible_text(&mut text, inline);
+                    push_inline_html(&mut output, inline);
                 }
-                push_html_escaped(&mut output, &text);
                 output.push_str("</p>\n");
             }
             Block::Unknown(_) => {}
@@ -84,6 +82,20 @@ pub fn to_html(document: &Document) -> String {
 
     output.push_str("</body>\n</html>\n");
     output
+}
+
+fn push_inline_html(output: &mut String, inline: &Inline) {
+    match inline {
+        Inline::Text(text) => push_html_escaped(output, text.text()),
+        Inline::Ruby(ruby) => {
+            output.push_str("<ruby>");
+            push_html_escaped(output, ruby.base_text());
+            output.push_str("<rt>");
+            push_html_escaped(output, ruby.annotation_text());
+            output.push_str("</rt></ruby>");
+        }
+        Inline::Unknown(_) => {}
+    }
 }
 
 fn push_html_escaped(output: &mut String, text: &str) {
