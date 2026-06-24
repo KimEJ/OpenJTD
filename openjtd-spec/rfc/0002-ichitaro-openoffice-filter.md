@@ -175,6 +175,36 @@ style:style
 style:font-decl
 ```
 
+## COM Automation Evidence
+
+Independent clean-room evidence from JXW.Application COM automation confirms the Ichitaro text export path without depending on the DLL binary.
+
+JustSystem exposes a registered COM ProgID:
+
+```text
+JXW.Application
+```
+
+The corresponding automation object exposes a `TaroLibrary` member with a `SaveDocument` method:
+
+```text
+JWApp.TaroLibrary.SaveDocument(outputPath, "", "", filterNo)
+```
+
+Setting `filterNo=10` selects plain-text export. This VBA call pattern was observed independently in automation scripts written for batch Ichitaro-to-Word conversion workflows used in government office environments.
+
+The COM ProgID and filter number are observable from automation scripts without DLL analysis and therefore qualify as clean-room input.
+
+### Text Export Tab Mode
+
+COM text export behavior depends on which save-tab mode is active in Ichitaro when the document is processed:
+
+- `基本` (basic): produces correct full-body text export
+- `アウトライン` (outline): may produce a structurally different output reflecting outline-mode document state
+- `提出` (submission): may produce a submission-scoped output that excludes certain content regions
+
+For reliable `DocumentText`-representative extraction from documents processed via COM automation, the `基本` tab should be active during export.
+
 ## License Boundary
 
 The package includes a Sun software license. The license text restricts decompilation and reverse engineering unless enforcement is prohibited by applicable law.

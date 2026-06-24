@@ -173,6 +173,36 @@ style:style
 style:font-decl
 ```
 
+## COM Automation Evidence
+
+`JXW.Application` COM automation による独立したクリーンルーム証拠が、DLL バイナリに依存せず Ichitaro text export パスを確認する。
+
+JustSystem は登録済み COM ProgID を公開している。
+
+```text
+JXW.Application
+```
+
+対応する automation object は `TaroLibrary` member と `SaveDocument` method を公開する。
+
+```text
+JWApp.TaroLibrary.SaveDocument(outputPath, "", "", filterNo)
+```
+
+`filterNo=10` を設定すると plain-text export が選択される。この VBA call パターンは、官公庁環境で使用される一太郎→Word 一括変換ワークフロー向け automation scripts において独立に観察された。
+
+COM ProgID と filter number は DLL 解析なしに automation scripts から観察可能であり、クリーンルーム入力として適格である。
+
+### Text Export Tab Mode
+
+COM text export の動作は、ドキュメント処理時に Ichitaro でアクティブになっている保存タブモードに依存する。
+
+- `基本`：正しい全文テキストエクスポートを生成する
+- `アウトライン`：アウトラインモードのドキュメント状態を反映した構造的に異なる出力を生成する場合がある
+- `提出`：特定のコンテンツ領域を除外する提出スコープの出力を生成する場合がある
+
+COM automation 経由で処理されたドキュメントから信頼性の高い `DocumentText` 相当の抽出を行うには、エクスポート時に `基本` タブがアクティブである必要がある。
+
 ## License Boundary
 
 package には Sun software license が含まれる。license text は、applicable law により enforcement が禁止されない限り decompilation と reverse engineering を制限する。

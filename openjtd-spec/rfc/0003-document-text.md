@@ -212,6 +212,60 @@ Two local `.jtd` samples open as `cfb-embedded-document-text`. They do not expos
 ハイキングクラブ会報・第２０号
 ```
 
+## COM Text Export Observation
+
+Plain-text export via `JXW.Application` COM automation (`TaroLibrary.SaveDocument`, `filterNo=10`) produces output that uses box-drawing characters from the Unicode U+2500 series to represent Ichitaro table structure. This independently corroborates the DocumentText control code assignments observed in local samples.
+
+### Table Cell Delimiter Corroboration
+
+COM text export uses U+2502 VERTICAL LINE (`│`) as a column delimiter between adjacent table cells:
+
+```text
+項目│値
+合計│100
+```
+
+This matches the observed DocumentText control code `0x001c` (51,971 occurrences across 60 local sample files), confirming its role as a table cell boundary. The code is defined in rjtd-core as:
+
+```rust
+pub const TABLE_CELL_DELIMITER_CONTROL: u16 = 0x001c;
+```
+
+### Table Row Delimiter Corroboration
+
+COM text export uses the following box-drawing characters for horizontal table borders:
+
+```text
+┌─┬─┐   (top edge)
+├─┼─┤   (inter-row divider)
+└─┴─┘   (bottom edge)
+```
+
+Characters used: U+2500 (`─`), U+250C (`┌`), U+251C (`├`), U+253C (`┼`), U+2514 (`└`), U+2524 (`┤`), U+252C (`┬`), U+2510 (`┐`), U+2534 (`┴`)
+
+This matches the observed DocumentText control code `0x000e` (6,621 occurrences across 41 local sample files), which appears frequently in control-cluster context (`control -> control` most common pairing). It is defined in rjtd-core as:
+
+```rust
+pub const TABLE_ROW_DELIMITER_CONTROL: u16 = 0x000e;
+```
+
+### Page Break Corroboration
+
+COM VBA scripts use `Chr(12)` (ASCII form feed, `0x0C`) as the page break character when searching or splitting exported text. This confirms DocumentText control code `0x000c` (166 occurrences across 24 local sample files):
+
+```rust
+pub const DOCUMENT_TEXT_PAGE_BREAK_CONTROL: u16 = 0x000c;
+```
+
+### Confidence Level
+
+These corroborations are strong but not exhaustive:
+
+- The VBA → box-drawing → DocumentText control mapping is consistent with all observed data.
+- Multiple document types (`.jtd`, `.jtt`) were covered by the VBA automation corpus.
+- The `基本` tab mode is required for correct full-body export; other tab modes may produce structurally different DocumentText content.
+- Semantic naming (TABLE_CELL_DELIMITER vs TABLE_ROW_DELIMITER) is now confirmed by independent cross-format evidence rather than control-code pattern analysis alone.
+
 ## Known Gaps
 
 - The inline segment rules are still heuristic and based on observed local samples.

@@ -57,11 +57,38 @@ N rows of 84 raw bytes
 
 The first dword in each 84-byte row is an index-like value. The rest of the row is preserved as raw bytes because the fields are not semantically decoded yet.
 
+`rjtd page-marks <file>` exposes the row parser with two decoded diagnostic fields derived from offsets in the raw row bytes:
+
+- `lineStart`: a u16 at a fixed offset within the row, interpreted as a layout line start position.
+- `lineEnd`: a u16 at a fixed offset within the row, interpreted as a layout line end position.
+- `flags`: a u32 at a fixed offset.
+- `u16Class`: a heuristic label derived from the `lineStart`/`lineEnd` pattern — `additive-boundary` for rows where both values are small and `lineEnd > lineStart` with regular spacing; `mixed-payload` for rows where both values are anomalously large or internally inconsistent; `zero-sentinel` for rows where `lineStart=lineEnd`.
+
+Analysis of the 11 government/academic samples reveals that `lineStart`/`lineEnd` encode **layout row positions (0-based)**. The span `lineEnd − lineStart` is constant within a file's dominant entry family and equals `rows_per_page − 1`:
+
+| Sample | dominant span | rows per page |
+| --- | ---: | ---: |
+| `論文様式.jtd` | 43 | 44 (45-row-per-page template, last line = 43) |
+| `01要綱（事務局組織令）.jtd` | 12 | 13 |
+| `02案文・理由（整備令）.jtd` | 12 | 13 |
+| `04参照条文（施行日政令）.jtd` | 29 | 30 |
+| `04参照条文（整備政令）.jtd` | 29 | 30 |
+
+Consecutive `additive-boundary` entries step forward by exactly `rows_per_page` in `lineStart` — i.e. they tile the layout coordinate space in fixed page-height increments. `mixed-payload` entries at the same index carry anomalously large or internally inconsistent values and likely represent style-record slots, not body pages. `zero-sentinel` entries have `lineStart = lineEnd` and appear at the end of a group as spacer or sentinel positions. The total number of normal `additive-boundary` entries far exceeds the visible document content in short samples (e.g. `01要綱（事務局組織令）` has 130+ additive entries but only 9 text lines), suggesting that PageMark pre-allocates a fixed layout-slot grid regardless of actual content length. The physical meaning of the layout row coordinates — in particular whether row 0 is the first printable line of the document body or includes margins and headers — is not decoded.
+
+The `count_value = last_index_value + 1` invariant holds for all 14 tested samples (Ginga large + 11 new local government/academic). `/PageMark` and `/PaperMark` share the same `count_value` in every sample. The meaning of `count_value` is not decoded.
+
 | Sample | header value 0 | header value 1 | header value 2 | rows | stream length formula |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `46.jtd` | 96 | 16 | 95 | 97 | `12 + 97 * 84 = 8160` |
 | `a5.jtd` | 74 | 16 | 73 | 75 | `12 + 75 * 84 = 6312` |
 | `b6.jtd` | 98 | 16 | 97 | 98 | `12 + 98 * 84 = 8244` |
+| `論文様式.jtd` | 3 | 16 | 2 | 3 | `12 + 3 * 84 = 264` |
+| `01要綱（事務局組織令）.jtd` | 7 | 16 | 6 | 135 | `12 + 135 * 84 = 11352` |
+| `03新旧（整備令）.jtd` | 11 | 16 | 10 | 12 | `12 + 12 * 84 = 1020` |
+| `04参照条文（施行日政令）.jtd` | 7 | 16 | 6 | 154 | `12 + 154 * 84 = 12948` |
+| `04参照条文（組織令）.jtd` | 6 | 16 | 5 | 7 | count-plus-one-trim2, row_bytes=1852 (7 large variable entries) |
+| `04参照条文（整備政令）.jtd` | 25 | 16 | 24 | 154 | `12 + 154 * 84 = 12948` |
 
 High-frequency `u32be` values show packed coordinate-like tuples inside the raw rows, but the internal field layout is not decoded:
 
@@ -138,11 +165,43 @@ N rows of:
 
 The row count is derived from stream length as `(stream_len - 12) / 8`. The first header value is count-like but is not always equal to either `row_count` or `row_count - 1`, so the parser preserves it as an observed header value instead of assigning semantics.
 
+However, from the 11 new government/academic local samples added in 2026-06-24, a stronger invariant emerges across **all 14 currently tested samples**:
+
+- `header_value_2 = header_value_0 - 1` (always; `last_index_value = count_value - 1`)
+- `/PageMark` and `/PaperMark` headers share the same `count_value` in every sample
+
+This means `count_value` and `last_index_value` are not independent — one is derived from the other. Their shared meaning is not decoded. Possible candidates: number of distinct page-section transitions, number of page-layout regions, or an unrelated document-level counter.
+
 | Sample | header value 0 | header value 1 | header value 2 | rows | flag distribution |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `46.jtd` | 96 | 12 | 95 | 97 | `0x00010000` x89, `0x00010010` x7, `0x00010011` x1 |
 | `a5.jtd` | 74 | 12 | 73 | 75 | `0x00010000` x65, `0x00010010` x9, `0x00010011` x1 |
 | `b6.jtd` | 98 | 12 | 97 | 98 | `0x00010000` x90, `0x00010010` x6, `0x00010011` x2 |
+| `論文様式.jtd` | 3 | 12 | 2 | 3 | `0x00010010` x1, `0x00010000` x2 |
+| `01要綱（事務局組織令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x129, `0x00010000` x9 |
+| `03新旧（整備令）.jtd` | 11 | 12 | 10 | 16 | `0x00010010` x2, `0x00010000` x14 |
+| `04参照条文（施行日政令）.jtd` | 7 | 12 | 6 | 158 | `0x00010010` x107, `0x00010000` x51 |
+| `04参照条文（組織令）.jtd` | 6 | 12 | 5 | 158 | `0x00010010` x105, `0x00010000` x53 |
+| `04参照条文（整備政令）.jtd` | 25 | 12 | 24 | 158 | `0x00010010` x114, `0x00010000` x44 |
+
+The `0x00010011` flag, observed in Ginga vertical samples (`46`/`a5`/`b6`), does not appear in any of the 11 new horizontal government/academic samples. The vertical samples also have a much higher ratio of `0x00010000` to `0x00010010` entries compared to the government document samples.
+
+The flags `0x00010000`/`0x00010010` interleave in alternating groups — runs of consecutive `0x00010010` entries followed by runs of consecutive `0x00010000` entries. The number of such groups is not the same as `count_value`.
+
+Cross-referencing PaperMark flag runs with the `/PageMark` `lineStart`/`lineEnd` values for the corresponding entry index (same entry index, same document position) reveals a consistent structural pattern across the 11 government/academic samples. For each transition from a `0x00010010` run to a `0x00010000` run, the `lineStart` of the first `0x00010000` entry is larger than the `lineEnd` of the last `0x00010010` entry before it. The gap is approximately 30 lines in the `04参照条文` samples, 11–13 lines in the `02案文` samples. The `0x00010000` runs in `04参照条文` samples correspond to spans of `lineStart`/`lineEnd` values that span approximately 30 contiguous lines each — strongly suggesting a section of body text such as one referenced statute article.
+
+Example from `04参照条文（施行日政令）.jtd`:
+
+```text
+PaperMark entry 3–6: flags=0x00010000, PageMark lineStart=[70,100,130,160], lineEnd=[99,129,159,160]
+  (entry 6 has lineStart=lineEnd=160 — a zero-extent sentinel page)
+PaperMark entry 7–13: flags=0x00010010, PageMark lineStart=[209,239,...,389], lineEnd=[238,268,...,418]
+  (gap from lineEnd=160 to lineStart=209 is 49 — the boundary between legal text blocks)
+PaperMark entry 14–20: flags=0x00010000, PageMark lineStart=[419,449,...,569]
+  (gap from lineEnd=418 to lineStart=419 is 1; transition within a legal block)
+```
+
+Working interpretation (decoded:false): `0x00010010` marks pages that belong to a continuous body section (one legal statute article or one document segment), while `0x00010000` marks transitional pages — section separators, front matter, or blank spacers — that separate distinct layout regions. The `lineStart=lineEnd` zero-extent page (entry 6) may be a sentinel or empty section marker rather than a visible page. The `0x00010011` flag (Ginga vertical samples only) remains undecoded.
 
 `rjtd paper-marks <file>` exposes this parser-backed diagnostic. It is not wired into the document model yet because the header and flag semantics are unknown. `rjtd paper-mark-shape <file>` exposes a non-failing shape diagnostic for all observed `/PaperMark` streams.
 
@@ -285,6 +344,84 @@ All 24 `MarkV.01` entry offsets in those three samples are outside the `/LineMar
 
 `rjtd text-position-count-fields <file>` exposes the remaining `TCntV.01` tail as positional `u16be` fields, and `rjtd text-position-count-field-deltas <file>` compares the chosen range span with the tail `t1..t2` span. In the current samples, all 89 rows have `t2 >= t1`, but no row has `t2 - t1` equal to the chosen range span. `rjtd text-position-count-tail-context <file>` also shows that `t1/t2` has a stronger `/DocumentText` UTF-16 unit hit pattern than byte hit pattern, though it is not universal. `rjtd text-position-count-tail-delta-scan <file>` raises unit hits most around delta 29/30, but text hits peak elsewhere. `rjtd text-position-count-tail-delta-groups <file>` then splits that aggregate signal into tail-pattern groups: one major `be0` pattern prefers `+29`, shifted patterns prefer `+30/+31`, and a major `0x0202` pattern is spread across many best deltas. `rjtd text-position-count-tail-row-deltas <file>` confirms the major `0x0202` pattern remains spread across many row-level best deltas. `rjtd text-position-count-tail-row-context <file>` shows that `0x0202` chosen ranges often touch later body byte ranges while best-delta tail fields usually touch early heading/date text. `rjtd text-position-count-range-preview <file>` then shows that `0x0202` chosen byte ranges often overlap real `/DocumentText` text entries even though they are not direct layout-stream coordinates. `rjtd text-position-count-range-boundaries <file>` adds that the major `0x0202` byte ranges mostly contain whole `/DocumentText` map entries and repeatedly include `0x001c`/`0x000e` controls. `rjtd text-control-context <file>` then shows `0x001c` as a high-frequency delimiter candidate and `0x000e` as more control-cluster or inline-adjacent. This keeps `TCntV.01` tail fields promising and makes `/DocumentText` control-delimited byte intervals the next target for chosen-range analysis, but rejects treating `t1/t2` as a simple duplicate of the chosen range.
 
+## LineMark Header Word 0 Variation
+
+The samples available in 2026-06-24 expose two `LineMark` header word 0 values:
+
+| Value | Samples |
+| --- | --- |
+| `0x0914` | `46.jtd`, `a5.jtd`, `b6.jtd` (Ginga vertical samples, RFC 0007 original set) |
+| `0x090b` | All 10 government-document local samples (`01要綱`, `02案文`, `03新旧`, `04参照`) |
+| `0x0912` | `論文様式.jtd` (A4 horizontal academic paper template) |
+
+All three values share the `0x0900` family prefix. The lower byte differs:
+`0x14 = 20`, `0x0b = 11`, `0x12 = 18`. The difference between Ginga vertical
+and A4 horizontal samples (`0x0914` vs `0x0912`) is 2; the difference between
+Ginga and government documents (`0x0914` vs `0x090b`) is 9. The meaning of the
+lower byte is not decoded.
+
+## LineMark to DocumentText 0x001c Correlation
+
+RFC 0009 established that every `0x001c` in `/DocumentText` is the opener of a
+self-describing paragraph/layout record (class, length, payload, footer). The
+`be16-delta-v1` LineMark profile emits one record per display line, while
+`0x001c` marks logical paragraphs (which can wrap to multiple display lines).
+
+In `論文様式.jtd` (25 LineMark records, 19 `0x001c` records), 14 of the 25
+LineMark `unit-start` values fall exactly on a `0x001c` record position; the
+remaining 11 fall inside text runs or at the `0x0000` document terminator.
+LineMark records whose `flag=0x0000` tend to fall inside text runs without a
+corresponding `0x001c`, which is consistent with continuation lines in a wrapped
+paragraph.
+
+In `03新旧（整備令）.jtd` (157 parsed LineMark records), the `0x001c` records
+include table-cell class `0x0030` (703 records) and paragraph class `0x0010`
+(151 records), reflecting the table-heavy structure of the new-vs-old comparison
+document. The LineMark delta values are correspondingly smaller and more varied
+compared to the simple paragraph-only `論文様式.jtd`.
+
+## PageLayoutStyle Observation
+
+Seven local government/academic samples expose `/PageLayoutStyle` and
+`/PageLayoutStyleHeader` streams in addition to `/LineMark`/`/PageMark`/`/PaperMark`.
+
+**`/PageLayoutStyle` structure (initial inventory):** Starts with `SsmgV.01` magic (8
+bytes). The header words are mostly zero except for a small region around offsets
+`w5=0x0004` or `w5=0x0005`, `w7=0x0100`, `w9`=entry-count-like value,
+`w10=0x0001`, `w11=0x0002`. The first significant cluster of non-zero words starts
+at word 138. Across all seven samples, the value `0x4001` appears at word 155 or 156,
+followed immediately by `0x010d=269`. This `269` is one more than `0x010c=268`, which
+equals the maximum cell `b1` coordinate (table width) in `03新旧（整備令）.jtd`. The
+same value `269` appears in samples with no tables (`01要綱`, `02案文` families), so
+it more likely encodes a page-level layout parameter (candidate: text-area width in the
+same coordinate units as `/DocumentText` `0x0030` cell coordinates). In `03新旧`,
+`0x4001/269` appears twice (words 155 and 792), suggesting section-level repetition.
+
+**`/PageLayoutStyleHeader` structure (initial inventory):** Starts with `SsmgV.01`
+magic. The first section (words 10–13) contains `TextV.01` magic, word 138 contains
+`TCntV.01` magic, and word 266 contains another `TextV.01`. These recurring magic
+strings suggest `/PageLayoutStyleHeader` is a composite container of `TextV.01` and
+`TCntV.01` sub-records interleaved in a flat byte stream. Words 299, 300, 302–306
+contain `0x001c`/`0x001f`/`0x001d`/`0x001e` patterns matching the `/DocumentText`
+inline opener/terminator sequence, suggesting that style block payloads may contain
+embedded text runs. The `0x0198=408` value repeats at words 279, 341, 440 (and
+corresponding positions in other sections); `0x07dd=2013` appears at words 285 and
+447. Physical meaning of all fields is not decoded.
+
+**`/PageLayoutStyle` slot `part06` cross-sample analysis (decoded:false):**
+Slots `0x32`–`0x39` each contain a `part06` byte sequence whose final u16 (big-endian)
+encodes a sample-specific value. In the `01要綱`/`02案文` family (A4, 13 rows/page):
+`0x32/0x33`→`0x03e8=1000`, `0x34/0x35`→`0x01c5=453`, `0x36/0x37`→`0x0258=600`,
+`0x38/0x39`→`0x0197=407`. In `03新旧（整備令）`: `0x32/0x33`→`0x0320=800` (20%
+less than `01要綱`'s 1000), `0x34/0x35`→`0x01c5=453` (identical), `0x36/0x37`→
+7-byte variant encoding two values (`0x0197=407` and `0x0305=773`), `0x38/0x39`→
+`0x019b=411` (4 more than `01要綱`'s 407). The slot-0x31 part06 in `01要綱` is
+`03002b010201ff01` (8 bytes); in `03新旧` it differs at the last u16 (`0xff01`→
+`0x2501=549`). The byte at position 1 of `part06` is `0x01` in `01要綱` but `0x00` in
+`03新旧`, which may be a format-version or layout-type flag. Physical meaning of the
+numeric values is not decoded; they may encode page-region heights or style parameters
+in the same coordinate system as `/DocumentText` `0x0030` cell coordinates.
+
 ## Known Gaps
 
 - No `LineMark` record parser exists yet.
@@ -294,6 +431,7 @@ All 24 `MarkV.01` entry offsets in those three samples are outside the `/LineMar
 - The relationship between these streams and `MarkV.01` / `TCntV.01` is not decoded; current evidence rejects direct Mark-entry-to-LineMark-word indexing and direct `TCntV.01` range-to-layout-stream offsets.
 - Small malformed samples can expose inventory entries whose mini-stream chains are not safely readable; `stream-meta` should be used before interpreting small layout streams.
 - `/LineMark` has tag-like values (`0x1000`, `0x1001`, `0x1002`) whose semantics are unknown; current tag-context evidence does not make the immediate next word a unique family discriminator or prove direct `DocumentText` coordinates.
+- The semantic meaning of the LineMark header word 0 (`0x0914` / `0x090b` / `0x0912`) is not decoded; it may encode document type, writing direction, or another document-level property.
 
 ## Next Steps
 
