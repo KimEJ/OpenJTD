@@ -254,6 +254,57 @@ appears at records 1, 6, 14, 16, 18 (which do not coincide with `0x001c`
 positions). This may indicate that `flag=0x0000` marks display-line
 continuations within a paragraph rather than paragraph boundaries.
 
+### Corroboration: `02案文・理由（整備令）.jtd`
+
+The government-regulation draft sample `02案文・理由（整備令）.jtd` (43 parsed
+LineMark records, `base-unit=16`) shows the same pattern at larger scale:
+25 of 43 `unit-start` values fall exactly on a `0x001c` record position.
+
+Selected representative rows (first 31 of 43):
+
+| LineMark record | LineMark unit-start | 0x001c unit in /DocumentText |
+| --------------- | ------------------: | ---------------------------: |
+| 0               | 16                  | — (no 0x001c at 16)          |
+| 1               | 41                  | 41                           |
+| 2               | 103                 | — (falls inside text run)    |
+| 3               | 114                 | 114                          |
+| 4–7             | 178–322             | — (all fall inside text run) |
+| 8               | 353                 | 353                          |
+| 9               | 386                 | 386                          |
+| 10              | 445                 | 445                          |
+| 11              | 513                 | 513                          |
+| 12              | 579                 | 579                          |
+| 13              | 634                 | 634                          |
+| 14              | 668                 | 668                          |
+| 15              | 729                 | 729                          |
+| 16              | 793                 | 793                          |
+| 17              | 918                 | 918                          |
+| 18              | 1036                | 1036                         |
+| 19              | 1070                | 1070                         |
+| 20              | 1128                | 1128                         |
+| 21              | 1184                | 1184                         |
+| 22              | 1223                | 1223                         |
+| 23              | 1288                | 1288                         |
+| 24              | 1351                | — (falls inside text run)    |
+| 25              | 1372                | 1372                         |
+| 26              | 1436                | 1436                         |
+| 27              | 1462                | 1462                         |
+| 28              | 1512                | 1512                         |
+| 29              | 1551                | 1551                         |
+| 30              | 1572                | 1572                         |
+| 31              | 1636                | — (falls inside text run)    |
+| 32–40           | 1667–1675 (delta=1) | — (all fall inside text run) |
+| 41              | 1684                | 1684                         |
+| 42              | 1748                | — (falls inside text run)    |
+
+Records 32–40 have `delta=1` each, with unit-start values 1667–1675
+consecutively. These fall inside a single long text run spanning units
+1589–1684 that contains multiple embedded `\n` characters (the main-body
+施行 sentence followed by the 理由 section preamble). Each delta=1 LineMark
+record corresponds to one of the embedded newlines, confirming that LineMark
+enumerates physical display-line starts regardless of whether a `0x001c`
+paragraph boundary exists at that position.
+
 ## Impact on Current Token Parser
 
 The current `parse_document_text` function (in `rjtd-core/src/document_text.rs`)
