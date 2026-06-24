@@ -210,6 +210,60 @@ observed `.jttc` template samples は plain text extraction 後、ほぼ blank/c
 ハイキングクラブ会報・第２０号
 ```
 
+## COM Text Export Observation
+
+`JXW.Application` COM automation（`TaroLibrary.SaveDocument`、`filterNo=10`）による plain-text export は、Ichitaro テーブル構造を表現するために Unicode U+2500 系の罫線文字を使用した出力を生成する。これは local samples で観察された DocumentText control code の割り当てを独立に裏付ける。
+
+### Table Cell Delimiter Corroboration
+
+COM text export は隣接するテーブルセル間の列区切りとして U+2502 VERTICAL LINE（`│`）を使用する。
+
+```text
+項目│値
+合計│100
+```
+
+これは観察済み DocumentText control code `0x001c`（local sample ファイル 60 件で 51,971 回出現）と一致し、テーブルセル境界としての役割を確認する。このコードは rjtd-core で次のように定義されている。
+
+```rust
+pub const TABLE_CELL_DELIMITER_CONTROL: u16 = 0x001c;
+```
+
+### Table Row Delimiter Corroboration
+
+COM text export は水平テーブル罫線に次の罫線文字を使用する。
+
+```text
+┌─┬─┐   (上端)
+├─┼─┤   (行間区切り)
+└─┴─┘   (下端)
+```
+
+使用文字：U+2500（`─`）、U+250C（`┌`）、U+251C（`├`）、U+253C（`┼`）、U+2514（`└`）、U+2524（`┤`）、U+252C（`┬`）、U+2510（`┐`）、U+2534（`┴`）
+
+これは観察済み DocumentText control code `0x000e`（local sample ファイル 41 件で 6,621 回出現）と一致する。このコードは control-cluster コンテキスト（`control -> control` が最頻ペア）で頻繁に現れる。rjtd-core での定義は次のとおり。
+
+```rust
+pub const TABLE_ROW_DELIMITER_CONTROL: u16 = 0x000e;
+```
+
+### Page Break Corroboration
+
+COM VBA スクリプトは、エクスポートテキストの検索や分割時に `Chr(12)`（ASCII フォームフィード、`0x0C`）を改ページ文字として使用する。これにより DocumentText control code `0x000c`（local sample ファイル 24 件で 166 回出現）が確認される。
+
+```rust
+pub const DOCUMENT_TEXT_PAGE_BREAK_CONTROL: u16 = 0x000c;
+```
+
+### Confidence Level
+
+これらの裏付けは強力だが網羅的ではない。
+
+- VBA → 罫線文字 → DocumentText control code のマッピングは観察データすべてと一致する。
+- VBA automation corpus は複数のドキュメントタイプ（`.jtd`、`.jtt`）をカバーしていた。
+- 正確な全文エクスポートには `基本` タブモードが必要であり、他のタブモードでは構造的に異なる DocumentText コンテンツが生成される場合がある。
+- セマンティック命名（TABLE_CELL_DELIMITER vs TABLE_ROW_DELIMITER）は、control-code パターン分析だけでなく独立したクロスフォーマット証拠によって確認された。
+
 ## Known Gaps
 
 - inline segment rules はまだ heuristic であり、observed local samples に基づく。
