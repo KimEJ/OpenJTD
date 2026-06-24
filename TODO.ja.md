@@ -433,7 +433,7 @@ Remaining:
 
 - [ ] extracted newline text から導出するのではなく、real paragraph boundaries を decode する。
 - [ ] current source-backed front erase、main-vs-shadow EmbeddedPress word5 gate、conservative `0x70.word0` shadow fill、新しい word-column diagnostics を超えて、`success_data-test` title-art の remaining exact paint semantics を decode する。full `0x46/0x48/0x60/0x65/0x70` state transitions、exact face/shadow fill colors、texture paint order、front-face halftone semantics はまだ unresolved である。
-- [ ] parse 時に decoded `TextLayoutStyle`、`DocumentEditStyles`、`DocumentViewStyles`、または関連 streams から paragraphs と text runs に style IDs を infer/attach する。
+- [ ] parse 時に decoded `TextLayoutStyle`、`DocumentEditStyles`、`DocumentViewStyles`、または関連 streams から paragraphs と text runs に style IDs を infer/attach する。11 件の行政・学術サンプルの `/DocumentEditStyles` 初期分析では：(1) ヘッダーのワード 2 がサンプル間で異なる（`0x2001` vs `0x2000`）；(2) UTF-16BE の CJK ペア `0x7b2c/第`、`0x6761/条`、`0x9805/項`、`0x56f3/図` が早い位置に出現し、自動番号スタイルテンプレートの可能性；(3) ASCII `{n}` プレースホルダー（`0x007b 0x0034 0x007d` = `{4}`）がCJK 用語と共存；(4) `標準`（U+6A19 U+6E96）はオフセット 524 以降に繰り返し出現し、主要な名前付きスタイルとして確認済み — 前段の CJK セクションは自動番号フォーマット文字列のエンコードの可能性が高い。ストリーム構造とレコード境界は未解読。
 - [ ] 対応する stream mutation format が証明されたら、style edits を decoded JTD style/body streams に保存する。
 - [ ] redistributable samples が利用可能になったら fixture-based expected JSON outputs を追加する。
 - [ ] inner `DocumentText` structure が理解できたら、decompressed `.jttc` template text/control placeholders を meaningful model blocks に変換する。
