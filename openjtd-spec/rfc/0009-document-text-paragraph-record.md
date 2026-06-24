@@ -308,12 +308,17 @@ were observed in the `shanai_lan` table context).
   `0x1b`, `0x24`–`0x27` and the role of `w8` are not decoded.
 - Class `0x0010` records of varying length appear to share a common sub-header
   signature `0x0026 0x0005` at words `w4/w5` (seen in `論文様式.jtd` len=20 and
-  `01要綱/02案文/04参照` len=17 samples). The len=17 variant shows variant fields
-  `w6/w7/w8/w9/w10`; in `04参照条文（整備政令）` the repeated value `0x01cc = 460`
-  could be a 1/10 mm indent unit (46 mm). In `論文様式.jtd` len=20, `w10=0x0141=321`
-  appears on indented continuation lines, which is consistent with a ~32 mm first-line
-  or hanging indent. These are layout-unit candidates only; the unit scale and field
-  role are not decoded.
+  `01要綱/02案文/04参照` len=17 samples). Detailed analysis of `04参照条文（整備政令）.jtd`
+  len=17 records (142 total, `w4=0x0026 w5=0x0005`) reveals 9 distinct payload
+  combinations driven by `w6`/`w7`/`w8`/`w9`/`w10`. When `w6=1` (102 records):
+  `w7=0x01ec=492` and `w8=w10=0x01cc=460` are constant, forming what appears to be
+  a hanging-indent group (if 1/20 mm: 24.6/23 mm; if 1/10 mm: 49.2/46 mm). When
+  `w6=0` (40 records): `w7` takes 0/2/4, `w8` is mostly 0, indicating no hanging
+  indent. In `論文様式.jtd` len=20, `w10=0x0141=321` appears on indented continuation
+  lines, consistent with a ~32 mm hanging indent. In `03新旧（整備令）.jtd`, the
+  `w4=0x002e` variant (18 records, len=13) is fully constant (`w5=w6=1`, `w7=0xffff`,
+  `w8=0`), suggesting uniform single-column layout. The unit scale and exact field role
+  are not decoded.
 
 ## Samples Used
 
