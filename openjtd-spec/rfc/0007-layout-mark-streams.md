@@ -169,6 +169,21 @@ The `0x00010011` flag, observed in Ginga vertical samples (`46`/`a5`/`b6`), does
 
 The flags `0x00010000`/`0x00010010` interleave in alternating groups — runs of consecutive `0x00010010` entries followed by runs of consecutive `0x00010000` entries. The number of such groups is not the same as `count_value`.
 
+Cross-referencing PaperMark flag runs with the `/PageMark` `lineStart`/`lineEnd` values for the corresponding entry index (same entry index, same document position) reveals a consistent structural pattern across the 11 government/academic samples. For each transition from a `0x00010010` run to a `0x00010000` run, the `lineStart` of the first `0x00010000` entry is larger than the `lineEnd` of the last `0x00010010` entry before it. The gap is approximately 30 lines in the `04参照条文` samples, 11–13 lines in the `02案文` samples. The `0x00010000` runs in `04参照条文` samples correspond to spans of `lineStart`/`lineEnd` values that span approximately 30 contiguous lines each — strongly suggesting a section of body text such as one referenced statute article.
+
+Example from `04参照条文（施行日政令）.jtd`:
+
+```text
+PaperMark entry 3–6: flags=0x00010000, PageMark lineStart=[70,100,130,160], lineEnd=[99,129,159,160]
+  (entry 6 has lineStart=lineEnd=160 — a zero-extent sentinel page)
+PaperMark entry 7–13: flags=0x00010010, PageMark lineStart=[209,239,...,389], lineEnd=[238,268,...,418]
+  (gap from lineEnd=160 to lineStart=209 is 49 — the boundary between legal text blocks)
+PaperMark entry 14–20: flags=0x00010000, PageMark lineStart=[419,449,...,569]
+  (gap from lineEnd=418 to lineStart=419 is 1; transition within a legal block)
+```
+
+Working interpretation (decoded:false): `0x00010010` marks pages that belong to a continuous body section (one legal statute article or one document segment), while `0x00010000` marks transitional pages — section separators, front matter, or blank spacers — that separate distinct layout regions. The `lineStart=lineEnd` zero-extent page (entry 6) may be a sentinel or empty section marker rather than a visible page. The `0x00010011` flag (Ginga vertical samples only) remains undecoded.
+
 `rjtd paper-marks <file>` exposes this parser-backed diagnostic. It is not wired into the document model yet because the header and flag semantics are unknown. `rjtd paper-mark-shape <file>` exposes a non-failing shape diagnostic for all observed `/PaperMark` streams.
 
 Across the current 61 local `.jtd`/`.jtt`/`.jttc` samples, 55 expose `/PaperMark`; 52 parse with this row shape. `paper-mark-shape` opens all 55 streams; three are intentionally classified as `non-paper-header` and rejected by `paper-marks`:
