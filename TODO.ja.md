@@ -456,7 +456,7 @@ Completed:
 Remaining:
 
 - [ ] record parser がそれらを expose した後、headings、lists、tables、ruby、layout semantics を保存する。
-- [ ] model が stable block/inline semantics を持った後に HTML export を追加する。
+- [x] model が stable block/inline semantics を持った後に HTML export を追加する。
 
 ## M5: WASM Viewer on Cloudflare Pages
 
