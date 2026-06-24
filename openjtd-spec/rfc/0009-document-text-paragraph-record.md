@@ -179,12 +179,19 @@ header block and a variable tail:
 
 Fields `w4=0x56=86`, `w5=0x0000`, `w6=0x0406=1030`, `w7=0x0010=16` are constant
 (style/context codes, not decoded). `w8` is a flag (0 or 1). When `w8=0`, `w9`
-takes small values (0, 1, 2, 4, 5) with `w13` mostly 0 or 2. When `w8=1` (6
-occurrences), `w9` takes large values and `w13` covaries: the pair
-`(w9=0x025d=605, w13=0xcd=205)` always accompanies the cell `[b0=4, b1=132]`
-and `(w9=0x0229=553, w13=0x99=153)` always accompanies the symmetric cell
-`[b0=136, b1=264]`. In both `w8=1` pairs `w9 − w13 = 400` exactly. No
-physical meaning decoded for the coordinate relationship.
+takes small values (0, 2, 4, 5) with `w13` mostly 0 or 2 (27×`(w9=4,w13=2)`,
+20×`(w9=2,w13=2)`, 11×`(w9=0,w13=2)`, 9×`(w9=2,w13=0)`, 2×`(0,0)`, 1×`(5,2)`,
+1×`(1,0)`). When `w8=1` (6 occurrences), `w9` takes large values and `w13`
+covaries: the pair `(w9=0x025d=605, w13=0xcd=205)` always accompanies the cell
+`[b0=4, b1=132]` and `(w9=0x0229=553, w13=0x99=153)` always accompanies the
+symmetric cell `[b0=136, b1=264]`. In both `w8=1` pairs `w9 − w13 = 400 =
+(b1 − b0) × 3.125` exactly. Between the two cells, w9 and w13 each decrease by
+exactly 52 (605→553 and 205→153), while b0 increases by 132; no linear
+relationship has been found. The w8=1 records always appear immediately before a
+`0x001c/0x0001` ruby/inline record (the heading text), while w8=0 records appear
+inside ordinary text runs. No physical meaning decoded for the coordinate
+relationship; the constant `w9−w13 = (b1−b0) × 3.125` ratio is an observed
+invariant only.
 
 ### Class 0x0020 — table-section transition marker (12 words)
 
@@ -296,7 +303,11 @@ were observed in the `shanai_lan` table context).
 - Classes `0x0000` and `0x0020` are observed with structural patterns documented but
   not semantically decoded: `0x0000 len=12` precedes ruby/inline segments with
   `w4=7` (inline len) and constant `w6=525`; `0x0000 len=21` appears inside table
-  cells with a stable constant block plus varying `w8`/`w9`/`w13` fields;
+  cells with a stable constant block plus varying `w8`/`w9`/`w13` fields — when
+  `w8=0` the values are small flag-like integers (dominant: `w9=4,w13=2` 27×;
+  `w9=2,w13=2` 20×; `w9=0,w13=2` 11×); when `w8=1` the values are large and
+  cell-specific (`w9−w13=400=(b1−b0)×3.125` invariant holds; w8=1 records
+  always appear immediately before `0x001c/0x0001` inline/heading content);
   `0x0020 len=12` marks table-to-paragraph transitions with `w4=0x0010` and
   `w7=1`.
 - The partial LineMark overlap (14/25 matches) is consistent with the
@@ -308,7 +319,13 @@ were observed in the `shanai_lan` table context).
   via its 4-word sub-entries `[tag, v1, v2, v3]`; the count of sub-entries equals
   `n_cells − 1` in the dominant cases. Sub-entry `v3` values correlate with cell
   spans but the exact formula is not decoded. The sub-entry tags `0x23`, `0x2b`,
-  `0x1b`, `0x24`–`0x27` and the role of `w8` are not decoded.
+  `0x1b`, `0x24`–`0x27` and the role of `w8` are not decoded. Cross-record
+  analysis shows `w8` takes only two values: `0x0001` (22 records) or `0x0003`
+  (107 records). Notably, all 14 records with `n_cells=12` (the widest rows in this
+  sample) have `w8=0x0001`, while `n_cells=4` rows are overwhelmingly `w8=0x0003`
+  (72×) with only 5 exceptions (`w8=0x0001`). The `w8=0x0001` / `0x0003` split is
+  not equal to the count of `0x23`-tagged sub-entries and no clean rule has been
+  found; it may encode a row-type flag (e.g. header row vs data row).
 - Class `0x0010` records of varying length appear to share a common sub-header
   signature `0x0026 0x0005` at words `w4/w5` (seen in `論文様式.jtd` len=20 and
   `01要綱/02案文/04参照` len=17 samples). Detailed analysis of `04参照条文（整備政令）.jtd`
