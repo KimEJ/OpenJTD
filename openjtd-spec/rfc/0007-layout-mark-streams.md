@@ -408,6 +408,20 @@ embedded text runs. The `0x0198=408` value repeats at words 279, 341, 440 (and
 corresponding positions in other sections); `0x07dd=2013` appears at words 285 and
 447. Physical meaning of all fields is not decoded.
 
+**`/PageLayoutStyle` slot `part06` cross-sample analysis (decoded:false):**
+Slots `0x32`–`0x39` each contain a `part06` byte sequence whose final u16 (big-endian)
+encodes a sample-specific value. In the `01要綱`/`02案文` family (A4, 13 rows/page):
+`0x32/0x33`→`0x03e8=1000`, `0x34/0x35`→`0x01c5=453`, `0x36/0x37`→`0x0258=600`,
+`0x38/0x39`→`0x0197=407`. In `03新旧（整備令）`: `0x32/0x33`→`0x0320=800` (20%
+less than `01要綱`'s 1000), `0x34/0x35`→`0x01c5=453` (identical), `0x36/0x37`→
+7-byte variant encoding two values (`0x0197=407` and `0x0305=773`), `0x38/0x39`→
+`0x019b=411` (4 more than `01要綱`'s 407). The slot-0x31 part06 in `01要綱` is
+`03002b010201ff01` (8 bytes); in `03新旧` it differs at the last u16 (`0xff01`→
+`0x2501=549`). The byte at position 1 of `part06` is `0x01` in `01要綱` but `0x00` in
+`03新旧`, which may be a format-version or layout-type flag. Physical meaning of the
+numeric values is not decoded; they may encode page-region heights or style parameters
+in the same coordinate system as `/DocumentText` `0x0030` cell coordinates.
+
 ## Known Gaps
 
 - No `LineMark` record parser exists yet.
