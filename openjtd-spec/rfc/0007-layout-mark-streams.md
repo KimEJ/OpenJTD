@@ -346,6 +346,34 @@ include table-cell class `0x0030` (703 records) and paragraph class `0x0010`
 document. The LineMark delta values are correspondingly smaller and more varied
 compared to the simple paragraph-only `論文様式.jtd`.
 
+## PageLayoutStyle Observation
+
+Seven local government/academic samples expose `/PageLayoutStyle` and
+`/PageLayoutStyleHeader` streams in addition to `/LineMark`/`/PageMark`/`/PaperMark`.
+
+**`/PageLayoutStyle` structure (initial inventory):** Starts with `SsmgV.01` magic (8
+bytes). The header words are mostly zero except for a small region around offsets
+`w5=0x0004` or `w5=0x0005`, `w7=0x0100`, `w9`=entry-count-like value,
+`w10=0x0001`, `w11=0x0002`. The first significant cluster of non-zero words starts
+at word 138. Across all seven samples, the value `0x4001` appears at word 155 or 156,
+followed immediately by `0x010d=269`. This `269` is one more than `0x010c=268`, which
+equals the maximum cell `b1` coordinate (table width) in `03新旧（整備令）.jtd`. The
+same value `269` appears in samples with no tables (`01要綱`, `02案文` families), so
+it more likely encodes a page-level layout parameter (candidate: text-area width in the
+same coordinate units as `/DocumentText` `0x0030` cell coordinates). In `03新旧`,
+`0x4001/269` appears twice (words 155 and 792), suggesting section-level repetition.
+
+**`/PageLayoutStyleHeader` structure (initial inventory):** Starts with `SsmgV.01`
+magic. The first section (words 10–13) contains `TextV.01` magic, word 138 contains
+`TCntV.01` magic, and word 266 contains another `TextV.01`. These recurring magic
+strings suggest `/PageLayoutStyleHeader` is a composite container of `TextV.01` and
+`TCntV.01` sub-records interleaved in a flat byte stream. Words 299, 300, 302–306
+contain `0x001c`/`0x001f`/`0x001d`/`0x001e` patterns matching the `/DocumentText`
+inline opener/terminator sequence, suggesting that style block payloads may contain
+embedded text runs. The `0x0198=408` value repeats at words 279, 341, 440 (and
+corresponding positions in other sections); `0x07dd=2013` appears at words 285 and
+447. Physical meaning of all fields is not decoded.
+
 ## Known Gaps
 
 - No `LineMark` record parser exists yet.
