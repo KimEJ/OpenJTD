@@ -55,6 +55,25 @@ N rows of 84 raw bytes
 
 各 84-byte row の first dword は index-like value である。remaining row は field semantics が decode されていないため raw bytes として保存する。
 
+`rjtd page-marks <file>` は 2 つの diagnostic フィールドとともに row parser を expose する：
+
+- `lineStart`：row bytes 内の固定オフセットの u16。レイアウト行開始位置として解釈。
+- `lineEnd`：row bytes 内の固定オフセットの u16。レイアウト行終了位置として解釈。
+- `flags`：固定オフセットの u32。
+- `u16Class`：`lineStart`/`lineEnd` パターンから導出されるヒューリスティックラベル — 両値が小さく `lineEnd > lineStart` で規則的な間隔なら `additive-boundary`；両値が異常に大きいか内部矛盾なら `mixed-payload`；`lineStart=lineEnd` なら `zero-sentinel`。
+
+11 件の行政・学術サンプル分析で `lineStart`/`lineEnd` は **レイアウト行番号（0 始まり）** をエンコードすることが判明した。支配的エントリ群内でのスパン `lineEnd − lineStart` は一定で、`ページあたり行数 − 1` に等しい：
+
+| Sample | 支配的スパン | ページあたり行数 |
+| --- | ---: | ---: |
+| `論文様式.jtd` | 43 | 44（45 行/ページ設定、最終行番号 = 43） |
+| `01要綱（事務局組織令）.jtd` | 12 | 13 |
+| `02案文・理由（整備令）.jtd` | 12 | 13 |
+| `04参照条文（施行日政令）.jtd` | 29 | 30 |
+| `04参照条文（整備政令）.jtd` | 29 | 30 |
+
+連続する `additive-boundary` エントリは `lineStart` が `ページあたり行数` 刻みで前進し、固定ページ高さ増分でレイアウト座標空間をタイル状に占める。同インデックスの `mixed-payload` エントリは異常に大きいか内部矛盾した値を持ち、本文ページではなくスタイルレコードスロットを表すと考えられる。`zero-sentinel` エントリは `lineStart = lineEnd` でグループ末尾のスペーサーまたはセンチネル位置に現れる。`additive-boundary` エントリ数はテキストが少ないサンプルでも多く（例：`01要綱（事務局組織令）` は 130 以上の additive エントリを持つが実テキストは 9 行のみ）、PageMark は実コンテンツ量に関係なく固定レイアウトスロットグリッドを事前確保している可能性がある。座標の物理的な意味（行 0 が本文先頭印刷行か余白・ヘッダーを含むかなど）は未解読。
+
 | Sample | header value 0 | header value 1 | header value 2 | rows | stream length formula |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `46.jtd` | 96 | 16 | 95 | 97 | `12 + 97 * 84 = 8160` |

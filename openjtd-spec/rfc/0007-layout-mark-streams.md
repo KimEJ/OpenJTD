@@ -57,6 +57,25 @@ N rows of 84 raw bytes
 
 The first dword in each 84-byte row is an index-like value. The rest of the row is preserved as raw bytes because the fields are not semantically decoded yet.
 
+`rjtd page-marks <file>` exposes the row parser with two decoded diagnostic fields derived from offsets in the raw row bytes:
+
+- `lineStart`: a u16 at a fixed offset within the row, interpreted as a layout line start position.
+- `lineEnd`: a u16 at a fixed offset within the row, interpreted as a layout line end position.
+- `flags`: a u32 at a fixed offset.
+- `u16Class`: a heuristic label derived from the `lineStart`/`lineEnd` pattern — `additive-boundary` for rows where both values are small and `lineEnd > lineStart` with regular spacing; `mixed-payload` for rows where both values are anomalously large or internally inconsistent; `zero-sentinel` for rows where `lineStart=lineEnd`.
+
+Analysis of the 11 government/academic samples reveals that `lineStart`/`lineEnd` encode **layout row positions (0-based)**. The span `lineEnd − lineStart` is constant within a file's dominant entry family and equals `rows_per_page − 1`:
+
+| Sample | dominant span | rows per page |
+| --- | ---: | ---: |
+| `論文様式.jtd` | 43 | 44 (45-row-per-page template, last line = 43) |
+| `01要綱（事務局組織令）.jtd` | 12 | 13 |
+| `02案文・理由（整備令）.jtd` | 12 | 13 |
+| `04参照条文（施行日政令）.jtd` | 29 | 30 |
+| `04参照条文（整備政令）.jtd` | 29 | 30 |
+
+Consecutive `additive-boundary` entries step forward by exactly `rows_per_page` in `lineStart` — i.e. they tile the layout coordinate space in fixed page-height increments. `mixed-payload` entries at the same index carry anomalously large or internally inconsistent values and likely represent style-record slots, not body pages. `zero-sentinel` entries have `lineStart = lineEnd` and appear at the end of a group as spacer or sentinel positions. The total number of normal `additive-boundary` entries far exceeds the visible document content in short samples (e.g. `01要綱（事務局組織令）` has 130+ additive entries but only 9 text lines), suggesting that PageMark pre-allocates a fixed layout-slot grid regardless of actual content length. The physical meaning of the layout row coordinates — in particular whether row 0 is the first printable line of the document body or includes margins and headers — is not decoded.
+
 The `count_value = last_index_value + 1` invariant holds for all 14 tested samples (Ginga large + 11 new local government/academic). `/PageMark` and `/PaperMark` share the same `count_value` in every sample. The meaning of `count_value` is not decoded.
 
 | Sample | header value 0 | header value 1 | header value 2 | rows | stream length formula |
