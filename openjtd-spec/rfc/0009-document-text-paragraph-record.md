@@ -92,10 +92,15 @@ four sub-types in `03新旧（整備令）.jtd`:
 
 For `w4=0x008f` records: `len = w5 + 12` (verified 129 records). `w6=268`
 equals the maximum cell `b1` coordinate in following `0x0030` rows — consistent
-with `w6` encoding the total table width. `w8` equals the count of `0x0023`-tagged
-column sub-entries in the payload. Two sub-entry tag values appear in the payload:
-`0x0023` (sparse values 0, 2, 6) and `0x002b` (values approximating content-column
-widths). The payload ends with a `0xffff` sentinel.
+with `w6` encoding the total table width. The variable-length payload (words
+`w9..w[len-5]`) consists of 4-word sub-entries `[tag, v1, v2, v3]` terminated by
+`[0xffff, 0x0000]`. The most common tags are `0x23` (546 occurrences; v1=v2=0;
+v3 varies — correlates with cell span), `0x2b` (71; v1=0, v2=0x08; v3 in 0x1d–0x76),
+and `0x1b` (11; v1=0, v2=0x08, v3=0x1f). The pattern `n_sub_entries = n_cells − 1`
+holds for the dominant cases (68 records with n_sub=3/n_cells=4 and 27 records with
+n_sub=9/n_cells=10). The `w8` field value does not directly equal the count of
+`0x0023`-tagged entries; its role is not decoded. Sub-entry tag semantics and the
+relationship between v3 and cell coordinates are not decoded.
 
 For `w4=0x002a` records: `w7` holds the count of large-valued (`> 1000`) word
 pairs in `w8..w(8+2*w7-1)`; those values are in the thousands and may encode
@@ -155,9 +160,14 @@ header and immediately before a `0x001c/0x0001` ruby/inline segment. Structure:
 
 `w4=0x0007` matches the `len` field of the following `0x0001` inline record (7
 words). `w6=0x020d=525` is constant across all 14 occurrences (style/type code
-candidate). `w5` varies by label text: `0x00dc=220` (before "改正案"/"現行"
-column headers), `0x0098=152`/`0x008e=142`/`0x008c=140` (before ministry-name
-labels). The physical meaning of `w5` is not decoded.
+candidate). `w5` varies: `0x00dc=220` appears in the wide content columns
+(width=124, b0=6 or b0=134) before "改正案"/"現行" column headers; `0x0098=152`
+and `0x008e=142` appear in narrow columns (width=28, b0=12) before ministry-name
+labels; `0x008c=140` appears in the symmetric narrow column (width=28, b0=144).
+The same ministry name can appear with different `w5` values depending on
+which column it occupies. The physical meaning of `w5` is not decoded — it
+appears sensitive to the containing cell's position or a style selector tied to
+the cell type rather than directly encoding the label text.
 
 **len=21 (77 records).** The most common `0x0000` form. Structure has a stable
 header block and a variable tail:
@@ -291,8 +301,11 @@ were observed in the `shanai_lan` table context).
 - No multi-column sample was used to test whether table-cell `0x001c` records
   differ structurally from paragraph `0x001c` records within the same family.
 - The `0x000e` row delimiter is confirmed as a single 1-word control code with no
-  additional payload. How the table-cell count, column widths, and cell geometry
-  are encoded elsewhere is not yet decoded.
+  additional payload. The `0x0010 w4=0x008f` record encodes per-row column layout
+  via its 4-word sub-entries `[tag, v1, v2, v3]`; the count of sub-entries equals
+  `n_cells − 1` in the dominant cases. Sub-entry `v3` values correlate with cell
+  spans but the exact formula is not decoded. The sub-entry tags `0x23`, `0x2b`,
+  `0x1b`, `0x24`–`0x27` and the role of `w8` are not decoded.
 - Class `0x0010` records of varying length appear to share a common sub-header
   signature `0x0026 0x0005` at words `w4/w5` (seen in `論文様式.jtd` len=20 and
   `01要綱/02案文/04参照` len=17 samples). The len=17 variant shows variant fields

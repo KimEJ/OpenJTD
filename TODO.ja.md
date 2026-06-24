@@ -224,7 +224,7 @@ Priority prework:
 - [ ] varying MarkV.01 header value `0x0603`/`0x0610`/`0x061c` の意味を decode する。current summary、LineMark-context、exact-byte-search evidence は direct page-count、document-length、global page-style-code、direct LineMark-entry-offset interpretation を弱める。
 - [ ] 29-byte `TCntV.01` records 内の remaining fields の semantic meaning を decode する。current `text-position-count-field-deltas` evidence は `t1/t2` が ordered range-like pair であるが chosen `start/end` range と同じ span ではないことを示す。
 - [ ] `TCntV.01` が byte coordinates、UTF-16 unit coordinates、layout/object-local coordinates を混在させるのか、または current token map が intervening record structure を欠いているのかを判断する。tail `t1/t2` は現時点で UTF-16 unit coordinates に寄り、delta 29/30 で unit hits は改善する。一方 `0x0202` chosen ranges は strong byte-range text/control overlap を示すが同じ tail coordinate behavior とは一致しない。
-- [ ] `/DocumentText` の `0x001c`/`0x000e` 制御境界の解読。RFC 0009 でレコードファミリー全体を文書化：`0x0030` b0/b1=セル座標；`0x0010` w4 サブタイプ（`0x002e`=段落、`0x008f`=表行、`0x002a`=複合遷移、`0xffff`=ヌル）；`0x0000 len=12`=インラインコンテキストマーカー（w4=inline-len、w6=525 定数）；`0x0000 len=21`=表セルマーカー（定数ブロック+可変 w8/w9/w13）；`0x0020 len=12`=表→段落遷移（w4=0x0010、w7=1）。残課題：座標の物理単位、`0x0023`/`0x002b` サブエントリ意味、`0x0000 len=12` の w5、`0x0000 len=21` の w8/w9/w13。
+- [ ] `/DocumentText` の `0x001c`/`0x000e` 制御境界の解読。RFC 0009 でレコードファミリー全体を文書化：`0x0030` b0/b1=セル座標；`0x0010` w4 サブタイプ（`0x002e`=段落、`0x008f`=表行、`0x002a`=複合遷移、`0xffff`=ヌル）；`0x0010 w4=0x008f` ペイロード = 4 ワードサブエントリ `[tag, v1, v2, v3]`（`0xffff` 終端）；主要ケースで `n_sub_entries = n_cells − 1` 成立；`0x23`/`0x2b`/`0x1b` タグ観測済みだが意味未解読；`0x0000 len=12`=インラインコンテキストマーカー（w4=inline-len、w6=525 定数、w5=セル位置依存スタイルセレクタ候補）；`0x0000 len=21`=表セルマーカー（定数ブロック+可変 w8/w9/w13）；`0x0020 len=12`=表→段落遷移（w4=0x0010、w7=1）。残課題：座標の物理単位、サブエントリ v3 計算式とタグ意味論、`0x0010 w4=0x008f` の w8、`0x0000 len=21` の w8/w9/w13。
 - [ ] `text-boundary-layout-map` で見えた file-specific shifts を説明できる row-local、section-local、または record-local base offset を探す。
 - [ ] `iwata_file` strict boundary candidates のうち 10 件だけが line-word/page-field exact endpoint evidence を両方持ち、残りの strict candidates と selected finance spans が持たない理由を説明する。view-style group hits は strict non-paragraph rows にも現れるため、反証されるまでは default/flag-like evidence として扱い、real paragraph construction には使わない。
 - [ ] shifted leading byte が flag、prefix、version、または preceding record boundary として説明できたら、`TCntV.01` `be0` と `be1-shifted` diagnostics を explicit raw-preserving record family types に昇格する。
@@ -460,7 +460,10 @@ Remaining:
 
 Goal: `rjtd-wasm` を `wasm-pack` でビルドし、ブラウザで JTD ファイルをドラッグ&ドロップして閲覧できる静的 Web ビューアを Cloudflare Pages にデプロイする。
 
-Status: 未着手。
+Status: MVP デプロイ済み（2026-06-24）。
+- https://openjtd.pages.dev
+- https://jtdview.pages.dev
+- https://jtd-438.pages.dev（初期テスト用）
 
 背景:
 - `rjtd-wasm` クレートは `cdylib` + `wasm-bindgen` 構成済みで、`renderPageSvg()`、`renderPageHtml()`、`renderPageToCanvas()`、`plainText()`、`pageCount()` などのブラウザ API を公開している。
@@ -472,12 +475,11 @@ Status: 未着手。
 
 Immediate tasks:
 
-- [ ] `wasm-pack build --target web rjtd/crates/rjtd-wasm` が通るか確認し、WASM 非対応の依存（`std::fs`、`image` crate のデスクトップ feature など）を特定する。
-- [ ] WASM ビルドを通すために必要な `cfg(target_arch = "wasm32")` 分岐を追加する（I/O 系 API のスタブ、`image` crate の feature gate 見直しなど）。
-- [ ] `openjtd.github.io/` に最小限の HTML フロントエンドを作成する（ファイルドロップ → `HwpDocument.new(bytes)` → `renderPageSvg()` を `<div>` に挿入する MVP）。
-- [ ] ページナビゲーション UI（前ページ・次ページボタン、ページ番号表示）を追加する。
-- [ ] `plainText()` 出力タブを追加し、テキスト検索の足がかりにする。
-- [ ] `wasm-pack` 成果物（`.wasm` + JS glue）と HTML をまとめて Cloudflare Pages にデプロイできる形にする（静的ファイル、Workers 不要）。
+- [x] `wasm-pack build --target web rjtd/crates/rjtd-wasm` が通るか確認し、WASM 非対応の依存（`std::fs`、`image` crate のデスクトップ feature など）を特定する。→ 追加対応不要で一発通過。
+- [x] `openjtd.github.io/` に最小限の HTML フロントエンドを作成する（ファイルドロップ → `HwpDocument.new(bytes)` → `renderPageSvg()` を `<div>` に挿入する MVP）。デジタル庁デザインシステムのカラートークン・タイポグラフィ適用済み。
+- [x] ページナビゲーション UI（前ページ・次ページボタン、ページ番号表示）を追加する。
+- [x] `plainText()` 出力タブを追加する。
+- [x] `wasm-pack` 成果物（`.wasm` + JS glue）と HTML を Cloudflare Pages にデプロイする。
 - [ ] Cloudflare Pages の GitHub Actions デプロイパイプラインを設定し、`rjtd-wasm` ソース更新時に自動ビルド・デプロイできるようにする。
 
 Constraints:
