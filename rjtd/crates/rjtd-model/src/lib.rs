@@ -1172,7 +1172,7 @@ impl DocumentCore {
 
     pub fn from_document(document: Document) -> Self {
         let page_layout = page_layout_from_document(&document);
-        let writing_mode = WritingMode::Horizontal;
+        let writing_mode = writing_mode_from_document_view_styles(document.unknown_styles());
         let pages = paginate_document_text(&document, page_layout, writing_mode);
         Self {
             document,
@@ -20155,6 +20155,24 @@ fn paper_marks_json(paper_marks: &[DocumentPaperMark]) -> String {
 // RFC 0007 §PaperMark: flag 0x00010011 appears exclusively in Ginga vertical-writing
 // samples (a5/a6/b6/46) and never in horizontal samples. Not yet formally decoded
 // (TODO 327), so the result is diagnostic-only and must not gate WritingMode directly.
+fn writing_mode_from_document_view_styles(styles: &[UnknownStyle]) -> WritingMode {
+    let has_record_0x1001 = styles
+        .iter()
+        .filter(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))
+        .any(|style| {
+            summarize_style_stream(style.payload())
+                .records()
+                .first()
+                .map(|r| r.code() == 0x1001)
+                .unwrap_or(false)
+        });
+    if has_record_0x1001 {
+        WritingMode::VerticalRl
+    } else {
+        WritingMode::Horizontal
+    }
+}
+
 fn writing_mode_candidate_from_paper_marks(
     paper_marks: &[DocumentPaperMark],
 ) -> Option<WritingMode> {
@@ -39532,6 +39550,41 @@ mod tests {
         b5_core.set_file_name("fax02.jtt");
         assert!((b5_core.page_width_px() - 688.0).abs() < 0.2);
         assert!((b5_core.page_height_px() - 971.3).abs() < 0.2);
+    }
+
+    fn document_view_styles_sequential_fixture(first_code: u16) -> Vec<u8> {
+        // Build a minimal sequential style stream with 4 records.
+        // The sequential record parser requires >= 4 records to accept a sequence.
+        // Each record: code u16be, length u16be, payload bytes.
+        let mut bytes = vec![0u8; 10]; // 10-byte header prefix
+        for i in 0..4u16 {
+            let code = first_code + i;
+            bytes.extend_from_slice(&code.to_be_bytes()); // code
+            bytes.extend_from_slice(&0x0001_u16.to_be_bytes()); // length = 1
+            bytes.push(0x00); // payload
+        }
+        bytes
+    }
+
+    #[test]
+    fn document_core_detects_vertical_writing_mode_from_record_0x1001() {
+        // DocumentViewStyles whose first sequential record is 0x1001 → vertical-rl
+        let vertical_styles = document_view_styles_sequential_fixture(0x1001);
+        let bytes_v = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (DOCUMENT_VIEW_STYLES_PATH, &vertical_styles),
+        ]);
+        let core_v = DocumentCore::from_bytes(&bytes_v).unwrap();
+        assert_eq!(core_v.writing_mode(), WritingMode::VerticalRl);
+
+        // DocumentViewStyles whose first sequential record is 0x1002 (not 0x1001) → horizontal
+        let horizontal_styles = document_view_styles_sequential_fixture(0x1002);
+        let bytes_h = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (DOCUMENT_VIEW_STYLES_PATH, &horizontal_styles),
+        ]);
+        let core_h = DocumentCore::from_bytes(&bytes_h).unwrap();
+        assert_eq!(core_h.writing_mode(), WritingMode::Horizontal);
     }
 
     #[test]
