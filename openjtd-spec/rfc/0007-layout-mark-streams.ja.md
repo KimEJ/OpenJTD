@@ -55,6 +55,25 @@ N rows of 84 raw bytes
 
 各 84-byte row の first dword は index-like value である。remaining row は field semantics が decode されていないため raw bytes として保存する。
 
+`rjtd page-marks <file>` は 2 つの diagnostic フィールドとともに row parser を expose する：
+
+- `lineStart`：row bytes 内の固定オフセットの u16。レイアウト行開始位置として解釈。
+- `lineEnd`：row bytes 内の固定オフセットの u16。レイアウト行終了位置として解釈。
+- `flags`：固定オフセットの u32。
+- `u16Class`：`lineStart`/`lineEnd` パターンから導出されるヒューリスティックラベル — 両値が小さく `lineEnd > lineStart` で規則的な間隔なら `additive-boundary`；両値が異常に大きいか内部矛盾なら `mixed-payload`；`lineStart=lineEnd` なら `zero-sentinel`。
+
+11 件の行政・学術サンプル分析で `lineStart`/`lineEnd` は **レイアウト行番号（0 始まり）** をエンコードすることが判明した。支配的エントリ群内でのスパン `lineEnd − lineStart` は一定で、`ページあたり行数 − 1` に等しい：
+
+| Sample | 支配的スパン | ページあたり行数 |
+| --- | ---: | ---: |
+| `論文様式.jtd` | 43 | 44（45 行/ページ設定、最終行番号 = 43） |
+| `01要綱（事務局組織令）.jtd` | 12 | 13 |
+| `02案文・理由（整備令）.jtd` | 12 | 13 |
+| `04参照条文（施行日政令）.jtd` | 29 | 30 |
+| `04参照条文（整備政令）.jtd` | 29 | 30 |
+
+連続する `additive-boundary` エントリは `lineStart` が `ページあたり行数` 刻みで前進し、固定ページ高さ増分でレイアウト座標空間をタイル状に占める。同インデックスの `mixed-payload` エントリは異常に大きいか内部矛盾した値を持ち、本文ページではなくスタイルレコードスロットを表すと考えられる。`zero-sentinel` エントリは `lineStart = lineEnd` でグループ末尾のスペーサーまたはセンチネル位置に現れる。`additive-boundary` エントリ数はテキストが少ないサンプルでも多く（例：`01要綱（事務局組織令）` は 130 以上の additive エントリを持つが実テキストは 9 行のみ）、PageMark は実コンテンツ量に関係なく固定レイアウトスロットグリッドを事前確保している可能性がある。座標の物理的な意味（行 0 が本文先頭印刷行か余白・ヘッダーを含むかなど）は未解読。
+
 | Sample | header value 0 | header value 1 | header value 2 | rows | stream length formula |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `46.jtd` | 96 | 16 | 95 | 97 | `12 + 97 * 84 = 8160` |
@@ -136,11 +155,53 @@ N rows of:
 
 row count は stream length から `(stream_len - 12) / 8` として derive する。first header value は count-like だが、常に `row_count` または `row_count - 1` と等しいわけではないため、parser は semantics を割り当てず observed header value として保存する。
 
+ただし、行政文書・学術論文サンプル（2026-06-24 追加 11 件 + その後追加 3 件）を含む**全 17 件**で、より強い不変条件が確認された：
+
+- `header_value_2 = header_value_0 - 1` （常に成立。`last_index_value = count_value - 1`）
+- `/PageMark` と `/PaperMark` のヘッダーは同じサンプル内で `count_value` が常に同一
+
+つまり `count_value` と `last_index_value` は独立していない。一方が他方から導出される。両者の共通の意味は未解読。候補：ページセクション遷移数、ページレイアウト領域数、または文書レベルの別カウンター。
+
 | Sample | header value 0 | header value 1 | header value 2 | rows | flag distribution |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `46.jtd` | 96 | 12 | 95 | 97 | `0x00010000` x89, `0x00010010` x7, `0x00010011` x1 |
 | `a5.jtd` | 74 | 12 | 73 | 75 | `0x00010000` x65, `0x00010010` x9, `0x00010011` x1 |
 | `b6.jtd` | 98 | 12 | 97 | 98 | `0x00010000` x90, `0x00010010` x6, `0x00010011` x2 |
+| `論文様式.jtd` | 3 | 12 | 2 | 3 | `0x00010010` x1, `0x00010000` x2 |
+| `01要綱（事務局組織令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x129, `0x00010000` x9 |
+| `01要綱（施行期日政令）.jtd` | 8 | 12 | 7 | 138 | `0x00010010` x129, `0x00010000` x9 |
+| `01要綱（整備政令）.jtd` | 6 | 12 | 5 | 138 | `0x00010010` x128, `0x00010000` x10 |
+| `02_番号利用法・住基法改正（案文）.jtd` | 9 | 12 | 8 | 9 | `0x00010010` x5, `0x00010000` x4 |
+| `02案文・理由（施行期日政令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x132, `0x00010000` x6 |
+| `02案文・理由（整備令）.jtd` | 8 | 12 | 7 | 138 | `0x00010010` x133, `0x00010000` x5 |
+| `02案文・理由（事務局組織令）.jtd` | 6 | 12 | 5 | 138 | `0x00010010` x130, `0x00010000` x8 |
+| `03_新旧（番号利用法）.jtd` | 208 | 12 | 207 | 208 | `0x00010010` x204, `0x00010000` x4 |
+| `03新旧（整備令）.jtd` | 11 | 12 | 10 | 16 | `0x00010010` x2, `0x00010000` x14 |
+| `04_新旧（番号利用法）.jtd` | 19 | 12 | 18 | 118 | `0x00010010` x112, `0x00010000` x6 |
+| `04参照条文（施行日政令）.jtd` | 7 | 12 | 6 | 158 | `0x00010010` x107, `0x00010000` x51 |
+| `04参照条文（組織令）.jtd` | 6 | 12 | 5 | 158 | `0x00010010` x105, `0x00010000` x53 |
+| `04参照条文（整備政令）.jtd` | 25 | 12 | 24 | 158 | `0x00010010` x114, `0x00010000` x44 |
+
+`0x00010011` フラグは Ginga 縦書きサンプル（`46`/`a5`/`b6`）にのみ出現し、14 件の横書き行政・学術サンプルには存在しない。縦書きサンプルは横書きサンプルと比べて `0x00010000` と `0x00010010` のエントリ比率も大きく異なる。
+
+注目すべき例外として `03_新旧（番号利用法）.jtd` は `count_value = row_count = 208` — 他の行政サンプルでは `count_value` が `row_count` よりはるかに小さいのに対し、このサンプルでは一致する。PaperMark の大部分も `0x00010010`（208 件中 204 件）で、セクション区切りのない長い新旧対照表文書と整合する。
+
+フラグ `0x00010000`/`0x00010010` は交互のグループをなして並ぶ — 連続する `0x00010010` エントリの群の後に連続する `0x00010000` エントリの群が続く。グループ数は `count_value` とは一致しない。
+
+PaperMark フラグ群と、同一エントリインデックスの `/PageMark` `lineStart`/`lineEnd` 値を照合すると、14 件の行政・学術サンプルで一貫した構造パターンが見える。`0x00010010` 群から `0x00010000` 群への遷移ごとに、最初の `0x00010000` エントリの `lineStart` が直前の最終 `0x00010010` エントリの `lineEnd` より大きい。ギャップは `04参照条文` サンプルで約 30 行、`02案文` サンプルで 11〜13 行。`04参照条文` の `0x00010000` 群は各々約 30 行連続した `lineStart`/`lineEnd` 値に対応し、参照する法律条文ブロック 1 本分のセクションを示すと考えられる。
+
+`04参照条文（施行日政令）.jtd` の例：
+
+```text
+PaperMark entry 3–6: flags=0x00010000, PageMark lineStart=[70,100,130,160], lineEnd=[99,129,159,160]
+  （entry 6 は lineStart=lineEnd=160 — ゼロ幅のセンチネルページ）
+PaperMark entry 7–13: flags=0x00010010, PageMark lineStart=[209,239,...,389], lineEnd=[238,268,...,418]
+  （lineEnd=160 から lineStart=209 へのギャップは 49 — 法律条文ブロック境界）
+PaperMark entry 14–20: flags=0x00010000, PageMark lineStart=[419,449,...,569]
+  （lineEnd=418 から lineStart=419 へのギャップは 1; 法律条文ブロック内遷移）
+```
+
+仮説（decoded:false）：`0x00010010` は連続した本文セクション（法律条文 1 本、または 1 つの文書セグメント）に属するページを示し、`0x00010000` は遷移ページ（セクション区切り、前付、または空白スペーサー）を示す。`lineStart=lineEnd` ゼロ幅ページ（entry 6）はセンチネルまたは空セクションマーカーの可能性がある。`0x00010011` フラグ（Ginga 縦書きサンプルのみ）は未解読のまま。
 
 `rjtd paper-marks <file>` はこの parser-backed diagnostic を expose する。header と flag semantics が unknown のため、document model にはまだ wire されていない。`rjtd paper-mark-shape <file>` は observed `/PaperMark` streams すべてに対する non-failing shape diagnostic を expose する。
 
@@ -283,6 +344,51 @@ three samples の all 24 `MarkV.01` entry offsets は `/LineMark` word range 外
 
 `rjtd text-position-count-fields <file>` は remaining `TCntV.01` tail を positional `u16be` fields として expose し、`rjtd text-position-count-field-deltas <file>` は chosen range span と tail `t1..t2` span を比較する。current samples では all 89 rows が `t2 >= t1` だが、`t2 - t1` が chosen range span と等しい row はない。`rjtd text-position-count-tail-context <file>` は `t1/t2` が byte hit pattern より強い `/DocumentText` UTF-16 unit hit pattern を示すが universal ではない。`rjtd text-position-count-tail-delta-scan <file>` は unit hits を delta 29/30 付近で最も増やすが、text hits は elsewhere で peak する。`rjtd text-position-count-tail-delta-groups <file>` は aggregate signal を tail-pattern groups に分ける: one major `be0` pattern は `+29`、shifted patterns は `+30/+31`、major `0x0202` pattern は many best deltas に分散する。`rjtd text-position-count-tail-row-deltas <file>` は major `0x0202` pattern が row-level best deltas でも分散したままであることを確認する。`rjtd text-position-count-tail-row-context <file>` は `0x0202` chosen ranges が later body byte ranges に触れることが多く、best-delta tail fields は early heading/date text に触れることが多いと示す。`rjtd text-position-count-range-preview <file>` は `0x0202` chosen byte ranges が direct layout-stream coordinates ではないにもかかわらず real `/DocumentText` text entries と overlap することを示す。`rjtd text-position-count-range-boundaries <file>` は major `0x0202` byte ranges が mostly whole `/DocumentText` map entries を含み、`0x001c`/`0x000e` controls を繰り返し含むことを追加する。`rjtd text-control-context <file>` は `0x001c` を high-frequency delimiter candidate、`0x000e` をより control-cluster or inline-adjacent と示す。これにより `TCntV.01` tail fields は有望なまま残るが、`t1/t2` を chosen range の単純な duplicate として扱うことは reject され、chosen-range analysis の次の target は `/DocumentText` control-delimited byte intervals になる。
 
+## LineMark ヘッダーワード 0 の変化
+
+2026-06-24 時点のローカルサンプルで `LineMark` ヘッダーワード 0 の値が 3 種類確認された：
+
+| 値 | サンプル |
+| --- | --- |
+| `0x0914` | `46.jtd`、`a5.jtd`、`b6.jtd`（Ginga 縦書きサンプル、RFC 0007 初期セット） |
+| `0x090b` | ローカルの行政文書サンプル 10 件すべて（`01要綱`、`02案文`、`03新旧`、`04参照`） |
+| `0x0912` | `論文様式.jtd`（A4 横書き学術論文テンプレート） |
+
+いずれも `0x0900` 系プレフィックスを共有し、下位バイトのみ異なる：
+`0x14 = 20`、`0x0b = 11`、`0x12 = 18`。Ginga 縦書きと A4 横書きの差は `2`（`0x0914` vs `0x0912`）、Ginga と行政文書の差は `9`（`0x0914` vs `0x090b`）。
+下位バイトの意味は未解読。文書種別・書字方向・その他の文書レベル属性をエンコードしている可能性がある。
+
+## LineMark と DocumentText 0x001c の相関
+
+RFC 0009 により、`/DocumentText` の各 `0x001c` が自己記述型の段落/レイアウトレコードのオープナーであることが確立された。`be16-delta-v1` LineMark プロファイルは表示行ごとに 1 レコードを出力し、`0x001c` は論理段落（複数の表示行に折り返す場合がある）をマークする。
+
+`論文様式.jtd`（LineMark レコード 25 件、`0x001c` レコード 19 件）では、25 件の LineMark `unit-start` 値のうち 14 件が `0x001c` レコード位置と完全一致する。残り 11 件はテキストラン内部または `0x0000` ドキュメントターミネーターに対応する。`flag=0x0000` を持つ LineMark レコードは `0x001c` 位置と一致しない傾向があり、折り返した段落内の続き表示行と整合する。
+
+`03新旧（整備令）.jtd`（解析済み LineMark レコード 157 件）では、`0x001c` レコードが表セルクラス `0x0030`（703 件）と段落クラス `0x0010`（151 件）を含み、新旧対照文書の表多用構造を反映している。LineMark のデルタ値も対応して小さく多様である。
+
+## PageLayoutStyle の観測
+
+10 のローカル官公庁/学術サンプルは `/LineMark`/`/PageMark`/`/PaperMark` に加えて `/PageLayoutStyle` と `/PageLayoutStyleHeader` ストリームを持つ。（`04参照条文` 系 4 件と `論文様式.jtd` には `/PageLayoutStyle` がない。）
+
+**`/PageLayoutStyle` 構造（初期目録）：** `SsmgV.01` マジック（8 バイト）で始まる。ヘッダーワードはほぼゼロで、`w5=0x0004` または `0x0005`、`w7=0x0100`、`w9`=エントリ数的な値、`w10=0x0001`、`w11=0x0002` の小さな領域のみ非ゼロ。最初の大きな非ゼロワードクラスタはワード 138 から始まる。10 サンプル全てにおいて `0x4001` がワード 155 または 156 に現れ、直後に `0x010d=269` が続く。この `269` は `0x010c=268`（`03新旧（整備令）.jtd` のセル最大 b1 = 表幅）より 1 多い値。表のないサンプル（`01要綱`、`02案文` 系）でも同値が出現するため、ページレベルのレイアウトパラメーター（候補：`/DocumentText` の `0x0030` セル座標と同単位のテキスト領域幅）の可能性がある。`03新旧` では 2 箇所（ワード 155 と 792）に出現し、セクション単位の繰り返しが示唆される。
+
+**`/PageLayoutStyleHeader` 構造（初期目録）：** `SsmgV.01` マジックで始まる。ワード 10–13 に `TextV.01` マジック、ワード 138 に `TCntV.01` マジック、ワード 266 に再び `TextV.01` が出現する。この繰り返しマジック文字列は `/PageLayoutStyleHeader` が `TextV.01` と `TCntV.01` サブレコードを平坦なバイトストリームに混在させた複合コンテナであることを示す。ワード 299, 300, 302–306 は `/DocumentText` のインライン opener/terminator シーケンスに対応する `0x001c`/`0x001f`/`0x001d`/`0x001e` パターンを含み、スタイルブロックのペイロードが埋め込みテキストランを含む可能性を示す。`0x0198=408` がワード 279、341、440 に繰り返し出現し、`0x07dd=2013` がワード 285 と 447 に出現する。全フィールドの物理的意味は未解読。
+
+**`/PageLayoutStyle` スロット `part06` クロスサンプル分析（decoded:false）：**
+スロット `0x32`–`0x39` の `part06` バイト列の末尾 u16（ビッグエンディアン）はサンプル固有の値をエンコードする。10 サンプルに拡張（decoded:false）：
+
+| サンプルファミリー | 0x32/0x33 | 0x34/0x35 | 0x36/0x37 | 0x38/0x39 | part06 byte1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `01要綱`/`02案文` | 1000 | 453 | 600（5バイト） | 407 | `0x01` |
+| `03新旧（整備令）` | 800 | 453 | 407+773（7バイト） | 411 | `0x00` |
+| `02_番号利用法（案文）` | 2000 | 0 | 0（5バイト） | 0 | `0x00` |
+| `03_新旧（番号利用法）` | 1405 | 0 | 0+1397（7バイト） | 0 | `0x00` |
+| `04_新旧（番号利用法）` | 1405 | 0 | 0+1397（7バイト） | 0 | `0x00` |
+
+`03_新旧（番号利用法）` と `04_新旧（番号利用法）` は全スロットで完全一致 — 同一文書改訂作業の異なる処理段階と整合する。`0x34/0x35=453` は `01要綱`/`02案文`/`03新旧（整備令）` クラスターにのみ出現し、番号利用法系 3 件では 0。part06 バイト 1 は `01要綱`/`02案文` ファミリーのみ `0x01`；他全サンプルは `0x00`。
+
+スロット 0x31 の part06 は 01要綱 で `03002b010201ff01`（8 バイト）、03新旧（整備令）では末尾 u16 が異なる（`0xff01`→`0x2501=549`）。数値の物理的意味は未解読；`/DocumentText` `0x0030` セル座標と同じ座標系でのページ領域高さまたはスタイルパラメータをエンコードしている可能性がある。
+
 ## Known Gaps
 
 - `LineMark` record parser はまだ存在しない。
@@ -292,6 +398,7 @@ three samples の all 24 `MarkV.01` entry offsets は `/LineMark` word range 外
 - これらの streams と `MarkV.01` / `TCntV.01` の関係は decode されていない。current evidence は direct Mark-entry-to-LineMark-word indexing と direct `TCntV.01` range-to-layout-stream offsets を reject する。
 - small malformed samples は mini-stream chains が safely readable ではない inventory entries を expose することがある。small layout streams を解釈する前に `stream-meta` を使うべきである。
 - `/LineMark` は semantics unknown の tag-like values (`0x1000`, `0x1001`, `0x1002`) を持つ。current tag-context evidence は immediate next word を unique family discriminator にせず、direct `DocumentText` coordinates も証明しない。
+- LineMark ヘッダーワード 0 の値（`0x0914` / `0x090b` / `0x0912`）の意味は未解読。文書種別・書字方向・その他の文書レベル属性をエンコードしている可能性がある。
 
 ## Next Steps
 
