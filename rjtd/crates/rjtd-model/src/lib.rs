@@ -861,10 +861,10 @@ impl PageLayout {
     }
 
     fn wrap_columns(self, writing_mode: WritingMode) -> usize {
-        if writing_mode.is_vertical() {
-            if let Some(wrap_columns) = self.vertical_wrap_columns_override {
-                return wrap_columns.max(8);
-            }
+        if writing_mode.is_vertical()
+            && let Some(wrap_columns) = self.vertical_wrap_columns_override
+        {
+            return wrap_columns.max(8);
         }
         let (extent, unit_width) = if writing_mode.is_vertical() {
             (self.body_height_px(), APP_VERTICAL_DISPLAY_UNIT_PX)
@@ -7087,6 +7087,7 @@ pub struct ObjectJseq3FormulaCandidate {
 }
 
 impl ObjectJseq3FormulaCandidate {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         magic_offset: usize,
         so_trailer_offset: Option<usize>,
@@ -7163,6 +7164,7 @@ pub struct ObjectJsfartArtFrameCandidate {
 }
 
 impl ObjectJsfartArtFrameCandidate {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         left: u32,
         top: u32,
@@ -7566,6 +7568,7 @@ pub struct ObjectEmbeddedPressSnapshotCandidate {
 }
 
 impl ObjectEmbeddedPressSnapshotCandidate {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         body_length_candidate: u32,
         format_marker: impl Into<String>,
@@ -7963,6 +7966,7 @@ pub struct ObjectVisualListCandidate {
 }
 
 impl ObjectVisualListCandidate {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         declared_size: usize,
         version: u32,
@@ -9083,11 +9087,11 @@ impl FdmVectorGradientContext {
         }
     }
 
-    fn from_color(self) -> u32 {
+    fn start_color(self) -> u32 {
         self.from_color
     }
 
-    fn to_color(self) -> u32 {
+    fn end_color(self) -> u32 {
         self.to_color
     }
 }
@@ -11471,7 +11475,7 @@ fn embedding_frame_candidate_is_plausible(frame: &ObjectEmbeddingFrameCandidate)
 }
 
 fn decode_utf16le_c_string(bytes: &[u8]) -> Option<String> {
-    if bytes.len() % 2 != 0 {
+    if !bytes.len().is_multiple_of(2) {
         return None;
     }
     let units = bytes
@@ -11950,18 +11954,17 @@ fn fdm_raw_vector_command_candidates(vector_stream: &[u8]) -> Vec<ObjectFdmVecto
             record,
             offset + record_len,
             None,
-        ) {
-            if command.has_renderable_geometry() {
-                let command = command.with_source_vector_relative_offset(offset);
-                let command = if let Some(source_segment) =
-                    fdm_vector_command_source_segment_for_vector_offset(&segments, offset)
-                {
-                    command.with_source_segment(source_segment)
-                } else {
-                    command
-                };
-                commands.push(command);
-            }
+        ) && command.has_renderable_geometry()
+        {
+            let command = command.with_source_vector_relative_offset(offset);
+            let command = if let Some(source_segment) =
+                fdm_vector_command_source_segment_for_vector_offset(&segments, offset)
+            {
+                command.with_source_segment(source_segment)
+            } else {
+                command
+            };
+            commands.push(command);
         }
         offset += record_len.max(1);
     }
@@ -12088,6 +12091,7 @@ fn fdm_vector_nested_primitive_command_candidates(
     candidates
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fdm_vector_nested_primitive_command_candidate_at(
     parent_command_index: usize,
     nested_index: usize,
@@ -12240,9 +12244,11 @@ fn fdm_vector_prefix_color(prefix: &[u8], offset: usize) -> Option<u32> {
     if color > 0x00ff_ffff {
         return None;
     }
-    if color == 0 || color == 0x00ff_ffff || color >= 0x0001_0000 {
-        Some(color)
-    } else if fdm_vector_is_grayscale_color(color) {
+    if color == 0
+        || color == 0x00ff_ffff
+        || color >= 0x0001_0000
+        || fdm_vector_is_grayscale_color(color)
+    {
         Some(color)
     } else {
         None
@@ -12631,8 +12637,8 @@ fn fdm_vector_linear_gradient_colors(
         return None;
     }
     let gradient = command.gradient_colors()?;
-    let from = fdm_vector_css_color(gradient.from_color())?;
-    let to = fdm_vector_css_color(gradient.to_color())?;
+    let from = fdm_vector_css_color(gradient.start_color())?;
+    let to = fdm_vector_css_color(gradient.end_color())?;
     (from != to).then_some((from, to))
 }
 
@@ -12735,8 +12741,8 @@ fn fdm_vector_text_mask_area_ratio(
         return None;
     }
     let ratio = inner_area as f64 / outer_area as f64;
-    (ratio >= FDM_VECTOR_TEXT_MASK_MIN_INNER_AREA_RATIO
-        && ratio <= FDM_VECTOR_TEXT_MASK_MAX_INNER_AREA_RATIO)
+    (FDM_VECTOR_TEXT_MASK_MIN_INNER_AREA_RATIO..=FDM_VECTOR_TEXT_MASK_MAX_INNER_AREA_RATIO)
+        .contains(&ratio)
         .then_some(ratio)
 }
 
@@ -12943,10 +12949,9 @@ fn fdm_index_stream_for_vector<'a>(
     if let Some((path, stream)) = streams
         .iter()
         .find(|(path, _)| path.eq_ignore_ascii_case(&exact_index_path))
+        && fdm_index_vector_pair_score(stream, vector_len).is_some()
     {
-        if fdm_index_vector_pair_score(stream, vector_len).is_some() {
-            return Some((path, stream));
-        }
+        return Some((path, stream));
     }
 
     let mut best: Option<(&String, &Vec<u8>, FdmIndexVectorPairScore)> = None;
@@ -13673,14 +13678,14 @@ fn jseq3_text_token_candidates(stream: &[u8]) -> Vec<ObjectJseq3TextTokenCandida
         let Some(unit) = read_le16_at(stream, offset) else {
             break;
         };
-        if let Some(character) = char::from_u32(u32::from(unit)) {
-            if JSEQ3_TEXT_TOKEN_CHARS.contains(character) {
-                tokens.push(ObjectJseq3TextTokenCandidate::new(
-                    character.to_string(),
-                    offset,
-                    "utf-16le",
-                ));
-            }
+        if let Some(character) = char::from_u32(u32::from(unit))
+            && JSEQ3_TEXT_TOKEN_CHARS.contains(character)
+        {
+            tokens.push(ObjectJseq3TextTokenCandidate::new(
+                character.to_string(),
+                offset,
+                "utf-16le",
+            ));
         }
         offset += 2;
     }
@@ -13847,11 +13852,10 @@ fn embedded_press_snapshot_vector_paths(
                 }
             }
             EMBEDDED_PRESS_RECORD_MOVE_TO => {
-                if let Some(builder) = current.as_mut() {
-                    if let Some((x, y)) = embedded_press_path_point(payload, 0, width, height) {
-                        builder
-                            .push(ObjectEmbeddedPressVectorPathCommandCandidate::MoveTo { x, y });
-                    }
+                if let Some(builder) = current.as_mut()
+                    && let Some((x, y)) = embedded_press_path_point(payload, 0, width, height)
+                {
+                    builder.push(ObjectEmbeddedPressVectorPathCommandCandidate::MoveTo { x, y });
                 }
             }
             EMBEDDED_PRESS_RECORD_BEZIER_TO => {
@@ -13865,11 +13869,11 @@ fn embedded_press_snapshot_vector_paths(
                 }
             }
             EMBEDDED_PRESS_RECORD_TEXTURE_BEZIER => {
-                if let Some(builder) = current.as_mut() {
-                    if let Some(header) = embedded_press_texture_bezier_header(payload) {
-                        builder.mark_texture(header);
-                        push_embedded_press_texture_bezier_record(builder, payload, width, height);
-                    }
+                if let Some(builder) = current.as_mut()
+                    && let Some(header) = embedded_press_texture_bezier_header(payload)
+                {
+                    builder.mark_texture(header);
+                    push_embedded_press_texture_bezier_record(builder, payload, width, height);
                 }
             }
             _ => {
@@ -13990,9 +13994,7 @@ fn embedded_press_record_points(
     let mut points = Vec::with_capacity(count);
     for index in 0..count {
         let offset = points_offset + index * 8;
-        let Some(point) = embedded_press_path_point(payload, offset, width, height) else {
-            return None;
-        };
+        let point = embedded_press_path_point(payload, offset, width, height)?;
         points.push(point);
     }
     Some(points)
@@ -14127,7 +14129,7 @@ fn decode_visual_list_rle8(width: u32, height: u32, data: &[u8]) -> Option<Vec<u
         let value = data[offset + 1];
         offset += 2;
         if count != 0 {
-            row.extend(std::iter::repeat(value).take(count as usize));
+            row.extend(std::iter::repeat_n(value, count as usize));
             continue;
         }
 
@@ -14141,7 +14143,7 @@ fn decode_visual_list_rle8(width: u32, height: u32, data: &[u8]) -> Option<Vec<u
                 let dx = data[offset] as usize;
                 let dy = data[offset + 1] as usize;
                 offset += 2;
-                row.extend(std::iter::repeat(fill).take(dx));
+                row.extend(std::iter::repeat_n(fill, dx));
                 for _ in 0..dy {
                     flush_visual_list_row(&mut pixels, &mut row, width, height, fill);
                 }
@@ -14165,7 +14167,7 @@ fn decode_visual_list_rle8(width: u32, height: u32, data: &[u8]) -> Option<Vec<u
         flush_visual_list_row(&mut pixels, &mut row, width, height, fill);
     }
     while pixels.len() < total_pixels {
-        pixels.extend(std::iter::repeat(fill).take(width));
+        pixels.extend(std::iter::repeat_n(fill, width));
     }
     pixels.truncate(total_pixels);
     Some(pixels)
@@ -14191,7 +14193,7 @@ fn flush_visual_list_row(
         return;
     }
     if row.len() < width {
-        row.extend(std::iter::repeat(fill).take(width - row.len()));
+        row.extend(std::iter::repeat_n(fill, width - row.len()));
     }
     pixels.extend(row.iter().copied().take(width));
     row.clear();
@@ -14249,7 +14251,7 @@ fn push_object_path_reasons(path: &str, reasons: &mut Vec<ObjectStreamCandidateR
         push_unique_object_reason(reasons, ObjectStreamCandidateReason::TablePath);
     }
 
-    if segments.iter().any(|segment| *segment == "visuallist") {
+    if segments.contains(&"visuallist") {
         push_unique_object_reason(reasons, ObjectStreamCandidateReason::VisualListPath);
     }
 }
@@ -14915,10 +14917,10 @@ fn document_text_toc_entries(entries: &[DocumentTextMapEntry]) -> Vec<DocumentTo
             DocumentTextMapKind::ControlBoundary => {}
         }
 
-        if entry.text().contains('\n') || entry.text().contains('\r') {
-            if let Some(toc_entry) = std::mem::take(&mut row).into_toc_entry() {
-                toc_entries.push(toc_entry);
-            }
+        if (entry.text().contains('\n') || entry.text().contains('\r'))
+            && let Some(toc_entry) = std::mem::take(&mut row).into_toc_entry()
+        {
+            toc_entries.push(toc_entry);
         }
     }
 
@@ -17922,14 +17924,12 @@ fn cursor_rect_from_line(
 
 fn column_units_before(line: &PageTextLine, char_offset: usize) -> f64 {
     let mut units = 0.0;
-    let mut current_offset = line.char_start();
 
-    for character in line.text().chars() {
+    for (current_offset, character) in (line.char_start()..).zip(line.text().chars()) {
         if current_offset >= char_offset {
             break;
         }
         units += display_column_width(character) as f64;
-        current_offset += 1;
     }
 
     units
@@ -17939,15 +17939,13 @@ fn char_offset_for_x(layout: PageLayout, line: &PageTextLine, x: f64) -> usize {
     let target_units =
         ((normalize_coordinate(x) - layout.margin_px() as f64) / column_width_px(layout)).max(0.0);
     let mut units = 0.0;
-    let mut char_offset = line.char_start();
 
-    for character in line.text().chars() {
+    for (char_offset, character) in (line.char_start()..).zip(line.text().chars()) {
         let width = display_column_width(character) as f64;
         if target_units <= units + (width / 2.0) {
             return char_offset;
         }
         units += width;
-        char_offset += 1;
     }
 
     line.char_end()
@@ -19295,7 +19293,7 @@ fn push_object_fdm_connector_candidate_json(
     output.push_str(&candidate.endpoint_dx().to_string());
     output.push_str(",\"y\":");
     output.push_str(&candidate.endpoint_dy().to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"endpointDistanceSquared\":");
     output.push_str(&candidate.endpoint_distance_squared().to_string());
     output.push_str(",\"pathPointCount\":");
@@ -22178,6 +22176,8 @@ struct ShanaiLanTextSlot {
     line_header_raw_words: [u16; 12],
 }
 
+type ShanaiLanTextSlotAttachment<'a> = (&'a ShanaiLanTextSlot, f32, (f32, f32, f32, f32));
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ShanaiLanTextStyleLinkEvidence {
     source: &'static str,
@@ -22757,7 +22757,7 @@ fn page_layer_tree_json(
                 output.push(',');
                 push_page_layer_shanai_lan_line_rule_json(
                     &mut output,
-                    &projection,
+                    projection,
                     rule_index,
                     rule,
                     shanai_lan_text_projection.as_ref(),
@@ -23368,6 +23368,7 @@ fn push_page_layer_page_mark_separator_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_page_layer_text_run_json(
     output: &mut String,
     source_id: usize,
@@ -23452,7 +23453,7 @@ fn push_page_layer_text_source_json(
     if let Some(annotation) = &fragment.ruby_annotation {
         source.push_str("{\"type\":\"ruby\",\"text\":");
         source.push_str(&json_string(annotation));
-        source.push_str("}");
+        source.push('}');
     }
     source.push_str("]}");
     output.push(source);
@@ -25422,6 +25423,7 @@ fn push_table_grid_source_only_horizontal_field_consensus_hypotheses_items_json(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_source_only_horizontal_field_consensus_hypothesis_json(
     output: &mut String,
     frame_basis: &'static str,
@@ -26689,24 +26691,24 @@ fn push_table_grid_page_mark_scoped_y_transform_probe_json(
     let single_parsed_entry_index = single_usize_value(&parsed_entry_indexes);
     let single_raw_header_index = single_usize_value(&raw_header_indexes);
     let mut value_candidates = Vec::new();
-    if let Some(entry_index) = single_parsed_entry_index {
-        if let Some(entry) = page_mark.entries().get(entry_index) {
-            collect_page_mark_entry_y_value_candidates(&mut value_candidates, entry);
-        }
+    if let Some(entry_index) = single_parsed_entry_index
+        && let Some(entry) = page_mark.entries().get(entry_index)
+    {
+        collect_page_mark_entry_y_value_candidates(&mut value_candidates, entry);
     }
-    if let Some(header_index) = single_raw_header_index {
-        if let Some(header) = record_headers.get(header_index) {
-            let next_offset = record_headers
-                .get(header_index + 1)
-                .map(|next| next.offset)
-                .unwrap_or(page_mark_bytes.len());
-            collect_page_mark_raw_header_y_value_candidates(
-                &mut value_candidates,
-                page_mark_bytes,
-                *header,
-                next_offset,
-            );
-        }
+    if let Some(header_index) = single_raw_header_index
+        && let Some(header) = record_headers.get(header_index)
+    {
+        let next_offset = record_headers
+            .get(header_index + 1)
+            .map(|next| next.offset)
+            .unwrap_or(page_mark_bytes.len());
+        collect_page_mark_raw_header_y_value_candidates(
+            &mut value_candidates,
+            page_mark_bytes,
+            *header,
+            next_offset,
+        );
     }
 
     let row_top_targets = (0..row_count)
@@ -26846,6 +26848,7 @@ fn push_table_grid_page_mark_scoped_y_transform_probe_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_page_mark_y_candidate_lineage_gate_json(
     output: &mut String,
     reference_layout: &TableGridReferenceLayout,
@@ -27751,13 +27754,12 @@ fn u16_values_are_monotonic_non_decreasing(values: &[u16]) -> bool {
 fn values_reused_after_different_value(values: &[usize]) -> bool {
     let mut last_seen = BTreeMap::<usize, usize>::new();
     for (index, value) in values.iter().copied().enumerate() {
-        if let Some(previous_index) = last_seen.insert(value, index) {
-            if values[previous_index + 1..index]
+        if let Some(previous_index) = last_seen.insert(value, index)
+            && values[previous_index + 1..index]
                 .iter()
                 .any(|between| *between != value)
-            {
-                return true;
-            }
+        {
+            return true;
         }
     }
     false
@@ -29532,7 +29534,7 @@ fn page_mark_raw_subrecord_line_span_candidates(
             };
             let line_start = subrecord.words[4];
             let line_end = subrecord.words[6];
-            if !max_line_end.is_some_and(|max_line_end| u32::from(line_end) <= max_line_end) {
+            if max_line_end.is_none_or(|max_line_end| u32::from(line_end) > max_line_end) {
                 continue;
             }
             let record_relative_byte_offset = subrecord.byte_offset.saturating_sub(header.offset);
@@ -29700,6 +29702,7 @@ fn single_usize_value(values: &[usize]) -> Option<usize> {
     values.iter().all(|value| *value == first).then_some(first)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_page_mark_scoped_y_record_set_probe_json(
     output: &mut String,
     record_set: &str,
@@ -29743,24 +29746,24 @@ fn push_page_mark_scoped_y_record_set_probe_json(
     let single_parsed_entry_index = single_usize_value(&parsed_entry_indexes);
     let single_raw_header_index = single_usize_value(&raw_header_indexes);
     let mut value_candidates = Vec::new();
-    if let Some(entry_index) = single_parsed_entry_index {
-        if let Some(entry) = page_mark.entries().get(entry_index) {
-            collect_page_mark_entry_y_value_candidates(&mut value_candidates, entry);
-        }
+    if let Some(entry_index) = single_parsed_entry_index
+        && let Some(entry) = page_mark.entries().get(entry_index)
+    {
+        collect_page_mark_entry_y_value_candidates(&mut value_candidates, entry);
     }
-    if let Some(header_index) = single_raw_header_index {
-        if let Some(header) = record_headers.get(header_index) {
-            let next_offset = record_headers
-                .get(header_index + 1)
-                .map(|next| next.offset)
-                .unwrap_or(page_mark_bytes.len());
-            collect_page_mark_raw_header_y_value_candidates(
-                &mut value_candidates,
-                page_mark_bytes,
-                *header,
-                next_offset,
-            );
-        }
+    if let Some(header_index) = single_raw_header_index
+        && let Some(header) = record_headers.get(header_index)
+    {
+        let next_offset = record_headers
+            .get(header_index + 1)
+            .map(|next| next.offset)
+            .unwrap_or(page_mark_bytes.len());
+        collect_page_mark_raw_header_y_value_candidates(
+            &mut value_candidates,
+            page_mark_bytes,
+            *header,
+            next_offset,
+        );
     }
 
     output.push_str(
@@ -29953,6 +29956,7 @@ fn collect_page_mark_raw_header_y_value_candidates(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_page_mark_scoped_y_shared_field_family_residuals_json(
     output: &mut String,
     parsed_page_mark_family: &str,
@@ -30014,6 +30018,7 @@ fn push_page_mark_scoped_y_shared_field_family_residuals_json(
     output.push_str("],\"renderPromotionContribution\":\"field-family-residual-diagnostic-only\",\"renderPromotionBlockedReason\":\"page-mark-subrecord-field-family-semantics-unproven\"}");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_page_mark_slot_scoped_subrecord_y_sequence_comparison_json(
     output: &mut String,
     layout: PageLayout,
@@ -30448,43 +30453,43 @@ fn collect_page_mark_scoped_y_family_members(
 ) {
     let subrecord_line_range_max =
         page_mark_subrecord_line_range_max_candidate(page_mark, record_headers);
-    if let Some(entry_index) = parsed_entry_index {
-        if let Some(entry) = page_mark.entries().get(entry_index) {
-            for subrecord in page_mark_u16_subrecord_candidates(entry.u16_fields()) {
-                let words = subrecord.words();
-                let line_range =
-                    page_mark_subrecord_line_range_candidate(&words, subrecord_line_range_max);
-                for (field_index, value) in words.iter().copied().enumerate() {
-                    let word_index = subrecord.word_index() + field_index;
-                    push_page_mark_scoped_y_family_member(
-                        output,
-                        "parsedEntryU16Subrecord",
-                        "direct-u16-px",
-                        field_index,
-                        Some(word_index),
-                        Some(word_index * 2),
-                        None,
-                        None,
-                        None,
-                        line_range,
-                        u32::from(value),
-                        f32::from(value),
-                    );
-                    push_page_mark_scoped_y_family_member(
-                        output,
-                        "parsedEntryU16Subrecord",
-                        "centipoint-to-css-px",
-                        field_index,
-                        Some(word_index),
-                        Some(word_index * 2),
-                        None,
-                        None,
-                        None,
-                        line_range,
-                        u32::from(value),
-                        page_mark_centipoints_to_css_px(u32::from(value)),
-                    );
-                }
+    if let Some(entry_index) = parsed_entry_index
+        && let Some(entry) = page_mark.entries().get(entry_index)
+    {
+        for subrecord in page_mark_u16_subrecord_candidates(entry.u16_fields()) {
+            let words = subrecord.words();
+            let line_range =
+                page_mark_subrecord_line_range_candidate(&words, subrecord_line_range_max);
+            for (field_index, value) in words.iter().copied().enumerate() {
+                let word_index = subrecord.word_index() + field_index;
+                push_page_mark_scoped_y_family_member(
+                    output,
+                    "parsedEntryU16Subrecord",
+                    "direct-u16-px",
+                    field_index,
+                    Some(word_index),
+                    Some(word_index * 2),
+                    None,
+                    None,
+                    None,
+                    line_range,
+                    u32::from(value),
+                    f32::from(value),
+                );
+                push_page_mark_scoped_y_family_member(
+                    output,
+                    "parsedEntryU16Subrecord",
+                    "centipoint-to-css-px",
+                    field_index,
+                    Some(word_index),
+                    Some(word_index * 2),
+                    None,
+                    None,
+                    None,
+                    line_range,
+                    u32::from(value),
+                    page_mark_centipoints_to_css_px(u32::from(value)),
+                );
             }
         }
     }
@@ -30580,6 +30585,7 @@ fn page_mark_subrecord_line_range_candidate(
         .then_some((start, end))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_page_mark_scoped_y_family_member(
     output: &mut Vec<PageMarkScopedYFamilyMember>,
     source: &'static str,
@@ -31234,10 +31240,10 @@ fn push_page_mark_scoped_y_hit_summary_json(
     output.push_str("]}");
 }
 
-fn nearest_page_mark_scoped_y_candidate<'a>(
+fn nearest_page_mark_scoped_y_candidate(
     target: f32,
-    candidates: &'a [PageMarkScopedYValueCandidate],
-) -> Option<(&'a PageMarkScopedYValueCandidate, f32)> {
+    candidates: &[PageMarkScopedYValueCandidate],
+) -> Option<(&PageMarkScopedYValueCandidate, f32)> {
     candidates
         .iter()
         .map(|candidate| (candidate, candidate.value_px - target))
@@ -31402,10 +31408,10 @@ fn page_mark_scoped_y_pairwise_delta_candidates(
     delta_candidates
 }
 
-fn nearest_page_mark_scoped_delta_candidate<'a>(
+fn nearest_page_mark_scoped_delta_candidate(
     target: f32,
-    candidates: &'a [PageMarkScopedYDeltaCandidate],
-) -> Option<(&'a PageMarkScopedYDeltaCandidate, f32)> {
+    candidates: &[PageMarkScopedYDeltaCandidate],
+) -> Option<(&PageMarkScopedYDeltaCandidate, f32)> {
     candidates
         .iter()
         .map(|candidate| (candidate, candidate.delta_px - target))
@@ -31883,6 +31889,7 @@ fn page_mark_raw_numeric_hit_context_words(
     (start, words)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_line_mark_stride_promotion_readiness_json(
     output: &mut String,
     document: &Document,
@@ -32576,6 +32583,7 @@ fn table_grid_page_mark_context_for_line_mark_record_indexes(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_line_mark_record_family_y_candidate_json(
     output: &mut String,
     layout: PageLayout,
@@ -35193,10 +35201,10 @@ fn push_table_grid_source_derived_layout_readiness_json(
     if !source_layout_present {
         rejection_reasons.push("source-derived-layout-candidate-absent");
     }
-    if let Some(layout) = source_layout {
-        if layout.render_promotion_blocked_reason != "none" {
-            rejection_reasons.push(layout.render_promotion_blocked_reason);
-        }
+    if let Some(layout) = source_layout
+        && layout.render_promotion_blocked_reason != "none"
+    {
+        rejection_reasons.push(layout.render_promotion_blocked_reason);
     }
     if source_layout_present && !source_layout_renderable {
         rejection_reasons.push("source-derived-layout-not-renderable");
@@ -35531,6 +35539,7 @@ fn table_grid_page_space_horizontal_transform_ready(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_page_space_horizontal_transform_gate_json(
     output: &mut String,
     layout: PageLayout,
@@ -36301,6 +36310,7 @@ fn push_table_grid_page_space_horizontal_page_mark_raw_field_hypotheses_json(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_page_space_horizontal_page_mark_raw_field_hypothesis_json(
     output: &mut String,
     frame_basis: &'static str,
@@ -36343,6 +36353,7 @@ fn push_table_grid_page_space_horizontal_page_mark_raw_field_hypothesis_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_page_space_horizontal_frame_hypothesis_json(
     output: &mut String,
     frame_basis: &'static str,
@@ -36378,6 +36389,7 @@ fn push_table_grid_page_space_horizontal_frame_hypothesis_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_reference_calibration_replacement_gate_json(
     output: &mut String,
     source_layout: Option<&TableGridSourceDerivedLayout>,
@@ -37348,6 +37360,7 @@ fn push_table_grid_source_gap_to_page_line_gap_readiness_hints_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_source_only_page_y_origin_hypothesis_json(
     output: &mut String,
     document: &Document,
@@ -38741,18 +38754,19 @@ fn table_grid_source_only_page_y_origin_candidate_supports(
                 document,
                 subrecord_span_readiness,
             );
-        if let Some(slot) = absolute_y_slot_candidates.first() {
-            if slot.field_index == 2 && slot.tail_block16_word_index == Some(11) {
-                push_table_grid_source_only_page_y_origin_candidate_support(
-                    &mut supports,
-                    "page-mark-absolute-y-slot-field2-tail-block16-word11",
-                    slot.value_px,
-                    None,
-                    Some(candidate.index()),
-                    "source-only-page-mark-absolute-y-slot-y-origin",
-                    "page-mark-absolute-y-slot-semantics-unproven",
-                );
-            }
+        if let Some(slot) = absolute_y_slot_candidates.first()
+            && slot.field_index == 2
+            && slot.tail_block16_word_index == Some(11)
+        {
+            push_table_grid_source_only_page_y_origin_candidate_support(
+                &mut supports,
+                "page-mark-absolute-y-slot-field2-tail-block16-word11",
+                slot.value_px,
+                None,
+                Some(candidate.index()),
+                "source-only-page-mark-absolute-y-slot-y-origin",
+                "page-mark-absolute-y-slot-semantics-unproven",
+            );
         }
     }
     if let Some(probe) = cross_table_row_boundary_offset_probe {
@@ -38893,6 +38907,7 @@ fn push_table_grid_line_mark_page_origin_candidate_json(
     output.push_str(",\"renderPromotionBlockedReason\":null}");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_table_grid_line_mark_stride_to_page_y_promotion_readiness_json(
     output: &mut String,
     document: &Document,
@@ -40416,7 +40431,7 @@ fn push_table_grid_layout_stream_probe_json(
     output.push_str(&frame_record_count.to_string());
     output.push_str(",\"objectFrameSourceUnitLinkCount\":0");
     output.push_str(",\"directPlacementEvidence\":false");
-    output.push_str("}");
+    output.push('}');
 }
 
 fn push_table_grid_page_mark_line_mark_record_evidence_json(
@@ -40887,20 +40902,20 @@ fn ranges_overlap_half_open(
     start < other_end && other_start < end
 }
 
-fn table_grid_interval_line_mark<'a>(
+fn table_grid_interval_line_mark(
     candidate: &TableCandidate,
     interval: &TableCandidateInterval,
-    line_mark_intervals: &'a [ShanaiLanLineMarkInterval],
+    line_mark_intervals: &[ShanaiLanLineMarkInterval],
 ) -> Option<ShanaiLanLineMarkInterval> {
     let row_unit_start = table_source_offset_to_units(candidate.basis(), interval.source_start());
     let row_unit_end = table_source_offset_to_units(candidate.basis(), interval.source_end());
     best_line_mark_interval_for_unit_range(line_mark_intervals, row_unit_start, row_unit_end)
 }
 
-fn table_grid_page_mark_entry_for_line_mark_record<'a>(
-    page_mark: Option<&'a DocumentPageMark>,
+fn table_grid_page_mark_entry_for_line_mark_record(
+    page_mark: Option<&DocumentPageMark>,
     record_index: usize,
-) -> Option<&'a DocumentPageMarkEntry> {
+) -> Option<&DocumentPageMarkEntry> {
     page_mark?.entries().iter().find(|entry| {
         let Some(line_start) = entry.line_start().map(|value| value as usize) else {
             return false;
@@ -41857,7 +41872,7 @@ fn success_data_test_fdm_reference_projection_layer_op(
     output.push_str(&projection.source_right.to_string());
     output.push_str(",\"bottom\":");
     output.push_str(&projection.source_bottom.to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"commandCount\":");
     output.push_str(&commands.len().to_string());
     output.push_str(",\"sourceCohort\":");
@@ -43145,7 +43160,7 @@ fn push_page_layer_fdm_command_diagnostic_json(
     output.push_str(&extent.right.to_string());
     output.push_str(",\"bottom\":");
     output.push_str(&extent.bottom.to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"projectionViewport\":");
     push_fdm_projection_viewport_json(output, layout);
     output.push('}');
@@ -43359,7 +43374,7 @@ fn push_page_layer_fdm_vector_primitive_large_span_blocked_json(
     output.push_str(&extent.right.to_string());
     output.push_str(",\"bottom\":");
     output.push_str(&extent.bottom.to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"projectionViewport\":");
     push_fdm_projection_viewport_json(output, layout);
     output.push('}');
@@ -43577,6 +43592,7 @@ fn push_fdm_page_paint_coverage_summary_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_page_layer_fdm_connector_candidate_json(
     output: &mut String,
     layout: PageLayout,
@@ -43730,7 +43746,7 @@ fn push_page_layer_fdm_connector_candidate_json(
     output.push_str(&extent.right.to_string());
     output.push_str(",\"bottom\":");
     output.push_str(&extent.bottom.to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"projectionViewport\":");
     push_fdm_projection_viewport_json(output, layout);
     output.push('}');
@@ -43817,6 +43833,7 @@ fn fdm_connector_order_trace_json(
     Some(output)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_fdm_connector_order_trace_connector_json(
     output: &mut String,
     layout: PageLayout,
@@ -45076,6 +45093,7 @@ fn fdm_connector_order_trace_node_from_diagnostic(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fdm_connector_order_trace_node_from_owner_summary(
     role: &'static str,
     endpoint: &'static str,
@@ -46739,6 +46757,7 @@ fn push_fdm_connector_endpoint_owner_candidates_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_fdm_connector_endpoint_owner_candidate_array_json(
     output: &mut String,
     point: (f32, f32),
@@ -49125,6 +49144,7 @@ fn push_fdm_connector_open_stroke_axis_rule_endpoint_match_summary_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_fdm_connector_open_stroke_axis_rule_owner_promotion_gate_json(
     output: &mut String,
     layout: PageLayout,
@@ -49602,12 +49622,12 @@ fn push_fdm_connector_open_stroke_axis_rule_endpoint_match_array_json(
     output.push(']');
 }
 
-fn fdm_connector_line_rule_endpoint_matches<'a>(
-    projection: &'a ShanaiLanLineRuleProjection,
+fn fdm_connector_line_rule_endpoint_matches(
+    projection: &ShanaiLanLineRuleProjection,
     point: FdmConnectorTextGridPoint,
 ) -> Vec<(
     usize,
-    &'a ShanaiLanLineRule,
+    &ShanaiLanLineRule,
     FdmConnectorLineRuleDistance,
     &'static str,
 )> {
@@ -49678,10 +49698,10 @@ fn fdm_connector_line_rule_tier_rank(tier: &str) -> usize {
     }
 }
 
-fn fdm_connector_nearest_line_rule_match<'a>(
-    projection: &'a ShanaiLanLineRuleProjection,
+fn fdm_connector_nearest_line_rule_match(
+    projection: &ShanaiLanLineRuleProjection,
     point: FdmConnectorTextGridPoint,
-) -> Option<(usize, &'a ShanaiLanLineRule, FdmConnectorLineRuleDistance)> {
+) -> Option<(usize, &ShanaiLanLineRule, FdmConnectorLineRuleDistance)> {
     projection
         .rules
         .iter()
@@ -50115,9 +50135,9 @@ fn push_shanai_lan_fill_basis_counts_json(
             output.push(',');
         }
         output.push_str("{\"fillColorBasis\":");
-        output.push_str(&json_string(*basis));
+        output.push_str(&json_string(basis));
         output.push_str(",\"fillColor\":");
-        output.push_str(&json_string(*fill_color));
+        output.push_str(&json_string(fill_color));
         output.push_str(",\"count\":");
         output.push_str(&count.to_string());
         output.push('}');
@@ -50143,9 +50163,12 @@ fn push_shanai_lan_view_style_group_candidate_counts_json(
     output.push(']');
 }
 
+type ShanaiLanGroupHeaderFamilyCounts =
+    BTreeMap<(String, String, &'static str, &'static str), (usize, Vec<String>)>;
+
 fn push_shanai_lan_group_header_family_counts_json(
     output: &mut String,
-    counts: &BTreeMap<(String, String, &'static str, &'static str), (usize, Vec<String>)>,
+    counts: &ShanaiLanGroupHeaderFamilyCounts,
 ) {
     output.push('[');
     for (index, ((control_kind, first_field, basis, fill_color), (count, examples))) in
@@ -50159,9 +50182,9 @@ fn push_shanai_lan_group_header_family_counts_json(
         output.push_str(",\"firstFieldWordHex\":");
         output.push_str(&json_string(first_field));
         output.push_str(",\"fillColorBasis\":");
-        output.push_str(&json_string(*basis));
+        output.push_str(&json_string(basis));
         output.push_str(",\"fillColor\":");
-        output.push_str(&json_string(*fill_color));
+        output.push_str(&json_string(fill_color));
         output.push_str(",\"count\":");
         output.push_str(&count.to_string());
         output.push_str(",\"exampleTexts\":");
@@ -50183,9 +50206,9 @@ fn push_shanai_lan_group_header_signature_counts_json(
         output.push_str("{\"rawWordsHexKey\":");
         output.push_str(&json_string(signature));
         output.push_str(",\"fillColorBasis\":");
-        output.push_str(&json_string(*basis));
+        output.push_str(&json_string(basis));
         output.push_str(",\"fillColor\":");
-        output.push_str(&json_string(*fill_color));
+        output.push_str(&json_string(fill_color));
         output.push_str(",\"count\":");
         output.push_str(&count.to_string());
         output.push_str(",\"exampleTexts\":");
@@ -51019,6 +51042,7 @@ fn push_shanai_lan_line_header_same_segment_group_runs_json(
     output.push(']');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_shanai_lan_line_header_same_segment_group_run_summary_json(
     output: &mut String,
     entries: &[DocumentTextMapEntry],
@@ -51166,7 +51190,7 @@ fn push_static_str_count_map_json(output: &mut String, counts: &BTreeMap<&'stati
             output.push(',');
         }
         output.push_str("{\"key\":");
-        output.push_str(&json_string(*key));
+        output.push_str(&json_string(key));
         output.push_str(",\"count\":");
         output.push_str(&count.to_string());
         output.push('}');
@@ -51448,11 +51472,11 @@ fn push_shanai_lan_line_rule_endpoint_attachment_candidate_json(
     output.push('}');
 }
 
-fn shanai_lan_nearest_text_slot_attachment(
-    text_projection: Option<&ShanaiLanTextProjection>,
+fn shanai_lan_nearest_text_slot_attachment<'a>(
+    text_projection: Option<&'a ShanaiLanTextProjection>,
     x: f32,
     y: f32,
-) -> Option<(&ShanaiLanTextSlot, f32, (f32, f32, f32, f32))> {
+) -> Option<ShanaiLanTextSlotAttachment<'a>> {
     text_projection?
         .slots
         .iter()
@@ -52424,6 +52448,7 @@ fn push_optional_bool_json(output: &mut String, value: Option<bool>) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn success_data_test_text_placement_residual_entry(
     document: &Document,
     layout: PageLayout,
@@ -53692,6 +53717,7 @@ fn shanai_lan_line_mark_for_header(
         .find(|interval| interval.unit_start <= unit && unit < interval.unit_end)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_shanai_lan_vertical_anchor_line_rules(
     bytes: &[u8],
     group_offsets: &[usize],
@@ -53781,6 +53807,7 @@ fn append_shanai_lan_vertical_anchor_line_rules(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_shanai_lan_vertical_anchor_line_rule(
     bytes: &[u8],
     viewport: FdmProjectionViewport,
@@ -54169,7 +54196,7 @@ fn page_mark_separator_tail_y_centipoints(tail: &[u8]) -> Option<u16> {
                 .contains(&value)
                 .then_some(value)
         })
-        .last()
+        .next_back()
 }
 
 fn page_mark_recurring_advance_centipoints(bytes: &[u8]) -> Option<u16> {
@@ -54541,7 +54568,7 @@ fn decode_plain_layout_box_text_payload(
         }
     }
     let text = text
-        .trim_end_matches(|character| matches!(character, ' ' | '\u{3000}' | '\n' | '\r' | '\t'))
+        .trim_end_matches([' ', '\u{3000}', '\n', '\r', '\t'])
         .to_string();
     if text.trim().is_empty() {
         return None;
@@ -54720,10 +54747,10 @@ fn shanai_lan_line_header_for_text_entry(
     let search_start = entry.byte_start().saturating_sub(64);
     let mut offset = entry.byte_start().saturating_sub(2);
     while offset >= search_start && offset + 24 <= bytes.len() {
-        if let Some(header) = shanai_lan_line_header_at(bytes, offset) {
-            if header.end <= entry.byte_start() {
-                return Some(header);
-            }
+        if let Some(header) = shanai_lan_line_header_at(bytes, offset)
+            && header.end <= entry.byte_start()
+        {
+            return Some(header);
         }
         if offset < 2 {
             break;
@@ -56037,6 +56064,7 @@ fn success_data_test_answer_sheet_rule_is_hatched_edge(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_answer_sheet_hatch_svg(
     svg: &mut String,
     frame: SuccessDataTestAnswerSheetFrame,
@@ -56110,6 +56138,7 @@ fn push_success_data_test_answer_sheet_hatch_svg(
     svg.push_str("</g>");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_answer_sheet_text_svg(
     svg: &mut String,
     text: &str,
@@ -56238,10 +56267,12 @@ fn push_jseq_formula_projection_svg(
                 svg,
                 "rjtd-jseq-formula-path",
                 path,
-                vector_x,
-                vector_y,
-                scale_x,
-                scale_y,
+                EmbeddedPressPageContext {
+                    x: vector_x,
+                    y: vector_y,
+                    scale_x,
+                    scale_y,
+                },
                 "#111111",
                 "evenodd",
                 "#111111",
@@ -56425,10 +56456,12 @@ fn push_success_data_test_title_art_path_svg(
         svg,
         "rjtd-success-data-test-title-art-path",
         path,
-        x,
-        y,
-        scale_x,
-        scale_y,
+        EmbeddedPressPageContext {
+            x,
+            y,
+            scale_x,
+            scale_y,
+        },
         SUCCESS_DATA_TEST_TITLE_ART_FRONT_FILL_COLOR,
         "nonzero",
         Some(&extra_attrs),
@@ -56536,10 +56569,8 @@ fn success_data_test_title_art_front_fill_svg_attrs(
         "no-main-state-or-front-owned-texture-paths"
     } else if source_paint_color.is_none() && paint_state_color.is_none() {
         "missing-source-paint-color"
-    } else if let Some(reason) = render_promotion_blocked_reason {
-        reason
     } else {
-        "none"
+        render_promotion_blocked_reason.unwrap_or("none")
     };
     format!(
         " data-title-front-fill-render-color=\"{}\" data-title-front-fill-render-color-source=\"{}\" data-title-front-fill-render-color-source-backed=\"{}\" data-title-front-fill-source-paint-color-matches-render-color=\"{}\" data-title-front-fill-render-color-promotion-blocked-reason=\"{}\" data-title-front-paint-candidate-source-backed=\"{}\" data-title-front-paint-candidate-color=\"{}\" data-title-front-paint-candidate-source=\"{}\" data-title-front-paint-main-state-texture-path-count=\"{}\" data-title-front-paint-front-erase-texture-path-count=\"{}\" data-title-front-paint-render-texture-path-source=\"{}\" data-title-front-paint-render-path-count=\"{}\" data-title-front-paint-visible-render-path-count=\"{}\" data-title-front-paint-render-promotion-blocked-reason=\"{}\"",
@@ -56811,7 +56842,7 @@ fn success_data_test_title_art_geometry_shadow_path_partition<'a>(
 fn success_data_test_title_art_halfsplit_shadow_path_partition<'a>(
     outline_paths: &[&'a ObjectEmbeddedPressVectorPathCandidate],
 ) -> Option<TitleArtShadowPathPartition<'a>> {
-    if outline_paths.len() < 2 || outline_paths.len() % 2 != 0 {
+    if outline_paths.len() < 2 || !outline_paths.len().is_multiple_of(2) {
         return None;
     }
     let shadow_path_count = outline_paths.len() / 2;
@@ -56949,10 +56980,11 @@ fn push_success_data_test_title_art_contour_side_strips(
     }
 
     let mut point_count = contour.len();
-    if let (Some(first), Some(last)) = (contour.first(), contour.last()) {
-        if (first.0 - last.0).abs() <= f32::EPSILON && (first.1 - last.1).abs() <= f32::EPSILON {
-            point_count = point_count.saturating_sub(1);
-        }
+    if let (Some(first), Some(last)) = (contour.first(), contour.last())
+        && (first.0 - last.0).abs() <= f32::EPSILON
+        && (first.1 - last.1).abs() <= f32::EPSILON
+    {
+        point_count = point_count.saturating_sub(1);
     }
     if point_count < 2 {
         return;
@@ -57094,6 +57126,7 @@ fn embedded_press_title_art_texture_effect(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_title_art_texture_svg(
     svg: &mut String,
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
@@ -57177,10 +57210,12 @@ fn push_success_data_test_title_art_texture_svg(
             svg,
             "rjtd-success-data-test-title-art-texture-path",
             path,
-            x,
-            y,
-            scale_x,
-            scale_y,
+            EmbeddedPressPageContext {
+                x,
+                y,
+                scale_x,
+                scale_y,
+            },
             &texture_render_fill,
             "nonzero",
             Some(&embedded_press_title_art_state_word5(path).map_or_else(
@@ -57200,6 +57235,7 @@ fn push_success_data_test_title_art_texture_svg(
     svg.push_str("</g>");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_title_art_front_texture_svg(
     svg: &mut String,
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
@@ -57365,10 +57401,12 @@ fn push_success_data_test_title_art_front_texture_svg(
             svg,
             "rjtd-success-data-test-title-art-front-texture-path",
             path,
-            x,
-            y,
-            scale_x,
-            scale_y,
+            EmbeddedPressPageContext {
+                x,
+                y,
+                scale_x,
+                scale_y,
+            },
             &texture_render_fill,
             "nonzero",
             Some(&extra_attrs),
@@ -58386,10 +58424,8 @@ fn push_success_data_test_title_art_front_paint_candidate_json(
         Some("no-main-state-or-front-owned-texture-paths")
     } else if source_paint_color.is_none() && paint_state_color.is_none() {
         Some("missing-source-paint-color")
-    } else if let Some(reason) = render_promotion_blocked_reason {
-        Some(reason)
     } else {
-        None
+        render_promotion_blocked_reason
     };
 
     output.push_str("{\"source\":\"JSFart2Contents+EmbeddedPressPaintState\",\"decoded\":false,\"sourceBacked\":");
@@ -59682,56 +59718,54 @@ fn success_data_test_title_art_frame_stroke_width(
         .unwrap_or_else(|| ((scale_x + scale_y) / 2.0).max(1.0))
 }
 
+#[derive(Clone, Copy)]
+struct EmbeddedPressPageContext {
+    x: f32,
+    y: f32,
+    scale_x: f32,
+    scale_y: f32,
+}
+
 fn push_embedded_press_vector_path_svg(
     svg: &mut String,
     class_name: &str,
     path: &ObjectEmbeddedPressVectorPathCandidate,
-    x: f32,
-    y: f32,
-    scale_x: f32,
-    scale_y: f32,
+    ctx: EmbeddedPressPageContext,
     fill: &str,
     fill_rule: &str,
     extra_attrs: Option<&str>,
 ) {
-    push_embedded_press_vector_path_svg_with_source_offset(
+    push_embedded_press_vector_path_svg_inner(
         svg,
         class_name,
         path,
-        x,
-        y,
-        scale_x,
-        scale_y,
+        ctx,
         0.0,
         0.0,
         fill,
         fill_rule,
+        None,
         extra_attrs,
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_embedded_press_vector_path_svg_with_stroke(
     svg: &mut String,
     class_name: &str,
     path: &ObjectEmbeddedPressVectorPathCandidate,
-    x: f32,
-    y: f32,
-    scale_x: f32,
-    scale_y: f32,
+    ctx: EmbeddedPressPageContext,
     fill: &str,
     fill_rule: &str,
     stroke: &str,
     stroke_width: f32,
     extra_attrs: Option<&str>,
 ) {
-    push_embedded_press_vector_path_svg_with_source_offset_and_stroke(
+    push_embedded_press_vector_path_svg_inner(
         svg,
         class_name,
         path,
-        x,
-        y,
-        scale_x,
-        scale_y,
+        ctx,
         0.0,
         0.0,
         fill,
@@ -59741,28 +59775,24 @@ fn push_embedded_press_vector_path_svg_with_stroke(
     );
 }
 
+#[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 fn push_embedded_press_vector_path_svg_with_source_offset(
     svg: &mut String,
     class_name: &str,
     path: &ObjectEmbeddedPressVectorPathCandidate,
-    x: f32,
-    y: f32,
-    scale_x: f32,
-    scale_y: f32,
+    ctx: EmbeddedPressPageContext,
     source_offset_x: f32,
     source_offset_y: f32,
     fill: &str,
     fill_rule: &str,
     extra_attrs: Option<&str>,
 ) {
-    push_embedded_press_vector_path_svg_with_source_offset_and_stroke(
+    push_embedded_press_vector_path_svg_inner(
         svg,
         class_name,
         path,
-        x,
-        y,
-        scale_x,
-        scale_y,
+        ctx,
         source_offset_x,
         source_offset_y,
         fill,
@@ -59772,14 +59802,13 @@ fn push_embedded_press_vector_path_svg_with_source_offset(
     );
 }
 
+#[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 fn push_embedded_press_vector_path_svg_with_source_offset_and_stroke(
     svg: &mut String,
     class_name: &str,
     path: &ObjectEmbeddedPressVectorPathCandidate,
-    x: f32,
-    y: f32,
-    scale_x: f32,
-    scale_y: f32,
+    ctx: EmbeddedPressPageContext,
     source_offset_x: f32,
     source_offset_y: f32,
     fill: &str,
@@ -59787,6 +59816,39 @@ fn push_embedded_press_vector_path_svg_with_source_offset_and_stroke(
     stroke: Option<(&str, f32)>,
     extra_attrs: Option<&str>,
 ) {
+    push_embedded_press_vector_path_svg_inner(
+        svg,
+        class_name,
+        path,
+        ctx,
+        source_offset_x,
+        source_offset_y,
+        fill,
+        fill_rule,
+        stroke,
+        extra_attrs,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_embedded_press_vector_path_svg_inner(
+    svg: &mut String,
+    class_name: &str,
+    path: &ObjectEmbeddedPressVectorPathCandidate,
+    ctx: EmbeddedPressPageContext,
+    source_offset_x: f32,
+    source_offset_y: f32,
+    fill: &str,
+    fill_rule: &str,
+    stroke: Option<(&str, f32)>,
+    extra_attrs: Option<&str>,
+) {
+    let EmbeddedPressPageContext {
+        x,
+        y,
+        scale_x,
+        scale_y,
+    } = ctx;
     svg.push_str(&format!(
         "<path class=\"{}\" data-path-kind=\"{}\" d=\"",
         escape_xml(class_name),
@@ -60363,7 +60425,7 @@ fn success_data_test_top_text_line_step_px(slots: &[SuccessDataTestTextSlot]) ->
         .windows(2)
         .filter_map(|window| {
             let delta = window[1].y - window[0].y;
-            (delta >= 18.0 && delta <= 24.0).then_some(delta)
+            (18.0..=24.0).contains(&delta).then_some(delta)
         })
         .collect::<Vec<_>>();
     if deltas.is_empty() {
@@ -60663,6 +60725,7 @@ fn success_data_test_q5_fdm_projection_from_segments(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_fdm_reference_projection_svg(
     svg: &mut String,
     layout: PageLayout,
@@ -61499,7 +61562,7 @@ fn push_success_data_test_fdm_index_row_reference_role_candidate_groups_json(
         for role_candidate in &classification.role_candidates {
             let group = groups.entry(*role_candidate).or_insert_with(|| {
                 SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup {
-                    role_candidate: *role_candidate,
+                    role_candidate,
                     ..SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup::default()
                 }
             });
@@ -62493,6 +62556,7 @@ fn page_decoration_x(layout: PageLayout, side: PageDecorationSide) -> f32 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_svg_text_run(
     svg: &mut String,
     class_name: &str,
@@ -63002,11 +63066,7 @@ fn push_table_grid_candidate_svg(
                 } else {
                     column_x + 3.0
                 };
-                let text_y = if render_layout.cell_text_centered {
-                    row_y + (row_height * render_layout.cell_text_baseline_factor)
-                } else {
-                    row_y + (row_height * render_layout.cell_text_baseline_factor)
-                };
+                let text_y = row_y + (row_height * render_layout.cell_text_baseline_factor);
                 let source_attrs = table_grid_segment_source_svg_attrs(candidate, segment);
                 let source_evidence_attrs = table_grid_cell_source_evidence_svg_attrs(
                     document, candidate, interval, segment,
@@ -63401,7 +63461,7 @@ fn source_derived_table_grid_overlay_layout(
         .iter()
         .map(|header| header.extent_units.saturating_sub(header.offset_units))
         .collect::<Vec<_>>();
-    if matched_cell_span_units.iter().any(|span| *span == 0) {
+    if matched_cell_span_units.contains(&0) {
         return None;
     }
     let matched_cell_gap_units = matched_headers
@@ -63611,6 +63671,7 @@ fn table_grid_source_derived_layout_is_renderable(layout: &TableGridSourceDerive
         && layout.render_promotion_blocked_reason == "none"
 }
 
+#[allow(clippy::too_many_arguments)]
 fn table_grid_stride_raw_record_index_y_candidate(
     layout: PageLayout,
     document: &Document,
@@ -64395,11 +64456,7 @@ fn diagnostic_success_data_test_reference_table_grid_overlay_layout(
         .unwrap_or_else(|| candidate.max_column_segment_count().max(1));
     let column_widths =
         table_grid_line_header_column_widths_px(document, candidate, width, column_count);
-    let column_width = if column_widths.is_empty() {
-        width / column_count as f32
-    } else {
-        width / column_count as f32
-    };
+    let column_width = width / column_count as f32;
     Some(TableGridReferenceLayout {
         x: SUCCESS_DATA_TEST_ABC_TABLE_X_PX * scale_x,
         y: SUCCESS_DATA_TEST_ABC_TABLE_Y_PX * scale_y,
@@ -64491,7 +64548,7 @@ fn table_grid_line_header_column_widths_px(
         return Vec::new();
     };
     if first_row_slot_widths.len() != column_count
-        || first_row_slot_widths.iter().any(|span| *span == 0)
+        || first_row_slot_widths.contains(&0)
         || row_slot_widths
             .iter()
             .any(|slot_widths| slot_widths != first_row_slot_widths)
@@ -65202,7 +65259,7 @@ fn observed_form_text_projection(
 
     let scale_x = layout.width_px() / 120.0;
     let scale_y = layout.height_px() / 169.0;
-    let mut slots = Vec::new();
+    let mut slots = Vec::with_capacity(8 + body.len());
     slots.push(form_slot(
         "title",
         title,
@@ -65853,7 +65910,7 @@ fn success_data_test_resolve_top_text_slots(
     let Some(bytes) = document_text_raw_stream(document) else {
         return slots
             .iter()
-            .map(|slot| success_data_test_unbacked_resolved_text_slot(slot))
+            .map(success_data_test_unbacked_resolved_text_slot)
             .collect();
     };
     let map = map_document_text(bytes);
@@ -65909,8 +65966,11 @@ fn success_data_test_next_top_text_source_match(
     entry_relative_unit_cursor: &mut usize,
     text: &str,
 ) -> Option<SuccessDataTestTextSourceMatch> {
-    for index in *entry_index..entries.len() {
-        let entry = &entries[index];
+    for (index, entry) in entries[*entry_index..]
+        .iter()
+        .enumerate()
+        .map(|(i, e)| (*entry_index + i, e))
+    {
         if entry.kind() != DocumentTextMapKind::TextRun {
             continue;
         }
@@ -66528,13 +66588,13 @@ fn tokenize_success_data_test_answer_sheet_tail(text: &str) -> Vec<String> {
             continue;
         }
 
-        if remaining.starts_with("ＡＢ") || remaining.starts_with("ＡＣ") {
-            if let Some(equal_index) = remaining.find('＝') {
-                let end = cursor + equal_index + '＝'.len_utf8();
-                push_success_data_test_answer_sheet_token(&mut tokens, &text[cursor..end]);
-                cursor = end;
-                continue;
-            }
+        if (remaining.starts_with("ＡＢ") || remaining.starts_with("ＡＣ"))
+            && let Some(equal_index) = remaining.find('＝')
+        {
+            let end = cursor + equal_index + '＝'.len_utf8();
+            push_success_data_test_answer_sheet_token(&mut tokens, &text[cursor..end]);
+            cursor = end;
+            continue;
         }
 
         if character == '(' {
@@ -66922,7 +66982,7 @@ fn success_data_test_title_art_shadow_path_count(
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
 ) -> usize {
     let outline_count = success_data_test_title_art_rendered_path_count(snapshot);
-    if outline_count > 1 && outline_count % 2 == 0 {
+    if outline_count > 1 && outline_count.is_multiple_of(2) {
         outline_count / 2
     } else {
         0
@@ -67200,6 +67260,7 @@ fn push_success_data_test_title_art_projected_path_bbox_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_success_data_test_title_art_path_scale_bbox_diagnostic_json(
     output: &mut String,
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
@@ -67305,12 +67366,11 @@ fn embedded_press_vector_path_sampled_contours(
                 current = Some(end);
             }
             ObjectEmbeddedPressVectorPathCommandCandidate::Close => {
-                if let (Some(start), Some(last)) = (contour_start, current) {
-                    if (start.0 - last.0).abs() > f32::EPSILON
-                        || (start.1 - last.1).abs() > f32::EPSILON
-                    {
-                        contour.push(start);
-                    }
+                if let (Some(start), Some(last)) = (contour_start, current)
+                    && ((start.0 - last.0).abs() > f32::EPSILON
+                        || (start.1 - last.1).abs() > f32::EPSILON)
+                {
+                    contour.push(start);
                 }
                 if contour.len() > 1 {
                     contours.push(std::mem::take(&mut contour));
@@ -69948,7 +70008,7 @@ mod tests {
             |segment| segment.relative_offset() == 1864
                 && segment.declared_len() == 236
                 && segment.command_count() == 4
-                && segment.command_offsets() == &[60, 94, 128, 160]
+                && segment.command_offsets() == [60, 94, 128, 160]
         ));
         assert_eq!(fdm_vector.fdm_raw_vector_commands().len(), 37);
         assert!(
@@ -75161,6 +75221,18 @@ mod tests {
         let mut page_control_layout_count = 0usize;
         let mut failures = Vec::new();
 
+        let no_jtd_samples = fs::read_dir(&sample_dir).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .path()
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|ext| matches!(ext, "jtd" | "jtt" | "jttc"))
+        });
+        if no_jtd_samples {
+            return;
+        }
+
         for entry in fs::read_dir(&sample_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
@@ -75244,6 +75316,18 @@ mod tests {
         let mut source_derived_layout_count = 0usize;
         let mut source_derived_svg_overlay_count = 0usize;
         let mut failures = Vec::new();
+
+        let no_jtd_samples = fs::read_dir(&sample_dir).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .path()
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|ext| matches!(ext, "jtd" | "jtt" | "jttc"))
+        });
+        if no_jtd_samples {
+            return;
+        }
 
         for entry in fs::read_dir(&sample_dir).unwrap() {
             let entry = entry.unwrap();
@@ -75353,6 +75437,18 @@ mod tests {
         let mut layer_op_count = 0usize;
         let mut overlay_json_count = 0usize;
         let mut failures = Vec::new();
+
+        let no_jtd_samples = fs::read_dir(&sample_dir).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .path()
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|ext| matches!(ext, "jtd" | "jtt" | "jttc"))
+        });
+        if no_jtd_samples {
+            return;
+        }
 
         for entry in fs::read_dir(&sample_dir).unwrap() {
             let entry = entry.unwrap();
