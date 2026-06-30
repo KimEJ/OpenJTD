@@ -1,0 +1,35 @@
+name: PR Target Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  validate-target:
+    name: Validate PR target
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce branch flow
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          echo "base=${BASE_REF} head=${HEAD_REF} head_repo=${HEAD_REPO}"
+
+          if [ "${BASE_REF}" = "main" ] && [ "${HEAD_REF}" != "dev" ]; then
+            echo "::error::Open development PRs against dev. Only dev -> main release PRs are allowed."
+            exit 1
+          fi
+
+          if [ "${BASE_REF}" = "main" ] && [ "${HEAD_REPO}" != "${REPOSITORY}" ]; then
+            echo "::error::Release PRs to main must come from this repository's dev branch."
+            exit 1
+          fi
