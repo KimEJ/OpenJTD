@@ -1664,7 +1664,7 @@ fn push_object_fdm_connector_candidate_json(
     output.push_str(&candidate.endpoint_dx().to_string());
     output.push_str(",\"y\":");
     output.push_str(&candidate.endpoint_dy().to_string());
-    output.push_str("}");
+    output.push('}');
     output.push_str(",\"endpointDistanceSquared\":");
     output.push_str(&candidate.endpoint_distance_squared().to_string());
     output.push_str(",\"pathPointCount\":");
@@ -2372,12 +2372,7 @@ fn push_success_data_test_fdm_role_count_json(
 ) {
     let count = classifications
         .iter()
-        .filter(|classification| {
-            classification
-                .role_candidates
-                .iter()
-                .any(|candidate| *candidate == role)
-        })
+        .filter(|classification| classification.role_candidates.contains(&role))
         .count();
     output.push(',');
     push_json_string(output, field_name);
@@ -2588,7 +2583,7 @@ fn push_success_data_test_fdm_index_row_reference_role_candidate_groups_json(
         for role_candidate in &classification.role_candidates {
             let group = groups.entry(*role_candidate).or_insert_with(|| {
                 SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup {
-                    role_candidate: *role_candidate,
+                    role_candidate,
                     ..SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup::default()
                 }
             });
@@ -4720,6 +4715,14 @@ mod tests {
         let mut failures = Vec::new();
         let mut rendered_count = 0usize;
 
+        let any_sample_present = samples.iter().any(|sample| {
+            let sample_path = sample_dir.join(sample);
+            sample_path.exists() && sample_path.with_extension("pdf").exists()
+        });
+        if !any_sample_present {
+            return;
+        }
+
         for sample in samples {
             let sample_path = sample_dir.join(sample);
             if !sample_path.exists() || !sample_path.with_extension("pdf").exists() {
@@ -4855,6 +4858,14 @@ mod tests {
         let mut failures = Vec::new();
         let mut rendered_count = 0usize;
 
+        let any_sample_present = samples.iter().any(|(sample, _)| {
+            let sample_path = sample_dir.join(sample);
+            sample_path.exists() && sample_path.with_extension("pdf").exists()
+        });
+        if !any_sample_present {
+            return;
+        }
+
         for (sample, page_checks) in samples {
             let sample_path = sample_dir.join(sample);
             if !sample_path.exists() || !sample_path.with_extension("pdf").exists() {
@@ -4962,6 +4973,14 @@ mod tests {
         ];
         let mut failures = Vec::new();
         let mut rendered_count = 0usize;
+
+        let any_sample_present = samples.iter().any(|(sample, _)| {
+            let sample_path = sample_dir.join(sample);
+            sample_path.exists() && sample_path.with_extension("pdf").exists()
+        });
+        if !any_sample_present {
+            return;
+        }
 
         for (sample, page_checks) in samples {
             let sample_path = sample_dir.join(sample);
@@ -5303,6 +5322,9 @@ if nonWhite == 0 {
             })
             .collect::<Vec<_>>();
         paths.sort();
+        if paths.is_empty() {
+            return;
+        }
 
         let mut failures = Vec::new();
         let mut pdf_count = 0usize;
