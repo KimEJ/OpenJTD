@@ -1291,6 +1291,33 @@ fn document_view_style_group_fixture(group_id: u16) -> Vec<u8> {
     bytes
 }
 
+fn document_view_styles_sequential_fixture(first_code: u16) -> Vec<u8> {
+    let mut bytes = vec![0u8; 10];
+    for offset in 0..4u16 {
+        let code = first_code + offset;
+        bytes.extend_from_slice(&code.to_be_bytes());
+        bytes.extend_from_slice(&1u16.to_be_bytes());
+        bytes.push(0);
+    }
+    bytes
+}
+
+fn document_info_path_with_document_view_styles(first_code: u16) -> PathBuf {
+    let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    compound
+        .create_stream("/DocumentText")
+        .unwrap()
+        .write_all(&document_text_fixture())
+        .unwrap();
+    compound
+        .create_stream("/DocumentViewStyles")
+        .unwrap()
+        .write_all(&document_view_styles_sequential_fixture(first_code))
+        .unwrap();
+
+    write_sample(compound.into_inner().into_inner())
+}
+
 fn document_view_style_ungrouped_path() -> PathBuf {
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
     let mut bytes = Vec::new();
@@ -1747,6 +1774,41 @@ fn page_info_command_reports_page_metrics_and_mark_context() {
     assert!(stdout.contains("\"pageNumber\":1"));
     assert!(stdout.contains("\"columns\":[{\"x\":72.0,\"width\":650.0}]"));
     assert!(stdout.contains("\"layoutMarkEvidence\":null"));
+}
+
+#[test]
+fn document_info_command_reports_document_view_styles_writing_mode_candidate() {
+    let path = document_info_path_with_document_view_styles(0x1001);
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("document-info")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_json_brackets_balanced(&stdout);
+    assert!(stdout.contains("\"writingMode\":\"horizontal\""));
+    assert!(stdout.contains(
+        "\"writingModeDecision\":{\"selected\":\"horizontal\",\"source\":\"default-horizontal\""
+    ));
+    assert!(stdout.contains("\"documentViewStylesCandidate\":\"vertical-rl\""));
+    assert!(stdout.contains("\"documentViewStylesDisagreesWithSelected\":true"));
+    assert!(stdout.contains("\"writingModeCandidateFromDocumentViewStyles\":\"vertical-rl\""));
+    assert!(stdout.contains("\"writingModeCandidateFromDocumentViewStylesSourceBacked\":true"));
+    assert!(stdout.contains("\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":4097"));
+    assert!(
+        stdout.contains(
+            "\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":\"0x1001\""
+        )
+    );
 }
 
 #[test]

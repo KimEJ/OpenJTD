@@ -4617,13 +4617,140 @@ mod tests {
         ObjectStreamCandidateReason, Paragraph, RawStream, RubyAnnotation, StyleRef,
         TextControlBoundary, TextRun, UnknownBlock, UnknownObject, UnknownStyle, parse_document,
     };
-    use std::{collections::BTreeSet, fs, path::PathBuf, process::Command};
+    use std::{
+        collections::BTreeSet,
+        fs,
+        path::{Path, PathBuf},
+        process::Command,
+    };
 
     #[cfg(not(target_arch = "wasm32"))]
     fn count_pdf_eof_markers(pdf: &[u8]) -> usize {
         pdf.windows(b"%%EOF".len())
             .filter(|window| *window == b"%%EOF")
             .count()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[derive(Debug, Clone, Copy)]
+    struct PdfMediaBox {
+        width: f32,
+        height: f32,
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    impl PdfMediaBox {
+        fn close_to(self, other: Self) -> bool {
+            const MEDIA_BOX_TOLERANCE_PT: f32 = 1.0;
+            (self.width - other.width).abs() <= MEDIA_BOX_TOLERANCE_PT
+                && (self.height - other.height).abs() <= MEDIA_BOX_TOLERANCE_PT
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn pdf_media_box_sizes(pdf: &[u8]) -> Vec<PdfMediaBox> {
+        let mut sizes = Vec::new();
+        let mut position = 0usize;
+        while let Some(relative_offset) = find_subslice(&pdf[position..], b"/MediaBox") {
+            let media_box_offset = position + relative_offset;
+            let mut cursor = pdf_skip_whitespace(pdf, media_box_offset + b"/MediaBox".len());
+            if !pdf.get(cursor..).is_some_and(|tail| tail.starts_with(b"[")) {
+                position = media_box_offset + b"/MediaBox".len();
+                continue;
+            }
+            cursor += 1;
+
+            let Some(x0) = pdf_parse_number(pdf, &mut cursor) else {
+                position = media_box_offset + b"/MediaBox".len();
+                continue;
+            };
+            let Some(y0) = pdf_parse_number(pdf, &mut cursor) else {
+                position = media_box_offset + b"/MediaBox".len();
+                continue;
+            };
+            let Some(x1) = pdf_parse_number(pdf, &mut cursor) else {
+                position = media_box_offset + b"/MediaBox".len();
+                continue;
+            };
+            let Some(y1) = pdf_parse_number(pdf, &mut cursor) else {
+                position = media_box_offset + b"/MediaBox".len();
+                continue;
+            };
+            sizes.push(PdfMediaBox {
+                width: (x1 - x0).abs(),
+                height: (y1 - y0).abs(),
+            });
+            position = cursor;
+        }
+        sizes
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn pdf_parse_number(bytes: &[u8], position: &mut usize) -> Option<f32> {
+        *position = pdf_skip_whitespace(bytes, *position);
+        let start = *position;
+        if bytes
+            .get(*position)
+            .is_some_and(|byte| matches!(*byte, b'+' | b'-'))
+        {
+            *position += 1;
+        }
+        let mut saw_digit = false;
+        while bytes.get(*position).is_some_and(|byte| {
+            let numeric = byte.is_ascii_digit() || *byte == b'.';
+            saw_digit |= byte.is_ascii_digit();
+            numeric
+        }) {
+            *position += 1;
+        }
+        if !saw_digit {
+            return None;
+        }
+        std::str::from_utf8(&bytes[start..*position])
+            .ok()?
+            .parse::<f32>()
+            .ok()
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
+    fn png_non_white_count_in_ratio_region(
+        path: &Path,
+        left_ratio: f32,
+        top_ratio: f32,
+        right_ratio: f32,
+        bottom_ratio: f32,
+    ) -> Result<usize, String> {
+        let image = image::ImageReader::open(path)
+            .map_err(|error| error.to_string())?
+            .decode()
+            .map_err(|error| error.to_string())?
+            .to_rgb8();
+        let width = image.width();
+        let height = image.height();
+        if width == 0 || height == 0 {
+            return Err("PNG image has zero size".to_string());
+        }
+
+        let left = ((width as f32) * left_ratio).floor().max(0.0) as u32;
+        let top = ((height as f32) * top_ratio).floor().max(0.0) as u32;
+        let right = ((width as f32) * right_ratio).ceil().min(width as f32) as u32;
+        let bottom = ((height as f32) * bottom_ratio).ceil().min(height as f32) as u32;
+        if left >= right || top >= bottom {
+            return Err(format!(
+                "invalid PNG region {left},{top}..{right},{bottom} for {width}x{height}"
+            ));
+        }
+
+        let mut non_white = 0usize;
+        for y in top..bottom {
+            for x in left..right {
+                let pixel = image.get_pixel(x, y);
+                if pixel[0] < 245 || pixel[1] < 245 || pixel[2] < 245 {
+                    non_white += 1;
+                }
+            }
+        }
+        Ok(non_white)
     }
 
     #[test]
@@ -4657,6 +4784,24 @@ mod tests {
         assert!(pdf_preview_safety_issues(&pdf).is_empty());
         assert_eq!(count_pdf_eof_markers(&pdf), 1);
         assert!(pdf.ends_with(b"%%EOF"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn pdf_media_box_parser_extracts_page_sizes() {
+        let pdf = b"1 0 obj\n<< /Type /Page\n/MediaBox [0 0 419.55 595.275]\n>>\nendobj\n2 0 obj\n<< /Type /Page /MediaBox [-10 -20 90 180] >>\nendobj\n";
+
+        let sizes = pdf_media_box_sizes(pdf);
+
+        assert_eq!(sizes.len(), 2);
+        assert!(sizes[0].close_to(PdfMediaBox {
+            width: 419.55,
+            height: 595.275,
+        }));
+        assert!(sizes[1].close_to(PdfMediaBox {
+            width: 100.0,
+            height: 200.0,
+        }));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -4871,6 +5016,19 @@ mod tests {
                     ));
                     let _ = fs::remove_dir_all(&temp_dir);
                     continue;
+                }
+                if sample == "ichitaro-20030228030923-success-002-success_data-test.jtd" {
+                    match png_non_white_count_in_ratio_region(&png_path, 0.05, 0.07, 0.92, 0.20) {
+                        Ok(non_white) if non_white >= 3_000 => {}
+                        Ok(non_white) => failures.push(format!(
+                            "{}: sips title region rendered too few non-white pixels ({non_white})",
+                            sample
+                        )),
+                        Err(error) => failures.push(format!(
+                            "{}: sips title region check failed: {error}",
+                            sample
+                        )),
+                    }
                 }
                 rendered_count += 1;
             }
@@ -5574,6 +5732,46 @@ if nonWhite == 0 {
                         reference_pdf_path.display()
                     ));
                 }
+
+                let reference_media_boxes = pdf_media_box_sizes(&reference_pdf);
+                let output_media_boxes = pdf_media_box_sizes(&pdf);
+                let Some(reference_media_box) = reference_media_boxes.first().copied() else {
+                    failures.push(format!(
+                        "{}: could not derive reference MediaBox",
+                        reference_pdf_path.display()
+                    ));
+                    continue;
+                };
+                if output_media_boxes.is_empty() {
+                    failures.push(format!(
+                        "{}: could not derive output MediaBox",
+                        pdf_path.display()
+                    ));
+                }
+                if output_page_count != 0 && output_media_boxes.len() != output_page_count {
+                    failures.push(format!(
+                        "{}: expected {output_page_count} MediaBox entries, got {}",
+                        pdf_path.display(),
+                        output_media_boxes.len()
+                    ));
+                }
+                for (page_index, output_media_box) in output_media_boxes.iter().enumerate() {
+                    let expected_media_box = reference_media_boxes
+                        .get(page_index)
+                        .copied()
+                        .unwrap_or(reference_media_box);
+                    if !output_media_box.close_to(expected_media_box) {
+                        failures.push(format!(
+                            "{}: page {} MediaBox {:.3}x{:.3} does not match trusted reference {:.3}x{:.3}",
+                            pdf_path.display(),
+                            page_index + 1,
+                            output_media_box.width,
+                            output_media_box.height,
+                            expected_media_box.width,
+                            expected_media_box.height
+                        ));
+                    }
+                }
             }
             checked_count += 1;
         }
@@ -5669,6 +5867,55 @@ if nonWhite == 0 {
 
         assert_eq!(failures, Vec::<String>::new());
         assert!(rendered_count >= 1);
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
+    #[test]
+    fn local_pdf_output_success_data_test_title_rasterizes_with_macos_sips_when_available() {
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
+        let pdf_path = project_root
+            .join("openjtd-samples/pdf-output")
+            .join("ichitaro-20030228030923-success-002-success_data-test.pdf");
+        if !pdf_path.exists() {
+            return;
+        }
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "rjtd-output-title-sips-smoke-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let png_path = temp_dir.join("success-data-test-page1.png");
+
+        let output = match Command::new("sips")
+            .arg("-s")
+            .arg("format")
+            .arg("png")
+            .arg(&pdf_path)
+            .arg("--out")
+            .arg(&png_path)
+            .output()
+        {
+            Ok(output) => output,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+            Err(error) => panic!("run sips failed: {error}"),
+        };
+        assert!(
+            output.status.success(),
+            "sips failed with status {:?}: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let title_non_white =
+            png_non_white_count_in_ratio_region(&png_path, 0.05, 0.07, 0.92, 0.20)
+                .expect("sips title region should be readable");
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        assert!(
+            title_non_white >= 3_000,
+            "sips-rendered title region has too few non-white pixels: {title_non_white}"
+        );
     }
 
     fn local_reference_pdf_page_count_is_trusted(stem: &str) -> bool {

@@ -4389,6 +4389,13 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     .map_err(|error| error.to_string())?,
             )
         }
+        Some("document-info") => {
+            let path = required_path(args.next(), "document-info")?;
+            let bytes = read_file(&path)?;
+            let mut core = DocumentCore::from_bytes(&bytes).map_err(|error| error.to_string())?;
+            core.set_file_name(&path);
+            write_stdout(&core.get_document_info())
+        }
         Some("page-svg") => {
             let path = required_path(args.next(), "page-svg")?;
             let page_index = required_page_index(args.next(), "page-svg")?;
@@ -4641,6 +4648,7 @@ Usage:
   rjtd text-position-context <file.jtd>
   rjtd text-position-line-context <file.jtd>
   rjtd text-position-delta-scan <file.jtd>
+  rjtd document-info <file.jtd>
   rjtd page-info <file.jtd> <zero-based-page-index>
   rjtd page-layer-tree <file.jtd> <zero-based-page-index>
   rjtd page-svg <file.jtd> <zero-based-page-index>
