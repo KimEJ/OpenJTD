@@ -12,8 +12,17 @@ const EMBEDDED_DOCUMENT_TEXT_MAX_SPAN: usize = 64 * 1024;
 const TEXT_RUN_MARKER: u16 = 0x001f;
 const INLINE_TEXT_START: u16 = 0x001d;
 const INLINE_TEXT_END: u16 = 0x001e;
+// 0x000e separates 0x001c/0x0030 table-cell records; reading_text stays true across it.
+// 0x000a is a within-cell/intra-paragraph line break (see RFC 0009); treated as a plain
+// text character ('\n') by is_control_boundary, which intentionally excludes 0x09/0x0a/0x0d.
 const TEXT_ROW_DELIMITER: u16 = 0x000e;
 const SKIPPED_INLINE_MAX_UNITS: usize = 256;
+
+// RFC 0009: 0x001c record class codes (decoded:false — structure proven, semantics partial)
+pub const RECORD_CLASS_INLINE_CONTEXT: u16 = 0x0000;
+pub const RECORD_CLASS_PARAGRAPH_LINE: u16 = 0x0010;
+pub const RECORD_CLASS_TABLE_SECTION_TRANSITION: u16 = 0x0020;
+pub const RECORD_CLASS_TABLE_CELL: u16 = 0x0030;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ParsedDocumentText {
@@ -451,7 +460,8 @@ pub fn parse_document_text(data: &[u8]) -> ParsedDocumentText {
             .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
             .collect();
         if units.get(9) == Some(&SSMG_RAW_TEXT_SEGMENT_COUNT)
-            && data.get(SSMG_HEADER_WORDS * 2..)
+            && data
+                .get(SSMG_HEADER_WORDS * 2..)
                 .is_some_and(|rest| rest.starts_with(TEXT_SEGMENT_NAME))
         {
             return parse_raw_text_segment(&units);
@@ -1124,7 +1134,9 @@ mod tests {
         let length = text_content.len() as u16;
         let mut payload: Vec<u8> = Vec::new();
         // SsmgV.01 header (10 words): magic + 4 header words + segment-count=1
-        let header: &[u16] = &[0x5373, 0x6d67, 0x562e, 0x3031, 0x0000, 0x0001, 0x0000, 0x0100, 0x0000, 0x0001];
+        let header: &[u16] = &[
+            0x5373, 0x6d67, 0x562e, 0x3031, 0x0000, 0x0001, 0x0000, 0x0100, 0x0000, 0x0001,
+        ];
         for w in header {
             payload.extend_from_slice(&w.to_be_bytes());
         }
@@ -1143,7 +1155,10 @@ mod tests {
         let parsed = parse_document_text(&payload);
         let text = parsed.plain_text();
         assert!(text.contains("te"), "should contain 'te' but got: {text:?}");
-        assert!(text.contains("sto"), "should contain 'sto' but got: {text:?}");
+        assert!(
+            text.contains("sto"),
+            "should contain 'sto' but got: {text:?}"
+        );
         assert!(text.contains('て'), "should contain 'て' but got: {text:?}");
     }
 
