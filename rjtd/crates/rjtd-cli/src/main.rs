@@ -24,8 +24,9 @@ use rjtd_core::style_stream::{
 use rjtd_export::to_pdf_with_file_name;
 use rjtd_export::{to_json, to_markdown, to_plain_text};
 use rjtd_model::{
-    DocumentCore, ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate, ObjectFrameRecordCandidate,
-    ObjectFrameReferenceRowCandidate, ObjectImagePayloadSpan, ObjectImageSignatureHit,
+    Document, DocumentCore, ObjectFdmIndexBbox, ObjectFdmIndexEntryCandidate,
+    ObjectFdmVectorCommandCandidate, ObjectFrameRecordCandidate, ObjectFrameReferenceRowCandidate,
+    ObjectImagePayloadSpan, ObjectImageSignatureHit,
     ObjectStreamCandidate as ModelObjectStreamCandidate, TableCandidate, TextBoundaryCandidate,
     TextCountRange, TextLayoutExactEvidence, page_mark_u16_geometry_profile, parse_document,
 };
@@ -1386,10 +1387,13 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             let path = required_path(args.next(), "object-fdm-index")?;
             let bytes = read_file(path)?;
             let streams = readable_cfb_streams(&bytes)?;
+            let model_document = parse_document(&bytes).ok();
             let mut index_count = 0usize;
             let mut parsed_entries = 0usize;
             let mut entries_with_images = 0usize;
             let mut image_hit_count = 0usize;
+            let mut offset_field_ref_rows = 0usize;
+            let mut offset_field_ref_count = 0usize;
             let mut missing_vector_count = 0usize;
 
             for (index_path, index_stream) in streams
@@ -1414,9 +1418,15 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 };
 
                 let entries = parse_fdm_index_entries(index_stream, vector_stream.len());
+                let raw_vector_commands = model_document
+                    .as_ref()
+                    .and_then(|document| fdm_raw_vector_commands_for_path(document, &vector_path))
+                    .unwrap_or_default();
                 let vector_hits = image_signature_hits(vector_stream);
                 let mut index_entries_with_images = 0usize;
                 let mut index_image_hits = 0usize;
+                let mut index_offset_field_ref_rows = 0usize;
+                let mut index_offset_field_ref_count = 0usize;
                 for entry in &entries {
                     let segment = fdm_vector_segment(entry.vector_offset, &entries, vector_stream);
                     let segment_hits =
@@ -1425,13 +1435,21 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                         index_entries_with_images += 1;
                         index_image_hits += segment_hits.len();
                     }
+                    let offset_field_refs =
+                        fdm_index_offset_field_reference_summaries(entry, raw_vector_commands);
+                    if !offset_field_refs.is_empty() {
+                        index_offset_field_ref_rows += 1;
+                        index_offset_field_ref_count += offset_field_refs.len();
+                    }
                 }
                 parsed_entries += entries.len();
                 entries_with_images += index_entries_with_images;
                 image_hit_count += index_image_hits;
+                offset_field_ref_rows += index_offset_field_ref_rows;
+                offset_field_ref_count += index_offset_field_ref_count;
 
                 write_stdout_line(&format!(
-                    "object-fdm-index-summary\tindex={}\tvector={}\tindex-bytes={}\tvector-bytes={}\tdeclared-count={}\tparsed-entries={}\ttrailing-bytes={}\tentries-with-image={}\timage-hits={}\tvector-missing=false\tdecoded=false",
+                    "object-fdm-index-summary\tindex={}\tvector={}\tindex-bytes={}\tvector-bytes={}\tdeclared-count={}\tparsed-entries={}\ttrailing-bytes={}\tentries-with-image={}\timage-hits={}\toffset-field-ref-rows={}\toffset-field-refs={}\tvector-missing=false\tdecoded=false",
                     escaped_path(index_path),
                     escaped_path(&vector_path),
                     index_stream.len(),
@@ -1440,7 +1458,9 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     entries.len(),
                     fdm_index_trailing_bytes(index_stream),
                     index_entries_with_images,
-                    index_image_hits
+                    index_image_hits,
+                    index_offset_field_ref_rows,
+                    index_offset_field_ref_count
                 ))?;
 
                 for entry in entries.iter() {
@@ -1451,8 +1471,10 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     let vector_prefix = vector_stream
                         .get(segment.start..segment.end)
                         .unwrap_or_default();
+                    let offset_field_refs =
+                        fdm_index_offset_field_reference_summaries(entry, raw_vector_commands);
                     write_stdout_line(&format!(
-                        "object-fdm-index-entry\tindex={}\tvector={}\trow={}\tindex-offset={}\tvector-offset={}\tnext-vector-offset={}\tvector-length={}\tkind=0x{:04x}\tbbox={},{},{},{}\tvalid-vector-offset={}\tvector-prefix={}\timage-signatures={}\tsegment-image-signatures={}\tdecoded=false",
+                        "object-fdm-index-entry\tindex={}\tvector={}\trow={}\tindex-offset={}\tvector-offset={}\tnext-vector-offset={}\tvector-length={}\tkind=0x{:04x}\tbbox={},{},{},{}\tvalid-vector-offset={}\tvector-prefix={}\timage-signatures={}\tsegment-image-signatures={}\toffset-field-refs={}\tdecoded=false",
                         escaped_path(index_path),
                         escaped_path(&vector_path),
                         entry.row_index,
@@ -1468,17 +1490,20 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                         entry.valid_vector_offset,
                         format_hex_preview(vector_prefix, OBJECT_STREAM_PREFIX_PREVIEW_BYTES),
                         format_object_signature_hits(&segment_hits),
-                        format_object_signature_hits(&relative_hits)
+                        format_object_signature_hits(&relative_hits),
+                        format_offset_field_refs(&offset_field_refs)
                     ))?;
                 }
             }
 
             write_stdout_line(&format!(
-                "summary\tindexes={}\tentries={}\tentries-with-image={}\timage-hits={}\tmissing-vectors={}\tdecoded=false",
+                "summary\tindexes={}\tentries={}\tentries-with-image={}\timage-hits={}\toffset-field-ref-rows={}\toffset-field-refs={}\tmissing-vectors={}\tdecoded=false",
                 index_count,
                 parsed_entries,
                 entries_with_images,
                 image_hit_count,
+                offset_field_ref_rows,
+                offset_field_ref_count,
                 missing_vector_count
             ))?;
             Ok(())
@@ -1614,6 +1639,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             let path = required_path(args.next(), "object-fdm-index-rows")?;
             let bytes = read_file(path)?;
             let streams = readable_cfb_streams(&bytes)?;
+            let model_document = parse_document(&bytes).ok();
             let mut index_count = 0usize;
             let mut row_count = 0usize;
             let mut declared_rows = 0usize;
@@ -1622,6 +1648,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             let mut valid_rows = 0usize;
             let mut invalid_rows = 0usize;
             let mut image_hits = 0usize;
+            let mut offset_field_ref_rows = 0usize;
+            let mut offset_field_ref_count = 0usize;
             let mut missing_vector_count = 0usize;
             let mut role_counts = BTreeMap::<String, usize>::new();
 
@@ -1638,7 +1666,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 let Some(vector_stream) = streams.get(&vector_path) else {
                     missing_vector_count += 1;
                     write_stdout_line(&format!(
-                        "object-fdm-index-rows-summary\tindex={}\tvector={}\tindex-bytes={}\tvector-bytes=0\theader-family={}\tdeclared-count={}\trows=0\tdeclared-rows=0\tpost-declared-rows=0\traw-rows=0\tvalid-rows=0\tinvalid-rows=0\timage-hits=0\troles=-\tvector-missing=true\tdecoded=false",
+                        "object-fdm-index-rows-summary\tindex={}\tvector={}\tindex-bytes={}\tvector-bytes=0\theader-family={}\tdeclared-count={}\trows=0\tdeclared-rows=0\tpost-declared-rows=0\traw-rows=0\tvalid-rows=0\tinvalid-rows=0\timage-hits=0\toffset-field-ref-rows=0\toffset-field-refs=0\troles=-\tvector-missing=true\tdecoded=false",
                         escaped_path(index_path),
                         escaped_path(&vector_path),
                         index_stream.len(),
@@ -1656,6 +1684,10 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 } else {
                     0
                 };
+                let raw_vector_commands = model_document
+                    .as_ref()
+                    .and_then(|document| fdm_raw_vector_commands_for_path(document, &vector_path))
+                    .unwrap_or_default();
                 let vector_hits = image_signature_hits(vector_stream);
                 let mut index_rows = 0usize;
                 let mut index_declared_rows = 0usize;
@@ -1664,6 +1696,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 let mut index_valid_rows = 0usize;
                 let mut index_invalid_rows = 0usize;
                 let mut index_image_hits = 0usize;
+                let mut index_offset_field_ref_rows = 0usize;
+                let mut index_offset_field_ref_count = 0usize;
                 let mut index_role_counts = BTreeMap::<String, usize>::new();
 
                 for entry in &entries {
@@ -1677,6 +1711,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     let segment_hits =
                         fdm_segment_signature_hits(&vector_hits, segment.start, segment.end);
                     let relative_hits = fdm_relative_signature_hits(&segment_hits, segment.start);
+                    let offset_field_refs =
+                        fdm_index_offset_field_reference_summaries(entry, raw_vector_commands);
 
                     index_rows += 1;
                     match scope {
@@ -1690,10 +1726,14 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                         index_invalid_rows += 1;
                     }
                     index_image_hits += segment_hits.len();
+                    if !offset_field_refs.is_empty() {
+                        index_offset_field_ref_rows += 1;
+                        index_offset_field_ref_count += offset_field_refs.len();
+                    }
                     *index_role_counts.entry(role.to_string()).or_default() += 1;
 
                     write_stdout_line(&format!(
-                        "object-fdm-index-row\tindex={}\tvector={}\trow={}\tscope={}\trole={}\tindex-offset={}\tvector-offset={}\tnext-vector-offset={}\tvector-length={}\tkind=0x{:04x}\tbbox={},{},{},{}\tvalid-vector-offset={}\tbe16={}\ti16={}\trow-bytes={}\timage-signatures={}\tsegment-image-signatures={}\tdecoded=false",
+                        "object-fdm-index-row\tindex={}\tvector={}\trow={}\tscope={}\trole={}\tindex-offset={}\tvector-offset={}\tnext-vector-offset={}\tvector-length={}\tkind=0x{:04x}\tbbox={},{},{},{}\tvalid-vector-offset={}\tbe16={}\ti16={}\trow-bytes={}\timage-signatures={}\tsegment-image-signatures={}\toffset-field-refs={}\tdecoded=false",
                         escaped_path(index_path),
                         escaped_path(&vector_path),
                         entry.row_index,
@@ -1713,7 +1753,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                         format_be16_signed_fields(&entry.row),
                         format_hex_preview(&entry.row, FDM_INDEX_ENTRY_BYTES),
                         format_object_signature_hits(&segment_hits),
-                        format_object_signature_hits(&relative_hits)
+                        format_object_signature_hits(&relative_hits),
+                        format_offset_field_refs(&offset_field_refs)
                     ))?;
                 }
 
@@ -1724,12 +1765,14 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 valid_rows += index_valid_rows;
                 invalid_rows += index_invalid_rows;
                 image_hits += index_image_hits;
+                offset_field_ref_rows += index_offset_field_ref_rows;
+                offset_field_ref_count += index_offset_field_ref_count;
                 for (role, count) in index_role_counts.iter() {
                     *role_counts.entry(role.clone()).or_default() += *count;
                 }
 
                 write_stdout_line(&format!(
-                    "object-fdm-index-rows-summary\tindex={}\tvector={}\tindex-bytes={}\tvector-bytes={}\theader-family={}\tdeclared-count={}\trows={}\tdeclared-rows={}\tpost-declared-rows={}\traw-rows={}\tvalid-rows={}\tinvalid-rows={}\timage-hits={}\troles={}\tvector-missing=false\tdecoded=false",
+                    "object-fdm-index-rows-summary\tindex={}\tvector={}\tindex-bytes={}\tvector-bytes={}\theader-family={}\tdeclared-count={}\trows={}\tdeclared-rows={}\tpost-declared-rows={}\traw-rows={}\tvalid-rows={}\tinvalid-rows={}\timage-hits={}\toffset-field-ref-rows={}\toffset-field-refs={}\troles={}\tvector-missing=false\tdecoded=false",
                     escaped_path(index_path),
                     escaped_path(&vector_path),
                     index_stream.len(),
@@ -1743,12 +1786,14 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     index_valid_rows,
                     index_invalid_rows,
                     index_image_hits,
+                    index_offset_field_ref_rows,
+                    index_offset_field_ref_count,
                     format_string_counts(&index_role_counts)
                 ))?;
             }
 
             write_stdout_line(&format!(
-                "summary\tindexes={}\trows={}\tdeclared-rows={}\tpost-declared-rows={}\traw-rows={}\tvalid-rows={}\tinvalid-rows={}\timage-hits={}\tmissing-vectors={}\troles={}\tdecoded=false",
+                "summary\tindexes={}\trows={}\tdeclared-rows={}\tpost-declared-rows={}\traw-rows={}\tvalid-rows={}\tinvalid-rows={}\timage-hits={}\toffset-field-ref-rows={}\toffset-field-refs={}\tmissing-vectors={}\troles={}\tdecoded=false",
                 index_count,
                 row_count,
                 declared_rows,
@@ -1757,6 +1802,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 valid_rows,
                 invalid_rows,
                 image_hits,
+                offset_field_ref_rows,
+                offset_field_ref_count,
                 missing_vector_count,
                 format_string_counts(&role_counts)
             ))?;
@@ -4020,6 +4067,12 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             let page_mark = read_page_mark(&bytes).map_err(|error| error.to_string())?;
             write_page_mark_u16_profile(&page_mark)
         }
+        Some("page-mark-pitch-profile") => {
+            let path = required_path(args.next(), "page-mark-pitch-profile")?;
+            let bytes = read_file(&path)?;
+            let page_mark = read_page_mark(&bytes).map_err(|error| error.to_string())?;
+            write_page_mark_pitch_profile(&path, &bytes, &page_mark)
+        }
         Some("page-mark-shape") => {
             let path = required_path(args.next(), "page-mark-shape")?;
             let bytes = read_file(path)?;
@@ -4378,8 +4431,43 @@ fn write_file(path: impl AsRef<Path>, bytes: &[u8]) -> Result<(), String> {
         std::fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create `{}`: {error}", parent.display()))?;
     }
-    std::fs::write(path, bytes)
-        .map_err(|error| format!("cannot write `{}`: {error}", path.display()))
+    let temp_path = temporary_output_path(path)?;
+    let write_result = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .and_then(|mut file| file.write_all(bytes));
+
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(format!("cannot write `{}`: {error}", path.display()));
+    }
+
+    if let Err(error) = std::fs::rename(&temp_path, path) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(format!("cannot write `{}`: {error}", path.display()));
+    }
+
+    Ok(())
+}
+
+fn temporary_output_path(path: &Path) -> Result<std::path::PathBuf, String> {
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| format!("invalid output path `{}`", path.display()))?;
+    let process_id = std::process::id();
+    for attempt in 0..1000 {
+        let candidate = parent.join(format!(".{file_name}.{process_id}.{attempt}.tmp"));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err(format!(
+        "cannot choose temporary output path for `{}`",
+        path.display()
+    ))
 }
 
 fn print_help() -> Result<(), String> {
@@ -4473,6 +4561,7 @@ Usage:
   rjtd paper-mark-shape <file.jtd>
   rjtd page-marks <file.jtd>
   rjtd page-mark-u16-profile <file.jtd>
+  rjtd page-mark-pitch-profile <file.jtd>
   rjtd page-mark-shape <file.jtd>
   rjtd text-map <file.jtd>
   rjtd text-position-context <file.jtd>
@@ -5509,6 +5598,89 @@ fn format_usize_hit_list(offsets: &[usize]) -> String {
         ));
     }
     values.join(",")
+}
+
+fn fdm_raw_vector_commands_for_path<'a>(
+    document: &'a Document,
+    vector_path: &str,
+) -> Option<&'a [ObjectFdmVectorCommandCandidate]> {
+    document
+        .object_stream_candidates()
+        .iter()
+        .find(|candidate| candidate.path() == vector_path)
+        .map(ModelObjectStreamCandidate::fdm_raw_vector_commands)
+}
+
+fn fdm_index_offset_field_reference_summaries(
+    entry: &FdmIndexEntry,
+    raw_commands: &[ObjectFdmVectorCommandCandidate],
+) -> Vec<String> {
+    let fields = [
+        Some(("vectorOffset", entry.vector_offset)),
+        non_negative_fdm_index_offset_field("bbox.left", entry.left),
+        non_negative_fdm_index_offset_field("bbox.top", entry.top),
+        non_negative_fdm_index_offset_field("bbox.right", entry.right),
+        non_negative_fdm_index_offset_field("bbox.bottom", entry.bottom),
+    ];
+
+    let mut references = Vec::new();
+    for (field_name, field_value) in fields.into_iter().flatten() {
+        let command_matches = raw_commands
+            .iter()
+            .filter(|command| command.relative_offset() == field_value)
+            .map(ObjectFdmVectorCommandCandidate::relative_offset)
+            .collect::<Vec<_>>();
+        if !command_matches.is_empty() {
+            references.push(format!(
+                "{}:command:{}{}",
+                field_name,
+                field_value,
+                format_offset_field_ref_match_suffix(field_value, &command_matches)
+            ));
+        }
+
+        let segment_matches = raw_commands
+            .iter()
+            .filter(|command| {
+                command
+                    .source_segment()
+                    .is_some_and(|segment| segment.relative_offset() == field_value)
+            })
+            .map(ObjectFdmVectorCommandCandidate::relative_offset)
+            .collect::<Vec<_>>();
+        if !segment_matches.is_empty() {
+            references.push(format!(
+                "{}:segment:{}->[{}]",
+                field_name,
+                field_value,
+                format_usize_hit_list(&segment_matches)
+            ));
+        }
+    }
+    references
+}
+
+fn non_negative_fdm_index_offset_field(
+    field_name: &'static str,
+    value: i32,
+) -> Option<(&'static str, usize)> {
+    (value >= 0).then_some((field_name, value as usize))
+}
+
+fn format_offset_field_ref_match_suffix(field_value: usize, matches: &[usize]) -> String {
+    if matches.len() == 1 && matches[0] == field_value {
+        String::new()
+    } else {
+        format!("->[{}]", format_usize_hit_list(matches))
+    }
+}
+
+fn format_offset_field_refs(references: &[String]) -> String {
+    if references.is_empty() {
+        "-".to_string()
+    } else {
+        references.join(",")
+    }
 }
 
 struct ObjectReferenceContext {
@@ -8383,6 +8555,12 @@ fn format_optional_u64(value: Option<u64>) -> String {
         .unwrap_or_else(|| "-".to_string())
 }
 
+fn format_optional_f32_3(value: Option<f32>) -> String {
+    value
+        .map(|value| format!("{value:.3}"))
+        .unwrap_or_else(|| "-".to_string())
+}
+
 fn format_span_relation(chosen_span: u32, tail_span: Option<i64>) -> &'static str {
     let Some(tail_span) = tail_span else {
         return "-";
@@ -8914,6 +9092,79 @@ fn write_page_mark_u16_profile(page_mark: &PageMark) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn write_page_mark_pitch_profile(
+    path: &str,
+    bytes: &[u8],
+    page_mark: &PageMark,
+) -> Result<(), String> {
+    let mut core = DocumentCore::from_bytes(bytes).map_err(|error| error.to_string())?;
+    core.set_file_name(path);
+    let layout = core.page_layout();
+    let mut class_counts = BTreeMap::<&'static str, usize>::new();
+
+    for entry in page_mark.entries() {
+        let fields = be16_words(entry.raw()).collect::<Vec<_>>();
+        let class_name = page_mark_u16_geometry_profile(&fields).class_name();
+        *class_counts.entry(class_name).or_insert(0) += 1;
+    }
+
+    write_stdout_line(&format!(
+        "summary\tentries={}\tpageWidthPx={:.3}\tpageHeightPx={:.3}\tbodyWidthPx={:.3}\tbodyHeightPx={:.3}\tmarginPx={:.3}\tzero-sentinel={}\tadditive-row={}\tadditive-boundary={}\tmixed-payload={}\tdecoded=false",
+        page_mark.entries().len(),
+        layout.width_px(),
+        layout.height_px(),
+        layout.body_width_px(),
+        layout.body_height_px(),
+        layout.margin_px(),
+        class_counts.get("zero-sentinel").copied().unwrap_or(0),
+        class_counts.get("additive-row").copied().unwrap_or(0),
+        class_counts.get("additive-boundary").copied().unwrap_or(0),
+        class_counts.get("mixed-payload").copied().unwrap_or(0)
+    ))?;
+
+    for (row, entry) in page_mark.entries().iter().enumerate() {
+        let fields = be16_words(entry.raw()).collect::<Vec<_>>();
+        let profile = page_mark_u16_geometry_profile(&fields);
+        let line_count = page_mark_entry_line_count(entry.line_start(), entry.line_end());
+        let line_gap_count = line_count.and_then(|count| count.checked_sub(1));
+        let tuple = PAGE_MARK_U16_PROFILE_WORD_INDEXES.map(|index| fields.get(index).copied());
+        write_stdout_line(&format!(
+            "entry\t{}\tclass={}\tpageIndex={}\tlineStart={}\tlineEnd={}\tlineCount={}\tlineGapCount={}\tpageHeightPxPerLineCount={}\tpageHeightPxPerLineGap={}\tbodyHeightPxPerLineCount={}\tbodyHeightPxPerLineGap={}\t{}\tdecoded=false",
+            row,
+            profile.class_name(),
+            format_optional_u32(entry.index()),
+            format_optional_u32(entry.line_start()),
+            format_optional_u32(entry.line_end()),
+            format_optional_u32(line_count),
+            format_optional_u32(line_gap_count),
+            format_optional_f32_3(page_mark_pitch(layout.height_px(), line_count)),
+            format_optional_f32_3(page_mark_pitch(layout.height_px(), line_gap_count)),
+            format_optional_f32_3(page_mark_pitch(layout.body_height_px(), line_count)),
+            format_optional_f32_3(page_mark_pitch(layout.body_height_px(), line_gap_count)),
+            format_page_mark_u16_profile_tuple(&tuple)
+        ))?;
+    }
+
+    Ok(())
+}
+
+fn page_mark_entry_line_count(line_start: Option<u32>, line_end: Option<u32>) -> Option<u32> {
+    let line_start = line_start?;
+    let line_end = line_end?;
+    if line_end < line_start {
+        return None;
+    }
+    Some(line_end - line_start + 1)
+}
+
+fn page_mark_pitch(size_px: f32, count: Option<u32>) -> Option<f32> {
+    let count = count?;
+    if count == 0 {
+        return None;
+    }
+    Some(size_px / count as f32)
 }
 
 fn format_page_mark_u16_profile_tuple(tuple: &[Option<u16>; 8]) -> String {

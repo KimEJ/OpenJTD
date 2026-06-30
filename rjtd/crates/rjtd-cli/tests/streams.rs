@@ -2590,7 +2590,7 @@ fn object_fdm_index_command_links_index_rows_to_vector_image_hits() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains(
-            "object-fdm-index-summary\tindex=/FigureData/main_data/FDMIndex\tvector=/FigureData/main_data/FDMVector\tindex-bytes=64\tvector-bytes=103\tdeclared-count=2\tparsed-entries=2\ttrailing-bytes=0\tentries-with-image=1\timage-hits=1\tvector-missing=false\tdecoded=false"
+            "object-fdm-index-summary\tindex=/FigureData/main_data/FDMIndex\tvector=/FigureData/main_data/FDMVector\tindex-bytes=64\tvector-bytes=103\tdeclared-count=2\tparsed-entries=2\ttrailing-bytes=0\tentries-with-image=1\timage-hits=1\toffset-field-ref-rows=0\toffset-field-refs=0\tvector-missing=false\tdecoded=false"
         ),
         "stdout: {stdout}"
     );
@@ -2601,10 +2601,10 @@ fn object_fdm_index_command_links_index_rows_to_vector_image_hits() {
         "object-fdm-index-entry\tindex=/FigureData/main_data/FDMIndex\tvector=/FigureData/main_data/FDMVector\trow=1\tindex-offset=42\tvector-offset=32\tnext-vector-offset=103\tvector-length=71\tkind=0x0b00\tbbox=-1,-2,10,20\tvalid-vector-offset=true\t"
     ));
     assert!(
-        stdout.contains("image-signatures=png@36\tsegment-image-signatures=png@4\tdecoded=false")
+        stdout.contains("image-signatures=png@36\tsegment-image-signatures=png@4\toffset-field-refs=-\tdecoded=false")
     );
     assert!(stdout.contains(
-        "summary\tindexes=1\tentries=2\tentries-with-image=1\timage-hits=1\tmissing-vectors=0\tdecoded=false"
+        "summary\tindexes=1\tentries=2\tentries-with-image=1\timage-hits=1\toffset-field-ref-rows=0\toffset-field-refs=0\tmissing-vectors=0\tdecoded=false"
     ));
 }
 
@@ -2728,10 +2728,10 @@ fn object_fdm_index_rows_command_classifies_coordinate_like_invalid_rows() {
         "object-fdm-index-row\tindex=/FigureData/main_data/FDMIndex\tvector=/FigureData/main_data/FDMVector\trow=2\tscope=post-declared\trole=coordinate-like-invalid"
     ));
     assert!(stdout.contains(
-        "object-fdm-index-rows-summary\tindex=/FigureData/main_data/FDMIndex\tvector=/FigureData/main_data/FDMVector\tindex-bytes=86\tvector-bytes=45\theader-family=fdm-index-v1\tdeclared-count=2\trows=3\tdeclared-rows=2\tpost-declared-rows=1\traw-rows=0\tvalid-rows=1\tinvalid-rows=2\timage-hits=1\troles=coordinate-like-invalid:2,vector-segment:1\tvector-missing=false\tdecoded=false"
+        "object-fdm-index-rows-summary\tindex=/FigureData/main_data/FDMIndex\tvector=/FigureData/main_data/FDMVector\tindex-bytes=86\tvector-bytes=45\theader-family=fdm-index-v1\tdeclared-count=2\trows=3\tdeclared-rows=2\tpost-declared-rows=1\traw-rows=0\tvalid-rows=1\tinvalid-rows=2\timage-hits=1\toffset-field-ref-rows=0\toffset-field-refs=0\troles=coordinate-like-invalid:2,vector-segment:1\tvector-missing=false\tdecoded=false"
     ));
     assert!(stdout.contains(
-        "summary\tindexes=1\trows=3\tdeclared-rows=2\tpost-declared-rows=1\traw-rows=0\tvalid-rows=1\tinvalid-rows=2\timage-hits=1\tmissing-vectors=0\troles=coordinate-like-invalid:2,vector-segment:1\tdecoded=false"
+        "summary\tindexes=1\trows=3\tdeclared-rows=2\tpost-declared-rows=1\traw-rows=0\tvalid-rows=1\tinvalid-rows=2\timage-hits=1\toffset-field-ref-rows=0\toffset-field-refs=0\tmissing-vectors=0\troles=coordinate-like-invalid:2,vector-segment:1\tdecoded=false"
     ));
 }
 
@@ -4291,6 +4291,103 @@ fn local_pdf_backed_page_mark_u16_profiles_stay_stable_when_available() {
 }
 
 #[test]
+fn local_pdf_backed_page_mark_pitch_profiles_stay_stable_when_available() {
+    let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("rjtd-testdata/local-samples");
+    if !sample_dir.exists() {
+        return;
+    }
+
+    let cases = [
+        (
+            "a5.jtd",
+            "summary\tentries=75\tpageWidthPx=559.370\tpageHeightPx=793.701\tbodyWidthPx=415.370\tbodyHeightPx=649.701\tmarginPx=72.000\tzero-sentinel=2\tadditive-row=68\tadditive-boundary=4\tmixed-payload=1\tdecoded=false",
+            "entry\t5\tclass=additive-row\tpageIndex=5\tlineStart=23\tlineEnd=40\tlineCount=18\tlineGapCount=17\tpageHeightPxPerLineCount=44.094\tpageHeightPxPerLineGap=46.688\tbodyHeightPxPerLineCount=36.094\tbodyHeightPxPerLineGap=38.218",
+        ),
+        (
+            "ichitaro-20030228030923-success-002-success_data-test.jtd",
+            "summary\tentries=2\tpageWidthPx=687.874\tpageHeightPx=971.339\tbodyWidthPx=543.874\tbodyHeightPx=827.339\tmarginPx=72.000\tzero-sentinel=0\tadditive-row=0\tadditive-boundary=2\tmixed-payload=0\tdecoded=false",
+            "entry\t0\tclass=additive-boundary\tpageIndex=0\tlineStart=0\tlineEnd=39\tlineCount=40\tlineGapCount=39\tpageHeightPxPerLineCount=24.283\tpageHeightPxPerLineGap=24.906\tbodyHeightPxPerLineCount=20.683\tbodyHeightPxPerLineGap=21.214",
+        ),
+    ];
+
+    let mut checked = 0usize;
+    for (file_name, expected_summary, expected_entry_prefix) in cases {
+        let sample_path = sample_dir.join(file_name);
+        if !sample_path.exists() || !sample_path.with_extension("pdf").exists() {
+            continue;
+        }
+
+        let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+            .arg("page-mark-pitch-profile")
+            .arg(&sample_path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{} stderr: {}",
+            file_name,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(
+            stdout.contains(expected_summary),
+            "{} stdout: {}",
+            file_name,
+            stdout
+        );
+        assert!(
+            stdout.contains(expected_entry_prefix),
+            "{} stdout: {}",
+            file_name,
+            stdout
+        );
+        checked += 1;
+    }
+
+    if sample_dir.join("a5.jtd").exists() {
+        assert!(checked >= 1);
+    }
+}
+
+#[test]
+fn local_success_data_test_fdm_index_rows_report_offset_field_references_when_available() {
+    let sample_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("rjtd-testdata/local-samples")
+        .join("ichitaro-20030228030923-success-002-success_data-test.jtd");
+    if !sample_path.exists() || !sample_path.with_extension("pdf").exists() {
+        return;
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("object-fdm-index-rows")
+        .arg(&sample_path)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("offset-field-ref-rows="),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("offset-field-refs=bbox.left:command:308"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("offset-field-refs=bbox.left:segment:1864->[1924,1958,1992,2024]"),
+        "stdout: {stdout}"
+    );
+}
+
+#[test]
 fn page_marks_command_reports_variable_family_rows() {
     let path = page_mark_variable_shape_path();
     let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
@@ -4636,6 +4733,59 @@ fn export_command_writes_pdf_from_document_model() {
 
     assert!(pdf.starts_with(b"%PDF-"));
     assert!(pdf.ends_with(b"%%EOF"));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn export_command_replaces_quarantined_pdf_output_file() {
+    let path = tiny_cfb_path();
+    let output_path = path.with_extension("pdf");
+    fs::write(&output_path, b"stale pdf").unwrap();
+    let xattr_output = Command::new("xattr")
+        .arg("-w")
+        .arg("com.apple.quarantine")
+        .arg("0081;00000000;;")
+        .arg(&output_path)
+        .output()
+        .unwrap();
+    assert!(
+        xattr_output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&xattr_output.stderr)
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("export")
+        .arg(&path)
+        .arg("--format")
+        .arg("pdf")
+        .arg("-o")
+        .arg(&output_path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let pdf = fs::read(&output_path).unwrap();
+    let quarantine = Command::new("xattr")
+        .arg("-p")
+        .arg("com.apple.quarantine")
+        .arg(&output_path)
+        .output()
+        .unwrap();
+    fs::remove_file(&output_path).unwrap();
+
+    assert!(pdf.starts_with(b"%PDF-"));
+    assert!(
+        !quarantine.status.success(),
+        "quarantine xattr survived PDF output replacement: {}",
+        String::from_utf8_lossy(&quarantine.stdout)
+    );
 }
 
 #[test]
