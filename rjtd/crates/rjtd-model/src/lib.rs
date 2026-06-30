@@ -75308,7 +75308,7 @@ mod tests {
             return;
         }
 
-        let mut _sample_count = 0usize;
+        let mut sample_count = 0usize;
         let mut files_with_grid = 0usize;
         let mut grid_candidate_count = 0usize;
         let mut svg_overlay_count = 0usize;
@@ -75342,7 +75342,7 @@ mod tests {
                 continue;
             }
 
-            _sample_count += 1;
+            sample_count += 1;
             let bytes = fs::read(&path).unwrap();
             match DocumentCore::from_bytes(&bytes) {
                 Ok(core) => {
@@ -75429,7 +75429,7 @@ mod tests {
             return;
         }
 
-        let mut _sample_count = 0usize;
+        let mut sample_count = 0usize;
         let mut files_with_images = 0usize;
         let mut image_payload_count = 0usize;
         let mut projected_payload_count = 0usize;
@@ -75460,7 +75460,7 @@ mod tests {
                 continue;
             }
 
-            _sample_count += 1;
+            sample_count += 1;
             let bytes = fs::read(&path).unwrap();
             match DocumentCore::from_bytes(&bytes) {
                 Ok(core) => {
