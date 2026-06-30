@@ -36,6 +36,13 @@ cargo run -p rjtd-cli -- export path/to/document.jtd --format json
 cargo run -p rjtd-cli -- export path/to/document.jtd --format pdf -o output.pdf
 ```
 
+To refresh the local sample PDF artifacts used for visual regression checks,
+run this from the repository root:
+
+```sh
+scripts/regenerate-pdf-output.sh
+```
+
 ## Repository Layout
 
 - [`rjtd/`](rjtd/) - Rust toolset and workspace for the current OpenJTD

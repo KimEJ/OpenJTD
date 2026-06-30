@@ -754,6 +754,9 @@ const PAGE_FRAME_TEXT_AFTER_BAR_GAP_LINES: f32 = 1.0;
 const DOCUMENT_VIEW_STYLES_PAGE_WIDTH_OFFSET: usize = 16;
 const DOCUMENT_VIEW_STYLES_PAGE_HEIGHT_OFFSET: usize = 20;
 const PAGE_LAYOUT_STYLE_RECORD_CODE: u16 = 0x4444;
+const PAGE_LAYOUT_STYLE_PAGE_SIZE_SUBRECORD_CODE: u16 = 0x4001;
+const PAGE_LAYOUT_STYLE_PAGE_SIZE_WIDTH_OFFSET: usize = 4;
+const PAGE_LAYOUT_STYLE_PAGE_SIZE_HEIGHT_OFFSET: usize = 8;
 const PAGE_LAYOUT_STYLE_PAYLOAD_WIDTH_OFFSET: usize = 24;
 const PAGE_LAYOUT_STYLE_PAYLOAD_HEIGHT_OFFSET: usize = 28;
 const MIN_PAPER_SIZE_MM100: u32 = 5_000;
@@ -886,6 +889,7 @@ impl PageLayout {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct SourceDocumentLayoutHint {
+    basis: &'static str,
     fallback_layout: PageLayout,
     writing_mode: WritingMode,
     override_decoded_layout: bool,
@@ -901,6 +905,7 @@ fn source_document_layout_hint(
         || document_has_shanai_lan_fdm_frame_evidence(document)
     {
         return Some(SourceDocumentLayoutHint {
+            basis: "shanai-lan-fdm-command-or-frame-evidence",
             fallback_layout: PageLayout::new(
                 millimeters_to_css_px(297.0),
                 millimeters_to_css_px(210.0),
@@ -915,12 +920,20 @@ fn source_document_layout_hint(
     if document_has_success_data_test_projection_evidence(document)
         || document_has_tsaiten_projection_evidence(document)
     {
-        let fallback_layout = if document_has_success_data_test_projection_evidence(document) {
-            PageLayout::new(millimeters_to_css_px(182.0), millimeters_to_css_px(257.0))
-        } else {
-            PageLayout::new(millimeters_to_css_px(210.0), millimeters_to_css_px(297.0))
-        };
+        let (fallback_layout, basis) =
+            if document_has_success_data_test_projection_evidence(document) {
+                (
+                    PageLayout::new(millimeters_to_css_px(182.0), millimeters_to_css_px(257.0)),
+                    "success-data-test-projection-evidence",
+                )
+            } else {
+                (
+                    PageLayout::new(millimeters_to_css_px(210.0), millimeters_to_css_px(297.0)),
+                    "tsaiten-projection-evidence",
+                )
+            };
         return Some(SourceDocumentLayoutHint {
+            basis,
             fallback_layout,
             writing_mode: WritingMode::Horizontal,
             override_decoded_layout: decoded_layout == PageLayout::default(),
@@ -931,6 +944,7 @@ fn source_document_layout_hint(
 
     if document_has_fax02_visual_list(document) {
         return Some(SourceDocumentLayoutHint {
+            basis: "fax02-visual-list-evidence",
             fallback_layout: PageLayout::new(
                 millimeters_to_css_px(182.0),
                 millimeters_to_css_px(257.0),
@@ -959,6 +973,7 @@ fn source_document_layout_hint(
             fallback_layout = fallback_layout.with_vertical_wrap_columns_override(wrap_columns);
         }
         return Some(SourceDocumentLayoutHint {
+            basis: "ginga-front-matter-evidence",
             fallback_layout,
             writing_mode: WritingMode::VerticalRl,
             override_decoded_layout: false,
@@ -985,13 +1000,13 @@ fn page_layout_from_document(document: &Document) -> PageLayout {
 fn decoded_page_layout_from_styles(styles: &[UnknownStyle]) -> Option<PageLayout> {
     styles
         .iter()
-        .find(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))
-        .and_then(|style| page_layout_from_document_view_styles(style.payload()))
+        .find(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+        .and_then(|style| page_layout_from_page_layout_style(style.payload()))
         .or_else(|| {
             styles
                 .iter()
-                .find(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
-                .and_then(|style| page_layout_from_page_layout_style(style.payload()))
+                .find(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))
+                .and_then(|style| page_layout_from_document_view_styles(style.payload()))
         })
 }
 
@@ -1008,6 +1023,26 @@ fn page_layout_from_page_layout_style(bytes: &[u8]) -> Option<PageLayout> {
         .iter()
         .filter(|record| record.code() == PAGE_LAYOUT_STYLE_RECORD_CODE)
         .find_map(|record| {
+            if let Some(layout) = record
+                .subrecords()
+                .iter()
+                .find(|subrecord| subrecord.code() == PAGE_LAYOUT_STYLE_PAGE_SIZE_SUBRECORD_CODE)
+                .and_then(|subrecord| {
+                    page_layout_from_encoded_mm100_shift8(
+                        read_be32_at(
+                            subrecord.payload(),
+                            PAGE_LAYOUT_STYLE_PAGE_SIZE_WIDTH_OFFSET,
+                        )?,
+                        read_be32_at(
+                            subrecord.payload(),
+                            PAGE_LAYOUT_STYLE_PAGE_SIZE_HEIGHT_OFFSET,
+                        )?,
+                    )
+                })
+            {
+                return Some(layout);
+            }
+
             let payload_start = record.offset().checked_add(4)?;
             page_layout_from_encoded_mm100_shift8(
                 read_be32_at(
@@ -1235,7 +1270,7 @@ impl DocumentCore {
         let decoded_page_layout = page_layout_from_document(&document);
         let hint = source_document_layout_hint(&document, decoded_page_layout);
         let mut page_layout = decoded_page_layout;
-        let mut writing_mode = writing_mode_from_document_view_styles(document.unknown_styles());
+        let mut writing_mode = WritingMode::Horizontal;
         if let Some(hint) = hint {
             if hint.override_decoded_layout || page_layout == PageLayout::default() {
                 page_layout = hint.fallback_layout;
@@ -1301,19 +1336,43 @@ impl DocumentCore {
         let style_candidates = text_style_candidates(self.document.unknown_styles());
         let font_names = document_font_names(&self.document);
         let fallback_font = primary_document_font_name(&font_names);
+        let writing_mode_decision = writing_mode_decision_json(&self.document, self.writing_mode);
+        let document_view_writing_mode_candidate =
+            writing_mode_candidate_from_document_view_styles(self.document.unknown_styles());
+        let document_view_writing_mode_candidate_str = document_view_writing_mode_candidate
+            .as_ref()
+            .map(|candidate| format!("\"{}\"", candidate.writing_mode.as_str()))
+            .unwrap_or_else(|| "null".to_string());
+        let document_view_writing_mode_first_code = document_view_writing_mode_candidate
+            .as_ref()
+            .map(|candidate| candidate.first_record_code.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let document_view_writing_mode_first_code_hex = document_view_writing_mode_candidate
+            .as_ref()
+            .map(|candidate| json_string(&format!("0x{:04x}", candidate.first_record_code)))
+            .unwrap_or_else(|| "null".to_string());
         let writing_mode_candidate =
             writing_mode_candidate_from_paper_marks(self.document.paper_marks());
         let writing_mode_candidate_str = writing_mode_candidate
             .map(|m| format!("\"{}\"", m.as_str()))
             .unwrap_or_else(|| "null".to_string());
         format!(
-            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"fdmOpenStrokeCohortSummary\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
+            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeDecision\":{},\"writingModeCandidateFromDocumentViewStyles\":{},\"writingModeCandidateFromDocumentViewStylesDecoded\":false,\"writingModeCandidateFromDocumentViewStylesSourceBacked\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":{},\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"fdmOpenStrokeCohortSummary\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
             APP_SOURCE_FORMAT,
             json_string(&self.file_name),
             self.page_count(),
             json_string(fallback_font),
             string_array_json(&font_names),
             self.writing_mode.as_str(),
+            writing_mode_decision,
+            document_view_writing_mode_candidate_str,
+            if document_view_writing_mode_candidate.is_some() {
+                "true"
+            } else {
+                "false"
+            },
+            document_view_writing_mode_first_code,
+            document_view_writing_mode_first_code_hex,
             writing_mode_candidate_str,
             self.document.blocks().len(),
             self.document.raw_streams().len(),
@@ -20508,25 +20567,114 @@ fn paper_marks_json(paper_marks: &[DocumentPaperMark]) -> String {
     output
 }
 
-// RFC 0007 §PaperMark: flag 0x00010011 appears exclusively in Ginga vertical-writing
-// samples (a5/a6/b6/46) and never in horizontal samples. Not yet formally decoded
-// (TODO 327), so the result is diagnostic-only and must not gate WritingMode directly.
-fn writing_mode_from_document_view_styles(styles: &[UnknownStyle]) -> WritingMode {
-    let has_record_0x1001 = styles
+fn writing_mode_decision_json(document: &Document, selected: WritingMode) -> String {
+    let decoded_layout = page_layout_from_document(document);
+    let source_layout_hint = source_document_layout_hint(document, decoded_layout);
+    let document_view_candidate =
+        writing_mode_candidate_from_document_view_styles(document.unknown_styles());
+    let paper_mark_candidate = writing_mode_candidate_from_paper_marks(document.paper_marks());
+    let computed = source_layout_hint
+        .as_ref()
+        .map(|hint| hint.writing_mode)
+        .unwrap_or(WritingMode::Horizontal);
+    let decision_source = if selected != computed {
+        "runtime-override"
+    } else if source_layout_hint.is_some() {
+        "source-document-layout-hint"
+    } else {
+        "default-horizontal"
+    };
+    let decision_source_backed = matches!(decision_source, "source-document-layout-hint");
+    let document_view_first_code_hex = document_view_candidate
+        .as_ref()
+        .map(|candidate| json_string(&format!("0x{:04x}", candidate.first_record_code)))
+        .unwrap_or_else(|| "null".to_string());
+    let source_hint_basis = source_layout_hint
+        .as_ref()
+        .map(|hint| json_string(hint.basis))
+        .unwrap_or_else(|| "null".to_string());
+    let source_hint_override_decoded_layout = source_layout_hint
+        .as_ref()
+        .map(|hint| hint.override_decoded_layout)
+        .unwrap_or(false);
+    let source_hint_margin = source_layout_hint
+        .and_then(|hint| hint.margin_override_px)
+        .map(|margin| format!("{margin:.3}"))
+        .unwrap_or_else(|| "null".to_string());
+    let source_hint_wrap_columns = source_layout_hint
+        .and_then(|hint| hint.vertical_wrap_columns_override)
+        .map(|columns| columns.to_string())
+        .unwrap_or_else(|| "null".to_string());
+    let source_hint_mode = source_layout_hint.map(|hint| hint.writing_mode);
+    let document_view_mode = document_view_candidate
+        .as_ref()
+        .map(|candidate| candidate.writing_mode);
+    let document_view_disagrees = document_view_mode
+        .map(|mode| mode != selected)
+        .unwrap_or(false);
+    let source_hint_disagrees = source_hint_mode
+        .map(|mode| mode != selected)
+        .unwrap_or(false);
+    let paper_mark_disagrees = paper_mark_candidate
+        .map(|mode| mode != selected)
+        .unwrap_or(false);
+    format!(
+        "{{\"selected\":\"{}\",\"source\":{},\"decoded\":false,\"sourceBacked\":{},\"computedBeforeRuntimeOverride\":\"{}\",\"documentViewStylesCandidate\":{},\"documentViewStylesFirstRecordCodeHex\":{},\"sourceDocumentLayoutHintCandidate\":{},\"sourceDocumentLayoutHintBasis\":{},\"sourceDocumentLayoutHintOverridesDecodedLayout\":{},\"sourceDocumentLayoutHintMarginOverridePx\":{},\"sourceDocumentLayoutHintVerticalWrapColumnsOverride\":{},\"paperMarkCandidate\":{},\"paperMarkCandidateDecoded\":false,\"documentViewStylesDisagreesWithSelected\":{},\"sourceDocumentLayoutHintDisagreesWithSelected\":{},\"paperMarkDisagreesWithSelected\":{}}}",
+        selected.as_str(),
+        json_string(decision_source),
+        decision_source_backed,
+        computed.as_str(),
+        writing_mode_option_json(document_view_mode),
+        document_view_first_code_hex,
+        writing_mode_option_json(source_hint_mode),
+        source_hint_basis,
+        source_hint_override_decoded_layout,
+        source_hint_margin,
+        source_hint_wrap_columns,
+        writing_mode_option_json(paper_mark_candidate),
+        document_view_disagrees,
+        source_hint_disagrees,
+        paper_mark_disagrees
+    )
+}
+
+fn writing_mode_option_json(mode: Option<WritingMode>) -> String {
+    mode.map(|mode| json_string(mode.as_str()))
+        .unwrap_or_else(|| "null".to_string())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DocumentViewWritingModeCandidate {
+    writing_mode: WritingMode,
+    first_record_code: u16,
+}
+
+// DocumentViewStyles record 0x1001 appears as the first sequential record in
+// current vertical-writing Ginga samples, but also appears in horizontal
+// reference-PDF samples such as tsaiten, tmogi3_2, success_data-test, and
+// shanai_lan. Keep it diagnostic-only until the surrounding style semantics are
+// decoded.
+fn writing_mode_candidate_from_document_view_styles(
+    styles: &[UnknownStyle],
+) -> Option<DocumentViewWritingModeCandidate> {
+    styles
         .iter()
         .filter(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))
-        .any(|style| {
-            summarize_style_stream(style.payload())
+        .find_map(|style| {
+            let first_record_code = summarize_style_stream(style.payload())
                 .records()
-                .first()
-                .map(|r| r.code() == 0x1001)
-                .unwrap_or(false)
-        });
-    if has_record_0x1001 {
-        WritingMode::VerticalRl
-    } else {
-        WritingMode::Horizontal
-    }
+                .first()?
+                .code();
+            let writing_mode = if first_record_code == 0x1001 {
+                WritingMode::VerticalRl
+            } else {
+                WritingMode::Horizontal
+            };
+            Some(DocumentViewWritingModeCandidate {
+                writing_mode,
+                first_record_code,
+            })
+        })
 }
 
 fn writing_mode_candidate_from_paper_marks(
@@ -23697,7 +23845,97 @@ fn push_page_decoration_mark_pitch_evidence_json(
         evidence.page_mark_line_end,
         &evidence.page_mark_u16_fields,
     );
+    output.push_str(",\"linePitchAgreementGate\":");
+    push_page_mark_line_pitch_agreement_gate_json(
+        output,
+        layout,
+        evidence.page_mark_line_start,
+        evidence.page_mark_line_end,
+        None,
+        None,
+        &evidence.page_mark_u16_fields,
+    );
     output.push_str(",\"renderPromotionContribution\":\"page-mark-line-gap-pitch-diagnostic-only\",\"renderPromotionBlockedReason\":\"page-mark-line-pitch-semantics-unproven\"}");
+}
+
+fn push_page_mark_line_pitch_agreement_gate_json(
+    output: &mut String,
+    layout: PageLayout,
+    line_start: Option<u32>,
+    line_end: Option<u32>,
+    row_height_px: Option<f32>,
+    row_height_basis: Option<&str>,
+    u16_fields: &[u16],
+) {
+    const PITCH_AGREEMENT_TOLERANCE_PX: f32 = 0.5;
+
+    let line_gap_count = line_start
+        .zip(line_end)
+        .map(|(start, end)| end.saturating_sub(start));
+    let body_height_px_per_line_gap = line_gap_count
+        .filter(|count| *count > 0)
+        .map(|count| layout.body_height_px() / count as f32);
+    let row_height_residual_px = row_height_px
+        .zip(body_height_px_per_line_gap)
+        .map(|(row, pitch)| row - pitch);
+    let abs_row_height_residual_px = row_height_residual_px.map(f32::abs);
+    let pitch_agreement_ready =
+        abs_row_height_residual_px.is_some_and(|residual| residual <= PITCH_AGREEMENT_TOLERANCE_PX);
+    let blocked_reason = if row_height_px.is_none() {
+        Some("source-row-height-candidate-absent")
+    } else if body_height_px_per_line_gap.is_none() {
+        Some("page-mark-line-gap-pitch-absent")
+    } else if !pitch_agreement_ready {
+        Some("source-row-height-and-page-mark-line-gap-disagree")
+    } else {
+        None
+    };
+
+    output.push_str("{\"source\":\"/PageMark body line-gap pitch+source row height\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"rowHeightCandidatePresent\":");
+    output.push_str(if row_height_px.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"rowHeightPx\":");
+    push_optional_f32_json(output, row_height_px);
+    output.push_str(",\"rowHeightBasis\":");
+    match row_height_basis {
+        Some(basis) => output.push_str(&json_string(basis)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"lineStart\":");
+    push_option_u32_json(output, line_start);
+    output.push_str(",\"lineEnd\":");
+    push_option_u32_json(output, line_end);
+    output.push_str(",\"lineGapCount\":");
+    push_option_u32_json(output, line_gap_count);
+    output.push_str(",\"bodyHeightPxPerLineGap\":");
+    push_optional_f32_json(output, body_height_px_per_line_gap);
+    output.push_str(",\"rowHeightResidualPx\":");
+    push_optional_f32_json(output, row_height_residual_px);
+    output.push_str(",\"absRowHeightResidualPx\":");
+    push_optional_f32_json(output, abs_row_height_residual_px);
+    output.push_str(",\"tolerancePx\":");
+    output.push_str(&format!("{PITCH_AGREEMENT_TOLERANCE_PX:.3}"));
+    output.push_str(",\"pageMarkU16GeometryClass\":");
+    output.push_str(&json_string(
+        page_mark_u16_geometry_profile(u16_fields).class_name(),
+    ));
+    output.push_str(",\"pitchAgreementReady\":");
+    output.push_str(if pitch_agreement_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderPromotionContribution\":\"page-mark-line-pitch-agreement-candidate\",\"renderPromotionBlockedReason\":");
+    match blocked_reason {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
+    }
+    output.push('}');
 }
 
 fn push_page_decoration_slot_pairs_json(output: &mut String, pairs: &[(u16, u16)]) {
@@ -52471,6 +52709,21 @@ fn push_success_data_test_source_pitch_evidence_json(
     push_optional_f32_json(output, source_row_height_minus_body_height_per_line_gap_px);
     output.push_str(",\"pageMarkSelectedFields\":");
     push_success_data_test_page_mark_selected_fields_json(output, page_mark_entry);
+    output.push_str(",\"linePitchAgreementGate\":");
+    let empty_page_mark_fields: &[u16] = &[];
+    let (line_start, line_end, page_mark_u16_fields) = page_mark_entry.map_or_else(
+        || (None, None, empty_page_mark_fields),
+        |entry| (entry.line_start(), entry.line_end(), entry.u16_fields()),
+    );
+    push_page_mark_line_pitch_agreement_gate_json(
+        output,
+        layout,
+        line_start,
+        line_end,
+        Some(candidate.row_height),
+        Some(candidate.row_height_basis),
+        page_mark_u16_fields,
+    );
     output.push_str(",\"pageHeightPxPerWord21Unit\":");
     push_optional_f32_json(output, page_height_px_per_word_21_unit);
     output.push_str(",\"pageHeightPxPerWord13Plus14Unit\":");
@@ -58617,7 +58870,16 @@ fn push_success_data_test_title_art_front_texture_role_gate_json(
     } else {
         "current-paint-state-inheritance"
     }));
-    let source_order_front_erase_render_promoted = source_order_front_erase_candidate;
+    let source_order_front_erase_render_promotion_blocked_reason =
+        if source_order_front_erase_candidate {
+            success_data_test_title_art_front_texture_render_promotion_blocked_reason(
+                "source-order-interstitial-front-erase-texture",
+            )
+        } else {
+            None
+        };
+    let source_order_front_erase_render_promoted = source_order_front_erase_candidate
+        && source_order_front_erase_render_promotion_blocked_reason.is_none();
     output.push_str(",\"visibleRenderPathCount\":");
     output.push_str(
         &(if source_order_front_erase_render_promoted {
@@ -58665,6 +58927,8 @@ fn push_success_data_test_title_art_front_texture_role_gate_json(
     output.push_str(",\"renderPromotionBlockedReason\":");
     if source_order_front_erase_render_promoted {
         output.push_str("null");
+    } else if let Some(reason) = source_order_front_erase_render_promotion_blocked_reason {
+        output.push_str(&json_string(reason));
     } else {
         output.push_str(&json_string(
             if blocked_interstitial_current_state_candidate {
@@ -59071,7 +59335,7 @@ fn push_success_data_test_title_art_shadow_paint_word_gate_json(
             && !word3_separates_texture_from_main
             && !word7_separates_texture_from_main
         {
-            "record70-separates-shadow-but-not-interstitial-texture-from-main"
+            "none"
         } else {
             "record70-role-separation-unproven"
         },
@@ -68108,6 +68372,26 @@ mod tests {
         assert!(document_info.contains("\"sectionCount\":1"));
         assert!(document_info.contains("\"writingMode\":\"horizontal\""));
         assert!(document_info.contains("\"writingModeDecoded\":false"));
+        assert!(document_info.contains(
+            "\"writingModeDecision\":{\"selected\":\"horizontal\",\"source\":\"default-horizontal\""
+        ));
+        assert!(document_info.contains("\"computedBeforeRuntimeOverride\":\"horizontal\""));
+        assert!(document_info.contains("\"documentViewStylesCandidate\":null"));
+        assert!(document_info.contains("\"sourceDocumentLayoutHintCandidate\":null"));
+        assert!(document_info.contains("\"paperMarkCandidate\":null"));
+        assert!(document_info.contains("\"documentViewStylesDisagreesWithSelected\":false"));
+        assert!(document_info.contains("\"writingModeCandidateFromDocumentViewStyles\":null"));
+        assert!(
+            document_info.contains("\"writingModeCandidateFromDocumentViewStylesDecoded\":false")
+        );
+        assert!(
+            document_info
+                .contains("\"writingModeCandidateFromDocumentViewStylesSourceBacked\":false")
+        );
+        assert!(
+            document_info
+                .contains("\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":null")
+        );
         assert!(document_info.contains("\"writingModeCandidateFromPaperMark\":null"));
         assert!(document_info.contains("\"writingModeCandidateDecoded\":false"));
         assert!(document_info.contains("\"textControlBoundaryCount\":0"));
@@ -68276,6 +68560,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn document_core_prefers_page_layout_style_over_document_view_styles_page_size() {
+        let view_styles = document_view_styles_page_size_fixture(16_395, 29_700);
+        let page_layout_style = page_layout_style_page_size_fixture(21_000, 29_700);
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (DOCUMENT_VIEW_STYLES_PATH, &view_styles),
+            (PAGE_LAYOUT_STYLE_PATH, &page_layout_style),
+        ]);
+
+        let core = DocumentCore::from_bytes(&bytes).unwrap();
+
+        assert!((core.page_width_px() - 793.7).abs() < 0.2);
+        assert!((core.page_height_px() - 1122.5).abs() < 0.2);
+        assert!(
+            core.get_page_def(0)
+                .unwrap()
+                .contains("\"landscape\":false")
+        );
+    }
+
     fn document_view_styles_sequential_fixture(first_code: u16) -> Vec<u8> {
         // Build a minimal sequential style stream with 4 records.
         // The sequential record parser requires >= 4 records to accept a sequence.
@@ -68291,15 +68596,34 @@ mod tests {
     }
 
     #[test]
-    fn document_core_detects_vertical_writing_mode_from_record_0x1001() {
-        // DocumentViewStyles whose first sequential record is 0x1001 → vertical-rl
+    fn document_core_keeps_document_view_styles_writing_mode_candidate_diagnostic_only() {
+        // 0x1001 is observed in both vertical and horizontal reference-PDF
+        // samples, so it must remain a candidate rather than render authority.
         let vertical_styles = document_view_styles_sequential_fixture(0x1001);
         let bytes_v = cfb_with_streams(&[
             ("/DocumentText", &document_text_fixture()),
             (DOCUMENT_VIEW_STYLES_PATH, &vertical_styles),
         ]);
         let core_v = DocumentCore::from_bytes(&bytes_v).unwrap();
-        assert_eq!(core_v.writing_mode(), WritingMode::VerticalRl);
+        assert_eq!(core_v.writing_mode(), WritingMode::Horizontal);
+        let info_v = core_v.get_document_info();
+        assert!(info_v.contains("\"writingMode\":\"horizontal\""));
+        assert!(info_v.contains(
+            "\"writingModeDecision\":{\"selected\":\"horizontal\",\"source\":\"default-horizontal\""
+        ));
+        assert!(info_v.contains("\"computedBeforeRuntimeOverride\":\"horizontal\""));
+        assert!(info_v.contains("\"documentViewStylesCandidate\":\"vertical-rl\""));
+        assert!(info_v.contains("\"sourceDocumentLayoutHintCandidate\":null"));
+        assert!(info_v.contains("\"paperMarkCandidate\":null"));
+        assert!(info_v.contains("\"documentViewStylesDisagreesWithSelected\":true"));
+        assert!(info_v.contains("\"writingModeCandidateFromDocumentViewStyles\":\"vertical-rl\""));
+        assert!(info_v.contains("\"writingModeCandidateFromDocumentViewStylesSourceBacked\":true"));
+        assert!(
+            info_v.contains("\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":4097")
+        );
+        assert!(info_v.contains(
+            "\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":\"0x1001\""
+        ));
 
         // DocumentViewStyles whose first sequential record is 0x1002 (not 0x1001) → horizontal
         let horizontal_styles = document_view_styles_sequential_fixture(0x1002);
@@ -68309,6 +68633,24 @@ mod tests {
         ]);
         let core_h = DocumentCore::from_bytes(&bytes_h).unwrap();
         assert_eq!(core_h.writing_mode(), WritingMode::Horizontal);
+        let info_h = core_h.get_document_info();
+        assert!(info_h.contains("\"writingMode\":\"horizontal\""));
+        assert!(info_h.contains(
+            "\"writingModeDecision\":{\"selected\":\"horizontal\",\"source\":\"default-horizontal\""
+        ));
+        assert!(info_h.contains("\"computedBeforeRuntimeOverride\":\"horizontal\""));
+        assert!(info_h.contains("\"documentViewStylesCandidate\":\"horizontal\""));
+        assert!(info_h.contains("\"sourceDocumentLayoutHintCandidate\":null"));
+        assert!(info_h.contains("\"paperMarkCandidate\":null"));
+        assert!(info_h.contains("\"documentViewStylesDisagreesWithSelected\":false"));
+        assert!(info_h.contains("\"writingModeCandidateFromDocumentViewStyles\":\"horizontal\""));
+        assert!(info_h.contains("\"writingModeCandidateFromDocumentViewStylesSourceBacked\":true"));
+        assert!(
+            info_h.contains("\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":4098")
+        );
+        assert!(info_h.contains(
+            "\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":\"0x1002\""
+        ));
     }
 
     #[test]
@@ -68692,6 +69034,26 @@ mod tests {
         assert_eq!(renamed_core.page_count(), 72);
         assert!((renamed_core.page_width_px() - 559.4).abs() < 0.2);
         assert!((renamed_core.page_height_px() - 793.7).abs() < 0.2);
+        let renamed_document_info = renamed_core.get_document_info();
+        assert!(
+            renamed_document_info
+                .contains("\"writingModeCandidateFromDocumentViewStyles\":\"vertical-rl\"")
+        );
+        assert!(renamed_document_info.contains(
+            "\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":\"0x1001\""
+        ));
+        assert!(renamed_document_info.contains(
+            "\"writingModeDecision\":{\"selected\":\"vertical-rl\",\"source\":\"source-document-layout-hint\""
+        ));
+        assert!(
+            renamed_document_info.contains("\"sourceDocumentLayoutHintCandidate\":\"vertical-rl\"")
+        );
+        assert!(
+            renamed_document_info
+                .contains("\"sourceDocumentLayoutHintBasis\":\"ginga-front-matter-evidence\"")
+        );
+        assert!(renamed_document_info.contains("\"paperMarkCandidate\":\"vertical-rl\""));
+        assert!(renamed_document_info.contains("\"paperMarkDisagreesWithSelected\":false"));
 
         let mut core = DocumentCore::from_document(document);
         core.set_file_name(sample_path.to_string_lossy());
@@ -68770,6 +69132,12 @@ mod tests {
             "\"pageHeightPxPerLineCount\":44.094,\"pageHeightPxPerLineGap\":46.688,\"bodyHeightPxPerLineCount\":36.094,\"bodyHeightPxPerLineGap\":38.218"
         ));
         assert!(page_six_layer_tree.contains(
+            "\"linePitchAgreementGate\":{\"source\":\"/PageMark body line-gap pitch+source row height\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"rowHeightCandidatePresent\":false,\"rowHeightPx\":null,\"rowHeightBasis\":null"
+        ));
+        assert!(page_six_layer_tree.contains(
+            "\"pitchAgreementReady\":false,\"renderPromotionContribution\":\"page-mark-line-pitch-agreement-candidate\",\"renderPromotionBlockedReason\":\"source-row-height-candidate-absent\""
+        ));
+        assert!(page_six_layer_tree.contains(
             "\"pageMarkSelectedFields\":{\"source\":\"/PageMark\",\"entryIndex\":5,\"lineStart\":23,\"lineEnd\":40,\"lineCount\":18,\"lineGapCount\":17,\"u16GeometryClass\":\"additive-row\""
         ));
         assert!(page_six_layer_tree.contains(
@@ -68809,6 +69177,15 @@ mod tests {
         ));
         assert!(page_six_info.contains(
             "\"pageHeightPxPerLineCount\":44.094,\"pageHeightPxPerLineGap\":46.688,\"bodyHeightPxPerLineCount\":36.094,\"bodyHeightPxPerLineGap\":38.218"
+        ));
+        assert!(page_six_info.contains(
+            "\"linePitchAgreementGate\":{\"source\":\"/PageMark body line-gap pitch+source row height\""
+        ));
+        assert!(page_six_info.contains(
+            "\"rowHeightCandidatePresent\":false,\"rowHeightPx\":null,\"rowHeightBasis\":null"
+        ));
+        assert!(page_six_info.contains(
+            "\"pitchAgreementReady\":false,\"renderPromotionContribution\":\"page-mark-line-pitch-agreement-candidate\",\"renderPromotionBlockedReason\":\"source-row-height-candidate-absent\""
         ));
         assert!(page_six_info.contains("\"paperMarkEntryIndex\":5"));
         assert!(page_six_info.contains("\"paperMarkFlagsHex\":\"0x00010010\""));
@@ -69392,6 +69769,21 @@ mod tests {
 
         let mut core = DocumentCore::from_document(document);
         core.set_file_name(sample_path.to_string_lossy());
+        assert_eq!(core.writing_mode(), WritingMode::Horizontal);
+        assert!((core.page_width_px() - 793.7).abs() < 0.2);
+        assert!((core.page_height_px() - 1122.5).abs() < 0.2);
+        let document_info = core.get_document_info();
+        assert!(document_info.contains(
+            "\"writingModeDecision\":{\"selected\":\"horizontal\",\"source\":\"default-horizontal\""
+        ));
+        assert!(
+            document_info
+                .contains("\"writingModeCandidateFromDocumentViewStyles\":\"vertical-rl\"")
+        );
+        assert!(document_info.contains(
+            "\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":\"0x1001\""
+        ));
+        assert!(document_info.contains("\"documentViewStylesDisagreesWithSelected\":true"));
         let layer_tree = core.get_page_layer_tree(0).unwrap();
         let svg = core.render_page_svg(0).unwrap();
 
@@ -70480,12 +70872,14 @@ mod tests {
             "\"frontEraseTextureRoleGate\":{\"source\":\"embeddedPressPathStateRecordComparison\",\"decoded\":false,\"pixelChange\":true,\"frontEraseTexturePathCount\":530,\"interstitialTexturePathCount\":530,\"record48SeparatesShadowFromTextureAndMain\":true,\"record48SeparatesTextureFromMain\":false,\"sourceOrderFrontEraseCandidate\":true"
         ));
         assert!(layer_tree.contains(
-            "\"candidateBasis\":\"source-order-interstitial-front-erase-texture\",\"visibleRenderPathCount\":530,\"renderPromoted\":true"
+            "\"candidateBasis\":\"source-order-interstitial-front-erase-texture\",\"visibleRenderPathCount\":0,\"renderPromoted\":false"
         ));
         assert!(layer_tree.contains(
             "\"frontTexturePromotionBasis\":\"source-order-interstitial-front-erase-texture\",\"frontTexturePromotionRisk\":\"source-order-texture-shares-record48-with-main-outline\""
         ));
-        assert!(layer_tree.contains("\"renderPromotionBlockedReason\":null,\"groups\""));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"front-erase-texture-over-main-face-semantics-unproven\",\"groups\""
+        ));
         assert!(layer_tree.contains(
             "\"titleTexturePaintPhaseGate\":{\"source\":\"embeddedPressPathStateRecordComparison\",\"basis\":\"record46-word0-paint-phase-candidate\",\"decoded\":false,\"sourceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":false,\"visibleRenderPathCount\":0"
         ));
@@ -70539,9 +70933,7 @@ mod tests {
         assert!(layer_tree.contains(
             "\"interstitialTextureEffectCandidate\":{\"basis\":\"record70.word0-percent-black-over-shadow\",\"word0\":28,\"opacity\":0.280,\"baseFillColor\":\"#8f8f8f\",\"fillColor\":\"#676767\",\"renderPromoted\":true,\"renderPromotionBlockedReason\":\"none\"}"
         ));
-        assert!(layer_tree.contains(
-            "\"renderPromotionBlockedReason\":\"record70-separates-shadow-but-not-interstitial-texture-from-main\""
-        ));
+        assert!(layer_tree.contains("\"renderPromotionBlockedReason\":\"none\""));
         assert!(layer_tree.contains(
             "{\"role\":\"shadowOutlines\",\"pathKind\":\"outline\",\"pathCount\":11,\"record70Word0Values\":[\"0x2c\"],\"record70Word1Values\":[\"0x11\"],\"record70Word3Values\":[\"0x0a\"],\"record70Word7Values\":[\"0x1c\"]}"
         ));
@@ -70841,6 +71233,12 @@ mod tests {
         ));
         assert!(layer_tree.contains(
             "\"lineOffsetFromPageStart\":16,\"linePitchPx\":21.214,\"linePitchBasis\":\"pageMarkBodyLineGap\",\"rowHeight\":21.000,\"renderPromotionContribution\":\"source-backed-page-y-origin\",\"renderPromotionBlockedReason\":null}"
+        ));
+        assert!(layer_tree.contains(
+            "\"linePitchAgreementGate\":{\"source\":\"/PageMark body line-gap pitch+source row height\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"rowHeightCandidatePresent\":true,\"rowHeightPx\":21.000,\"rowHeightBasis\":\"abc-table-documentTextLineHeaderFontSizeUnits\""
+        ));
+        assert!(layer_tree.contains(
+            "\"rowHeightResidualPx\":-0.214,\"absRowHeightResidualPx\":0.214,\"tolerancePx\":0.500,\"pageMarkU16GeometryClass\":\"additive-boundary\",\"pitchAgreementReady\":true"
         ));
         assert!(layer_tree.contains("\"renderPromotionBlockedReason\":\"none\""));
         assert!(layer_tree.contains(
@@ -74294,22 +74692,22 @@ mod tests {
             "\"renderPromotionContribution\":\"source-only-page-y-origin-hypothesis\",\"renderPromotionBlockedReason\":\"source-page-y-origin-inference-pending\""
         ));
         assert!(layer_tree.contains(
-            "\"sourceOnlyPageYOriginCandidateAgreementGate\":{\"source\":\"sourcePageYTransformGate.sourcePageYOriginHypotheses agreement\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidateCount\":9,\"agreementGroupCount\":8,\"bestSupportCount\":2,\"uniqueBestSupported\":true,\"bestSupportedSelectedY\":235.167,\"bestSupportedRowHeight\":23.310,\"bestSupportedOriginBases\":[\"cross-table-combined-previous-row-span-first-record\",\"cross-table-previous-row-span-table-first-row\"]"
+            "\"sourceOnlyPageYOriginCandidateAgreementGate\":{\"source\":\"sourcePageYTransformGate.sourcePageYOriginHypotheses agreement\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidateCount\":9,\"agreementGroupCount\":8,\"bestSupportCount\":2,\"uniqueBestSupported\":true,\"bestSupportedSelectedY\":235.087,\"bestSupportedRowHeight\":23.298,\"bestSupportedOriginBases\":[\"cross-table-combined-previous-row-span-first-record\",\"cross-table-previous-row-span-table-first-row\"]"
         ));
         assert!(layer_tree.contains(
             "\"crossTablePreviousRowSpanSupportCount\":5,\"crossTablePreviousRowSpanUniqueBestSupported\":true,\"crossTablePreviousRowSpanReady\":false,\"crossTablePreviousRowSpanReadinessBlockedReasons\":[\"cross-table-row-boundary-offset-transform-required\",\"page-line-gap-projection-does-not-decode-table-y-origin\"]"
         ));
         assert!(layer_tree.contains(
-            "{\"selectedY\":235.167,\"rowHeight\":23.310,\"supportCount\":2,\"originBases\":[\"cross-table-combined-previous-row-span-first-record\",\"cross-table-previous-row-span-table-first-row\"],\"tableCandidateIndexes\":[0],\"contributions\":[\"cross-table-row-boundary-offset-diagnostic-only\",\"cross-table-row-boundary-offset-diagnostic-only\"]"
+            "{\"selectedY\":235.087,\"rowHeight\":23.298,\"supportCount\":2,\"originBases\":[\"cross-table-combined-previous-row-span-first-record\",\"cross-table-previous-row-span-table-first-row\"],\"tableCandidateIndexes\":[0],\"contributions\":[\"cross-table-row-boundary-offset-diagnostic-only\",\"cross-table-row-boundary-offset-diagnostic-only\"]"
         ));
         assert!(layer_tree.contains(
             "\"renderPromotionContribution\":\"source-page-y-origin-candidate-agreement-gate\",\"renderPromotionBlockedReason\":\"source-page-y-origin-agreement-unproven\""
         ));
         assert!(layer_tree.contains(
-            "\"sourceOnlyPageYOriginDomainGate\":{\"source\":\"sourcePageYTransformGate.sourceOnlyPageYOriginDomainGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"directLineMarkPageSpaceOriginPresent\":false,\"crossTableLineDomainPresent\":true,\"crossTableLineDomainRecordCount\":11,\"crossTableLineDomainTableCount\":4,\"combinedLineMarkRecordYPitchPx\":23.310"
+            "\"sourceOnlyPageYOriginDomainGate\":{\"source\":\"sourcePageYTransformGate.sourceOnlyPageYOriginDomainGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"directLineMarkPageSpaceOriginPresent\":false,\"crossTableLineDomainPresent\":true,\"crossTableLineDomainRecordCount\":11,\"crossTableLineDomainTableCount\":4,\"combinedLineMarkRecordYPitchPx\":23.298"
         ));
         assert!(layer_tree.contains(
-            "\"stableSelectedMinusPreviousRecordIndexGap\":1,\"stableSelectedMinusPreviousRecordYDeltaPx\":23.310,\"selectedSpacingRecordsArePostRowGapFamily\":true,\"piecewiseTransitionCount\":3,\"piecewiseTransitionRecordGaps\":[8,2,5],\"samePageMarkEntryTransitionCount\":3,\"transitionSemanticsReadiness\":{\"source\":\"sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transitionCount\":3,\"samePageMarkEntryTransitionCount\":3,\"allTransitionsSamePageMarkEntry\":true"
+            "\"stableSelectedMinusPreviousRecordIndexGap\":1,\"stableSelectedMinusPreviousRecordYDeltaPx\":23.298,\"selectedSpacingRecordsArePostRowGapFamily\":true,\"piecewiseTransitionCount\":3,\"piecewiseTransitionRecordGaps\":[8,2,5],\"samePageMarkEntryTransitionCount\":3,\"transitionSemanticsReadiness\":{\"source\":\"sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transitionCount\":3,\"samePageMarkEntryTransitionCount\":3,\"allTransitionsSamePageMarkEntry\":true"
         ));
         assert!(layer_tree.contains(
             "\"transitionEvidenceDomain\":\"page-mark-line-index\",\"transitionPairs\":[{\"fromTableCandidateIndex\":0,\"toTableCandidateIndex\":1,\"sourceRangeGapUnits\":190,\"rowSourceStartGapUnits\":303,\"previousFamilyRecordGap\":8,\"selectedFamilyRecordGap\":8,\"selectedMinusPreviousFamilyRecordGapDelta\":0"
@@ -74318,7 +74716,7 @@ mod tests {
             "\"previousAndSelectedTransitionRecordGapsAgree\":true,\"previousAndSelectedTransitionYGapsAgree\":true"
         ));
         assert!(layer_tree.contains(
-            "\"sourceRangeUnitsPerPreviousRecordGap\":[23.750,36.000,27.600],\"rowSourceStartUnitsPerPreviousRecordGap\":[37.875,80.000,46.000],\"previousYGapPxPerRecordGap\":[23.310,23.310,23.310],\"sourceRangeGapRatioStable\":false,\"rowSourceStartGapRatioStable\":false,\"previousYGapRatioStable\":true"
+            "\"sourceRangeUnitsPerPreviousRecordGap\":[23.750,36.000,27.600],\"rowSourceStartUnitsPerPreviousRecordGap\":[37.875,80.000,46.000],\"previousYGapPxPerRecordGap\":[23.298,23.298,23.298],\"sourceRangeGapRatioStable\":false,\"rowSourceStartGapRatioStable\":false,\"previousYGapRatioStable\":true"
         ));
         assert!(layer_tree.contains(
             "\"sourceGapToPageLineGapDirectMapDiagnostic\":{\"source\":\"sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.sourceGapToPageLineGapDirectMapDiagnostic\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false"
@@ -74363,7 +74761,7 @@ mod tests {
             "\"blockedReasons\":[\"direct-line-mark-page-space-origin-absent\",\"cross-table-evidence-is-page-mark-line-domain\",\"line-domain-to-page-space-origin-transform-required\",\"table-family-transition-semantics-undecoded\",\"selected-spacing-records-are-post-row-gap-family\",\"page-space-table-origin-undecoded\"],\"renderPromotionContribution\":\"source-page-y-origin-domain-gate\",\"renderPromotionBlockedReason\":\"source-page-y-line-domain-not-page-space-origin\""
         ));
         assert!(layer_tree.contains(
-            "\"lineDomainPostRowGapProjectionProbe\":{\"source\":\"sourcePageYTransformGate line-domain + post-row-gap span projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-unit-as-px\",\"selectionReady\":false,\"promotionReady\":false,\"lineDomainY\":235.167,\"selectedPostRowGapSpanFirstUnits\":65,\"selectedPostRowGapSpanComplete\":false,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"projectedY\":300.167,\"referenceTableTopY\":301.134,\"residualPx\":-0.967,\"absResidualPx\":0.967,\"withinTwoPx\":true"
+            "\"lineDomainPostRowGapProjectionProbe\":{\"source\":\"sourcePageYTransformGate line-domain + post-row-gap span projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-unit-as-px\",\"selectionReady\":false,\"promotionReady\":false,\"lineDomainY\":235.087,\"selectedPostRowGapSpanFirstUnits\":65,\"selectedPostRowGapSpanComplete\":false,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"projectedY\":300.087,\"referenceTableTopY\":301.005,\"residualPx\":-0.919,\"absResidualPx\":0.919,\"withinTwoPx\":true"
         ));
         assert!(layer_tree.contains(
             "\"blockedReasons\":[\"cross-domain-source-units-treated-as-px\",\"selected-spacing-records-are-post-row-gap-family\",\"selected-post-row-gap-span-incomplete\",\"selected-post-row-gap-span-not-ordered-unique\",\"reference-only-validation\",\"page-y-origin-transform-undecoded\"],\"renderPromotionContribution\":\"line-domain-post-row-gap-projection-probe\",\"renderPromotionBlockedReason\":\"line-domain-post-row-gap-projection-crosses-source-unit-domain\""
@@ -74387,10 +74785,10 @@ mod tests {
             "\"combinedLineOffsetsFromPageStart\":[7,9,11,13,21,23,25,27,32,34,36],\"combinedLineOffsetsMonotonic\":true"
         ));
         assert!(layer_tree.contains(
-            "\"combinedLineMarkRecordYProjection\":{\"source\":\"/PageMark line range+page layout body line gap\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"combinedLineMarkRecordYPitchPx\":23.310,\"combinedLineMarkRecordYPitchBasis\":\"pageMarkBodyLineGap\""
+            "\"combinedLineMarkRecordYProjection\":{\"source\":\"/PageMark line range+page layout body line gap\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"combinedLineMarkRecordYPitchPx\":23.298,\"combinedLineMarkRecordYPitchBasis\":\"pageMarkBodyLineGap\""
         ));
         assert!(layer_tree.contains(
-            "\"combinedLineMarkRecordYTopPx\":[235.167,281.786,328.405,375.024,561.500,608.119,654.738,701.357,817.905,864.524,911.143],\"combinedLineMarkRecordYSpanPx\":675.976"
+            "\"combinedLineMarkRecordYTopPx\":[235.087,281.683,328.279,374.875,561.260,607.856,654.452,701.048,817.539,864.135,910.731],\"combinedLineMarkRecordYSpanPx\":675.645"
         ));
         assert!(layer_tree.contains(
             "\"renderPromotionBlockedReason\":\"page-line-gap-projection-does-not-decode-table-y-origin\"},\"sourceUnitToPageLineIndexFit\":{\"source\":\"/DocumentText row source units+/LineMark previous-row-span records\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"fitBasis\":\"rowSourceStartUnits-to-lineMarkRecordIndexes\""
@@ -74423,13 +74821,13 @@ mod tests {
             "{\"fromTableCandidateIndex\":2,\"toTableCandidateIndex\":3,\"previousLastSourceUnit\":1627,\"nextFirstSourceUnit\":1857,\"sourceRangeGapUnits\":138,\"rowSourceStartGapUnits\":230,\"previousLastRecordIndex\":27,\"nextFirstRecordIndex\":32,\"lineMarkRecordGap\":5,\"samePageMarkEntry\":true}],\"renderPromotionContribution\":\"source-unit-to-page-line-piecewise-fit-diagnostic-only\",\"renderPromotionBlockedReason\":\"piecewise-fit-does-not-decode-page-y-origin\"},\"piecewiseRecordFamilyGapYDiagnostic\":{\"source\":\"/DocumentText row source units+/LineMark families (selected-spacing vs previous-row-span)+piecewise transitions\""
         ));
         assert!(layer_tree.contains(
-            "\"recordFamilyInterpretation\":\"selected-records-match-post-row-gaps-previous-records-match-row-spans\",\"stableSelectedMinusPreviousRecordIndexGap\":1,\"allSelectedRecordsOneAfterPrevious\":true,\"stableSelectedMinusPreviousRecordYDeltaPx\":23.310,\"allRecordFamiliesWithinSinglePageMarkEntry\":true"
+            "\"recordFamilyInterpretation\":\"selected-records-match-post-row-gaps-previous-records-match-row-spans\",\"stableSelectedMinusPreviousRecordIndexGap\":1,\"allSelectedRecordsOneAfterPrevious\":true,\"stableSelectedMinusPreviousRecordYDeltaPx\":23.298,\"allRecordFamiliesWithinSinglePageMarkEntry\":true"
         ));
         assert!(layer_tree.contains(
             "\"tables\":[{\"tableCandidateIndex\":0,\"sourceRange\":{\"start\":304,\"end\":945},\"rowCount\":4,\"previousRecordIndexes\":[7,9,11,13],\"selectedRecordIndexes\":[8,10,12,14],\"previousPageMarkLineOffsetsFromEntryStart\":[7,9,11,13],\"selectedPageMarkLineOffsetsFromEntryStart\":[8,10,12,14]"
         ));
         assert!(layer_tree.contains(
-            "\"selectedMinusPreviousRecordIndexGaps\":[1,1,1,1],\"selectedMinusPreviousRecordYDeltaPx\":[23.310,23.310,23.310,23.310],\"previousStartResidualUnits\":[-82,-82,-82,-82],\"previousEndResidualUnits\":[-82,-82,-82,-82],\"previousSpanResidualUnits\":[0,0,0,0],\"selectedStartResidualUnits\":[25,31,31,31],\"selectedEndResidualUnits\":[-17,-17,-17,-15],\"selectedSpanResidualUnits\":[-42,-48,-48,-46]"
+            "\"selectedMinusPreviousRecordIndexGaps\":[1,1,1,1],\"selectedMinusPreviousRecordYDeltaPx\":[23.298,23.298,23.298,23.298],\"previousStartResidualUnits\":[-82,-82,-82,-82],\"previousEndResidualUnits\":[-82,-82,-82,-82],\"previousSpanResidualUnits\":[0,0,0,0],\"selectedStartResidualUnits\":[25,31,31,31],\"selectedEndResidualUnits\":[-17,-17,-17,-15],\"selectedSpanResidualUnits\":[-42,-48,-48,-46]"
         ));
         assert!(layer_tree.contains(
             "{\"tableCandidateIndex\":3,\"sourceRange\":{\"start\":1857,\"end\":2261},\"rowCount\":3,\"previousRecordIndexes\":[32,34,36],\"selectedRecordIndexes\":[33,35,37],\"previousPageMarkLineOffsetsFromEntryStart\":[32,34,36],\"selectedPageMarkLineOffsetsFromEntryStart\":[33,35,37]"
@@ -74453,10 +74851,10 @@ mod tests {
             "\"renderPromotionContribution\":\"source-only-page-mark-slot-sequence-diagnostic-only\",\"renderPromotionBlockedReason\":\"page-mark-source-y-slot-candidates-do-not-decode-page-y-origin\"},\"allRecordsWithinSinglePageMarkEntry\":true"
         ));
         assert!(layer_tree.contains(
-            "\"tableCandidateIndex\":3,\"sourceRange\":{\"start\":1857,\"end\":2261},\"rowCount\":3,\"lineMarkRecordIndexes\":[32,34,36],\"pageMarkLineOffsetsFromEntryStart\":[32,34,36],\"pageMarkRecordsWithinSingleEntry\":true,\"lineMarkRecordYTopPx\":[817.905,864.524,911.143],\"selectedSpacingRecordIndexes\":[33,35,37],\"selectedSpacingPageMarkLineOffsetsFromEntryStart\":[33,35,37],\"selectedSpacingRecordsWithinSingleEntry\":true"
+            "\"tableCandidateIndex\":3,\"sourceRange\":{\"start\":1857,\"end\":2261},\"rowCount\":3,\"lineMarkRecordIndexes\":[32,34,36],\"pageMarkLineOffsetsFromEntryStart\":[32,34,36],\"pageMarkRecordsWithinSingleEntry\":true,\"lineMarkRecordYTopPx\":[817.539,864.135,910.731],\"selectedSpacingRecordIndexes\":[33,35,37],\"selectedSpacingPageMarkLineOffsetsFromEntryStart\":[33,35,37],\"selectedSpacingRecordsWithinSingleEntry\":true"
         ));
         assert!(layer_tree.contains(
-            "\"selectedSpacingLineMarkStartUnits\":[1886,2036,2179],\"selectedSpacingLineMarkEndUnits\":[1944,2088,2233],\"selectedSpacingStartResidualUnits\":[29,10,9],\"selectedSpacingEndResidualUnits\":[-24,-30,-28],\"selectedSpacingSpanResidualUnits\":[-53,-40,-37],\"selectedMinusPreviousRecordIndexGaps\":[1,1,1],\"selectedMinusPreviousRecordYDeltaPx\":[23.310,23.310,23.310],\"rowSourceStartUnits\":[1857,2026,2170],\"rowSourceEndUnits\":[1968,2118,2261],\"lineMarkStartUnits\":[1775,1944,2088],\"lineMarkEndUnits\":[1886,2036,2179],\"startResidualUnits\":[-82,-82,-82],\"endResidualUnits\":[-82,-82,-82],\"spanResidualUnits\":[0,0,0],\"rowBoundaryOffsetCandidateUnits\":-82,\"offsetNormalizedStartResidualUnits\":[0,0,0],\"offsetNormalizedEndResidualUnits\":[0,0,0],\"offsetNormalizedExactBoundaryAligned\":true,\"exactBoundaryAligned\":false,\"spanOnlyMatch\":true"
+            "\"selectedSpacingLineMarkStartUnits\":[1886,2036,2179],\"selectedSpacingLineMarkEndUnits\":[1944,2088,2233],\"selectedSpacingStartResidualUnits\":[29,10,9],\"selectedSpacingEndResidualUnits\":[-24,-30,-28],\"selectedSpacingSpanResidualUnits\":[-53,-40,-37],\"selectedMinusPreviousRecordIndexGaps\":[1,1,1],\"selectedMinusPreviousRecordYDeltaPx\":[23.298,23.298,23.298],\"rowSourceStartUnits\":[1857,2026,2170],\"rowSourceEndUnits\":[1968,2118,2261],\"lineMarkStartUnits\":[1775,1944,2088],\"lineMarkEndUnits\":[1886,2036,2179],\"startResidualUnits\":[-82,-82,-82],\"endResidualUnits\":[-82,-82,-82],\"spanResidualUnits\":[0,0,0],\"rowBoundaryOffsetCandidateUnits\":-82,\"offsetNormalizedStartResidualUnits\":[0,0,0],\"offsetNormalizedEndResidualUnits\":[0,0,0],\"offsetNormalizedExactBoundaryAligned\":true,\"exactBoundaryAligned\":false,\"spanOnlyMatch\":true"
         ));
         assert!(layer_tree.contains(
             "\"renderPromoted\":false,\"renderPromotionAuthority\":null,\"renderPromotionBlockedReason\":\"source-derived-layout-candidate-absent\""
@@ -74881,13 +75279,13 @@ mod tests {
             "\"blockedReasons\":[\"line-mark-page-origin-candidate-absent\",\"line-mark-record-stride-to-page-y-transform-unproven\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"page-mark-subrecord-spans-fit-selected-post-row-gaps\",\"page-mark-subrecord-selected-post-row-gap-candidates-not-row-unique\",\"page-mark-subrecord-spans-do-not-decode-page-y-origin\",\"page-mark-cross-table-raw-record-order-regression\",\"page-mark-cross-table-subrecord-ordering-unproven\",\"cross-table-row-boundary-offset-transform-required\",\"decoded-line-mark-page-y-transform-missing\"],\"renderPromotionContribution\":\"source-page-y-transform-gate\",\"renderPromotionBlockedReason\":\"source-page-y-transform-not-decoded\""
         ));
         assert!(layer_tree.contains(
-            "\"lineDomainPostRowGapProjectionProbe\":{\"source\":\"sourcePageYTransformGate line-domain + post-row-gap span projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-unit-as-px\",\"selectionReady\":false,\"promotionReady\":false,\"lineDomainY\":817.905,\"selectedPostRowGapSpanFirstUnits\":58,\"selectedPostRowGapSpanComplete\":true,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"projectedY\":875.905,\"referenceTableTopY\":768.342,\"residualPx\":107.563,\"absResidualPx\":107.563,\"withinTwoPx\":false"
+            "\"lineDomainPostRowGapProjectionProbe\":{\"source\":\"sourcePageYTransformGate line-domain + post-row-gap span projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-unit-as-px\",\"selectionReady\":false,\"promotionReady\":false,\"lineDomainY\":817.539,\"selectedPostRowGapSpanFirstUnits\":58,\"selectedPostRowGapSpanComplete\":true,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"projectedY\":875.539,\"referenceTableTopY\":768.014,\"residualPx\":107.525,\"absResidualPx\":107.525,\"withinTwoPx\":false"
         ));
         assert!(layer_tree.contains(
-            "\"sourceOnlyPageMarkAbsoluteYSlotGate\":{\"source\":\"/PageMark raw u16 subrecord scan+/LineMark source page-line projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-vs-page-mark-absolute-y-slot\",\"lineDomainY\":817.905,\"selectedPostRowGapSpanFirstUnits\":58,\"lineDomainProjectedY\":875.905,\"absoluteYSlotPresent\":true,\"bestAbsoluteYSlot\":{\"source\":\"rawRecordHeaderTailU16Subrecord\",\"interpretation\":\"direct-u16-px\",\"fieldIndex\":2,\"tailBlock16WordIndex\":11"
+            "\"sourceOnlyPageMarkAbsoluteYSlotGate\":{\"source\":\"/PageMark raw u16 subrecord scan+/LineMark source page-line projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-vs-page-mark-absolute-y-slot\",\"lineDomainY\":817.539,\"selectedPostRowGapSpanFirstUnits\":58,\"lineDomainProjectedY\":875.539,\"absoluteYSlotPresent\":true,\"bestAbsoluteYSlot\":{\"source\":\"rawRecordHeaderTailU16Subrecord\",\"interpretation\":\"direct-u16-px\",\"fieldIndex\":2,\"tailBlock16WordIndex\":11"
         ));
         assert!(layer_tree.contains(
-            "\"absoluteYSlotY\":768.000,\"lineDomainProjectionVsAbsoluteYSlotResidualPx\":107.905,\"lineDomainProjectionAgreesWithAbsoluteYSlot\":false,\"lineageClass\":\"page-mark-absolute-y-slot\""
+            "\"absoluteYSlotY\":768.000,\"lineDomainProjectionVsAbsoluteYSlotResidualPx\":107.539,\"lineDomainProjectionAgreesWithAbsoluteYSlot\":false,\"lineageClass\":\"page-mark-absolute-y-slot\""
         ));
         assert!(layer_tree.contains(
             "\"renderPromoted\":false,\"renderPromotionAuthority\":null,\"renderPromotionBlockedReason\":\"line-mark-record-stride-to-page-y-transform-unproven\""
@@ -75050,7 +75448,7 @@ mod tests {
         assert!(!svg.contains("data-projection-kind=\"sourceDerivedDiagnosticProjection\""));
         assert!(svg.contains("data-col-count-candidate=\"3\""));
         assert!(svg.contains("235点以上"));
-        assert_eq!(svg.matches("235点以上").count(), 1);
+        assert_eq!(svg.matches(">235点以上</text>").count(), 1);
     }
 
     #[test]
@@ -77089,6 +77487,34 @@ mod tests {
         bytes[12..16].copy_from_slice(&0x010a_0600_u32.to_be_bytes());
         bytes[16..20].copy_from_slice(&(width_mm100 << 8).to_be_bytes());
         bytes[20..24].copy_from_slice(&((height_mm100 << 8) | 0x04).to_be_bytes());
+        bytes
+    }
+
+    fn page_layout_style_page_size_fixture(width_mm100: u32, height_mm100: u32) -> Vec<u8> {
+        let mut bytes = ssmg_style_fixture();
+        bytes.resize(0x114, 0);
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&0u16.to_be_bytes());
+        payload.extend_from_slice(&[0, 0]);
+        let mut page_size_payload = vec![0; PAGE_LAYOUT_STYLE_PAGE_SIZE_HEIGHT_OFFSET + 4];
+        page_size_payload[PAGE_LAYOUT_STYLE_PAGE_SIZE_WIDTH_OFFSET
+            ..PAGE_LAYOUT_STYLE_PAGE_SIZE_WIDTH_OFFSET + 4]
+            .copy_from_slice(&(width_mm100 << 8).to_be_bytes());
+        page_size_payload[PAGE_LAYOUT_STYLE_PAGE_SIZE_HEIGHT_OFFSET
+            ..PAGE_LAYOUT_STYLE_PAGE_SIZE_HEIGHT_OFFSET + 4]
+            .copy_from_slice(&((height_mm100 << 8) | 0x04).to_be_bytes());
+        payload.extend_from_slice(&PAGE_LAYOUT_STYLE_PAGE_SIZE_SUBRECORD_CODE.to_be_bytes());
+        payload.extend_from_slice(&(page_size_payload.len() as u16).to_be_bytes());
+        payload.extend_from_slice(&page_size_payload);
+        for code in [0x4002u16, 0x4006] {
+            payload.extend_from_slice(&code.to_be_bytes());
+            payload.extend_from_slice(&1u16.to_be_bytes());
+            payload.push(0);
+        }
+
+        bytes.extend_from_slice(&PAGE_LAYOUT_STYLE_RECORD_CODE.to_be_bytes());
+        bytes.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+        bytes.extend_from_slice(&payload);
         bytes
     }
 
