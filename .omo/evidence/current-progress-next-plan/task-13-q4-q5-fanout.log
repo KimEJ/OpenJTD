@@ -1,0 +1,194 @@
+Task 13: Prove or narrow Q4/Q5 row fanout and segment ownership semantics
+Workspace: /Users/kimuj5090/Documents/rjtd
+Started: 2026-07-01
+
+## Scope
+- Product files touched:
+  - rjtd/crates/rjtd-export/src/lib.rs
+  - rjtd/crates/rjtd-model/src/lib.rs
+- Evidence files touched:
+  - .omo/evidence/current-progress-next-plan/task-13-q4-q5-fanout.log
+  - .omo/evidence/current-progress-next-plan/task-13-notepad.md
+- Plan/ledger edits: none.
+- Vector-offset authority edits: none.
+
+## Behavior Change
+The Q5 role fanout segment-owner gate now reports whether fanout rows use command-relative offset fields:
+`fanoutRowsUseCommandRelativeOffsetFields`.
+
+For the local Q5 line-candidate role, the expected observable is:
+- `roleCandidate: "line-candidate"`
+- `rowIndexes: [40]`
+- `commandRelativeOffsets: [1992,2024]`
+- `renderPromotionBlockedReason: "fdm-index-role-row-fanout-multi-command-single-row"`
+- `fanoutRowsUseCommandRelativeOffsetFields: false`
+- `fanoutRowsUseSourceSegmentOffsetFields: true`
+
+This keeps the one-row-to-many-command case blocked as role fanout evidence, not as a generic primitive-role blocker.
+
+## Red Check
+Command:
+`cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-export local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact`
+
+Exit status: 0
+Disclosure: unqualified `--exact` ran 0 tests.
+
+Command:
+`cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-export tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact`
+
+Exit status: 101
+Observable: 1 test ran and failed at `crates/rjtd-export/src/lib.rs:8038` because the Q5 line-candidate role assertion required `fanoutRowsUseCommandRelativeOffsetFields:false`, which the implementation did not yet emit.
+
+## Final Command Output
+
+## Command Transcript (final verification)
+
+### cargo test -p rjtd-export fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact
+   Compiling rjtd-model v0.0.0 (/Users/kimuj5090/Documents/rjtd/rjtd/crates/rjtd-model)
+   Compiling rjtd-export v0.0.0 (/Users/kimuj5090/Documents/rjtd/rjtd/crates/rjtd-export)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.00s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_export-6547548c2d06489d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
+
+exit_status=0
+
+### cargo test -p rjtd-export tests::fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_export-6547548c2d06489d)
+
+running 1 test
+test tests::fdm_bbox_center_handles_extreme_bounds_without_overflow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+
+exit_status=0
+
+### rg -n rowFanoutSegmentOwnerGate|roleFanoutSegmentOwnerGate|fdm-index-role-row-fanout-multi-command-single-row|rowsWithMultipleCommandRefs
+crates/rjtd-export/src/lib.rs:2402:    output.push_str(",\"rowFanoutSegmentOwnerGate\":");
+crates/rjtd-export/src/lib.rs:2835:    output.push_str(",\"rowsWithMultipleCommandRefs\":");
+crates/rjtd-export/src/lib.rs:3111:            "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-export/src/lib.rs:3141:    output.push_str("{\"basis\":\"fdm-primitive-ownership-admission-gate\",\"source\":\"ownershipGate+offsetFieldAuthorityGate+rowFanoutSegmentOwnerGate+roleFanoutSegmentOwnerGate+paintOrderContinuityProfile\",\"decoded\":false,\"sourceBacked\":true");
+crates/rjtd-export/src/lib.rs:3605:        output.push_str(",\"roleFanoutSegmentOwnerGate\":");
+crates/rjtd-export/src/lib.rs:3780:        "fdm-index-role-row-fanout-multi-command-single-row"
+crates/rjtd-export/src/lib.rs:3858:    output.push_str(",\"rowsWithMultipleCommandRefs\":");
+crates/rjtd-export/src/lib.rs:7810:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7817:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7824:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7960:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7967:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7974:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7997:                "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-export/src/lib.rs:8046:        assert!(json.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseCommandRelativeOffsetFields\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-model/src/lib.rs:68990:    output.push_str(",\"rowFanoutSegmentOwnerGate\":");
+crates/rjtd-model/src/lib.rs:69444:    output.push_str(",\"rowsWithMultipleCommandRefs\":");
+crates/rjtd-model/src/lib.rs:69720:            "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-model/src/lib.rs:69750:    output.push_str("{\"basis\":\"fdm-primitive-ownership-admission-gate\",\"source\":\"ownershipGate+offsetFieldAuthorityGate+rowFanoutSegmentOwnerGate+roleFanoutSegmentOwnerGate+paintOrderContinuityProfile\",\"decoded\":false,\"sourceBacked\":true");
+crates/rjtd-model/src/lib.rs:70218:        output.push_str(",\"roleFanoutSegmentOwnerGate\":");
+crates/rjtd-model/src/lib.rs:70393:        "fdm-index-role-row-fanout-multi-command-single-row"
+crates/rjtd-model/src/lib.rs:70471:    output.push_str(",\"rowsWithMultipleCommandRefs\":");
+crates/rjtd-model/src/lib.rs:80143:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80150:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80157:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80293:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80300:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80307:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80330:                "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-model/src/lib.rs:80379:        assert!(info.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseCommandRelativeOffsetFields\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-model/src/lib.rs:80423:        assert!(layer_tree.contains("\"rowFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"rowFanoutDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-row-fanout-segment-owner-offset-namespace-mixed\",\"commandCount\":20,\"referenceCount\":20"));
+crates/rjtd-model/src/lib.rs:80433:        assert!(layer_tree.contains("\"rowFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"rowFanoutDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-row-fanout-segment-owner-multi-command-single-row\",\"commandCount\":7,\"referenceCount\":7"));
+exit_status=0
+
+### cargo test -p rjtd-export local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_export-6547548c2d06489d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
+
+exit_status=0
+
+### cargo test -p rjtd-export tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_export-6547548c2d06489d)
+
+running 1 test
+test tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.20s
+
+exit_status=0
+
+### cargo test -p rjtd-model tests::local_success_data_test_preserves_embedding_frame_candidates_when_reference_pdf_is_available -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::local_success_data_test_preserves_embedding_frame_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.88s
+
+exit_status=0
+
+### cargo fmt --all --check
+Diff in /Users/kimuj5090/Documents/rjtd/rjtd/crates/rjtd-model/src/lib.rs:83078:
+         ));
+         assert!(layer_tree.contains("\"axisRuleParentRelativeOffsetRange\":"));
+         assert!(layer_tree.contains("\"endpointOwnerParentRelativeOffsetRange\":"));
+-        assert!(layer_tree.contains("\"endpointOwnerParentRelations\":{\"connectorVsOwnerParentSpan\":"));
++        assert!(
++            layer_tree
++                .contains("\"endpointOwnerParentRelations\":{\"connectorVsOwnerParentSpan\":")
++        );
+         assert!(layer_tree.contains("\"endpointOwnerParentRelationToAxisRuleParentSpan\":"));
+         assert!(layer_tree.contains("\"segmentImageSignatureCommandContexts\":["));
+         assert!(layer_tree.contains(
+exit_status=1
+
+## Manual QA Matrix
+- Scenario: Q5 role fanout exact sample branch.
+  Invocation: `cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-export tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact`
+  Binary observable: 1 test ran and passed.
+  Captured artifact: this log, command transcript above.
+  Required Q5 observable: line-candidate role reports `rowIndexes:[40]`, `commandRelativeOffsets:[1992,2024]`, `renderPromotionBlockedReason:"fdm-index-role-row-fanout-multi-command-single-row"`, `fanoutRowsUseCommandRelativeOffsetFields:false`, `fanoutRowsUseSourceSegmentOffsetFields:true`, and `rowsWithMultipleCommandRefs` row 40.
+- Scenario: model/app-core mirror branch.
+  Invocation: `cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::local_success_data_test_preserves_embedding_frame_candidates_when_reference_pdf_is_available -- --exact`
+  Binary observable: 1 test ran and passed.
+  Captured artifact: this log, command transcript above.
+- Scenario: non-skipping fixture/static audit.
+  Invocation: `cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-export tests::fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`
+  Binary observable: 1 test ran and passed.
+  Captured artifact: this log, command transcript above.
+- Scenario: static gate-name audit.
+  Invocation: `cd /Users/kimuj5090/Documents/rjtd/rjtd && rg -n "rowFanoutSegmentOwnerGate|roleFanoutSegmentOwnerGate|fdm-index-role-row-fanout-multi-command-single-row|rowsWithMultipleCommandRefs" crates/rjtd-export/src/lib.rs crates/rjtd-model/src/lib.rs`
+  Binary observable: exit 0, matches in both export and model files.
+  Captured artifact: this log, command transcript above.
+- Scenario: local sample/PDF branch availability.
+  Invocation checked before QA: `test -f ../rjtd-testdata/local-samples/ichitaro-20030228030923-success-002-success_data-test.jtd` and matching `.pdf`.
+  Binary observable: both existed, so the sample-backed branch was run.
+
+## Zero-Test Disclosures
+- `cargo test -p rjtd-export fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`: exit 0, ran 0 tests; fully qualified rerun passed 1 test.
+- `cargo test -p rjtd-export local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact`: exit 0, ran 0 tests; fully qualified rerun passed 1 test.
+
+## Review / Slop-Overfit Check
+- No weakened tests: existing sample-backed assertions were tightened to require the new role fanout field.
+- No tautological or implementation-mirroring tests: assertions inspect exported/model JSON observable fields for the real local Q5 sample.
+- No unnecessary abstraction or dependency: added one boolean derived from existing fanout counts; no new helper, dependency, or data source.
+- No generated output as source truth: source authority remains model/export diagnostic evidence from parsed FDMIndex/FDMVector data.
+- No render promotion: `renderPromotionBlockedReason` remains `fdm-index-role-row-fanout-multi-command-single-row`; `roleOwnershipDecoded` and `segmentOwnerDecoded` remain false.
+- No vector-offset semantics edit: `roleVectorOffsetAuthorityGate` code and blockers were not changed.
+- Scoped whitespace check: `git diff --check -- rjtd/crates/rjtd-export/src/lib.rs rjtd/crates/rjtd-model/src/lib.rs .omo/evidence/current-progress-next-plan/task-13-q4-q5-fanout.log .omo/evidence/current-progress-next-plan/task-13-notepad.md` exited 0.
+- Post-write LOC measurement: `rjtd-export/src/lib.rs` 7607 pure LOC; `rjtd-model/src/lib.rs` 83536 pure LOC. These are pre-existing central files explicitly called out as intentionally large in `rjtd/AGENTS.md`; this task made a minimal scoped edit rather than splitting them.
+
+## Cleanup Receipt
+- No temp files, generated PDFs, servers, ports, tmux sessions, browser sessions, or external processes were created.
+- No staging, commits, destructive commands, plan edits, or ledger edits were performed.
+- Evidence artifact size check: `wc -c .omo/evidence/current-progress-next-plan/task-13-q4-q5-fanout.log .omo/evidence/current-progress-next-plan/task-13-notepad.md` reported non-empty files.
+
+## Risks / Known Gaps
+- `cargo fmt --all --check` exits 1 due to an unrelated pre-existing formatting hunk at `rjtd-model/src/lib.rs:83078`, outside Task 13 fanout scope. It was not auto-formatted to avoid modifying another task's nearby work.
+- The Q5 one-row-to-many-command case remains diagnostic-only and blocked; no source-backed ownership rule was added.

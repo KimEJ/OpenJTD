@@ -1,0 +1,431 @@
+# Task 6 Q4/Q5 primitive ownership admission gates
+Date: 2026-07-01T01:13:38Z
+Workspace: /Users/kimuj5090/Documents/rjtd
+Rust workspace: /Users/kimuj5090/Documents/rjtd/rjtd
+
+## Preflight
+$ git status --short
+ M TODO.ja.md
+ M TODO.md
+ M openjtd-spec/rfc/0008-object-stream-candidates.ja.md
+ M openjtd-spec/rfc/0008-object-stream-candidates.md
+ M rjtd/crates/rjtd-cli/src/main.rs
+ M rjtd/crates/rjtd-cli/tests/streams.rs
+ M rjtd/crates/rjtd-export/src/lib.rs
+ M rjtd/crates/rjtd-model/src/lib.rs
+?? .omo/
+?? AGENTS.md
+?? rjtd/AGENTS.md
+
+$ test -f ../rjtd-testdata/local-samples/ichitaro-20030228030923-success-002-success_data-test.jtd && test -f ../rjtd-testdata/local-samples/ichitaro-20030228030923-success-002-success_data-test.pdf
+exit=0
+
+## Acceptance command 1
+$ cargo test -p rjtd-export fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
+
+exit=0
+
+## Acceptance command 2
+$ cargo test -p rjtd-model fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.00s
+
+exit=0
+
+## Static assertion audit
+$ rg -n "primitiveOwnershipAdmissionGate|fdm-index-role-vector-offset-authority-valid-vector-offset-missing|role-paint-order-authority-unproven|fdm-index-role-row-fanout-multi-command-single-row" crates/rjtd-export/src/lib.rs crates/rjtd-model/src/lib.rs
+crates/rjtd-export/src/lib.rs:2404:    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+crates/rjtd-export/src/lib.rs:3111:            "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-export/src/lib.rs:3132:            "role-paint-order-authority-unproven",
+crates/rjtd-export/src/lib.rs:3394:        push_unique_static_str(&mut reasons, "role-paint-order-authority-unproven");
+crates/rjtd-export/src/lib.rs:3446:            "role-paint-order-authority-unproven"
+crates/rjtd-export/src/lib.rs:3625:        "fdm-index-role-vector-offset-authority-valid-vector-offset-missing"
+crates/rjtd-export/src/lib.rs:3778:        "fdm-index-role-row-fanout-multi-command-single-row"
+crates/rjtd-export/src/lib.rs:7823:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7830:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7837:                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+crates/rjtd-export/src/lib.rs:7844:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7973:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7980:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7989:                "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-export/src/lib.rs:7990:                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+crates/rjtd-export/src/lib.rs:7993:                "role-paint-order-authority-unproven",
+crates/rjtd-export/src/lib.rs:7998:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:8005:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:8028:                "role-paint-order-authority-unproven",
+crates/rjtd-export/src/lib.rs:8038:        assert!(json.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-export/src/lib.rs:8039:        assert!(json.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":1992,\"commandRelativeOffsetSpanMax\":2024,\"roleCommandCount\":2,\"commandCountInSpan\":2,\"interleavedNonRoleCommandCount\":0,\"hasInterleavedNonRoleCommands\":false,\"maxCommandOffsetGap\":32,\"commandOffsetContinuityScore\":1.000,\"spanContiguousCandidate\":true,\"paintOrderAuthorityPending\":true,\"continuityBlocked\":false,\"renderPromotionBlockedReason\":\"role-paint-order-authority-unproven\"}"));
+crates/rjtd-model/src/lib.rs:68992:    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+crates/rjtd-model/src/lib.rs:69720:            "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-model/src/lib.rs:69741:            "role-paint-order-authority-unproven",
+crates/rjtd-model/src/lib.rs:70007:        push_unique_static_str(&mut reasons, "role-paint-order-authority-unproven");
+crates/rjtd-model/src/lib.rs:70059:            "role-paint-order-authority-unproven"
+crates/rjtd-model/src/lib.rs:70238:        "fdm-index-role-vector-offset-authority-valid-vector-offset-missing"
+crates/rjtd-model/src/lib.rs:70391:        "fdm-index-role-row-fanout-multi-command-single-row"
+crates/rjtd-model/src/lib.rs:80156:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80163:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80170:                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+crates/rjtd-model/src/lib.rs:80177:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80306:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80313:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80322:                "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-model/src/lib.rs:80323:                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+crates/rjtd-model/src/lib.rs:80326:                "role-paint-order-authority-unproven",
+crates/rjtd-model/src/lib.rs:80331:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80338:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80361:                "role-paint-order-authority-unproven",
+crates/rjtd-model/src/lib.rs:80371:        assert!(info.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-model/src/lib.rs:80372:        assert!(info.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":1992,\"commandRelativeOffsetSpanMax\":2024,\"roleCommandCount\":2,\"commandCountInSpan\":2,\"interleavedNonRoleCommandCount\":0,\"hasInterleavedNonRoleCommands\":false,\"maxCommandOffsetGap\":32,\"commandOffsetContinuityScore\":1.000,\"spanContiguousCandidate\":true,\"paintOrderAuthorityPending\":true,\"continuityBlocked\":false,\"renderPromotionBlockedReason\":\"role-paint-order-authority-unproven\"}"));
+crates/rjtd-model/src/lib.rs:80426:        assert!(layer_tree.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"fdm-index-row-order-reference-not-one-to-one\",\"renderPromotionBlockedReasons\":[\"fdm-index-row-order-reference-not-one-to-one\",\"fdm-index-row-order-single-row-backs-multiple-commands\",\"fdm-index-row-order-valid-vector-offset-missing\",\"fdm-index-row-order-offset-namespace-mixed\",\"role-paint-order-continuity-unproven\",\"role-paint-order-authority-unproven\"],\"commandCount\":7,\"referencedCommandCount\":7,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":3,\"referenceCount\":7"));
+exit=0
+
+## Acceptance command rerun with stderr captured
+$ cargo test -p rjtd-export fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_export-6547548c2d06489d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
+
+exit=0
+
+$ cargo test -p rjtd-model fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.00s
+
+exit=0
+
+$ rg -n "primitiveOwnershipAdmissionGate|fdm-index-role-vector-offset-authority-valid-vector-offset-missing|role-paint-order-authority-unproven|fdm-index-role-row-fanout-multi-command-single-row" crates/rjtd-export/src/lib.rs crates/rjtd-model/src/lib.rs
+crates/rjtd-export/src/lib.rs:2404:    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+crates/rjtd-export/src/lib.rs:3111:            "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-export/src/lib.rs:3132:            "role-paint-order-authority-unproven",
+crates/rjtd-export/src/lib.rs:3394:        push_unique_static_str(&mut reasons, "role-paint-order-authority-unproven");
+crates/rjtd-export/src/lib.rs:3446:            "role-paint-order-authority-unproven"
+crates/rjtd-export/src/lib.rs:3625:        "fdm-index-role-vector-offset-authority-valid-vector-offset-missing"
+crates/rjtd-export/src/lib.rs:3778:        "fdm-index-role-row-fanout-multi-command-single-row"
+crates/rjtd-export/src/lib.rs:7823:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7830:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7837:                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+crates/rjtd-export/src/lib.rs:7844:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7973:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7980:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7989:                "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-export/src/lib.rs:7990:                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+crates/rjtd-export/src/lib.rs:7993:                "role-paint-order-authority-unproven",
+crates/rjtd-export/src/lib.rs:7998:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:8005:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:8028:                "role-paint-order-authority-unproven",
+crates/rjtd-export/src/lib.rs:8038:        assert!(json.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-export/src/lib.rs:8039:        assert!(json.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":1992,\"commandRelativeOffsetSpanMax\":2024,\"roleCommandCount\":2,\"commandCountInSpan\":2,\"interleavedNonRoleCommandCount\":0,\"hasInterleavedNonRoleCommands\":false,\"maxCommandOffsetGap\":32,\"commandOffsetContinuityScore\":1.000,\"spanContiguousCandidate\":true,\"paintOrderAuthorityPending\":true,\"continuityBlocked\":false,\"renderPromotionBlockedReason\":\"role-paint-order-authority-unproven\"}"));
+crates/rjtd-model/src/lib.rs:68992:    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+crates/rjtd-model/src/lib.rs:69720:            "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-model/src/lib.rs:69741:            "role-paint-order-authority-unproven",
+crates/rjtd-model/src/lib.rs:70007:        push_unique_static_str(&mut reasons, "role-paint-order-authority-unproven");
+crates/rjtd-model/src/lib.rs:70059:            "role-paint-order-authority-unproven"
+crates/rjtd-model/src/lib.rs:70238:        "fdm-index-role-vector-offset-authority-valid-vector-offset-missing"
+crates/rjtd-model/src/lib.rs:70391:        "fdm-index-role-row-fanout-multi-command-single-row"
+crates/rjtd-model/src/lib.rs:80156:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80163:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80170:                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+crates/rjtd-model/src/lib.rs:80177:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80306:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80313:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80322:                "fdm-index-role-row-fanout-multi-command-single-row",
+crates/rjtd-model/src/lib.rs:80323:                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+crates/rjtd-model/src/lib.rs:80326:                "role-paint-order-authority-unproven",
+crates/rjtd-model/src/lib.rs:80331:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80338:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80361:                "role-paint-order-authority-unproven",
+crates/rjtd-model/src/lib.rs:80371:        assert!(info.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-model/src/lib.rs:80372:        assert!(info.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":1992,\"commandRelativeOffsetSpanMax\":2024,\"roleCommandCount\":2,\"commandCountInSpan\":2,\"interleavedNonRoleCommandCount\":0,\"hasInterleavedNonRoleCommands\":false,\"maxCommandOffsetGap\":32,\"commandOffsetContinuityScore\":1.000,\"spanContiguousCandidate\":true,\"paintOrderAuthorityPending\":true,\"continuityBlocked\":false,\"renderPromotionBlockedReason\":\"role-paint-order-authority-unproven\"}"));
+crates/rjtd-model/src/lib.rs:80426:        assert!(layer_tree.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"fdm-index-row-order-reference-not-one-to-one\",\"renderPromotionBlockedReasons\":[\"fdm-index-row-order-reference-not-one-to-one\",\"fdm-index-row-order-single-row-backs-multiple-commands\",\"fdm-index-row-order-valid-vector-offset-missing\",\"fdm-index-row-order-offset-namespace-mixed\",\"role-paint-order-continuity-unproven\",\"role-paint-order-authority-unproven\"],\"commandCount\":7,\"referencedCommandCount\":7,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":3,\"referenceCount\":7"));
+exit=0
+
+## Local sample branch
+local samples present: ../rjtd-testdata/local-samples/ichitaro-20030228030923-success-002-success_data-test.jtd and .pdf
+$ cargo test -p rjtd-export local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_export-6547548c2d06489d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
+
+exit=0
+
+## Non-skipping exact test execution
+Note: the literal acceptance commands above matched 0 tests because --exact requires the full module path. These fully qualified invocations execute the intended tests.
+$ cargo test -p rjtd-export tests::fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_export-6547548c2d06489d)
+
+running 1 test
+test tests::fdm_bbox_center_handles_extreme_bounds_without_overflow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+
+exit=0
+
+$ cargo test -p rjtd-model tests::fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::fdm_bbox_center_handles_extreme_bounds_without_overflow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.00s
+
+exit=0
+
+$ cargo test -p rjtd-export tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_export-6547548c2d06489d)
+
+running 1 test
+test tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.20s
+
+exit=0
+
+## Test inventory proving exact path
+$ cargo test -p rjtd-export -- --list | rg "fdm_bbox|local_success_data_test_exports_embedding_frame_candidates"
+tests::fdm_bbox_center_handles_extreme_bounds_without_overflow: test
+tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available: test
+exit=0
+
+$ cargo test -p rjtd-model -- --list | rg "fdm_bbox"
+tests::fdm_bbox_center_handles_extreme_bounds_without_overflow: test
+exit=0
+
+## Required field coverage audit
+$ rg -n "primitiveOwnershipComparison|ownershipGate|offsetFieldAuthorityGate|rowFanoutSegmentOwnerGate|roleVectorOffsetAuthorityGate|roleFanoutSegmentOwnerGate|paintOrderContinuityProfile|indexRowOrderPromotionGate|primitiveOwnershipAdmissionGate" crates/rjtd-export/src/lib.rs crates/rjtd-model/src/lib.rs
+crates/rjtd-export/src/lib.rs:1928:        output.push_str(",\"primitiveOwnershipComparison\":");
+crates/rjtd-export/src/lib.rs:1958:                output.push_str(",\"primitiveOwnershipComparison\":");
+crates/rjtd-export/src/lib.rs:2398:    output.push_str(",\"ownershipGate\":");
+crates/rjtd-export/src/lib.rs:2400:    output.push_str(",\"offsetFieldAuthorityGate\":");
+crates/rjtd-export/src/lib.rs:2402:    output.push_str(",\"rowFanoutSegmentOwnerGate\":");
+crates/rjtd-export/src/lib.rs:2404:    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+crates/rjtd-export/src/lib.rs:2406:    output.push_str(",\"indexRowOrderPromotionGate\":");
+crates/rjtd-export/src/lib.rs:3141:    output.push_str("{\"basis\":\"fdm-primitive-ownership-admission-gate\",\"source\":\"ownershipGate+offsetFieldAuthorityGate+rowFanoutSegmentOwnerGate+roleFanoutSegmentOwnerGate+paintOrderContinuityProfile\",\"decoded\":false,\"sourceBacked\":true");
+crates/rjtd-export/src/lib.rs:3165:    output.push_str(",\"ownershipGateBlockedReason\":");
+crates/rjtd-export/src/lib.rs:3603:        output.push_str(",\"roleVectorOffsetAuthorityGate\":");
+crates/rjtd-export/src/lib.rs:3605:        output.push_str(",\"roleFanoutSegmentOwnerGate\":");
+crates/rjtd-export/src/lib.rs:3607:        output.push_str(",\"decoded\":false,\"paintOrderContinuityProfile\":");
+crates/rjtd-export/src/lib.rs:7739:        assert!(json.contains("\"primitiveOwnershipComparison\":{\"basis\":\"fdmVectorCommandProvenance+sourceGeometryLocalSubdiagram\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":20,\"mainCircleAnchorCount\":3,\"lineCandidateCount\":11,\"radialLineCandidateCount\":0,\"chordCandidateCount\":0,\"arcCandidateCount\":6,\"connectorCandidateCount\":8,\"surfaceBoundaryCandidateCount\":2"));
+crates/rjtd-export/src/lib.rs:7745:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7752:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7757:        assert_json_number_field_after(&json, "\"ownershipGate\":{", 0, "commandCount", "20");
+crates/rjtd-export/src/lib.rs:7760:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7767:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7774:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7781:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-export/src/lib.rs:7788:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-export/src/lib.rs:7795:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-export/src/lib.rs:7802:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7809:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7816:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7823:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7830:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7844:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7851:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-export/src/lib.rs:7858:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-export/src/lib.rs:7869:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-export/src/lib.rs:7876:        assert!(json.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":308,\"commandRelativeOffsetSpanMax\":504,\"roleCommandCount\":3,\"commandCountInSpan\":7,\"interleavedNonRoleCommandCount\":4,\"hasInterleavedNonRoleCommands\":true,\"maxCommandOffsetGap\":162,\"commandOffsetContinuityScore\":0.429,\"spanContiguousCandidate\":false,\"paintOrderAuthorityPending\":false,\"continuityBlocked\":true,\"renderPromotionBlockedReason\":\"role-span-interleaved-non-role-commands\"}"));
+crates/rjtd-export/src/lib.rs:7877:        assert!(json.contains("\"roleCandidate\":\"radial-line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":2,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[342,406],\"rowIndexes\":[8,10],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":2,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":8,\"commandRelativeOffset\":342,\"matchKind\":\"command-relative-offset-field\"},{\"rowIndex\":10,\"commandRelativeOffset\":406,\"matchKind\":\"command-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":"));
+crates/rjtd-export/src/lib.rs:7878:        assert!(json.contains("\"primitiveOwnershipComparison\":{\"basis\":\"fdmVectorCommandProvenance+sourceGeometryLocalSubdiagram\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":7,\"mainCircleAnchorCount\":1,\"lineCandidateCount\":4,\"radialLineCandidateCount\":2,\"chordCandidateCount\":2,\"arcCandidateCount\":2,\"connectorCandidateCount\":2,\"surfaceBoundaryCandidateCount\":2"));
+crates/rjtd-export/src/lib.rs:7891:        assert!(json.contains("\"primitiveOwnershipComparison\":{\"basis\":\"fdmVectorCommandProvenance+sourceGeometryLocalSubdiagram\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":7,\"mainCircleAnchorCount\":0,\"lineCandidateCount\":2,\"radialLineCandidateCount\":0,\"chordCandidateCount\":0,\"arcCandidateCount\":4,\"connectorCandidateCount\":3,\"surfaceBoundaryCandidateCount\":1"));
+crates/rjtd-export/src/lib.rs:7897:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7904:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7913:        assert_json_number_field_after(&json, "\"ownershipGate\":{", 1, "commandCount", "7");
+crates/rjtd-export/src/lib.rs:7914:        assert_json_number_field_after(&json, "\"ownershipGate\":{", 1, "rawSpanCommandCount", "1");
+crates/rjtd-export/src/lib.rs:7917:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7924:            "\"ownershipGate\":{",
+crates/rjtd-export/src/lib.rs:7931:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-export/src/lib.rs:7938:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-export/src/lib.rs:7945:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-export/src/lib.rs:7952:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7959:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7966:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-export/src/lib.rs:7973:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7980:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7998:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:8005:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:8012:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-export/src/lib.rs:8019:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-export/src/lib.rs:8033:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-export/src/lib.rs:8038:        assert!(json.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-export/src/lib.rs:8039:        assert!(json.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":1992,\"commandRelativeOffsetSpanMax\":2024,\"roleCommandCount\":2,\"commandCountInSpan\":2,\"interleavedNonRoleCommandCount\":0,\"hasInterleavedNonRoleCommands\":false,\"maxCommandOffsetGap\":32,\"commandOffsetContinuityScore\":1.000,\"spanContiguousCandidate\":true,\"paintOrderAuthorityPending\":true,\"continuityBlocked\":false,\"renderPromotionBlockedReason\":\"role-paint-order-authority-unproven\"}"));
+crates/rjtd-model/src/lib.rs:45994:    output.push_str(",\"primitiveOwnershipComparison\":");
+crates/rjtd-model/src/lib.rs:46026:            output.push_str(",\"primitiveOwnershipComparison\":");
+crates/rjtd-model/src/lib.rs:68986:    output.push_str(",\"ownershipGate\":");
+crates/rjtd-model/src/lib.rs:68988:    output.push_str(",\"offsetFieldAuthorityGate\":");
+crates/rjtd-model/src/lib.rs:68990:    output.push_str(",\"rowFanoutSegmentOwnerGate\":");
+crates/rjtd-model/src/lib.rs:68992:    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+crates/rjtd-model/src/lib.rs:68994:    output.push_str(",\"indexRowOrderPromotionGate\":");
+crates/rjtd-model/src/lib.rs:69750:    output.push_str("{\"basis\":\"fdm-primitive-ownership-admission-gate\",\"source\":\"ownershipGate+offsetFieldAuthorityGate+rowFanoutSegmentOwnerGate+roleFanoutSegmentOwnerGate+paintOrderContinuityProfile\",\"decoded\":false,\"sourceBacked\":true");
+crates/rjtd-model/src/lib.rs:69774:    output.push_str(",\"ownershipGateBlockedReason\":");
+crates/rjtd-model/src/lib.rs:70216:        output.push_str(",\"roleVectorOffsetAuthorityGate\":");
+crates/rjtd-model/src/lib.rs:70218:        output.push_str(",\"roleFanoutSegmentOwnerGate\":");
+crates/rjtd-model/src/lib.rs:70220:        output.push_str(",\"decoded\":false,\"paintOrderContinuityProfile\":");
+crates/rjtd-model/src/lib.rs:70865:        output.push_str(",\"primitiveOwnershipComparison\":");
+crates/rjtd-model/src/lib.rs:70894:                output.push_str(",\"primitiveOwnershipComparison\":");
+crates/rjtd-model/src/lib.rs:80072:        assert!(info.contains("\"primitiveOwnershipComparison\":{\"basis\":\"fdmVectorCommandProvenance+sourceGeometryLocalSubdiagram\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":20,\"mainCircleAnchorCount\":3,\"lineCandidateCount\":11,\"radialLineCandidateCount\":0,\"chordCandidateCount\":0,\"arcCandidateCount\":6,\"connectorCandidateCount\":8,\"surfaceBoundaryCandidateCount\":2"));
+crates/rjtd-model/src/lib.rs:80078:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80085:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80090:        assert_json_number_field_after(&info, "\"ownershipGate\":{", 0, "commandCount", "20");
+crates/rjtd-model/src/lib.rs:80093:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80100:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80107:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80114:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-model/src/lib.rs:80121:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-model/src/lib.rs:80128:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-model/src/lib.rs:80135:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80142:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80149:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80156:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80163:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80177:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80184:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-model/src/lib.rs:80191:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-model/src/lib.rs:80202:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-model/src/lib.rs:80209:        assert!(info.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":308,\"commandRelativeOffsetSpanMax\":504,\"roleCommandCount\":3,\"commandCountInSpan\":7,\"interleavedNonRoleCommandCount\":4,\"hasInterleavedNonRoleCommands\":true,\"maxCommandOffsetGap\":162,\"commandOffsetContinuityScore\":0.429,\"spanContiguousCandidate\":false,\"paintOrderAuthorityPending\":false,\"continuityBlocked\":true,\"renderPromotionBlockedReason\":\"role-span-interleaved-non-role-commands\"}"));
+crates/rjtd-model/src/lib.rs:80210:        assert!(info.contains("\"roleCandidate\":\"radial-line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":2,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[342,406],\"rowIndexes\":[8,10],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":2,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":8,\"commandRelativeOffset\":342,\"matchKind\":\"command-relative-offset-field\"},{\"rowIndex\":10,\"commandRelativeOffset\":406,\"matchKind\":\"command-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":"));
+crates/rjtd-model/src/lib.rs:80211:        assert!(info.contains("\"primitiveOwnershipComparison\":{\"basis\":\"fdmVectorCommandProvenance+sourceGeometryLocalSubdiagram\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":7,\"mainCircleAnchorCount\":1,\"lineCandidateCount\":4,\"radialLineCandidateCount\":2,\"chordCandidateCount\":2,\"arcCandidateCount\":2,\"connectorCandidateCount\":2,\"surfaceBoundaryCandidateCount\":2"));
+crates/rjtd-model/src/lib.rs:80224:        assert!(info.contains("\"primitiveOwnershipComparison\":{\"basis\":\"fdmVectorCommandProvenance+sourceGeometryLocalSubdiagram\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":7,\"mainCircleAnchorCount\":0,\"lineCandidateCount\":2,\"radialLineCandidateCount\":0,\"chordCandidateCount\":0,\"arcCandidateCount\":4,\"connectorCandidateCount\":3,\"surfaceBoundaryCandidateCount\":1"));
+crates/rjtd-model/src/lib.rs:80230:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80237:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80246:        assert_json_number_field_after(&info, "\"ownershipGate\":{", 1, "commandCount", "7");
+crates/rjtd-model/src/lib.rs:80247:        assert_json_number_field_after(&info, "\"ownershipGate\":{", 1, "rawSpanCommandCount", "1");
+crates/rjtd-model/src/lib.rs:80250:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80257:            "\"ownershipGate\":{",
+crates/rjtd-model/src/lib.rs:80264:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-model/src/lib.rs:80271:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-model/src/lib.rs:80278:            "\"offsetFieldAuthorityGate\":{",
+crates/rjtd-model/src/lib.rs:80285:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80292:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80299:            "\"rowFanoutSegmentOwnerGate\":{",
+crates/rjtd-model/src/lib.rs:80306:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80313:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80331:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80338:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80345:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-model/src/lib.rs:80352:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-model/src/lib.rs:80366:            "\"indexRowOrderPromotionGate\":{",
+crates/rjtd-model/src/lib.rs:80371:        assert!(info.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-model/src/lib.rs:80372:        assert!(info.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":1992,\"commandRelativeOffsetSpanMax\":2024,\"roleCommandCount\":2,\"commandCountInSpan\":2,\"interleavedNonRoleCommandCount\":0,\"hasInterleavedNonRoleCommands\":false,\"maxCommandOffsetGap\":32,\"commandOffsetContinuityScore\":1.000,\"spanContiguousCandidate\":true,\"paintOrderAuthorityPending\":true,\"continuityBlocked\":false,\"renderPromotionBlockedReason\":\"role-paint-order-authority-unproven\"}"));
+crates/rjtd-model/src/lib.rs:80410:        assert!(layer_tree.contains("\"primitiveOwnershipComparison\":{\"basis\":\"fdmVectorCommandProvenance+sourceGeometryLocalSubdiagram\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":20,\"mainCircleAnchorCount\":3,\"lineCandidateCount\":11,\"radialLineCandidateCount\":0,\"chordCandidateCount\":0,\"arcCandidateCount\":6,\"connectorCandidateCount\":8,\"surfaceBoundaryCandidateCount\":2"));
+crates/rjtd-model/src/lib.rs:80414:        assert!(layer_tree.contains("\"offsetFieldAuthorityGate\":{\"basis\":\"fdm-index-offset-field-authority-gate\",\"source\":\"FDMIndex row offset fields+FDMVector command provenance\",\"decoded\":false,\"sourceBacked\":true,\"offsetFieldAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-offset-field-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-offset-field-authority-mixed-command-and-segment-fields\",\"commandCount\":20,\"referenceCount\":20"));
+crates/rjtd-model/src/lib.rs:80415:        assert!(layer_tree.contains("\"rowFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"rowFanoutDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-row-fanout-segment-owner-offset-namespace-mixed\",\"commandCount\":20,\"referenceCount\":20"));
+crates/rjtd-model/src/lib.rs:80416:        assert!(layer_tree.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"fdm-index-row-order-valid-vector-offset-missing\",\"renderPromotionBlockedReasons\":[\"fdm-index-row-order-valid-vector-offset-missing\",\"fdm-index-row-order-offset-namespace-mixed\",\"role-paint-order-continuity-unproven\"],\"commandCount\":20,\"referencedCommandCount\":20,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":20,\"referenceCount\":20"));
+crates/rjtd-model/src/lib.rs:80424:        assert!(layer_tree.contains("\"offsetFieldAuthorityGate\":{\"basis\":\"fdm-index-offset-field-authority-gate\",\"source\":\"FDMIndex row offset fields+FDMVector command provenance\",\"decoded\":false,\"sourceBacked\":true,\"offsetFieldAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-offset-field-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-offset-field-authority-mixed-command-and-segment-fields\",\"commandCount\":7,\"referenceCount\":7"));
+crates/rjtd-model/src/lib.rs:80425:        assert!(layer_tree.contains("\"rowFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"rowFanoutDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-row-fanout-segment-owner-multi-command-single-row\",\"commandCount\":7,\"referenceCount\":7"));
+crates/rjtd-model/src/lib.rs:80426:        assert!(layer_tree.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"fdm-index-row-order-reference-not-one-to-one\",\"renderPromotionBlockedReasons\":[\"fdm-index-row-order-reference-not-one-to-one\",\"fdm-index-row-order-single-row-backs-multiple-commands\",\"fdm-index-row-order-valid-vector-offset-missing\",\"fdm-index-row-order-offset-namespace-mixed\",\"role-paint-order-continuity-unproven\",\"role-paint-order-authority-unproven\"],\"commandCount\":7,\"referencedCommandCount\":7,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":3,\"referenceCount\":7"));
+exit=0
+
+## Render promotion audit
+Observable: primitiveOwnershipAdmissionGate appears only in JSON emission/assertion surfaces; Q4/Q5 blockers include decoded:false, ownershipProven:false, paintOrderDecoded:false, and renderPromotionBlockedReason values. No source edit was made to draw additional SVG/PDF primitives.
+$ rg -n "primitiveOwnershipAdmissionGate|renderPromoted\":false|renderable\":false|ownershipProven\":false|paintOrderDecoded\":false|role-candidate-and-paint-order-unproven" crates/rjtd-export/src/lib.rs crates/rjtd-model/src/lib.rs
+crates/rjtd-export/src/lib.rs:2404:    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+crates/rjtd-export/src/lib.rs:3539:            ",\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\"",
+crates/rjtd-export/src/lib.rs:7823:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7830:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7844:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7875:        assert!(json.contains("\"roleCandidate\":\"main-circle-anchor\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":3,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":3,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[308,470,504],\"rowIndexes\":[7,12,13],\"uniqueCommandRelativeOffsetCount\":3,\"uniqueRowIndexCount\":3,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":7,\"commandRelativeOffset\":308,\"matchKind\":\"command-relative-offset-field\"}"));
+crates/rjtd-export/src/lib.rs:7877:        assert!(json.contains("\"roleCandidate\":\"radial-line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":2,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[342,406],\"rowIndexes\":[8,10],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":2,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":8,\"commandRelativeOffset\":342,\"matchKind\":\"command-relative-offset-field\"},{\"rowIndex\":10,\"commandRelativeOffset\":406,\"matchKind\":\"command-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":"));
+crates/rjtd-export/src/lib.rs:7973:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7980:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:7998:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:8005:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-export/src/lib.rs:8038:        assert!(json.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+crates/rjtd-model/src/lib.rs:68992:    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+crates/rjtd-model/src/lib.rs:70152:            ",\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\"",
+crates/rjtd-model/src/lib.rs:80156:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80163:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80177:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80208:        assert!(info.contains("\"roleCandidate\":\"main-circle-anchor\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":3,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":3,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[308,470,504],\"rowIndexes\":[7,12,13],\"uniqueCommandRelativeOffsetCount\":3,\"uniqueRowIndexCount\":3,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":7,\"commandRelativeOffset\":308,\"matchKind\":\"command-relative-offset-field\"}"));
+crates/rjtd-model/src/lib.rs:80210:        assert!(info.contains("\"roleCandidate\":\"radial-line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":2,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[342,406],\"rowIndexes\":[8,10],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":2,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":8,\"commandRelativeOffset\":342,\"matchKind\":\"command-relative-offset-field\"},{\"rowIndex\":10,\"commandRelativeOffset\":406,\"matchKind\":\"command-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":"));
+crates/rjtd-model/src/lib.rs:80306:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80313:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80331:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80338:            "\"primitiveOwnershipAdmissionGate\":{",
+crates/rjtd-model/src/lib.rs:80371:        assert!(info.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+exit=0
+
+## QA conclusion
+status=complete
+sample-dependent Q4/Q5 behavioral branch executed because local .jtd and .pdf were present.
+literal acceptance exact test commands were recorded and exited 0 but matched 0 tests; fully qualified exact invocations executed the intended non-skipping tests and passed.
+product_source_edits_by_task_6=none
+cleanup=none; no processes, ports, temp dirs, staging, commits, or generated PDFs created.
+
+## Manual QA matrix
+
+| Scenario | Invocation / artifact | Binary observable | Result |
+| --- | --- | --- | --- |
+| Literal `--exact` 0-test issue is preserved rather than hidden | `cargo test -p rjtd-export fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`; `cargo test -p rjtd-model fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`; `cargo test -p rjtd-export local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact` | Each command exited `0` but printed `running 0 tests`, proving these literal acceptance invocations are misleading success output and not sufficient completion evidence. | PASS: failure mode captured explicitly. |
+| Fully qualified non-skipping tests execute intended gates | `cargo test -p rjtd-export tests::fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`; `cargo test -p rjtd-model tests::fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`; `cargo test -p rjtd-export tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact` | Each command printed `running 1 test` and `1 passed; 0 failed; 0 ignored`. | PASS. |
+| Static `rg` audit covers admission fields and blockers | `rg -n "primitiveOwnershipComparison|ownershipGate|offsetFieldAuthorityGate|rowFanoutSegmentOwnerGate|roleVectorOffsetAuthorityGate|roleFanoutSegmentOwnerGate|paintOrderContinuityProfile|indexRowOrderPromotionGate|primitiveOwnershipAdmissionGate" crates/rjtd-export/src/lib.rs crates/rjtd-model/src/lib.rs`; blocker audit for `primitiveOwnershipAdmissionGate|fdm-index-role-vector-offset-authority-valid-vector-offset-missing|role-paint-order-authority-unproven|fdm-index-role-row-fanout-multi-command-single-row` | `rg` exited `0` with hits in export/model emission and assertion surfaces. | PASS. |
+| Local sample branch executed when private sample pair was present | `test -f ../rjtd-testdata/local-samples/ichitaro-20030228030923-success-002-success_data-test.jtd && test -f ../rjtd-testdata/local-samples/ichitaro-20030228030923-success-002-success_data-test.pdf`; fully qualified local sample cargo test above | Fixture existence check exited `0`; local sample test printed `running 1 test` and passed. | PASS. |
+| Vector-offset blocker remains explicit | Static blocker audit and fully qualified tests | Evidence includes `fdm-index-role-vector-offset-authority-valid-vector-offset-missing` with `decoded:false`/`sourceBacked:true`; no rendered primitive promotion claimed from invalid vector offsets. | PASS. |
+| Fanout blocker remains explicit | Static blocker audit and fully qualified tests | Evidence includes `fdm-index-role-row-fanout-multi-command-single-row`; fanout rows backing multiple commands remain blockers, not ownership proof. | PASS. |
+| Paint-order blocker remains explicit | Static blocker audit and fully qualified tests | Evidence includes `role-paint-order-authority-unproven` and `paintOrderDecoded:false`; continuity evidence is not promoted into decoded paint order. | PASS. |
+| Admission gate blocks ownership promotion | Render promotion audit and fully qualified tests | `primitiveOwnershipAdmissionGate` appears in JSON/evidence paths with `ownershipProven:false` and `role-candidate-and-paint-order-unproven`; no Q4/Q5 render promotion is asserted. | PASS. |
+| Cleanup explicitly present | This file, `## QA conclusion` and this matrix | `cleanup=none; no processes, ports, temp dirs, staging, commits, or generated PDFs created.` | PASS. |
+
+## Code review / slop-overfit review
+
+- Scope of this supplement: evidence-package hardening only. Product files, plan files, ledger files, docs, Rust source, tests, generated outputs, and Cargo metadata were not edited by this supplement.
+- No tests were weakened. The supplement records that the literal acceptance invocations matched `0 tests`, then names the fully qualified `--exact` commands that actually ran `1 test` each.
+- No implementation-mirroring or tautological tests were added in this supplement; no tests were added at all.
+- No Q4/Q5 render promotion was introduced or claimed. The evidence continues to treat vector offset, fanout, paint order, and admission as blocking gates until decoded authority is proven.
+- No raw/generated output was promoted to source truth. Static audits and local sample execution are evidence artifacts only, not format authority.
+- No abstractions, dependencies, helper layers, scripts, generated PDFs, staging, commits, or long cargo suites were introduced by this supplement.
+
+## Notepad
+
+Task memory artifact: `/Users/kimuj5090/Documents/rjtd/.omo/evidence/current-progress-next-plan/task-6-notepad.md`
+
+## Evidence supplement self-checks
+
+$ test -s .omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log && test -s .omo/evidence/current-progress-next-plan/task-6-notepad.md; printf 'exit=%s\n' "$?"
+exit=0
+
+$ rg -n '^## Manual QA matrix|^## Code review / slop-overfit review|^## Notepad|cleanup=none|Task memory artifact' .omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log .omo/evidence/current-progress-next-plan/task-6-notepad.md
+.omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log:371:cleanup=none; no processes, ports, temp dirs, staging, commits, or generated PDFs created.
+.omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log:373:## Manual QA matrix
+.omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log:385:| Cleanup explicitly present | This file, `## QA conclusion` and this matrix | `cleanup=none; no processes, ports, temp dirs, staging, commits, or generated PDFs created.` | PASS. |
+.omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log:387:## Code review / slop-overfit review
+.omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log:396:## Notepad
+.omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log:398:Task memory artifact: `/Users/kimuj5090/Documents/rjtd/.omo/evidence/current-progress-next-plan/task-6-notepad.md`
+
+$ rg -n 'Literal `--exact` 0-test issue|Fully qualified non-skipping tests|Static `rg` audit|Local sample branch|Vector-offset blocker|Fanout blocker|Paint-order blocker|Admission gate|Cleanup explicitly present|No tests were weakened|No Q4/Q5 render promotion|No raw/generated output|No abstractions' .omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log
+155:## Local sample branch
+377:| Literal `--exact` 0-test issue is preserved rather than hidden | `cargo test -p rjtd-export fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`; `cargo test -p rjtd-model fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`; `cargo test -p rjtd-export local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact` | Each command exited `0` but printed `running 0 tests`, proving these literal acceptance invocations are misleading success output and not sufficient completion evidence. | PASS: failure mode captured explicitly. |
+378:| Fully qualified non-skipping tests execute intended gates | `cargo test -p rjtd-export tests::fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`; `cargo test -p rjtd-model tests::fdm_bbox_center_handles_extreme_bounds_without_overflow -- --exact`; `cargo test -p rjtd-export tests::local_success_data_test_exports_embedding_frame_candidates_when_reference_pdf_is_available -- --exact` | Each command printed `running 1 test` and `1 passed; 0 failed; 0 ignored`. | PASS. |
+379:| Static `rg` audit covers admission fields and blockers | `rg -n "primitiveOwnershipComparison|ownershipGate|offsetFieldAuthorityGate|rowFanoutSegmentOwnerGate|roleVectorOffsetAuthorityGate|roleFanoutSegmentOwnerGate|paintOrderContinuityProfile|indexRowOrderPromotionGate|primitiveOwnershipAdmissionGate" crates/rjtd-export/src/lib.rs crates/rjtd-model/src/lib.rs`; blocker audit for `primitiveOwnershipAdmissionGate|fdm-index-role-vector-offset-authority-valid-vector-offset-missing|role-paint-order-authority-unproven|fdm-index-role-row-fanout-multi-command-single-row` | `rg` exited `0` with hits in export/model emission and assertion surfaces. | PASS. |
+380:| Local sample branch executed when private sample pair was present | `test -f ../rjtd-testdata/local-samples/ichitaro-20030228030923-success-002-success_data-test.jtd && test -f ../rjtd-testdata/local-samples/ichitaro-20030228030923-success-002-success_data-test.pdf`; fully qualified local sample cargo test above | Fixture existence check exited `0`; local sample test printed `running 1 test` and passed. | PASS. |
+381:| Vector-offset blocker remains explicit | Static blocker audit and fully qualified tests | Evidence includes `fdm-index-role-vector-offset-authority-valid-vector-offset-missing` with `decoded:false`/`sourceBacked:true`; no rendered primitive promotion claimed from invalid vector offsets. | PASS. |
+382:| Fanout blocker remains explicit | Static blocker audit and fully qualified tests | Evidence includes `fdm-index-role-row-fanout-multi-command-single-row`; fanout rows backing multiple commands remain blockers, not ownership proof. | PASS. |
+383:| Paint-order blocker remains explicit | Static blocker audit and fully qualified tests | Evidence includes `role-paint-order-authority-unproven` and `paintOrderDecoded:false`; continuity evidence is not promoted into decoded paint order. | PASS. |
+384:| Admission gate blocks ownership promotion | Render promotion audit and fully qualified tests | `primitiveOwnershipAdmissionGate` appears in JSON/evidence paths with `ownershipProven:false` and `role-candidate-and-paint-order-unproven`; no Q4/Q5 render promotion is asserted. | PASS. |
+385:| Cleanup explicitly present | This file, `## QA conclusion` and this matrix | `cleanup=none; no processes, ports, temp dirs, staging, commits, or generated PDFs created.` | PASS. |
+390:- No tests were weakened. The supplement records that the literal acceptance invocations matched `0 tests`, then names the fully qualified `--exact` commands that actually ran `1 test` each.
+392:- No Q4/Q5 render promotion was introduced or claimed. The evidence continues to treat vector offset, fanout, paint order, and admission as blocking gates until decoded authority is proven.
+393:- No raw/generated output was promoted to source truth. Static audits and local sample execution are evidence artifacts only, not format authority.
+394:- No abstractions, dependencies, helper layers, scripts, generated PDFs, staging, commits, or long cargo suites were introduced by this supplement.
+
+$ git status --short -- .omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log .omo/evidence/current-progress-next-plan/task-6-notepad.md
+?? .omo/evidence/current-progress-next-plan/task-6-notepad.md
+?? .omo/evidence/current-progress-next-plan/task-6-q4-q5-current.log

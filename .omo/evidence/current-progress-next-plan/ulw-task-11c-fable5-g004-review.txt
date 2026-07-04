@@ -1,0 +1,54 @@
+G004 Fable5 last-resort review
+Generated: 2026-07-02T01:53:42Z
+
+Invocation
+- Primary MCP tool mcp__fable5_last_resort.ask_fable5 was available, but the already-running MCP server refused the call because its server environment did not include FABLE5_ENABLE_EXPENSIVE_CALLS=1.
+- Local shell environment did include FABLE5_ENABLE_EXPENSIVE_CALLS=1 and ANTHROPIC_API_KEY was present, so the same MCP server script was invoked directly through its tools/call JSON-RPC interface.
+- Result: model=claude-fable-5, stop_reason=end_turn, usage=1972 input tokens and 4653 output tokens, estimated $0.2524 before cache/fallback adjustments.
+
+Blocked problems presented to Fable
+1. Scoring table source-only readiness is blocked: sourceDerivedLayoutCandidate:null, sourceLayoutCandidatePresent:false, sourceRenderLayoutPresent:false, sourceLayoutRenderable:false, sourceOnlyPageYAdmissionReady:false, sourceReplacementBlockedReason:source-derived-layout-candidate-absent.
+2. Lower visible table page-y admission remains blocked: it has a source layout candidate but sourceOnlyPageYAdmissionReady:false due PageMark absolute-y disagreement and unstable source-gap-to-page-line transform.
+3. Downstream tasks 18-20/F1-F4 remain gated until task 11 genuinely completes.
+
+Fable verdict
+- Safe to pursue G004 implementation branch (a), but only as a provenance-fenced second source-layout candidate path.
+- Do not relax or redefine the existing decoded compact placement gate.
+- Add an explicit provenance distinction so sparse-sibling-derived geometry can make sourceLayoutCandidatePresent true while remaining render-ineligible.
+- Keep decodedSourcePlacementEvidence false for the scoring table; sparse sibling geometry is not decoded compact ShanaiLanLineHeader placement.
+- Full task 11 readiness remains blocked after this slice.
+
+Recommended implementation boundary
+- Add a provenance marker such as DecodedCompactPlacement vs SparseSiblingDerived on TableGridSourceDerivedLayout or its equivalent JSON representation.
+- Try the sparse-sibling-derived candidate path only when the existing source_derived_table_grid_overlay_layout path returns None.
+- Hard guards for sparse-derived candidate creation:
+  - derivedCellGeometryCoverageComplete is true.
+  - derivedMatchedCellCount == requiredCellCount.
+  - matchedRowCount == candidateRowCount.
+  - matchedSegmentCount == candidateSegmentCount.
+  - exactly one compactToSparseColumnOffsetCandidate is present.
+  - matched sparse column indexes are contiguous and match the requested column count.
+  - no reference bbox or PageMark-y authority is used as proof.
+- Emit render_promotion_blocked_reason such as sparse-sibling-derived-candidate-render-ineligible.
+- Harden table_grid_source_derived_layout_is_renderable so sparse provenance can never render, even if other fields are accidentally permissive.
+- Audit consumers so visible replacement/fallback suppression depends on sourceLayoutRenderable/sourceOnlyPageYAdmissionReady, not sourceLayoutCandidatePresent alone.
+
+Expected post-G004 tuple if implemented safely
+- sourceDerivedLayoutCandidatePresent/sourceLayoutCandidatePresent: true for scoring.
+- sourceLayoutRenderable/sourceOnlyPageYAdmissionReady/sourceRenderLayoutPresent: false.
+- referenceFallbackUsed: true for the two visible tsaiten table groups.
+- decodedSourcePlacementEvidence and decodedSourcePlacementMatchCount: unchanged false/0.
+- sourceReplacementBlockedReason should move from source-derived-layout-candidate-absent to source-derived-layout-not-renderable, or an equivalent render-ineligible reason.
+
+Required tests/evidence
+- Failing-first scoring fixture assertion for the expected tuple above, including sparse provenance and unchanged decodedSourcePlacementMatchCount:0/12.
+- Fallback invariant: referenceFallbackUsed:true remains and visible output is not promoted.
+- No-authority guard: sparse-derived candidate has sourceBacked:true/referenceBacked:false and no PageMark y or reference bbox proof.
+- Negative guard: incomplete sparse evidence or ambiguous offset must keep candidate absent.
+- Lower table regression: existing decoded compact candidate remains page-y blocked; lower path is not changed by G004.
+- Promotion-impossibility guard: sparse provenance must not become renderable even if a reason string is accidentally "none".
+
+Fable-identified remaining full-readiness blocker
+- Decoded compact ShanaiLanLineHeader per-cell placement is still 0/12 for scoring.
+- sourceLineHeaderColumnWidthsPresent remains false.
+- LineMark/PageMark page-origin admission remains a separate blocker.

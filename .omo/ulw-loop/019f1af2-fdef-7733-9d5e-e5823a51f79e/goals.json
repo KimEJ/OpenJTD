@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "createdAt": "2026-07-01T04:24:28.148Z",
+  "updatedAt": "2026-07-01T04:37:22.280Z",
+  "briefPath": ".omo/ulw-loop/019f1af2-fdef-7733-9d5e-e5823a51f79e/brief.md",
+  "goalsPath": ".omo/ulw-loop/019f1af2-fdef-7733-9d5e-e5823a51f79e/goals.json",
+  "ledgerPath": ".omo/ulw-loop/019f1af2-fdef-7733-9d5e-e5823a51f79e/ledger.jsonl",
+  "codexGoalMode": "aggregate",
+  "goals": [
+    {
+      "id": "G001-update-omo-plans-current-progress-ne",
+      "title": "Update .omo/plans/current-progress-next-plan.md and related ULW/start...",
+      "objective": "Update .omo/plans/current-progress-next-plan.md and related ULW/start-work state to reflect the out-of-order PDF visual comparison evidence: task 19 remains formally gated and unchecked, but preflight PDF comparison evidence exists; task 19/20/F3/F4 must require the comparison report/contact sheet and carry the shanai_lan connector-line visual gap as remaining risk. Then run the ULW loop evidence flow for this plan-state correction without modifying product code.",
+      "status": "complete",
+      "successCriteria": [
+        {
+          "id": "C001",
+          "scenario": "CLI auxiliary-surface happy path: run rg over .omo/plans/current-progress-next-plan.md, .omo/boulder.json, .omo/start-work/ledger.jsonl, and task-19-visual-compare.md for preflight PDF evidence, formal task 19 gating, task-19-visual-compare.md, contact sheet, and shanai_lan connector-line risk; PASS iff all terms are present and output is captured to .omo/evidence/current-progress-next-plan/ulw-plan-correction-c001.txt",
+          "userModel": "happy",
+          "expectedEvidence": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c001.txt",
+          "essential": true,
+          "capturedEvidence": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c001.txt | cleanup: no runtime process, tmux session, browser context, port, container, or temp dir spawned; CLI-only rg evidence",
+          "status": "pass",
+          "capturedAt": "2026-07-01T04:28:06.467Z"
+        },
+        {
+          "id": "C002",
+          "scenario": "CLI auxiliary-surface edge guard: run rg for unchecked 11/18/19/20/F1-F4 checkboxes and jq for boulder status blocked_by task 11; PASS iff blocked tasks remain unchecked and Boulder still reports blocked_by task 11; capture to .omo/evidence/current-progress-next-plan/ulw-plan-correction-c002.txt",
+          "userModel": "edge",
+          "expectedEvidence": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c002.txt",
+          "essential": true,
+          "capturedEvidence": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c002.txt | cleanup: no runtime process, tmux session, browser context, port, container, or temp dir spawned; CLI-only rg/jq evidence",
+          "status": "pass",
+          "capturedAt": "2026-07-01T04:28:06.490Z"
+        },
+        {
+          "id": "C003",
+          "scenario": "CLI auxiliary-surface regression: run jq validation for .omo/boulder.json and .omo/start-work/ledger.jsonl, test non-empty task-19 visual reports/contact sheet/generated PDFs, and list product-code git diff names for unchanged scope awareness; PASS iff JSON/JSONL parse, visual artifacts are non-empty, and output is captured to .omo/evidence/current-progress-next-plan/ulw-plan-correction-c003.txt",
+          "userModel": "regression",
+          "expectedEvidence": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c003.txt",
+          "essential": false,
+          "capturedEvidence": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c003.txt | cleanup: no runtime process, tmux session, browser context, port, container, or temp dir spawned; CLI-only jq/test/git evidence",
+          "status": "pass",
+          "capturedAt": "2026-07-01T04:28:06.514Z"
+        }
+      ],
+      "attempt": 1,
+      "createdAt": "2026-07-01T04:24:28.148Z",
+      "updatedAt": "2026-07-01T04:37:22.280Z",
+      "startedAt": "2026-07-01T04:24:40.673Z",
+      "completedAt": "2026-07-01T04:37:22.280Z",
+      "evidence": "C001/C002/C003 passed with CLI evidence files; QA Executor APPROVE; Code Reviewer APPROVE; Gate Reviewer APPROVE; quality gate JSON at .omo/evidence/current-progress-next-plan/ulw-plan-correction-quality-gate.json"
+    }
+  ],
+  "codexObjective": "Complete the durable ulw-loop plan in .omo/ulw-loop/019f1af2-fdef-7733-9d5e-e5823a51f79e/goals.json, including later accepted/appended stories, under the original brief constraints; use .omo/ulw-loop/019f1af2-fdef-7733-9d5e-e5823a51f79e/ledger.jsonl as the audit trail.",
+  "aggregateCompletion": {
+    "status": "complete",
+    "completedAt": "2026-07-01T04:37:22.280Z",
+    "evidence": "C001/C002/C003 passed with CLI evidence files; QA Executor APPROVE; Code Reviewer APPROVE; Gate Reviewer APPROVE; quality gate JSON at .omo/evidence/current-progress-next-plan/ulw-plan-correction-quality-gate.json",
+    "codexGoal": {
+      "threadId": "019f1af2-fdef-7733-9d5e-e5823a51f79e",
+      "objective": "Complete the durable ulw-loop plan in .omo/ulw-loop/019f1af2-fdef-7733-9d5e-e5823a51f79e/goals.json, including later accepted/appended stories, under the original brief constraints; use .omo/ulw-loop/019f1af2-fdef-7733-9d5e-e5823a51f79e/ledger.jsonl as the audit trail.",
+      "status": "complete",
+      "tokensUsed": 112643,
+      "timeUsedSeconds": 630,
+      "createdAt": 1782879895,
+      "updatedAt": 1782880525
+    }
+  }
+}

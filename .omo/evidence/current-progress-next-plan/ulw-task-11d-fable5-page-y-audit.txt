@@ -1,0 +1,62 @@
+Fable5 audit for current unresolved tsaiten page-y blocker
+
+Invocation
+- User requested Fable use only for currently unresolved blockers.
+- The normal path had already produced focused Rust test output, live page-layer-tree JSON, code-gate anchors, and a local blocker decision.
+- Direct Codex MCP call was refused because the already-running MCP server did not inherit FABLE5_ENABLE_EXPENSIVE_CALLS=1.
+- The same local Fable MCP server script was invoked once through the shell environment, where ANTHROPIC_API_KEY and FABLE5_ENABLE_EXPENSIVE_CALLS=1 were present.
+- Returned model: claude-fable-5
+- Stop reason: end_turn
+- Usage reported by tool: 1429 input, 2064 output, estimated $0.1175 before cache/fallback adjustments
+
+Question asked
+- Audit whether current tsaiten source-only page-y admission evidence justifies narrowing the gate now.
+- Constraints supplied: do not use reference PDF bbox/output similarity, reference residuals, sparse sibling provenance, or PageMark direct-y resemblance as render proof.
+- If fallback preservation is correct, identify the next source-only probes and false-positive traps.
+
+Verdict
+- Preserve fallback.
+- Do not narrow page-y admission now.
+- The current blockers are semantic blockers, not merely numeric tolerances:
+  - no stable source-gap-to-page-line transform exists;
+  - PageMark absolute-y slot semantics remain unproven;
+  - lower visible table still uses single-support/non-row-unique support;
+  - scoring sparseSiblingDerived candidate remains inference/provenance-fenced;
+  - table-family stability cannot be inferred from one partially plausible family.
+
+Blocked problems confirmed
+1. Scoring table
+   - Current state: sourceLayoutCandidatePresent:true from sparseSiblingDerived.
+   - Still blocked: sourceLayoutRenderable:false and sourceOnlyPageYAdmissionReady:false.
+   - Reason: sparse sibling provenance is source-backed as a diagnostic candidate, not decoded source placement proof.
+
+2. Lower visible table / page-y admission
+   - Current state: decodedCompactPlacement candidate exists, but replacement remains source-page-y-render-admission-not-ready.
+   - Still blocked: pageMarkAbsoluteYSlotResidualPx 107.539, sourceOnlySelectorSingleSupportFallback:true, selectedPostRowGapSpanOrderedUniqueCoverageComplete:false, sourceGapToPageLineGapTableFamilyTransformStable:false.
+   - Reason: missing stable source-gap-to-page-line transform and unproven PageMark absolute-y semantics.
+
+3. Task 11 / downstream plan
+   - Current state: fallbackUsedCount remains 2 and pageYRenderReadyCount remains 0.
+   - Still blocked: task 11 cannot be marked source-only ready; tasks 18, 19, 20 and F1-F4 remain gated.
+   - Reason: both visible table families must satisfy the same source-only admission contract.
+
+Next 3 source-only probes from Fable
+1. Enumerate the full PageMark record family and decode every field.
+   - Prove/falsify whether the presumed absolute-y slot is actually y, cumulative line index, record offset, per-page baseline, or a stride-scaled value.
+
+2. Run a cross-page/cross-table LineMark stride consistency probe.
+   - Prove/falsify whether lineMarkPageGridStrideRawRecordIndex is a legitimate page-origin authority with enough multi-support evidence to escape single-support fallback.
+
+3. Search for the missing gap-carrier field family around post-row-gap transitions.
+   - Prove/falsify whether a decoded record field can make source-gap-to-page-line-gap transform exact across the table family.
+
+False-positive traps to guard
+- Residual-trend trap: smaller residuals must not prove semantics.
+- Span-complete conflation: selectedPostRowGapSpanComplete is not enough when ordered unique coverage is false.
+- Sibling-provenance leakage: sparseSiblingDerived must not make sourceLayoutRenderable true.
+- Single-support smuggling: a one-point exact fit must remain non-render-admissible.
+- Family-partial promotion: one family passing must not suppress fallback while another visible family remains blocked.
+
+Decision impact
+- G005 should remain a sharper-blocker result, not a product-code admission change.
+- The next safe subgoal should target source-only probe 1, 2, or 3 above before any attempt to flip sourceOnlyPageYAdmissionReady/sourceLayoutRenderable/referenceFallbackUsed.

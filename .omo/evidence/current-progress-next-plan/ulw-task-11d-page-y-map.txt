@@ -1,0 +1,227 @@
+# G005 C001 post-G004 page-y readiness map
+
+## Focused test
+
+running 1 test
+test tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.14s
+
+
+## Live fallback summary
+{
+  "fallbackUsedCount": 2,
+  "tables": [
+    {
+      "replacement": "source-derived-layout-not-renderable",
+      "fallbackUsed": true,
+      "candidate": true,
+      "renderPresent": false,
+      "renderable": false,
+      "yReady": false,
+      "candidateSource": "sparseTableSiblingEvidence compact cell geometry candidate",
+      "provenance": "sparseSiblingDerived",
+      "sourceDerivedBlocked": "sparse-sibling-derived-candidate-render-ineligible"
+    },
+    {
+      "replacement": "source-page-y-render-admission-not-ready",
+      "fallbackUsed": false,
+      "candidate": true,
+      "renderPresent": false,
+      "renderable": false,
+      "yReady": false,
+      "candidateSource": "documentTextLineHeaders+fallbackTextAnchors",
+      "provenance": "decodedCompactPlacement",
+      "sourceDerivedBlocked": "page-space-origin-and-row-baseline-unproven"
+    },
+    {
+      "replacement": "source-page-y-render-admission-not-ready",
+      "fallbackUsed": false,
+      "candidate": true,
+      "renderPresent": false,
+      "renderable": false,
+      "yReady": false,
+      "candidateSource": "documentTextLineHeaders+fallbackTextAnchors",
+      "provenance": "decodedCompactPlacement",
+      "sourceDerivedBlocked": "page-space-origin-and-row-baseline-unproven"
+    },
+    {
+      "replacement": "source-page-y-render-admission-not-ready",
+      "fallbackUsed": true,
+      "candidate": true,
+      "renderPresent": false,
+      "renderable": false,
+      "yReady": false,
+      "candidateSource": "documentTextLineHeaders+/LineMark+/PageMark",
+      "provenance": "decodedCompactPlacement",
+      "sourceDerivedBlocked": "line-mark-record-stride-to-page-y-transform-unproven"
+    }
+  ]
+}
+
+## Page-y gates by JSON path
+[
+  {
+    "path": [
+      "root",
+      "ops",
+      29,
+      "pageSpaceSolver",
+      "sourcePageYTransformGate"
+    ],
+    "admissionReady": false,
+    "pageOriginAuthority": "none",
+    "lineMarkRowsExactAndContiguous": false,
+    "sourceOnlySelectorSingleSupportFallback": false,
+    "sourceOnlySelectorSupportFragmentedByTable": true,
+    "sourceOnlySelectorBlockedReason": "source-y-origin-selector-fragmented-by-table-not-render-admissible",
+    "sourceOnlySelectorSupportBlockedReasons": [
+      "cross-table-row-boundary-offset-transform-required",
+      "page-line-gap-projection-does-not-decode-table-y-origin"
+    ],
+    "selectedPostRowGapSpanComplete": false,
+    "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+    "pageMarkAbsoluteYSlotSemanticsReady": false,
+    "pageMarkAbsoluteYSlotBlockedReason": "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+    "pageMarkAbsoluteYSlotResidualPx": -723.913,
+    "sourceGapToPageLineGapTableFamilyTransformStable": false,
+    "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+    "blockedReasons": [
+      "direct-line-mark-page-origin-absent",
+      "page-origin-authority-not-renderable-line-mark-page-grid",
+      "line-mark-rows-not-exact-source-boundaries",
+      "cross-table-line-domain-not-page-space-origin",
+      "source-order-vs-subrecord-order-contradiction",
+      "cross-table-row-boundary-offset-transform-required",
+      "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+      "source-y-origin-selector-fragmented-by-table-not-render-admissible",
+      "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "decoded-line-mark-page-y-transform-missing"
+    ],
+    "renderPromotionBlockedReason": "source-page-y-render-admission-not-ready"
+  },
+  {
+    "path": [
+      "root",
+      "ops",
+      30,
+      "pageSpaceSolver",
+      "sourcePageYTransformGate"
+    ],
+    "admissionReady": false,
+    "pageOriginAuthority": "fallbackTextAnchors",
+    "lineMarkRowsExactAndContiguous": false,
+    "sourceOnlySelectorSingleSupportFallback": true,
+    "sourceOnlySelectorSupportFragmentedByTable": false,
+    "sourceOnlySelectorBlockedReason": "source-y-origin-selector-single-support-fallback-not-render-admissible",
+    "sourceOnlySelectorSupportBlockedReasons": [
+      "stride-origin-needs-page-origin-rule"
+    ],
+    "selectedPostRowGapSpanComplete": false,
+    "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+    "pageMarkAbsoluteYSlotSemanticsReady": false,
+    "pageMarkAbsoluteYSlotBlockedReason": "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+    "pageMarkAbsoluteYSlotResidualPx": -148.740,
+    "sourceGapToPageLineGapTableFamilyTransformStable": false,
+    "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+    "blockedReasons": [
+      "direct-line-mark-page-origin-absent",
+      "line-mark-record-stride-to-page-y-transform-unproven",
+      "page-origin-authority-not-renderable-line-mark-page-grid",
+      "line-mark-rows-not-exact-source-boundaries",
+      "cross-table-line-domain-not-page-space-origin",
+      "source-order-vs-subrecord-order-contradiction",
+      "cross-table-row-boundary-offset-transform-required",
+      "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+      "source-y-origin-selector-single-support-fallback-not-render-admissible",
+      "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "decoded-line-mark-page-y-transform-missing"
+    ],
+    "renderPromotionBlockedReason": "source-page-y-render-admission-not-ready"
+  },
+  {
+    "path": [
+      "root",
+      "ops",
+      31,
+      "pageSpaceSolver",
+      "sourcePageYTransformGate"
+    ],
+    "admissionReady": false,
+    "pageOriginAuthority": "fallbackTextAnchors",
+    "lineMarkRowsExactAndContiguous": false,
+    "sourceOnlySelectorSingleSupportFallback": true,
+    "sourceOnlySelectorSupportFragmentedByTable": false,
+    "sourceOnlySelectorBlockedReason": "source-y-origin-selector-single-support-fallback-not-render-admissible",
+    "sourceOnlySelectorSupportBlockedReasons": [
+      "stride-origin-needs-page-origin-rule"
+    ],
+    "selectedPostRowGapSpanComplete": true,
+    "selectedPostRowGapSpanOrderedUniqueCoverageComplete": true,
+    "pageMarkAbsoluteYSlotSemanticsReady": false,
+    "pageMarkAbsoluteYSlotBlockedReason": "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+    "pageMarkAbsoluteYSlotResidualPx": -49.548,
+    "sourceGapToPageLineGapTableFamilyTransformStable": false,
+    "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+    "blockedReasons": [
+      "direct-line-mark-page-origin-absent",
+      "line-mark-record-stride-to-page-y-transform-unproven",
+      "page-origin-authority-not-renderable-line-mark-page-grid",
+      "line-mark-rows-not-exact-source-boundaries",
+      "cross-table-line-domain-not-page-space-origin",
+      "selected-post-row-gap-spans-not-page-y-origin",
+      "source-order-vs-subrecord-order-contradiction",
+      "cross-table-row-boundary-offset-transform-required",
+      "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+      "source-y-origin-selector-single-support-fallback-not-render-admissible",
+      "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "decoded-line-mark-page-y-transform-missing"
+    ],
+    "renderPromotionBlockedReason": "source-page-y-render-admission-not-ready"
+  },
+  {
+    "path": [
+      "root",
+      "ops",
+      32,
+      "pageSpaceSolver",
+      "sourcePageYTransformGate"
+    ],
+    "admissionReady": false,
+    "pageOriginAuthority": "lineMarkPageGridStrideRawRecordIndex",
+    "lineMarkRowsExactAndContiguous": false,
+    "sourceOnlySelectorSingleSupportFallback": true,
+    "sourceOnlySelectorSupportFragmentedByTable": false,
+    "sourceOnlySelectorBlockedReason": "source-y-origin-selector-single-support-fallback-not-render-admissible",
+    "sourceOnlySelectorSupportBlockedReasons": [
+      "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+      "page-mark-absolute-y-slot-semantics-unproven"
+    ],
+    "selectedPostRowGapSpanComplete": true,
+    "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+    "pageMarkAbsoluteYSlotSemanticsReady": false,
+    "pageMarkAbsoluteYSlotBlockedReason": "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+    "pageMarkAbsoluteYSlotResidualPx": 107.539,
+    "sourceGapToPageLineGapTableFamilyTransformStable": false,
+    "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+    "blockedReasons": [
+      "direct-line-mark-page-origin-absent",
+      "line-mark-record-stride-to-page-y-transform-unproven",
+      "page-origin-authority-not-renderable-line-mark-page-grid",
+      "line-mark-rows-not-exact-source-boundaries",
+      "cross-table-line-domain-not-page-space-origin",
+      "selected-post-row-gap-spans-not-page-y-origin",
+      "selected-post-row-gap-coverage-not-row-unique",
+      "source-order-vs-subrecord-order-contradiction",
+      "cross-table-row-boundary-offset-transform-required",
+      "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+      "source-y-origin-selector-single-support-fallback-not-render-admissible",
+      "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "decoded-line-mark-page-y-transform-missing"
+    ],
+    "renderPromotionBlockedReason": "source-page-y-render-admission-not-ready"
+  }
+]
+
+## Cleanup
+cargo test and cargo run exited; no tmux/browser/ports/temp dirs/subagents spawned by this criterion.

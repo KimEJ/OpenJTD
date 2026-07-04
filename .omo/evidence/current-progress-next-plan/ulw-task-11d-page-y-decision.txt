@@ -1,0 +1,74 @@
+ULW G005 C002 page-y implementation-or-blocker decision
+
+Decision
+- Selected branch: (b) sharper blocker.
+- No product-code change is safe in this slice.
+- Fable was not invoked for this slice; local live output and code-gate evidence were sufficient, so the expensive path was avoided.
+
+Why branch (a) is unsafe
+- The render admission code admits source-only page-y only through `direct_line_mark_origin_admissible`.
+- Code anchor: `rjtd/crates/rjtd-model/src/lib.rs:39755`
+  - `direct_line_mark_origin_admissible = direct_line_mark_page_origin_present && line_mark_rows_exact_and_contiguous && y_origin_solver_ready`
+- The lower visible tsaiten table fails all material parts of that gate in the live extraction:
+  - `admissionReady:false`
+  - `pageOriginAuthority:"lineMarkPageGridStrideRawRecordIndex"`
+  - `lineMarkRowsExactAndContiguous:false`
+  - `lineMarkPageOriginPresent:false`
+  - `lineMarkPageOriginStridePresent:true`
+  - `renderPromotionBlockedReason:"source-page-y-render-admission-not-ready"`
+- Therefore a minimal admission flip would bypass the current proof contract instead of satisfying it.
+
+Exact missing source field family / code gate
+1. A stable source-gap-to-page-line transform is missing.
+   - Code anchor: `rjtd/crates/rjtd-model/src/lib.rs:40639`
+   - `source_gap_to_page_line_gap_transform_stable()` requires `transition_count > 0` and `best_candidate_max_abs_delta_units == Some(0)`.
+   - Code anchor: `rjtd/crates/rjtd-model/src/lib.rs:40643`
+   - table-family stability additionally requires `all_transitions_same_page_mark_entry`.
+   - Live lower gate:
+     - `sourceGapToPageLineGapTableFamilyTransformStable:false`
+     - `sourceGapToPageLineGapTableFamilyTransformBlockedReason:"source-gap-to-page-line-gap-transform-unstable-across-table-family"`
+     - `bestCandidateTransformKind:"segment-offset-gap"`
+     - `bestCandidateMaxAbsDeltaUnits:105`
+     - `exactTransformCandidateCount:0`
+
+2. PageMark absolute-y slot semantics are not proven.
+   - Code anchor: `rjtd/crates/rjtd-model/src/lib.rs:40281`
+   - `semantics_ready()` requires `line_domain_projected_y`, a best absolute-y slot, and agreement.
+   - Code anchor: `rjtd/crates/rjtd-model/src/lib.rs:40325`
+   - Current projection is `line_domain_y + selectedPostRowGapSpanFirstUnits`, which the gate itself treats as line-domain/source-unit projection, not decoded page origin.
+   - Live lower gate:
+     - `pageMarkAbsoluteYSlotSemanticsReady:false`
+     - `pageMarkAbsoluteYSlotBlockedReason:"line-domain-projection-disagrees-with-page-mark-absolute-y-slot"`
+     - `pageMarkAbsoluteYSlotResidualPx:107.539`
+     - `sourceOnlySelectorSupportBlockedReasons:["line-domain-projection-disagrees-with-page-mark-absolute-y-slot","page-mark-absolute-y-slot-semantics-unproven"]`
+
+3. The selected post-row-gap support is not a render-admissible origin.
+   - Code anchor: `rjtd/crates/rjtd-model/src/lib.rs:39850`
+   - A selector using single-support fallback is explicitly classified as `source-y-origin-selector-single-support-fallback-not-render-admissible`.
+   - Live lower gate:
+     - `sourceOnlySelectorSingleSupportFallback:true`
+     - `sourceOnlySelectorSupportCount:1`
+     - `selectedPostRowGapSpanComplete:true`
+     - `selectedPostRowGapSpanOrderedUniqueCoverageComplete:false`
+     - `selected-post-row-gap-spans-not-page-y-origin`
+     - `selected-post-row-gap-coverage-not-row-unique`
+
+What would be needed for a future green implementation
+- A source-backed transform that makes one candidate exact across the table family:
+  - `sourceGapToPageLineGapTableFamilyTransformStable:true`
+  - `exactTransformCandidateCount > 0`
+  - no `source-gap-to-page-line-gap-transform-unstable-across-table-family`
+- Or a decoded PageMark absolute-y slot semantics path:
+  - `pageMarkAbsoluteYSlotSemanticsReady:true`
+  - no `line-domain-projection-disagrees-with-page-mark-absolute-y-slot`
+  - row-unique coverage that avoids single-support fallback
+- Either route still must keep visible reference fallback until both visible table families satisfy the same source-only render admission contract.
+
+Safety result
+- Do not set `sourceLayoutRenderable:true`.
+- Do not set `sourceOnlyPageYAdmissionReady:true`.
+- Do not suppress `referenceFallbackUsed:true` for either visible tsaiten table.
+- Do not use reference bbox, reference PDF residuals, sparse sibling provenance, or PageMark direct-y resemblance as render proof.
+
+Cleanup receipt
+- No code edit, runtime process, tmux session, browser context, bound port, container, temp directory, or subagent was spawned for this decision artifact.

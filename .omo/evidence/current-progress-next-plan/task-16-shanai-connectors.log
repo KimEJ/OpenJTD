@@ -1,0 +1,237 @@
+# Task 16 baseline targeted tests
+started_at=2026-07-01T01:36:54Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model fdm_connector_line_rule_endpoint_matches_horizontal_tight_span -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.00s
+
+status=0
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model fdm_connector_line_rule_endpoint_match_summary_blocks_single_endpoint -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.00s
+
+status=0
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model fdm_connector_parent_normalized_order_requires_parent_relative_offset_between_nearest_owner_parents -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.00s
+
+status=0
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model fdm_axis_rule_source_order_gate_classifies_parent_relative_offset_spans -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.00s
+
+status=0
+finished_at=2026-07-01T01:36:54Z
+
+# Red test for task 16 new image-bearing relation fields
+started_at=2026-07-01T01:38:09Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::document_core_projects_shanai_lan_fdm_frame_diagnostics -- --exact
+   Compiling rjtd-model v0.0.0 (/Users/kimuj5090/Documents/rjtd/rjtd/crates/rjtd-model)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.00s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::document_core_projects_shanai_lan_fdm_frame_diagnostics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.02s
+
+status=0
+finished_at=2026-07-01T01:38:15Z
+
+# Red test retry with imageBearingSegmentGate-scoped assertion
+started_at=2026-07-01T01:39:05Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::document_core_projects_shanai_lan_fdm_frame_diagnostics -- --exact
+   Compiling rjtd-model v0.0.0 (/Users/kimuj5090/Documents/rjtd/rjtd/crates/rjtd-model)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.72s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::document_core_projects_shanai_lan_fdm_frame_diagnostics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.03s
+
+status=0
+finished_at=2026-07-01T01:39:10Z
+
+# Red test with new endpointOwnerParentRelations field
+started_at=2026-07-01T01:40:30Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::document_core_projects_shanai_lan_fdm_frame_diagnostics -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::document_core_projects_shanai_lan_fdm_frame_diagnostics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.02s
+
+status=0
+finished_at=2026-07-01T01:40:30Z
+
+# Force rebuild for task 16 red test
+started_at=2026-07-01T01:40:42Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo clean -p rjtd-model
+     Removed 159735 files, 40.1GiB total
+clean_status=0
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::document_core_projects_shanai_lan_fdm_frame_diagnostics -- --exact
+   Compiling rjtd-model v0.0.0 (/Users/kimuj5090/Documents/rjtd/rjtd/crates/rjtd-model)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.42s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::document_core_projects_shanai_lan_fdm_frame_diagnostics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.02s
+
+status=0
+finished_at=2026-07-01T01:41:13Z
+
+# Local-sample red test for new endpointOwnerParentRelations field
+started_at=2026-07-01T01:42:03Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available ... FAILED
+
+failures:
+
+---- tests::local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available stdout ----
+
+thread 'tests::local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available' (5464717) panicked at crates/rjtd-model/src/lib.rs:83076:9:
+assertion failed: layer_tree.contains("\"imageBearingSegmentGate\":{\"basis\":\"FDMIndex.imageSignature+FDMVector.connectorBbox+sameRowAxisRuleParentSpan\",\"source\":\"FDMIndex.segmentImageSignatures+FDMVector.commandSourceBbox\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"image-signature-without-complete-payload-role-unproven\",\"imageBearingSegmentCandidate\":true,\"connectorParent\":{\"commandIndex\":")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 94 filtered out; finished in 2.68s
+
+error: test failed, to rerun pass `-p rjtd-model --lib`
+status=101
+finished_at=2026-07-01T01:42:05Z
+
+# Format after task 16 diagnostic JSON change
+started_at=2026-07-01T01:43:05Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo fmt --all
+status=0
+finished_at=2026-07-01T01:43:06Z
+
+# Local-sample green test for task 16 emitted diagnostics
+started_at=2026-07-01T01:43:14Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available -- --exact
+   Compiling rjtd-model v0.0.0 (/Users/kimuj5090/Documents/rjtd/rjtd/crates/rjtd-model)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.07s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 3.66s
+
+status=0
+finished_at=2026-07-01T01:43:23Z
+
+# Task 16 fully-qualified acceptance tests
+started_at=2026-07-01T01:43:38Z
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::fdm_connector_line_rule_endpoint_matches_horizontal_tight_span -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::fdm_connector_line_rule_endpoint_matches_horizontal_tight_span ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.00s
+
+status=0
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::fdm_connector_line_rule_endpoint_match_summary_blocks_single_endpoint -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::fdm_connector_line_rule_endpoint_match_summary_blocks_single_endpoint ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.00s
+
+status=0
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::fdm_connector_parent_normalized_order_requires_parent_relative_offset_between_nearest_owner_parents -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::fdm_connector_parent_normalized_order_requires_parent_relative_offset_between_nearest_owner_parents ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.00s
+
+status=0
+$ cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-model tests::fdm_axis_rule_source_order_gate_classifies_parent_relative_offset_spans -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::fdm_axis_rule_source_order_gate_classifies_parent_relative_offset_spans ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.00s
+
+status=0
+finished_at=2026-07-01T01:43:38Z
+
+# Diff whitespace check
+started_at=2026-07-01T01:44:17Z
+$ cd /Users/kimuj5090/Documents/rjtd && git diff --check -- rjtd/crates/rjtd-model/src/lib.rs
+status=0
+finished_at=2026-07-01T01:44:17Z
+
+# Task 16 manual QA matrix and review receipt
+artifact_notepad=/Users/kimuj5090/Documents/rjtd/.omo/evidence/current-progress-next-plan/task-16-notepad.md
+
+Manual QA matrix:
+- Happy: diagnostics expose dual-endpoint/source-order counts and explicit ownership/source-order fields. Observable: `tests::local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available` passed with 1 selected test, status=0, and asserts `imageBearingSegmentGate` includes `connectorParent`, `axisRuleParentRelativeOffsetRange`, `endpointOwnerParentRelativeOffsetRange`, `endpointOwnerParentRelations`, plus existing dual endpoint/source-order count assertions.
+- Happy: rendering remains blocked. Observable: same local-sample test still asserts SVG lacks `class="rjtd-shanai-lan-line-rule"`, `fdmOpenPathConnectorCandidateProjection`, and `class="rjtd-fdm-open-stroke-axis-rule-connector-readiness"`.
+- Failure: pre-production red test for the local-sample diagnostic failed with status=101 because `imageBearingSegmentGate` did not yet include scoped `connectorParent`.
+- Failure: no straight-line probe/render promotion was attempted. Rejection recorded: improving connector count without ownership proof, mean/RMS proof, or paint-order proof remains rejected; no rendering path was promoted.
+
+0-test disclosure:
+- Bare acceptance invocations selected 0 tests for all four required names and exited status=0. Fully qualified `tests::<name>` reruns selected 1 test each and exited status=0.
+
+Code review / slop-overfit review:
+- No weakened tests: only additive assertions were made.
+- No tautological or implementation-mirroring tests: local test validates real `DocumentCore` layer-tree output from the local `shanai_lan` sample; unit tests validate behavior functions.
+- No unnecessary abstraction/dependency: no dependency or new helper abstraction added.
+- No generated output as source truth: local sample/reference PDF only gates the existing local diagnostic test; generated artifacts were not used as source authority.
+- No visible connector render promotion: diagnostic JSON remains `decoded:false`, `diagnosticOnly:true`, `renderable:false`; SVG negative assertions still pass.
+
+Cleanup receipt:
+- No long-running process, server, port, tmux session, browser session, or temp script was created.
+- Build-cache cleanup performed: `cargo clean -p rjtd-model`, status=0, removed stale package artifacts before rebuilding.
+- Evidence files present: this log and `/Users/kimuj5090/Documents/rjtd/.omo/evidence/current-progress-next-plan/task-16-notepad.md`.
+
+# Evidence artifact presence check
+started_at=2026-07-01T01:44:58Z
+$ test -s /Users/kimuj5090/Documents/rjtd/.omo/evidence/current-progress-next-plan/task-16-shanai-connectors.log
+log_status=0
+$ test -s /Users/kimuj5090/Documents/rjtd/.omo/evidence/current-progress-next-plan/task-16-notepad.md
+notepad_status=0
+$ rg -n 'Manual QA matrix|Code review / slop-overfit review|Cleanup receipt|0-test disclosure' /Users/kimuj5090/Documents/rjtd/.omo/evidence/current-progress-next-plan/task-16-shanai-connectors.log
+204:Manual QA matrix:
+210:0-test disclosure:
+213:Code review / slop-overfit review:
+220:Cleanup receipt:
+rg_status=0
+finished_at=2026-07-01T01:44:58Z

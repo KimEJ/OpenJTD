@@ -1,0 +1,17 @@
+# C002 edge guard: formal blocked tasks remain unchecked and Boulder stays blocked by task 11
+## Unchecked blocked tasks
+179:- [ ] 11. Promote `tsaiten` only to source-only readiness when both table families satisfy the admission contract
+235:- [ ] 18. Run full Rust verification and capture exact failures before any handoff
+243:- [ ] 19. Run local sample/PDF visual QA when assets and tools are present
+336:- [ ] 20. Prepare final handoff, dirty-tree summary, and Lore commit recommendation
+346:- [ ] F1. Plan compliance audit
+352:- [ ] F2. Code quality review
+358:- [ ] F3. Real manual QA
+364:- [ ] F4. Scope fidelity
+## Boulder blocked status
+status=blocked
+blocked_by=11. Promote tsaiten only to source-only readiness when both table families satisfy the admission contract
+formal_task_19_status=unchecked; still gated by task 11 and task 18
+## No accidental checked task 19/20/F gates
+PASS: blocked task checkboxes remain unchecked
+cleanup: no runtime process, tmux session, browser context, port, container, or temp dir spawned for C002; CLI-only rg/jq evidence.

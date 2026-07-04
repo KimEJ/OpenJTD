@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "active_work_id": "current-progress-next-plan",
+  "works": {
+    "current-progress-next-plan": {
+      "work_id": "current-progress-next-plan",
+      "active_plan": ".omo/plans/current-progress-next-plan.md",
+      "plan_name": "current-progress-next-plan",
+      "session_ids": [
+        "codex:019f1af2-fdef-7733-9d5e-e5823a51f79e"
+      ],
+      "status": "blocked",
+      "worktree_path": null,
+      "blocked_at": "2026-07-01T11:59:53+09:00",
+      "blocked_by": "11. Promote tsaiten only to source-only readiness when both table families satisfy the admission contract",
+      "blocker": "Task 11 was independently confirmed blocked; downstream tasks 18, 19, 20, and F1-F4 require task 11 to be complete.",
+      "next_required_evidence": [
+        "Scoring table complete source-derived layout evidence",
+        "Lower table stable source-gap-to-page-line transform or PageMark absolute-y semantics agreeing with line-domain projection"
+      ],
+      "preflight_visual_evidence": {
+        "recorded_at": "2026-07-01T13:25:42+09:00",
+        "formal_task_19_status": "unchecked; still gated by task 11 and task 18",
+        "visual_qa_report": ".omo/evidence/current-progress-next-plan/task-19-visual-qa.md",
+        "visual_compare_report": ".omo/evidence/current-progress-next-plan/task-19-visual-compare.md",
+        "contact_sheet": ".omo/evidence/current-progress-next-plan/task-19-compare/task-19-page1-comparison-contact-sheet.png",
+        "remaining_visual_risk": "shanai_lan reference connector lines are absent or not aligned in generated PDF output; this is consistent with line-rule rendering staying diagnostic-only."
+      }
+    }
+  }
+}

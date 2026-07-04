@@ -1,0 +1,104 @@
+ULW task 11d post-G004 page-y readiness map
+
+Scope
+- Session: task-11-tsaiten-source-readiness-20260701
+- Purpose: choose the next evidence-bound story after G004 completed.
+- Source surface: `cargo run -q -p rjtd-cli -- page-layer-tree ../rjtd-testdata/local-samples/ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd 0`
+- Code anchors inspected:
+  - `rjtd/crates/rjtd-model/src/lib.rs:37582` sourceOnlyAxisAdmissionGate emission
+  - `rjtd/crates/rjtd-model/src/lib.rs:39694` sourceOnlyPageYRenderAdmissionGate emission
+  - `rjtd/crates/rjtd-model/src/lib.rs:74033` referenceFallbackAdmissionGate emission
+  - `rjtd/crates/rjtd-model/src/lib.rs:85731` focused tsaiten assertions for sparseSiblingDerived scoring candidate
+
+Live extraction after G004
+```json
+{
+  "fallbackUsedCount": 2,
+  "visibleTables": [
+    {
+      "sourceReplacementBlockedReason": "source-derived-layout-not-renderable",
+      "referenceFallbackUsed": true,
+      "sourceLayoutCandidatePresent": true,
+      "sourceLayoutRenderable": false,
+      "sourceOnlyPageYAdmissionReady": false,
+      "sourceDerivedLayoutCandidateSource": "sparseTableSiblingEvidence compact cell geometry candidate",
+      "provenance": "sparseSiblingDerived",
+      "sourceDerivedLayoutBlockedReason": "sparse-sibling-derived-candidate-render-ineligible"
+    },
+    {
+      "sourceReplacementBlockedReason": "source-page-y-render-admission-not-ready",
+      "referenceFallbackUsed": true,
+      "sourceLayoutCandidatePresent": true,
+      "sourceLayoutRenderable": false,
+      "sourceOnlyPageYAdmissionReady": false,
+      "sourceDerivedLayoutCandidateSource": "documentTextLineHeaders+/LineMark+/PageMark",
+      "provenance": "decodedCompactPlacement",
+      "sourceDerivedLayoutBlockedReason": "line-mark-record-stride-to-page-y-transform-unproven"
+    }
+  ]
+}
+```
+
+Page-y render admission gates found by JSON path
+```text
+root.ops[29].pageSpaceSolver.sourcePageYTransformGate.sourceOnlyPageYRenderAdmissionGate
+  admissionReady=false
+  pageOriginAuthority=none
+  sourceOnlySelectorSupportFragmentedByTable=true
+  sourceOnlySelectorBlockedReason=source-y-origin-selector-fragmented-by-table-not-render-admissible
+  pageMarkAbsoluteYSlotBlockedReason=line-domain-projection-disagrees-with-page-mark-absolute-y-slot
+  pageMarkAbsoluteYSlotResidualPx=-723.913
+  sourceGapToPageLineGapTableFamilyTransformStable=false
+  sourceGapToPageLineGapTableFamilyTransformBlockedReason=source-gap-to-page-line-gap-transform-unstable-across-table-family
+
+root.ops[30].pageSpaceSolver.sourcePageYTransformGate.sourceOnlyPageYRenderAdmissionGate
+  admissionReady=false
+  pageOriginAuthority=fallbackTextAnchors
+  sourceOnlySelectorSingleSupportFallback=true
+  sourceOnlySelectorBlockedReason=source-y-origin-selector-single-support-fallback-not-render-admissible
+  sourceOnlySelectorSupportBlockedReasons=[stride-origin-needs-page-origin-rule]
+  pageMarkAbsoluteYSlotBlockedReason=line-domain-projection-disagrees-with-page-mark-absolute-y-slot
+  pageMarkAbsoluteYSlotResidualPx=-148.740
+  sourceGapToPageLineGapTableFamilyTransformStable=false
+  sourceGapToPageLineGapTableFamilyTransformBlockedReason=source-gap-to-page-line-gap-transform-unstable-across-table-family
+
+root.ops[31].pageSpaceSolver.sourcePageYTransformGate.sourceOnlyPageYRenderAdmissionGate
+  admissionReady=false
+  pageOriginAuthority=fallbackTextAnchors
+  selectedPostRowGapSpanComplete=true
+  selectedPostRowGapSpanOrderedUniqueCoverageComplete=true
+  sourceOnlySelectorSingleSupportFallback=true
+  sourceOnlySelectorBlockedReason=source-y-origin-selector-single-support-fallback-not-render-admissible
+  pageMarkAbsoluteYSlotBlockedReason=line-domain-projection-disagrees-with-page-mark-absolute-y-slot
+  pageMarkAbsoluteYSlotResidualPx=-49.548
+  sourceGapToPageLineGapTableFamilyTransformStable=false
+  sourceGapToPageLineGapTableFamilyTransformBlockedReason=source-gap-to-page-line-gap-transform-unstable-across-table-family
+
+root.ops[32].pageSpaceSolver.sourcePageYTransformGate.sourceOnlyPageYRenderAdmissionGate
+  admissionReady=false
+  pageOriginAuthority=lineMarkPageGridStrideRawRecordIndex
+  selectedPostRowGapSpanComplete=true
+  selectedPostRowGapSpanOrderedUniqueCoverageComplete=false
+  sourceOnlySelectorSingleSupportFallback=true
+  sourceOnlySelectorBlockedReason=source-y-origin-selector-single-support-fallback-not-render-admissible
+  sourceOnlySelectorSupportBlockedReasons=[
+    line-domain-projection-disagrees-with-page-mark-absolute-y-slot,
+    page-mark-absolute-y-slot-semantics-unproven
+  ]
+  pageMarkAbsoluteYSlotBlockedReason=line-domain-projection-disagrees-with-page-mark-absolute-y-slot
+  pageMarkAbsoluteYSlotResidualPx=107.539
+  sourceGapToPageLineGapTableFamilyTransformStable=false
+  sourceGapToPageLineGapTableFamilyTransformBlockedReason=source-gap-to-page-line-gap-transform-unstable-across-table-family
+```
+
+Decision
+- G001 C001 is no longer blocked by an absent scoring source layout candidate; it is now blocked by sparse provenance being intentionally render-ineligible.
+- G001 C002 remains blocked by decodedCompactPlacement lower-table page-y admission.
+- The next safe story is lower/table-family page-y admission narrowing, not visible fallback suppression.
+- A PASS for the next story may be either:
+  - a failing-first minimal Rust change that proves a new source-backed page-y transform field family and preserves fallback until both visible table families are ready; or
+  - a narrower blocker that identifies why the page-line gap transform or PageMark absolute-y slot semantics cannot yet be promoted.
+
+Cleanup receipt
+- cargo run exited.
+- No tmux session, browser context, server process, bound port, container, temp dir under repo, or subagent was spawned for this map.

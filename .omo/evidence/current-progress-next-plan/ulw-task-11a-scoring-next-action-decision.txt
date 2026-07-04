@@ -1,0 +1,36 @@
+# G002 C002 scoring next-action decision
+Started: 2026-07-02T10:24:42+09:00
+Workspace: /Users/kimuj5090/Documents/rjtd
+
+## Selected branch
+branch=b: narrower evidence-backed blocker, not production code edit in this pass.
+
+## Why this is not a safe one-line implementation
+1. source_derived_table_grid_overlay_layout first requires table_grid_decoded_source_placement_evidence_present. For scoring, the live CLI output records sourcePlacementEvidencePresent:false and matchedCellHeaderCount:0/12.
+2. Even if placement evidence were forced true, the same function computes matched_column_count from table_candidate_document_text_line_header_rows(...).matched_cell_count. The scoring minimum is still 0, so layout creation returns None before x/width/row-height construction.
+3. The current row geometry type is TableCandidateLineHeaderRow with ShanaiLanLineHeader offsets/extents/font-size. Sparse sibling topology proves identity mapping (4/4 rows, 12/12 segments, compactToSparseColumnOffsetCandidate:3) but does not currently supply the compact-row line-header offset/extent/font metrics required by the source-derived layout path.
+4. PageMark/horizontal/y diagnostics are useful comparison targets but are intentionally diagnostic-only; using them here would violate task 11 by promoting source placement before a source-only table geometry model exists.
+
+## Narrow blocker
+Missing source field family/model: a source-only sparse-sibling-derived line-header geometry adapter for compact table rows. It must translate complete sparse topology into per-compact-cell offset_units, extent_units, and font_size_units (or a typed equivalent) before the scoring table can become sourceLayoutCandidatePresent:true without reference bbox authority.
+
+## Minimal future red target
+Add a failing-first Rust assertion around the local tsaiten layer tree expecting a new diagnostic field, e.g. scoring sparse-sibling-derived geometry coverage 12/12 with sourceColumnWidthBasis/documentTextLineHeaderCellSlotUnits or equivalent, while still asserting sourceLayoutRenderable:false and sourceOnlyPageYAdmissionReady:false until y admission is proven.
+Do not start by changing sourceReplacementBlockedReason to pass; first introduce the typed geometry evidence and keep referenceFallbackUsed:true.
+
+## Anchors from C001 artifact
+C001 artifact: .omo/evidence/current-progress-next-plan/ulw-task-11a-scoring-source-placement-map.txt
+5270:Observed scoring live output keeps sourcePlacementEvidencePresent:false, matchedCellHeaderCount:0, requiredCellHeaderCount:12, sourceDerivedLayoutCandidatePresent:false, and sourceDerivedLayoutCandidate:null.
+5271:The source_derived_table_grid_overlay_layout entry gate returns None when table_grid_decoded_source_placement_evidence_present is false. That evidence is currently the sum of compact interval line-header matched cells.
+5272:Sparse sibling topology is complete (4/4 rows, 12/12 segments, compactToSparseColumnOffsetCandidate:3), but sparse topology is exposed only as diagnostic/readiness evidence and does not feed table_candidate_document_text_line_header_rows or decoded source placement match count.
+5274:cleanup: cargo test and cargo run exited; no tmux/browser/ports/temp dirs spawned.
+
+## Source anchors
+rjtd/crates/rjtd-model/src/lib.rs:72482-72498 gates source_derived_table_grid_overlay_layout on decoded placement and matched_column_count.
+rjtd/crates/rjtd-model/src/lib.rs:73258-73264 defines decoded source placement as matched cell count >= required cell count.
+rjtd/crates/rjtd-model/src/lib.rs:73296-73396 derives matched cell count only from compact interval line headers and requires positive, strictly increasing header geometry.
+rjtd/crates/rjtd-model/src/lib.rs:85492-85505 current live assertions prove sparse topology complete but compactLineHeaderCellCoverageComplete:false and sourceLineHeaderColumnWidthsPresent:false.
+
+## Decision
+Next work should be a new model/test slice for sparse-sibling-derived compact cell geometry, not a page-y admission change and not a false sourceLayoutCandidatePresent flip.
+cleanup: no runtime process, tmux session, browser context, port, container, or temp dir spawned; artifact derived from existing C001 captured outputs and static source anchors.

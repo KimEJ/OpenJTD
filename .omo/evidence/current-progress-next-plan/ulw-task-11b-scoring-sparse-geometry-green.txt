@@ -1,0 +1,164 @@
+== TEST ==
+   Compiling rjtd-model v0.0.0 (/Users/kimuj5090/Documents/rjtd/rjtd/crates/rjtd-model)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.38s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.15s
+
+
+TEST_EXIT_CODE=0
+
+== CLI ==
+{
+  "sparseSiblingColumnPromotionReadiness": null,
+  "sparseSiblingDerivedCompactCellGeometry": null,
+  "sourceDerivedLayoutCandidate": null,
+  "referenceFallbackAdmissionGate": {
+    "source": "table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "referenceLayoutPresent": true,
+    "referenceFallbackAllowed": true,
+    "referenceFallbackUsed": true,
+    "sourceLayoutCandidatePresent": false,
+    "sourceRenderLayoutPresent": false,
+    "sourceLayoutRenderable": false,
+    "sourceOnlyPageYAdmissionReady": false,
+    "sourceOnlyPageYAdmissionBasis": null,
+    "sourceReplacementBlockedReason": "source-derived-layout-candidate-absent",
+    "blockedReason": null,
+    "renderPromotionContribution": "reference-fallback-admission-gate",
+    "renderPromotionBlockedReason": null
+  }
+}
+
+CLI_EXIT_CODE=0
+
+== CLI SCORING CANDIDATE ==
+null
+
+SCORING_CLI_EXIT_CODE=0
+
+== CLI EXACT RERUN ==
+{
+  "sparseSiblingColumnPromotionReadiness": null,
+  "sparseSiblingDerivedCompactCellGeometry": null,
+  "sourceDerivedLayoutCandidate": null,
+  "referenceFallbackAdmissionGate": {
+    "source": "table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "referenceLayoutPresent": true,
+    "referenceFallbackAllowed": true,
+    "referenceFallbackUsed": true,
+    "sourceLayoutCandidatePresent": false,
+    "sourceRenderLayoutPresent": false,
+    "sourceLayoutRenderable": false,
+    "sourceOnlyPageYAdmissionReady": false,
+    "sourceOnlyPageYAdmissionBasis": null,
+    "sourceReplacementBlockedReason": "source-derived-layout-candidate-absent",
+    "blockedReason": null,
+    "renderPromotionContribution": "reference-fallback-admission-gate",
+    "renderPromotionBlockedReason": null
+  }
+}
+
+EXACT_CLI_EXIT_CODE=0
+
+== CLI NESTED GEOMETRY EVIDENCE ==
+{
+  "sparseSiblingColumnPromotionReadiness": {
+    "source": "sparseTableSiblingEvidence+documentTextLineHeaders column promotion readiness",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "columnSplitReady": false,
+    "requestedColumnCount": 3,
+    "candidateRowCount": 4,
+    "matchedRowCount": 4,
+    "candidateSegmentCount": 12,
+    "matchedSegmentCount": 12,
+    "sparseTopologyComplete": true,
+    "compactToSparseColumnOffsetCandidate": 3,
+    "matchedSparseColumnIndexes": [
+      3,
+      4,
+      5
+    ],
+    "compactLineHeaderCellCoverageComplete": false,
+    "decodedSourcePlacementMatchCount": 0,
+    "decodedSourcePlacementRequiredCellCount": 12,
+    "sourceLineHeaderColumnWidthsPresent": false,
+    "sourceColumnWidthBasis": null,
+    "sourceColumnWidthFractions": [],
+    "blockedReasons": [
+      "compact-line-header-cell-geometry-incomplete",
+      "source-line-header-column-widths-missing"
+    ],
+    "renderPromotionContribution": "sparse-sibling-column-readiness-gate",
+    "renderPromotionBlockedReason": "source-column-split-not-ready"
+  },
+  "sparseSiblingDerivedCompactCellGeometry": {
+    "source": "sparseTableSiblingEvidence compact cell geometry prerequisite",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "candidateRowCount": 4,
+    "matchedRowCount": 4,
+    "candidateSegmentCount": 12,
+    "matchedSegmentCount": 12,
+    "compactToSparseColumnOffsetCandidate": 3,
+    "matchedSparseColumnIndexes": [
+      3,
+      4,
+      5
+    ],
+    "derivedMatchedCellCount": 12,
+    "requiredCellCount": 12,
+    "derivedCellGeometryCoverageComplete": true,
+    "sourcePlacementPrerequisiteReady": true,
+    "renderPromotionContribution": "sparse-sibling-derived-geometry-prerequisite",
+    "renderPromotionBlockedReason": "sparse-sibling-derived-geometry-diagnostic-only"
+  },
+  "sourceDerivedLayoutCandidate": null,
+  "referenceFallbackAdmissionGate": {
+    "source": "table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "referenceLayoutPresent": true,
+    "referenceFallbackAllowed": true,
+    "referenceFallbackUsed": true,
+    "sourceLayoutCandidatePresent": false,
+    "sourceRenderLayoutPresent": false,
+    "sourceLayoutRenderable": false,
+    "sourceOnlyPageYAdmissionReady": false,
+    "sourceOnlyPageYAdmissionBasis": null,
+    "sourceReplacementBlockedReason": "source-derived-layout-candidate-absent",
+    "blockedReason": null,
+    "renderPromotionContribution": "reference-fallback-admission-gate",
+    "renderPromotionBlockedReason": null
+  }
+}
+
+NESTED_CLI_EXIT_CODE=0

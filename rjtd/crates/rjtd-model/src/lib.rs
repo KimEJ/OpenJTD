@@ -195,6 +195,11 @@ const FDM_VECTOR_RENDERED_PRIMITIVE_MARKERS: [[u8; 4]; 12] = [
     *b"\x01\x00\x09\x60",
 ];
 const FDM_VECTOR_PATH_DIAGNOSTIC_MAX_SPAN_RATIO: f32 = 0.28;
+const FDM_TEXT_MASK_COHORT_MIN_PRIMITIVES: usize = 3;
+const FDM_TEXT_MASK_COHORT_LIMIT: usize = 24;
+const FDM_TEXT_MASK_RIGHT_NEIGHBOR_MAX_GAP_FACTOR: f32 = 3.0;
+const FDM_TEXT_MASK_COMPONENT_MIN_PRIMITIVES: usize = 3;
+const FDM_TEXT_MASK_COMPONENT_MAX_HEIGHT_LINE_FACTOR: f32 = 0.85;
 const FDM_CONNECTOR_CANDIDATE_MIN_SOURCE_SPAN_UNITS: i32 = 500;
 const FDM_CONNECTOR_CANDIDATE_MIN_PROJECTED_SPAN_PX: f32 = 48.0;
 const FDM_OPEN_STROKE_AXIS_RULE_MIN_PROJECTED_SPAN_PX: f32 = 5.0;
@@ -616,6 +621,7 @@ const APP_PAGE_WIDTH_PX: f32 = 794.0;
 const APP_PAGE_HEIGHT_PX: f32 = 1123.0;
 const APP_PAGE_MARGIN_PX: f32 = 72.0;
 const APP_FONT_SIZE_PX: f32 = 13.3;
+const APP_TABLE_BASE_FONT_SIZE_UNITS: f32 = 12.0;
 const APP_LINE_HEIGHT_PX: f32 = 23.0;
 const APP_DEFAULT_COLUMN_WIDTH_PX: f32 =
     (APP_PAGE_WIDTH_PX - (APP_PAGE_MARGIN_PX * 2.0)) / APP_WRAP_COLUMNS as f32;
@@ -1755,7 +1761,10 @@ impl DocumentCore {
         self.page_lines(page_num)?;
         let mut controls = Vec::new();
         for control in projected_text_controls(&self.document) {
-            let rect = self.cursor_rect_for(control.paragraph_index, control.char_offset)?;
+            let Ok(rect) = self.cursor_rect_for(control.paragraph_index, control.char_offset)
+            else {
+                continue;
+            };
             if rect.page_index != page_num as usize {
                 continue;
             }
@@ -7304,6 +7313,67 @@ impl ObjectJsfartArtFrameCandidate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectJsfartStreamProfileCandidate {
+    magic_family: String,
+    magic_family_hex: String,
+    magic_offset: usize,
+    magic_ascii_or_utf16_preview: String,
+    header_prefix: Vec<u8>,
+    structured_art_candidate_present: bool,
+    render_promotion_blocked_reason: String,
+}
+
+impl ObjectJsfartStreamProfileCandidate {
+    fn new(
+        magic_family: impl Into<String>,
+        magic_family_hex: impl Into<String>,
+        magic_offset: usize,
+        magic_ascii_or_utf16_preview: impl Into<String>,
+        header_prefix: Vec<u8>,
+        structured_art_candidate_present: bool,
+        render_promotion_blocked_reason: impl Into<String>,
+    ) -> Self {
+        Self {
+            magic_family: magic_family.into(),
+            magic_family_hex: magic_family_hex.into(),
+            magic_offset,
+            magic_ascii_or_utf16_preview: magic_ascii_or_utf16_preview.into(),
+            header_prefix,
+            structured_art_candidate_present,
+            render_promotion_blocked_reason: render_promotion_blocked_reason.into(),
+        }
+    }
+
+    pub fn magic_family(&self) -> &str {
+        &self.magic_family
+    }
+
+    pub fn magic_family_hex(&self) -> &str {
+        &self.magic_family_hex
+    }
+
+    pub fn magic_offset(&self) -> usize {
+        self.magic_offset
+    }
+
+    pub fn magic_ascii_or_utf16_preview(&self) -> &str {
+        &self.magic_ascii_or_utf16_preview
+    }
+
+    pub fn header_prefix(&self) -> &[u8] {
+        &self.header_prefix
+    }
+
+    pub fn structured_art_candidate_present(&self) -> bool {
+        self.structured_art_candidate_present
+    }
+
+    pub fn render_promotion_blocked_reason(&self) -> &str {
+        &self.render_promotion_blocked_reason
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectJsfartArtCandidate {
     magic: String,
     magic_offset: usize,
@@ -8205,6 +8275,7 @@ pub struct ObjectStreamCandidate {
     figure_link_candidate: Option<ObjectFigureLinkCandidate>,
     embedded_press_snapshot_candidate: Option<ObjectEmbeddedPressSnapshotCandidate>,
     fdm_text_candidates: Vec<ObjectFdmTextCandidate>,
+    jsfart_stream_profile_candidate: Option<ObjectJsfartStreamProfileCandidate>,
     jsfart_art_candidate: Option<ObjectJsfartArtCandidate>,
     jseq3_formula_candidate: Option<ObjectJseq3FormulaCandidate>,
     svg_offsets: Vec<usize>,
@@ -9393,6 +9464,7 @@ pub struct ObjectStreamCandidateEvidence {
     figure_link_candidate: Option<ObjectFigureLinkCandidate>,
     embedded_press_snapshot_candidate: Option<ObjectEmbeddedPressSnapshotCandidate>,
     fdm_text_candidates: Vec<ObjectFdmTextCandidate>,
+    jsfart_stream_profile_candidate: Option<ObjectJsfartStreamProfileCandidate>,
     jsfart_art_candidate: Option<ObjectJsfartArtCandidate>,
     jseq3_formula_candidate: Option<ObjectJseq3FormulaCandidate>,
     svg_offsets: Vec<usize>,
@@ -9416,6 +9488,7 @@ impl ObjectStreamCandidateEvidence {
             figure_link_candidate: None,
             embedded_press_snapshot_candidate: None,
             fdm_text_candidates: Vec::new(),
+            jsfart_stream_profile_candidate: None,
             jsfart_art_candidate: None,
             jseq3_formula_candidate: None,
             svg_offsets,
@@ -9465,6 +9538,14 @@ impl ObjectStreamCandidateEvidence {
         self
     }
 
+    fn with_jsfart_stream_profile_candidate(
+        mut self,
+        profile: Option<ObjectJsfartStreamProfileCandidate>,
+    ) -> Self {
+        self.jsfart_stream_profile_candidate = profile;
+        self
+    }
+
     fn with_jsfart_art_candidate(mut self, art: Option<ObjectJsfartArtCandidate>) -> Self {
         self.jsfart_art_candidate = art;
         self
@@ -9505,6 +9586,7 @@ impl ObjectStreamCandidate {
             figure_link_candidate: evidence.figure_link_candidate,
             embedded_press_snapshot_candidate: evidence.embedded_press_snapshot_candidate,
             fdm_text_candidates: evidence.fdm_text_candidates,
+            jsfart_stream_profile_candidate: evidence.jsfart_stream_profile_candidate,
             jsfart_art_candidate: evidence.jsfart_art_candidate,
             jseq3_formula_candidate: evidence.jseq3_formula_candidate,
             svg_offsets: evidence.svg_offsets,
@@ -9619,6 +9701,10 @@ impl ObjectStreamCandidate {
 
     pub fn fdm_text_candidates(&self) -> &[ObjectFdmTextCandidate] {
         &self.fdm_text_candidates
+    }
+
+    pub fn jsfart_stream_profile_candidate(&self) -> Option<&ObjectJsfartStreamProfileCandidate> {
+        self.jsfart_stream_profile_candidate.as_ref()
     }
 
     pub fn jsfart_art_candidate(&self) -> Option<&ObjectJsfartArtCandidate> {
@@ -13317,6 +13403,8 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
     let embedded_press_snapshot_candidate = embedded_press_snapshot_candidate_from_stream(stream);
     let fdm_text_candidates = fdm_text_candidates_from_stream(path, stream);
     let jsfart_art_candidate = jsfart_art_candidate_from_stream(path, stream);
+    let jsfart_stream_profile_candidate =
+        jsfart_stream_profile_candidate_from_stream(path, stream, jsfart_art_candidate.is_some());
     let jseq3_formula_candidate = jseq3_formula_candidate_from_stream(path, stream);
     if !image_signature_hits.is_empty() {
         push_unique_object_reason(&mut reasons, ObjectStreamCandidateReason::ImageSignature);
@@ -13368,10 +13456,73 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
         .with_figure_link_candidate(figure_link_candidate)
         .with_embedded_press_snapshot_candidate(embedded_press_snapshot_candidate)
         .with_fdm_text_candidates(fdm_text_candidates)
+        .with_jsfart_stream_profile_candidate(jsfart_stream_profile_candidate)
         .with_jsfart_art_candidate(jsfart_art_candidate)
         .with_jseq3_formula_candidate(jseq3_formula_candidate),
         stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec(),
     ))
+}
+
+fn jsfart_stream_profile_candidate_from_stream(
+    path: &str,
+    stream: &[u8],
+    structured_art_candidate_present: bool,
+) -> Option<ObjectJsfartStreamProfileCandidate> {
+    if !path.ends_with("/JSFart2Contents") {
+        return None;
+    }
+
+    let header_prefix = stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec();
+    let magic_family_hex = hex_bytes(&stream[..stream.len().min(2)]);
+    let preview = utf16le_printable_preview(&header_prefix);
+    let magic_family = jsfart_stream_magic_family(stream, &preview);
+    let render_promotion_blocked_reason = if structured_art_candidate_present {
+        "structured-jsfart-art-still-paint-authority-unproven"
+    } else {
+        "jsfart-variant-layout-undecoded"
+    };
+
+    Some(ObjectJsfartStreamProfileCandidate::new(
+        magic_family,
+        magic_family_hex,
+        0,
+        preview,
+        header_prefix,
+        structured_art_candidate_present,
+        render_promotion_blocked_reason,
+    ))
+}
+
+fn jsfart_stream_magic_family(stream: &[u8], utf16le_preview: &str) -> &'static str {
+    if stream.starts_with(JSFART2_CONTENTS_MAGIC_UTF16LE) {
+        "mstudio-ocx-utf16le"
+    } else if utf16le_preview.starts_with("JSFART.") {
+        "jsfart-object-utf16le"
+    } else if stream.get(..2).is_some_and(|prefix| prefix == [0x00, 0x00]) {
+        "zero-prefix"
+    } else if !utf16le_preview.is_empty() {
+        "utf16le-text-prefix"
+    } else {
+        "binary-prefix"
+    }
+}
+
+fn utf16le_printable_preview(bytes: &[u8]) -> String {
+    let mut preview = String::new();
+    for chunk in bytes.chunks_exact(2) {
+        let value = u16::from_le_bytes([chunk[0], chunk[1]]);
+        if value == 0 {
+            break;
+        }
+        let Some(ch) = char::from_u32(u32::from(value)) else {
+            break;
+        };
+        if ch.is_control() {
+            break;
+        }
+        preview.push(ch);
+    }
+    preview
 }
 
 fn jsfart_art_candidate_from_stream(path: &str, stream: &[u8]) -> Option<ObjectJsfartArtCandidate> {
@@ -18288,6 +18439,10 @@ fn json_string(value: &str) -> String {
     escaped
 }
 
+fn json_bool(value: bool) -> &'static str {
+    if value { "true" } else { "false" }
+}
+
 fn text_count_ranges_json(ranges: &[TextCountRange]) -> String {
     let mut output = String::from("[");
     for (index, range) in ranges.iter().enumerate() {
@@ -18581,6 +18736,12 @@ fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStre
     } else {
         output.push_str("null");
     }
+    output.push_str(",\"jsfartStreamProfile\":");
+    if let Some(profile) = candidate.jsfart_stream_profile_candidate() {
+        push_object_jsfart_stream_profile_candidate_json(output, profile);
+    } else {
+        output.push_str("null");
+    }
     output.push_str(",\"jsfartArt\":");
     if let Some(art) = candidate.jsfart_art_candidate() {
         push_object_jsfart_art_candidate_json(output, art);
@@ -18596,6 +18757,31 @@ fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStre
     output.push_str(",\"payloadPrefixHex\":");
     output.push_str(&json_string(&hex_bytes(candidate.payload_prefix())));
     output.push_str(",\"decoded\":false}");
+}
+
+fn push_object_jsfart_stream_profile_candidate_json(
+    output: &mut String,
+    profile: &ObjectJsfartStreamProfileCandidate,
+) {
+    output.push_str("{\"format\":\"JSFart2Contents\",\"source\":\"stream-prefix\",\"sourceCandidateType\":\"objectStream\",\"magicFamily\":");
+    output.push_str(&json_string(profile.magic_family()));
+    output.push_str(",\"magicFamilyHex\":");
+    output.push_str(&json_string(profile.magic_family_hex()));
+    output.push_str(",\"magicOffset\":");
+    output.push_str(&profile.magic_offset().to_string());
+    output.push_str(",\"magicAsciiOrUtf16Preview\":");
+    output.push_str(&json_string(profile.magic_ascii_or_utf16_preview()));
+    output.push_str(",\"headerPrefixHex\":");
+    output.push_str(&json_string(&hex_bytes(profile.header_prefix())));
+    output.push_str(",\"structuredArtCandidatePresent\":");
+    output.push_str(if profile.structured_art_candidate_present() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"renderable\":false,\"decoded\":false,\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(profile.render_promotion_blocked_reason()));
+    output.push('}');
 }
 
 fn push_object_fdm_text_candidate_json(output: &mut String, candidate: &ObjectFdmTextCandidate) {
@@ -21388,6 +21574,7 @@ const SUCCESS_DATA_TEST_FORMULA_TEXT_SLOTS: &[SuccessDataTestFormulaTextSlot] = 
 struct ImagePayloadDiagnostic<'a> {
     candidate_index: usize,
     payload_index: usize,
+    document: &'a Document,
     candidate: &'a ObjectStreamCandidate,
     span: &'a ObjectImagePayloadSpan,
 }
@@ -21713,6 +21900,49 @@ struct FdmPagePaintCoverageSummary {
     max_viewport_coverage_ratio_ppm: u32,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct FdmTextMaskCohortDiagnosticSummary {
+    row_index: usize,
+    primitive_count: usize,
+    black_fill_primitive_count: usize,
+    white_fill_primitive_count: usize,
+    counter_overlay_count: usize,
+    command_index_min: Option<usize>,
+    command_index_max: Option<usize>,
+    relative_offset_min: Option<usize>,
+    relative_offset_max: Option<usize>,
+    source_bbox: Option<(i32, i32, i32, i32)>,
+    projected_bbox: Option<(f32, f32, f32, f32)>,
+    component_count: usize,
+    top_text_like_component: Option<FdmTextMaskComponentDiagnosticSummary>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct FdmTextMaskComponentDiagnosticSummary {
+    component_index: usize,
+    primitive_count: usize,
+    black_fill_primitive_count: usize,
+    white_fill_primitive_count: usize,
+    counter_overlay_count: usize,
+    command_index_min: Option<usize>,
+    command_index_max: Option<usize>,
+    relative_offset_min: Option<usize>,
+    relative_offset_max: Option<usize>,
+    source_bbox: Option<(i32, i32, i32, i32)>,
+    projected_bbox: Option<(f32, f32, f32, f32)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct FdmTextMaskPrimitiveDiagnosticSummary {
+    command_index: usize,
+    relative_offset: usize,
+    source_bbox: Option<(i32, i32, i32, i32)>,
+    projected_bbox: (f32, f32, f32, f32),
+    black_fill: bool,
+    white_fill: bool,
+    counter_overlay: bool,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct FdmConnectorRuleSetMatchDiagnosticSummary {
     line_rule_projection_count: usize,
@@ -22031,16 +22261,22 @@ impl FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary {
             < self.dual_endpoint_match_connector_count
         {
             "nearest-owner-row-not-connector-row"
-        } else if self.parent_normalized_ordered_same_row_same_connector_count == 0
-            && self.between_owner_parent_command_span_count == 0
+        } else if self.parent_command_relation_unclassified_count > 0 {
+            "connector-parent-command-relation-unclassified"
+        } else if self.parent_relative_offset_relation_unclassified_count > 0 {
+            "connector-parent-relative-offset-relation-unclassified"
+        } else if self.between_owner_parent_command_span_count
+            < self.dual_endpoint_match_connector_count
         {
             "connector-parent-command-outside-nearest-owner-parent-command-span"
-        } else if self.parent_normalized_ordered_same_row_same_connector_count == 0
-            && self.between_owner_parent_relative_offset_span_count == 0
+        } else if self.between_owner_parent_relative_offset_span_count
+            < self.dual_endpoint_match_connector_count
         {
             "connector-parent-relative-offset-outside-nearest-owner-parent-relative-offset-span"
-        } else if self.parent_normalized_ordered_same_row_same_connector_count == 0 {
-            "parent-normalized-order-unproven"
+        } else if self.parent_normalized_ordered_same_row_same_connector_count
+            < self.dual_endpoint_match_connector_count
+        {
+            "parent-command-source-order-axis-disagreement"
         } else {
             "none"
         }
@@ -22364,9 +22600,56 @@ struct ShanaiLanTextSlot {
     split_from_text_run: bool,
     line_header_hex: String,
     line_header_raw_words: [u16; 12],
+    line_header_same_segment_group_run: Option<ShanaiLanLineHeaderSameSegmentGroupRun>,
+    line_header_same_segment_group_run_text_slot_count: Option<usize>,
+    line_header_same_segment_group_run_distinct_text_group_count: Option<usize>,
 }
 
 type ShanaiLanTextSlotAttachment<'a> = (&'a ShanaiLanTextSlot, f32, (f32, f32, f32, f32));
+
+#[derive(Debug, Clone, Copy)]
+struct FdmTextMaskRightNeighborCandidate<'a> {
+    slot_index: usize,
+    slot: &'a ShanaiLanTextSlot,
+    bbox: (f32, f32, f32, f32),
+    gap_px: f32,
+    vertical_overlap_px: f32,
+    center_delta_y_px: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FdmTextMaskPreFragmentBridgeMetrics {
+    pre_fragment_unit_count: usize,
+    pre_fragment_grid_units: usize,
+    pre_fragment_projected_width_px: f32,
+    line_start_x: f32,
+    text_start_x: f32,
+    source_begins_after_line_start: bool,
+    source_ends_before_text_start: bool,
+    source_bbox_within_pre_fragment_projection: bool,
+    source_bbox_right_to_text_start_px: f32,
+    text_baseline_minus_source_bottom_px: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FdmTextMaskSourceTransformCandidate<'a> {
+    row_index: usize,
+    candidate_class: &'static str,
+    component_index: Option<usize>,
+    slot_index: usize,
+    slot: &'a ShanaiLanTextSlot,
+    source_bbox: (i32, i32, i32, i32),
+    projected_bbox: (f32, f32, f32, f32),
+    metrics: FdmTextMaskPreFragmentBridgeMetrics,
+    cohort_component_agreement: bool,
+    current_projection_grid_start: f32,
+    current_projection_grid_end: f32,
+    current_projection_grid_span: f32,
+    source_units_per_text_grid_unit_x: f32,
+    line_start_source_x: f32,
+    text_start_source_x: f32,
+    source_gap_to_text_start_x: f32,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ShanaiLanTextStyleLinkEvidence {
@@ -22394,6 +22677,16 @@ struct ShanaiLanTextRunFragmentContext {
     next_gap_units: Option<usize>,
     style_boundary_proven: bool,
     promotion_blocked_reason: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ShanaiLanLineHeaderSameSegmentGroupRun {
+    offset_units: u16,
+    extent_units: u16,
+    start_group_index: usize,
+    end_group_index: usize,
+    group_count: usize,
+    position_in_run: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22552,10 +22845,391 @@ fn image_payload_overlay_diagnostics_json(document: &Document) -> Vec<String> {
             output.push_str(&diagnostic.span.len().to_string());
             output.push_str(",\"dimensions\":");
             push_object_image_dimensions_json(&mut output, diagnostic.span.dimensions());
-            output.push_str(",\"placementProven\":false,\"geometryDecoded\":false,\"renderable\":true,\"decoded\":false}");
+            output.push_str(",\"objectEnvelope\":");
+            push_object_image_payload_envelope_json(&mut output, diagnostic.span.envelope());
+            output.push_str(",\"placementProven\":false,\"geometryDecoded\":false");
+            push_image_payload_render_gate_json(&mut output, diagnostic);
+            output.push_str(",\"decoded\":false}");
             output
         })
         .collect()
+}
+
+fn push_image_payload_render_gate_json(
+    output: &mut String,
+    diagnostic: ImagePayloadDiagnostic<'_>,
+) {
+    let source_path_candidate_present = image_payload_source_path_candidate_present(diagnostic);
+    let declared_payload_length_present = diagnostic
+        .span
+        .envelope()
+        .declared_payload_length()
+        .is_some();
+    let ownership_evidence_ready = image_payload_ownership_evidence_ready(diagnostic);
+    let ownership_proven = ownership_evidence_ready;
+    let frame_reference_row_count = diagnostic.candidate.frame_reference_row_candidates().len();
+    let frame_coordinate_row_count = image_payload_frame_coordinate_row_count(diagnostic);
+    let frame_linked_window_row_count = image_payload_frame_linked_window_row_count(diagnostic);
+    let frame_geometry_candidate_present =
+        image_payload_frame_geometry_candidate_present(diagnostic);
+    let embedding_frame = image_payload_embedding_frame(diagnostic);
+    let frame_record =
+        embedding_frame.and_then(|frame| embedding_frame_record(diagnostic.document, frame));
+    let source_frame_record_geometry_present =
+        frame_record.map_or(false, image_payload_source_frame_record_has_geometry);
+    let payload_frame_aspect_delta_permille =
+        image_payload_frame_payload_aspect_delta_permille(frame_record, diagnostic.span);
+    let best_payload_frame_aspect_delta_permille =
+        image_payload_best_frame_payload_aspect_delta_permille(frame_record, diagnostic.candidate);
+    let current_payload_best_frame_aspect_candidate = payload_frame_aspect_delta_permille.is_some()
+        && payload_frame_aspect_delta_permille == best_payload_frame_aspect_delta_permille;
+
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true");
+    output.push_str(",\"sourcePathCandidatePresent\":");
+    output.push_str(json_bool(source_path_candidate_present));
+    output.push_str(",\"declaredPayloadLengthPresent\":");
+    output.push_str(json_bool(declared_payload_length_present));
+    output.push_str(",\"ownershipCandidate\":");
+    if let Some(ownership) = diagnostic.candidate.ownership_candidate() {
+        push_object_stream_ownership_candidate_json(output, ownership);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"ownershipReferenceCount\":");
+    output.push_str(
+        &diagnostic
+            .candidate
+            .ownership_reference_candidates()
+            .len()
+            .to_string(),
+    );
+    output.push_str(",\"ownershipEvidenceReady\":");
+    output.push_str(json_bool(ownership_evidence_ready));
+    output.push_str(",\"frameReferenceRowCount\":");
+    output.push_str(&frame_reference_row_count.to_string());
+    output.push_str(",\"frameCoordinateRowCount\":");
+    output.push_str(&frame_coordinate_row_count.to_string());
+    output.push_str(",\"frameLinkedWindowRowCount\":");
+    output.push_str(&frame_linked_window_row_count.to_string());
+    output.push_str(",\"frameGeometryCandidatePresent\":");
+    output.push_str(json_bool(frame_geometry_candidate_present));
+    output.push_str(",\"embeddingFrameTracePresent\":");
+    output.push_str(json_bool(embedding_frame.is_some()));
+    output.push_str(",\"sourceFrameRecordGeometryPresent\":");
+    output.push_str(json_bool(source_frame_record_geometry_present));
+    output.push_str(",\"sourceFrameTrace\":");
+    push_image_payload_source_frame_trace_json(output, diagnostic, embedding_frame, frame_record);
+    output.push_str(",\"candidateFrameBBox\":");
+    push_image_payload_candidate_frame_bbox_json(output, frame_record);
+    output.push_str(",\"payloadFrameAspectFit\":");
+    push_image_payload_frame_aspect_fit_json(
+        output,
+        diagnostic,
+        frame_record,
+        payload_frame_aspect_delta_permille,
+        best_payload_frame_aspect_delta_permille,
+        current_payload_best_frame_aspect_candidate,
+    );
+    output.push_str(",\"ownershipProven\":");
+    output.push_str(json_bool(ownership_proven));
+    output.push_str(",\"pageGeometryProven\":false,\"paintOrderDecoded\":false,\"diagnosticRenderable\":true,\"renderable\":false");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(image_payload_render_promotion_blocked_reason(
+        diagnostic,
+    )));
+}
+
+fn image_payload_source_path_candidate_present(diagnostic: ImagePayloadDiagnostic<'_>) -> bool {
+    diagnostic
+        .span
+        .envelope()
+        .header_fields()
+        .source_path_candidate()
+        .is_some()
+}
+
+fn image_payload_ownership_evidence_ready(diagnostic: ImagePayloadDiagnostic<'_>) -> bool {
+    diagnostic.candidate.ownership_candidate().is_some()
+        && image_payload_source_path_candidate_present(diagnostic)
+        && !diagnostic
+            .candidate
+            .ownership_reference_candidates()
+            .is_empty()
+}
+
+fn image_payload_frame_coordinate_row_count(diagnostic: ImagePayloadDiagnostic<'_>) -> usize {
+    diagnostic
+        .candidate
+        .frame_reference_row_candidates()
+        .iter()
+        .filter(|row| row.family() == "frame-index-tail-coordinate-row12")
+        .count()
+}
+
+fn image_payload_frame_linked_window_row_count(diagnostic: ImagePayloadDiagnostic<'_>) -> usize {
+    diagnostic
+        .candidate
+        .frame_reference_row_candidates()
+        .iter()
+        .filter(|row| row.family() == "frame-index-tail-window20" && row.suffix_link().is_some())
+        .count()
+}
+
+fn image_payload_frame_geometry_candidate_present(diagnostic: ImagePayloadDiagnostic<'_>) -> bool {
+    image_payload_frame_coordinate_row_count(diagnostic) > 0
+        || image_payload_source_frame_record(diagnostic)
+            .is_some_and(image_payload_source_frame_record_has_geometry)
+}
+
+fn image_payload_embedding_frame(
+    diagnostic: ImagePayloadDiagnostic<'_>,
+) -> Option<&ObjectEmbeddingFrameCandidate> {
+    let embedding_index = diagnostic
+        .candidate
+        .ownership_candidate()
+        .and_then(ObjectStreamOwnershipCandidate::embedding_index)?;
+    diagnostic
+        .document
+        .object_embedding_frames()
+        .iter()
+        .find(|frame| frame.embedding_index() == embedding_index)
+}
+
+fn image_payload_source_frame_record(
+    diagnostic: ImagePayloadDiagnostic<'_>,
+) -> Option<&ObjectFrameRecordCandidate> {
+    let frame = image_payload_embedding_frame(diagnostic)?;
+    embedding_frame_record(diagnostic.document, frame)
+}
+
+fn embedding_frame_record<'a>(
+    document: &'a Document,
+    frame: &ObjectEmbeddingFrameCandidate,
+) -> Option<&'a ObjectFrameRecordCandidate> {
+    document
+        .object_frame_records()
+        .iter()
+        .find(|record| record.row_index() as u32 == frame.frame_ref())
+}
+
+fn image_payload_source_frame_record_has_geometry(record: &ObjectFrameRecordCandidate) -> bool {
+    record.width() > 0 && record.height() > 0
+}
+
+fn push_image_payload_source_frame_trace_json(
+    output: &mut String,
+    diagnostic: ImagePayloadDiagnostic<'_>,
+    embedding_frame: Option<&ObjectEmbeddingFrameCandidate>,
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+) {
+    let ownership_embedding_index = diagnostic
+        .candidate
+        .ownership_candidate()
+        .and_then(ObjectStreamOwnershipCandidate::embedding_index);
+
+    output.push_str("{\"ownershipEmbeddingIndex\":");
+    push_optional_usize_json(output, ownership_embedding_index);
+    output.push_str(",\"embeddingFramePresent\":");
+    output.push_str(json_bool(embedding_frame.is_some()));
+    output.push_str(",\"embeddingFrameRef\":");
+    if let Some(frame) = embedding_frame {
+        output.push_str(&frame.frame_ref().to_string());
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"frameRecordPresent\":");
+    output.push_str(json_bool(frame_record.is_some()));
+    output.push_str(",\"frameRecordGeometry\":");
+    if let Some(record) = frame_record {
+        output.push_str("{\"sourcePath\":");
+        output.push_str(&json_string(record.source_path()));
+        output.push_str(",\"rowIndex\":");
+        output.push_str(&record.row_index().to_string());
+        output.push_str(",\"rowStart\":");
+        output.push_str(&record.row_start().to_string());
+        output.push_str(",\"objectId\":");
+        output.push_str(&record.object_id().to_string());
+        output.push_str(",\"objectType\":");
+        output.push_str(&record.object_type().to_string());
+        output.push_str(",\"x\":");
+        output.push_str(&record.x().to_string());
+        output.push_str(",\"y\":");
+        output.push_str(&record.y().to_string());
+        output.push_str(",\"width\":");
+        output.push_str(&record.width().to_string());
+        output.push_str(",\"height\":");
+        output.push_str(&record.height().to_string());
+        output.push_str(",\"decoded\":false}");
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_image_payload_candidate_frame_bbox_json(
+    output: &mut String,
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+) {
+    let Some(record) =
+        frame_record.filter(|record| image_payload_source_frame_record_has_geometry(record))
+    else {
+        output.push_str("null");
+        return;
+    };
+    let (x, y, width, height) = image_payload_candidate_frame_bbox(record);
+    output.push_str("{\"source\":\"EmbeddingInfo+/FrameRecord\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"placementProven\":false,\"renderable\":false");
+    output.push_str(",\"x\":");
+    output.push_str(&format!("{x:.3}"));
+    output.push_str(",\"y\":");
+    output.push_str(&format!("{y:.3}"));
+    output.push_str(",\"width\":");
+    output.push_str(&format!("{width:.3}"));
+    output.push_str(",\"height\":");
+    output.push_str(&format!("{height:.3}"));
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"page-assignment-and-paint-order-unproven\"}",
+    );
+}
+
+fn image_payload_candidate_frame_bbox(record: &ObjectFrameRecordCandidate) -> (f32, f32, f32, f32) {
+    (
+        frame_record_unit_to_css_px(record.x()),
+        frame_record_unit_to_css_px(record.y()),
+        frame_record_unit_to_css_px(record.width()),
+        frame_record_unit_to_css_px(record.height()),
+    )
+}
+
+fn push_image_payload_frame_aspect_fit_json(
+    output: &mut String,
+    diagnostic: ImagePayloadDiagnostic<'_>,
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+    payload_frame_aspect_delta_permille: Option<u64>,
+    best_payload_frame_aspect_delta_permille: Option<u64>,
+    current_payload_best_frame_aspect_candidate: bool,
+) {
+    let Some(record) = frame_record else {
+        output.push_str("null");
+        return;
+    };
+    let Some(dimensions) = diagnostic.span.dimensions() else {
+        output.push_str("null");
+        return;
+    };
+
+    output.push_str("{\"source\":\"imagePayloadDimensions+/FrameRecord\"");
+    output.push_str(",\"frameWidth\":");
+    output.push_str(&record.width().to_string());
+    output.push_str(",\"frameHeight\":");
+    output.push_str(&record.height().to_string());
+    output.push_str(",\"payloadWidth\":");
+    output.push_str(&dimensions.width().to_string());
+    output.push_str(",\"payloadHeight\":");
+    output.push_str(&dimensions.height().to_string());
+    output.push_str(",\"aspectDeltaPermille\":");
+    push_optional_u64_json(output, payload_frame_aspect_delta_permille);
+    output.push_str(",\"bestPayloadAspectDeltaPermille\":");
+    push_optional_u64_json(output, best_payload_frame_aspect_delta_permille);
+    output.push_str(",\"currentPayloadBestFrameAspectCandidate\":");
+    output.push_str(json_bool(current_payload_best_frame_aspect_candidate));
+    output.push_str(
+        ",\"renderPromotionContribution\":\"payload-to-frame-aspect-fit-diagnostic-only\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":\"payload-selection-page-assignment-and-paint-order-unproven\"");
+    output.push_str(",\"decoded\":false}");
+}
+
+fn push_optional_u64_json(output: &mut String, value: Option<u64>) {
+    if let Some(value) = value {
+        output.push_str(&value.to_string());
+    } else {
+        output.push_str("null");
+    }
+}
+
+fn optional_u64_svg_attr(value: Option<u64>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_string())
+}
+
+fn image_payload_frame_payload_aspect_delta_permille(
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+    span: &ObjectImagePayloadSpan,
+) -> Option<u64> {
+    let record = frame_record?;
+    let dimensions = span.dimensions()?;
+    aspect_delta_permille(
+        u128::from(record.width()),
+        u128::from(record.height()),
+        u128::from(dimensions.width()),
+        u128::from(dimensions.height()),
+    )
+}
+
+fn image_payload_best_frame_payload_aspect_delta_permille(
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+    candidate: &ObjectStreamCandidate,
+) -> Option<u64> {
+    candidate
+        .image_payload_spans()
+        .iter()
+        .filter_map(|span| image_payload_frame_payload_aspect_delta_permille(frame_record, span))
+        .min()
+}
+
+fn aspect_delta_permille(
+    frame_width: u128,
+    frame_height: u128,
+    image_width: u128,
+    image_height: u128,
+) -> Option<u64> {
+    if frame_width == 0 || frame_height == 0 || image_width == 0 || image_height == 0 {
+        return None;
+    }
+
+    let left = frame_width.saturating_mul(image_height);
+    let right = image_width.saturating_mul(frame_height);
+    let denominator = left.max(right);
+    if denominator == 0 {
+        return None;
+    }
+    Some(((left.abs_diff(right).saturating_mul(1000)) / denominator) as u64)
+}
+
+fn image_payload_render_promotion_blocked_reason(
+    diagnostic: ImagePayloadDiagnostic<'_>,
+) -> &'static str {
+    if diagnostic.candidate.ownership_candidate().is_none() {
+        "image-payload-stream-ownership-candidate-missing"
+    } else if !image_payload_source_path_candidate_present(diagnostic) {
+        "image-payload-envelope-source-path-candidate-missing"
+    } else if diagnostic
+        .candidate
+        .ownership_reference_candidates()
+        .is_empty()
+    {
+        "image-payload-cross-stream-ownership-reference-missing"
+    } else if diagnostic
+        .candidate
+        .frame_reference_row_candidates()
+        .is_empty()
+    {
+        "image-payload-frame-reference-row-missing"
+    } else if !image_payload_frame_geometry_candidate_present(diagnostic) {
+        "image-payload-frame-geometry-candidate-missing"
+    } else if image_payload_embedding_frame(diagnostic).is_none() {
+        "image-payload-embedding-frame-trace-missing"
+    } else if image_payload_source_frame_record(diagnostic).is_none() {
+        "image-payload-frame-record-trace-missing"
+    } else if !image_payload_source_frame_record(diagnostic)
+        .is_some_and(image_payload_source_frame_record_has_geometry)
+    {
+        "image-payload-frame-record-geometry-missing"
+    } else {
+        "image-payload-frame-geometry-present-but-page-assignment-and-paint-order-unproven"
+    }
 }
 
 fn image_payload_diagnostics(document: &Document) -> Vec<ImagePayloadDiagnostic<'_>> {
@@ -22566,6 +23240,7 @@ fn image_payload_diagnostics(document: &Document) -> Vec<ImagePayloadDiagnostic<
                 diagnostics.push(ImagePayloadDiagnostic {
                     candidate_index,
                     payload_index,
+                    document,
                     candidate,
                     span,
                 });
@@ -22598,10 +23273,7 @@ fn embedding_frame_diagnostics(document: &Document) -> Vec<EmbeddingFrameDiagnos
         .iter()
         .enumerate()
         .map(|(frame_index, frame)| {
-            let frame_record = document
-                .object_frame_records()
-                .iter()
-                .find(|record| record.row_index() as u32 == frame.frame_ref());
+            let frame_record = embedding_frame_record(document, frame);
             let jseq3_path = format!(
                 "/EmbedItems/Embedding {}/JSEQ3Contents",
                 frame.embedding_index()
@@ -22823,6 +23495,41 @@ fn fdm_entry_complete_payload_count(
         .count()
 }
 
+fn fdm_entry_image_payload_extraction_status(
+    candidate: &ObjectStreamCandidate,
+    entry: &ObjectFdmIndexEntryCandidate,
+) -> &'static str {
+    if entry.image_signature_hits().is_empty() && entry.segment_image_signature_hits().is_empty() {
+        "no-image-signature"
+    } else if fdm_entry_complete_payload_count(candidate, entry) > 0 {
+        "complete-payload-in-fdm-index-segment"
+    } else if candidate
+        .image_payload_spans()
+        .iter()
+        .any(|span| span.complete())
+    {
+        "complete-payload-elsewhere-in-vector-stream"
+    } else {
+        "signature-without-complete-payload"
+    }
+}
+
+fn fdm_entry_frame_render_blocked_reason(
+    candidate: &ObjectStreamCandidate,
+    entry: &ObjectFdmIndexEntryCandidate,
+) -> &'static str {
+    match fdm_entry_image_payload_extraction_status(candidate, entry) {
+        "signature-without-complete-payload" => {
+            "image-signature-without-complete-payload-role-unproven"
+        }
+        "no-image-signature" => "fdm-frame-image-payload-absent",
+        "complete-payload-in-fdm-index-segment" => {
+            "fdm-frame-linked-image-payload-placement-and-paint-order-unproven"
+        }
+        _ => "fdm-frame-image-placement-and-paint-order-unproven",
+    }
+}
+
 fn normalize_fdm_bbox(bbox: ObjectFdmIndexBbox) -> (i32, i32, i32, i32) {
     (
         bbox.left().min(bbox.right()),
@@ -22830,6 +23537,21 @@ fn normalize_fdm_bbox(bbox: ObjectFdmIndexBbox) -> (i32, i32, i32, i32) {
         bbox.left().max(bbox.right()),
         bbox.top().max(bbox.bottom()),
     )
+}
+
+fn normalize_fdm_index_entry_bbox(bbox: ObjectFdmIndexBbox) -> (i32, i32, i32, i32) {
+    (
+        bbox.left().min(bbox.top()),
+        bbox.right().min(bbox.bottom()),
+        bbox.left().max(bbox.top()),
+        bbox.right().max(bbox.bottom()),
+    )
+}
+
+fn fdm_bbox_center(bbox: (i32, i32, i32, i32)) -> (i32, i32) {
+    let center_x = i64::from(bbox.0) + (i64::from(bbox.2) - i64::from(bbox.0)) / 2;
+    let center_y = i64::from(bbox.1) + (i64::from(bbox.3) - i64::from(bbox.1)) / 2;
+    (center_x as i32, center_y as i32)
 }
 
 fn fdm_bbox_extent_union(
@@ -22961,6 +23683,7 @@ fn page_layer_tree_json(
             push_page_layer_shanai_lan_line_header_projection_candidate_summary_json(
                 &mut output,
                 layout,
+                &core.document,
                 bytes,
                 &shanai_lan_line_mark_intervals(&core.document),
                 shanai_lan_line_rule_projection.as_ref(),
@@ -23004,7 +23727,16 @@ fn page_layer_tree_json(
         }
         let command_diagnostics = fdm_command_diagnostics(&core.document);
         if let Some(extent) = fdm_command_projection_extent(&command_diagnostics) {
-            for diagnostic in command_diagnostics {
+            let primitive_diagnostics = fdm_vector_primitive_diagnostics(&core.document);
+            output.push(',');
+            push_page_layer_fdm_projection_extent_summary_json(
+                &mut output,
+                layout,
+                &command_diagnostics,
+                &primitive_diagnostics,
+                extent,
+            );
+            for diagnostic in command_diagnostics.iter().copied() {
                 if fdm_command_diagnostic_bbox(layout, diagnostic, extent).is_some() {
                     output.push(',');
                     push_page_layer_fdm_command_diagnostic_json(
@@ -23015,7 +23747,6 @@ fn page_layer_tree_json(
                     );
                 }
             }
-            let primitive_diagnostics = fdm_vector_primitive_diagnostics(&core.document);
             for diagnostic in primitive_diagnostics.iter().copied() {
                 if fdm_path_diagnostic_bbox(layout, diagnostic, extent).is_some() {
                     output.push(',');
@@ -23037,6 +23768,26 @@ fn page_layer_tree_json(
                         diagnostic,
                         extent,
                         &primitive_diagnostics,
+                    );
+                }
+            }
+            if let Some(text_projection) = shanai_lan_text_projection.as_ref() {
+                let text_mask_cohorts =
+                    fdm_text_mask_cohort_summaries(layout, &primitive_diagnostics, extent);
+                if !text_mask_cohorts.is_empty() {
+                    output.push(',');
+                    push_page_layer_fdm_text_mask_cohort_summary_json(
+                        &mut output,
+                        layout,
+                        &text_mask_cohorts,
+                        text_projection,
+                    );
+                    output.push(',');
+                    push_page_layer_fdm_text_mask_source_transform_candidate_summary_json(
+                        &mut output,
+                        layout,
+                        &text_mask_cohorts,
+                        text_projection,
                     );
                 }
             }
@@ -24022,7 +24773,7 @@ fn push_page_layer_table_grid_candidate_json(
 ) {
     let reference_layout =
         reference_table_grid_overlay_layout(layout, document, candidate, grid.column_count());
-    let source_layout = source_derived_table_grid_overlay_layout(
+    let source_layout = table_grid_source_derived_layout_candidate(
         layout,
         document,
         lines,
@@ -24034,6 +24785,7 @@ fn push_page_layer_table_grid_candidate_json(
         .as_ref()
         .filter(|layout| table_grid_source_derived_layout_is_renderable(layout))
         .map(TableGridRenderLayout::from_source_derived);
+    let source_render_layout_present = source_render_layout.is_some();
     let render_layout = source_render_layout.or_else(|| {
         reference_layout
             .as_ref()
@@ -24042,6 +24794,8 @@ fn push_page_layer_table_grid_candidate_json(
     let reference_projection = render_layout
         .as_ref()
         .is_some_and(|layout| layout.reference_backed);
+    let reference_fallback_admission =
+        table_grid_reference_layout_visible_fallback_admission(document, candidate);
     let (
         x,
         y,
@@ -24154,13 +24908,23 @@ fn push_page_layer_table_grid_candidate_json(
         output.push_str(&json_string(render_layout.cell_text_font_weight));
         output.push_str(",\"cellTextFontWeightBasis\":");
         output.push_str(&json_string(render_layout.cell_text_font_weight_basis));
+        output.push_str(",\"cellTextFontSize\":");
+        output.push_str(&format!("{:.3}", render_layout.font_size));
+        output.push_str(",\"cellTextFontSizeBasis\":");
+        output.push_str(&json_string(render_layout.font_size_basis));
     }
     output.push_str(",\"sourceAnchorEvidence\":");
     push_table_grid_source_anchor_evidence_json(output, candidate);
     output.push_str(",\"geometryDerivationEvidence\":");
     push_table_grid_geometry_derivation_evidence_json(output, layout, document, lines, candidate);
     output.push_str(",\"sourceDerivedLayoutCandidate\":");
-    push_table_grid_source_derived_layout_candidate_json(output, source_layout.as_ref());
+    push_table_grid_source_derived_layout_candidate_json(
+        output,
+        layout,
+        document,
+        candidate,
+        source_layout.as_ref(),
+    );
     output.push_str(",\"sourceDerivedLayoutReadiness\":");
     push_table_grid_source_derived_layout_readiness_json(
         output,
@@ -24168,6 +24932,15 @@ fn push_page_layer_table_grid_candidate_json(
         candidate,
         grid.column_count(),
         source_layout.as_ref(),
+    );
+    output.push_str(",\"referenceFallbackAdmissionGate\":");
+    push_table_grid_reference_fallback_admission_gate_json(
+        output,
+        reference_layout.is_some(),
+        reference_projection,
+        source_layout.as_ref(),
+        source_render_layout_present,
+        &reference_fallback_admission,
     );
     output.push_str(",\"pageSpaceSolver\":");
     push_table_grid_page_space_solver_json(
@@ -24277,13 +25050,14 @@ fn push_table_grid_geometry_derivation_evidence_json(
     let layout_box_text_position_tables_present =
         raw_stream_bytes(document, LAYOUT_BOX_TEXT_POSITION_TABLES_PATH).is_some();
     let text_count_range_count = document.text_count_ranges().len();
-    let source_layout_evidence_present = table_grid_source_layout_evidence_present(document);
     let decoded_source_placement_match_count =
         table_grid_decoded_source_placement_match_count(document, candidate);
     let decoded_source_placement_required_cell_count =
         table_grid_decoded_source_placement_required_cell_count(candidate);
     let decoded_source_placement_evidence_present =
         table_grid_decoded_source_placement_evidence_present(document, candidate);
+    let source_layout_evidence_present = table_grid_source_layout_evidence_present(document)
+        || decoded_source_placement_evidence_present;
     let placement_authority = if decoded_source_placement_evidence_present {
         "documentTextLineHeaders"
     } else if fallback_anchor_count > 0 {
@@ -24344,6 +25118,8 @@ fn push_table_grid_geometry_derivation_evidence_json(
     push_table_grid_sparse_table_sibling_evidence_json(output, document, candidate);
     output.push_str(",\"sparseSiblingColumnPromotionReadiness\":");
     push_table_grid_sparse_sibling_column_promotion_readiness_json(output, document, candidate);
+    output.push_str(",\"sparseSiblingDerivedCompactCellGeometry\":");
+    push_table_grid_sparse_sibling_derived_compact_cell_geometry_json(output, document, candidate);
     output.push_str(",\"sparseSiblingLineMarkYComparison\":");
     push_table_grid_sparse_sibling_line_mark_y_comparison_json(output, layout, document, candidate);
     output.push_str(",\"pageMarkRawRecordScanEvidence\":");
@@ -24378,7 +25154,7 @@ fn push_table_grid_geometry_derivation_evidence_json(
     output.push_str(",\"topTextAnchorEvidence\":");
     push_table_grid_top_text_anchor_evidence_json(output, layout, document, candidate);
     output.push_str(",\"topTextTableSourceGapEvidence\":");
-    push_table_grid_top_text_table_source_gap_evidence_json(output, document, candidate);
+    push_table_grid_top_text_table_source_gap_evidence_json(output, layout, document, candidate);
     output.push_str(",\"topTextAnchorResidualEvidence\":");
     push_table_grid_top_text_anchor_residual_evidence_json(output, layout, document, candidate);
     output.push_str(",\"independentPageTransformEvidence\":{\"present\":false,\"blockedReason\":\"top-text-page-coordinates-and-table-bbox-are-reference-backed\"}");
@@ -24475,6 +25251,7 @@ fn push_table_grid_top_text_anchor_evidence_json(
 
 fn push_table_grid_top_text_table_source_gap_evidence_json(
     output: &mut String,
+    layout: PageLayout,
     document: &Document,
     candidate: &TableCandidate,
 ) {
@@ -24567,6 +25344,21 @@ fn push_table_grid_top_text_table_source_gap_evidence_json(
     } else {
         "false"
     });
+    output.push_str(",\"sourceTablePlacementCoherenceGate\":");
+    let source_top_text_placement_readiness =
+        push_table_grid_source_table_placement_coherence_gate_json(
+            output,
+            layout,
+            document,
+            candidate,
+            &rows,
+            span,
+            header,
+            table_min_offset_units,
+            table_max_extent_units,
+            table_font_size_units,
+            source_gap_after_anchor_text_units,
+        );
     output.push_str(",\"tableCandidateUnitRange\":");
     output.push_str(&source_range_json(table_unit_start, table_unit_end));
     output.push_str(",\"firstRowUnitRange\":");
@@ -24598,12 +25390,645 @@ fn push_table_grid_top_text_table_source_gap_evidence_json(
             .push_str(&((first_header.start / 2).saturating_sub(table_unit_start)).to_string()),
         None => output.push_str("null"),
     }
+    output.push_str(",\"sourceTopTextPlacementReady\":");
+    output.push_str(if source_top_text_placement_readiness.ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"readinessBlockedReasons\":");
+    push_json_string_slice_array(output, &source_top_text_placement_readiness.blocked_reasons);
+    output.push_str(",\"renderPromotionContribution\":");
+    if source_top_text_placement_readiness.ready {
+        output.push_str(&json_string("source-top-text-placement-readiness"));
+    } else {
+        output.push_str(&json_string(
+            "prompt-to-table-source-adjacency-evidence-only",
+        ));
+    }
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    match source_top_text_placement_readiness.blocked_reason() {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
+    }
+    output.push('}');
+}
+
+fn table_grid_source_top_text_placement_readiness_for_candidate(
+    layout: PageLayout,
+    document: &Document,
+    candidate: &TableCandidate,
+) -> Option<TableGridSourceTopTextPlacementReadiness> {
+    let slots = success_data_test_resolved_top_text_projection(document, 1)?;
+    let rows = table_candidate_document_text_line_header_rows(document, candidate);
+    rows.first()?;
+    let table_unit_start =
+        table_source_offset_to_units(candidate.basis(), candidate.source_start());
+    let table_min_offset_units = rows
+        .iter()
+        .flat_map(|row| row.headers.iter().map(|header| header.offset_units))
+        .min();
+    let table_max_extent_units = rows
+        .iter()
+        .flat_map(|row| row.headers.iter().map(|header| header.extent_units))
+        .max();
+    let table_font_size_units = rows
+        .iter()
+        .flat_map(|row| row.headers.iter().map(|header| header.font_size_units))
+        .try_fold(None, |seen, value| match seen {
+            Some(previous) if previous != value => None,
+            _ => Some(Some(value)),
+        })
+        .flatten();
+    let (_, span, header, source_gap_after_anchor_text_units) = slots
+        .iter()
+        .filter_map(|slot| {
+            let span = slot.source_span.as_ref()?;
+            let header = slot.line_header?;
+            if span.unit_end() > table_unit_start {
+                return None;
+            }
+            let full_width = Some(header.offset_units) == table_min_offset_units
+                && Some(header.extent_units) == table_max_extent_units;
+            full_width.then_some((slot, span, header, table_unit_start - span.unit_end()))
+        })
+        .min_by_key(|(_, _, _, gap)| *gap)?;
+    let mut scratch = String::new();
+    Some(push_table_grid_source_table_placement_coherence_gate_json(
+        &mut scratch,
+        layout,
+        document,
+        candidate,
+        &rows,
+        span,
+        header,
+        table_min_offset_units,
+        table_max_extent_units,
+        table_font_size_units,
+        source_gap_after_anchor_text_units,
+    ))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TableGridSourceTopTextPlacementReadiness {
+    ready: bool,
+    blocked_reasons: Vec<&'static str>,
+}
+
+impl TableGridSourceTopTextPlacementReadiness {
+    fn blocked_reason(&self) -> Option<&'static str> {
+        self.blocked_reasons.first().copied()
+    }
+}
+
+fn push_table_grid_source_table_placement_coherence_gate_json(
+    output: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    candidate: &TableCandidate,
+    rows: &[TableCandidateLineHeaderRow],
+    anchor_span: &TextSourceSpan,
+    anchor_header: ShanaiLanLineHeader,
+    table_min_offset_units: Option<u16>,
+    table_max_extent_units: Option<u16>,
+    table_font_size_units: Option<u16>,
+    source_gap_after_anchor_text_units: usize,
+) -> TableGridSourceTopTextPlacementReadiness {
+    let first_row = rows.first();
+    let matched_column_count = rows
+        .iter()
+        .map(|row| row.matched_cell_count)
+        .min()
+        .unwrap_or(0);
+    let line_header_rows_homogeneous = table_grid_line_header_rows_are_homogeneous(rows);
+    let line_mark_rows_exact_and_contiguous =
+        table_grid_line_mark_rows_are_exact_and_contiguous(document, candidate, rows);
+    let candidate_basis = if line_mark_rows_exact_and_contiguous {
+        TableGridUnitBBoxBasis::MatchedCellsPlusFirstTrailingHeader
+    } else {
+        TableGridUnitBBoxBasis::MatchedCells
+    };
+    let selected_range = first_row.and_then(|row| {
+        table_grid_unit_bbox_range_for_row(row, matched_column_count, candidate_basis)
+    });
+    let (row_agreement_count, all_rows_agree) = selected_range
+        .map(|range| {
+            table_grid_unit_bbox_row_agreement_summary(
+                rows,
+                matched_column_count,
+                candidate_basis,
+                range,
+            )
+        })
+        .unwrap_or((0, false));
+    let first_trailing_header =
+        first_row.and_then(|row| row.headers.get(matched_column_count).copied());
+    let second_trailing_header =
+        first_row.and_then(|row| row.headers.get(matched_column_count + 1).copied());
+    let last_matched_header = first_row.and_then(|row| {
+        row.headers
+            .get(matched_column_count.saturating_sub(1))
+            .copied()
+    });
+    let selected_width_units = selected_range.map(|(start, end)| end.saturating_sub(start));
+    let full_extent_units = match (table_min_offset_units, table_max_extent_units) {
+        (Some(start), Some(end)) => Some(end.saturating_sub(start)),
+        _ => None,
+    };
+    let full_extent_trailing_after_selected_units = match (selected_range, table_max_extent_units) {
+        (Some((_, selected_end)), Some(full_end)) => Some(full_end.saturating_sub(selected_end)),
+        _ => None,
+    };
+    let first_trailing_gap_after_matched_units = match (last_matched_header, first_trailing_header)
+    {
+        (Some(last), Some(first)) => Some(first.offset_units.saturating_sub(last.extent_units)),
+        _ => None,
+    };
+    let second_trailing_gap_after_first_trailing_units =
+        match (first_trailing_header, second_trailing_header) {
+            (Some(first), Some(second)) => {
+                Some(second.offset_units.saturating_sub(first.extent_units))
+            }
+            _ => None,
+        };
+    let visible_range_uses_first_trailing_header =
+        matches!(
+            candidate_basis,
+            TableGridUnitBBoxBasis::MatchedCellsPlusFirstTrailingHeader
+        ) && match (selected_range, first_trailing_header) {
+            (Some((_, selected_end)), Some(first)) => selected_end == first.extent_units,
+            _ => false,
+        };
+    let full_extent_includes_second_trailing_header =
+        match (second_trailing_header, table_max_extent_units) {
+            (Some(second), Some(max_extent)) => second.extent_units == max_extent,
+            _ => false,
+        };
+    let shared_full_extent_with_table = Some(anchor_header.offset_units) == table_min_offset_units
+        && Some(anchor_header.extent_units) == table_max_extent_units;
+    let shared_font_size_with_table = Some(anchor_header.font_size_units) == table_font_size_units;
+    let coherent_with_top_text_anchor = source_gap_after_anchor_text_units <= 4
+        && shared_full_extent_with_table
+        && shared_font_size_with_table;
+    let selected_closes_at_first_trailing_header = match (selected_range, first_trailing_header) {
+        (Some((_, selected_end)), Some(first)) => selected_end == first.extent_units,
+        _ => false,
+    };
+    let second_trailing_is_full_line_remainder = match (
+        selected_range,
+        second_trailing_header,
+        table_max_extent_units,
+    ) {
+        (Some((_, selected_end)), Some(second), Some(full_end)) => {
+            second.offset_units > selected_end && second.extent_units == full_end
+        }
+        _ => false,
+    };
+    let trailing_headers_coherent = first_trailing_header.is_some()
+        && second_trailing_header.is_some()
+        && visible_range_uses_first_trailing_header
+        && full_extent_includes_second_trailing_header
+        && first_trailing_gap_after_matched_units.is_some_and(|gap| gap > 0)
+        && second_trailing_gap_after_first_trailing_units.is_some_and(|gap| gap > 0);
+    let anchor_source_grid = success_data_test_source_text_placement_candidate(
+        document,
+        layout,
+        Some(anchor_span),
+        SUCCESS_DATA_TEST_TOP_TEXT_FONT_SIZE_PX,
+    );
+    let table_page_origin = table_font_size_units.and_then(|font_size_units| {
+        table_grid_line_mark_page_origin_candidate(
+            layout,
+            document,
+            candidate,
+            rows,
+            f32::from(font_size_units) * 1.75,
+        )
+    });
+    let first_table_line_mark_record_index =
+        table_grid_line_mark_record_indexes_for_rows(document, candidate)
+            .first()
+            .copied();
+    let line_mark_record_gap_after_anchor =
+        match (&anchor_source_grid, first_table_line_mark_record_index) {
+            (Some(anchor), Some(first_table_record_index)) => Some(signed_usize_delta_i32(
+                first_table_record_index,
+                anchor.line_grid.record_index,
+            )),
+            _ => None,
+        };
+    let same_page_mark_entry = match (&anchor_source_grid, &table_page_origin) {
+        (Some(anchor), Some(table_origin)) => {
+            anchor.line_grid.page_mark_entry_index == table_origin.page_mark_entry_index
+        }
+        _ => false,
+    };
+    let source_page_grid_coupling_ready = anchor_source_grid.is_some()
+        && table_page_origin.is_some()
+        && same_page_mark_entry
+        && line_mark_record_gap_after_anchor == Some(1);
+
+    let mut blocked_reasons = Vec::new();
+    if !coherent_with_top_text_anchor {
+        blocked_reasons.push("top-text-anchor-not-coherent-with-table-full-extent");
+    }
+    if !trailing_headers_coherent {
+        blocked_reasons.push("trailing-header-width-semantics-not-coherent");
+    }
+    if !all_rows_agree {
+        blocked_reasons.push("table-width-candidate-not-row-stable");
+    }
+    if !line_header_rows_homogeneous {
+        blocked_reasons.push("line-header-rows-not-homogeneous");
+    }
+    if !line_mark_rows_exact_and_contiguous {
+        blocked_reasons.push("line-mark-rows-not-exact-source-boundaries");
+    }
+    let source_placement_coherence_ready = blocked_reasons.is_empty();
+    let visible_width_semantics_ready = source_placement_coherence_ready
+        && selected_closes_at_first_trailing_header
+        && second_trailing_is_full_line_remainder
+        && all_rows_agree
+        && line_header_rows_homogeneous
+        && line_mark_rows_exact_and_contiguous;
+    let mut readiness_blocked_reasons = Vec::new();
+    if !source_placement_coherence_ready {
+        readiness_blocked_reasons.push("source-placement-coherence-unproven");
+    }
+    if !visible_width_semantics_ready {
+        readiness_blocked_reasons.push("source-total-width-semantics-unproven");
+    }
+    if !source_page_grid_coupling_ready {
+        readiness_blocked_reasons.push("page-space-y-origin-unproven");
+    }
+    let source_top_text_placement_ready = source_placement_coherence_ready
+        && visible_width_semantics_ready
+        && source_page_grid_coupling_ready
+        && readiness_blocked_reasons.is_empty();
+
+    output.push_str("{\"source\":\"topTextLineHeaders+documentTextTableLineHeaders\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"candidateSourceUnitRange\":");
+    output.push_str(&source_range_json(
+        table_source_offset_to_units(candidate.basis(), candidate.source_start()),
+        table_source_offset_to_units(candidate.basis(), candidate.source_end()),
+    ));
+    output.push_str(",\"sourceGapAfterAnchorTextUnits\":");
+    output.push_str(&source_gap_after_anchor_text_units.to_string());
+    output.push_str(",\"coherentWithTopTextAnchor\":");
+    output.push_str(if coherent_with_top_text_anchor {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sharedFullExtentWithTable\":");
+    output.push_str(if shared_full_extent_with_table {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sharedFontSizeWithTable\":");
+    output.push_str(if shared_font_size_with_table {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"candidateWidthBasis\":");
+    output.push_str(&json_string(candidate_basis.as_str()));
+    output.push_str(",\"selectedXUnitRange\":");
+    match selected_range {
+        Some((start, end)) => {
+            output.push_str(&source_range_json(usize::from(start), usize::from(end)))
+        }
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"selectedWidthUnits\":");
+    push_optional_u16_json(output, selected_width_units);
+    output.push_str(",\"fullExtentUnits\":");
+    push_optional_u16_json(output, full_extent_units);
+    output.push_str(",\"fullExtentTrailingAfterSelectedUnits\":");
+    push_optional_u16_json(output, full_extent_trailing_after_selected_units);
+    output.push_str(",\"rowAgreementCount\":");
+    output.push_str(&row_agreement_count.to_string());
+    output.push_str(",\"allRowsAgree\":");
+    output.push_str(if all_rows_agree { "true" } else { "false" });
+    output.push_str(",\"lineHeaderRowsHomogeneous\":");
+    output.push_str(if line_header_rows_homogeneous {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"lineMarkRowsExactAndContiguous\":");
+    output.push_str(if line_mark_rows_exact_and_contiguous {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"firstTrailingHeaderUnitRange\":");
+    match first_trailing_header {
+        Some(header) => output.push_str(&source_range_json(
+            usize::from(header.offset_units),
+            usize::from(header.extent_units),
+        )),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"secondTrailingHeaderUnitRange\":");
+    match second_trailing_header {
+        Some(header) => output.push_str(&source_range_json(
+            usize::from(header.offset_units),
+            usize::from(header.extent_units),
+        )),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"firstTrailingGapAfterMatchedCellsUnits\":");
+    push_optional_u16_json(output, first_trailing_gap_after_matched_units);
+    output.push_str(",\"secondTrailingGapAfterFirstTrailingUnits\":");
+    push_optional_u16_json(output, second_trailing_gap_after_first_trailing_units);
+    output.push_str(",\"visibleRangeUsesFirstTrailingHeader\":");
+    output.push_str(if visible_range_uses_first_trailing_header {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"fullExtentIncludesSecondTrailingHeader\":");
+    output.push_str(if full_extent_includes_second_trailing_header {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"trailingHeadersCoherent\":");
+    output.push_str(if trailing_headers_coherent {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePlacementCoherenceReady\":");
+    output.push_str(if source_placement_coherence_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output.push_str(",\"sourceTopTextPlacementReadinessGate\":");
+    output.push_str("{\"source\":\"topTextLineHeaders+documentTextTableLineHeaders+/LineMark\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"candidateSourceUnitRange\":");
+    output.push_str(&source_range_json(
+        table_source_offset_to_units(candidate.basis(), candidate.source_start()),
+        table_source_offset_to_units(candidate.basis(), candidate.source_end()),
+    ));
+    output.push_str(",\"anchorSelection\":\"nearest-preceding-full-width-line-header\"");
+    output.push_str(",\"sourceGapAfterAnchorTextUnits\":");
+    output.push_str(&source_gap_after_anchor_text_units.to_string());
+    output.push_str(",\"coherentWithTopTextAnchor\":");
+    output.push_str(if coherent_with_top_text_anchor {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sharedFullExtentWithTable\":");
+    output.push_str(if shared_full_extent_with_table {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sharedFontSizeWithTable\":");
+    output.push_str(if shared_font_size_with_table {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"candidateWidthBasis\":");
+    output.push_str(&json_string(candidate_basis.as_str()));
+    output.push_str(",\"selectedXUnitRange\":");
+    match selected_range {
+        Some((start, end)) => {
+            output.push_str(&source_range_json(usize::from(start), usize::from(end)))
+        }
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"selectedWidthUnits\":");
+    push_optional_u16_json(output, selected_width_units);
+    output.push_str(",\"fullExtentUnits\":");
+    push_optional_u16_json(output, full_extent_units);
+    output.push_str(",\"trailingHeadersCoherent\":");
+    output.push_str(if trailing_headers_coherent {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"allRowsAgree\":");
+    output.push_str(if all_rows_agree { "true" } else { "false" });
+    output.push_str(",\"lineHeaderRowsHomogeneous\":");
+    output.push_str(if line_header_rows_homogeneous {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"lineMarkRowsExactAndContiguous\":");
+    output.push_str(if line_mark_rows_exact_and_contiguous {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePlacementCoherenceReady\":");
+    output.push_str(if source_placement_coherence_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceVisibleWidthVsFullExtentGate\":");
+    output.push_str("{\"source\":\"documentTextLineHeaders visible-width vs full-extent gate\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"selectedXUnitRange\":");
+    match selected_range {
+        Some((start, end)) => {
+            output.push_str(&source_range_json(usize::from(start), usize::from(end)))
+        }
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"selectedWidthUnits\":");
+    push_optional_u16_json(output, selected_width_units);
+    output.push_str(",\"fullExtentUnits\":");
+    push_optional_u16_json(output, full_extent_units);
+    output.push_str(",\"fullExtentTrailingAfterSelectedUnits\":");
+    push_optional_u16_json(output, full_extent_trailing_after_selected_units);
+    output.push_str(",\"firstTrailingHeaderUnitRange\":");
+    match first_trailing_header {
+        Some(header) => output.push_str(&source_range_json(
+            usize::from(header.offset_units),
+            usize::from(header.extent_units),
+        )),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"secondTrailingHeaderUnitRange\":");
+    match second_trailing_header {
+        Some(header) => output.push_str(&source_range_json(
+            usize::from(header.offset_units),
+            usize::from(header.extent_units),
+        )),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"selectedClosesAtFirstTrailingHeader\":");
+    output.push_str(if selected_closes_at_first_trailing_header {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"secondTrailingIsFullLineRemainder\":");
+    output.push_str(if second_trailing_is_full_line_remainder {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"allRowsAgree\":");
+    output.push_str(if all_rows_agree { "true" } else { "false" });
+    output.push_str(",\"lineHeaderRowsHomogeneous\":");
+    output.push_str(if line_header_rows_homogeneous {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"lineMarkRowsExactAndContiguous\":");
+    output.push_str(if line_mark_rows_exact_and_contiguous {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"visibleWidthSemanticsReady\":");
+    output.push_str(if visible_width_semantics_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output
+        .push_str(",\"renderPromotionContribution\":\"source-visible-width-vs-full-extent-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if visible_width_semantics_ready {
+        output.push_str("null");
+    } else {
+        output.push_str(&json_string("source-total-width-semantics-unproven"));
+    }
+    output.push('}');
+    output.push_str(",\"sourceTopTextPageGridCouplingGate\":");
+    output.push_str("{\"source\":\"topTextAnchor+/LineMark+/PageMark+tableLineMarkPageOrigin\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"anchorSourceGridPresent\":");
+    output.push_str(if anchor_source_grid.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"tableLineMarkPageOriginPresent\":");
+    output.push_str(if table_page_origin.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"anchorLineMarkRecordIndex\":");
+    push_optional_usize_json(
+        output,
+        anchor_source_grid
+            .as_ref()
+            .map(|anchor| anchor.line_grid.record_index),
+    );
+    output.push_str(",\"firstTableLineMarkRecordIndex\":");
+    push_optional_usize_json(output, first_table_line_mark_record_index);
+    output.push_str(",\"lineMarkRecordGapAfterAnchor\":");
+    push_optional_i32_json(output, line_mark_record_gap_after_anchor);
+    output.push_str(",\"anchorPageMarkEntryIndex\":");
+    push_optional_usize_json(
+        output,
+        anchor_source_grid
+            .as_ref()
+            .map(|anchor| anchor.line_grid.page_mark_entry_index),
+    );
+    output.push_str(",\"tablePageMarkEntryIndex\":");
+    push_optional_usize_json(
+        output,
+        table_page_origin
+            .as_ref()
+            .map(|origin| origin.page_mark_entry_index),
+    );
+    output.push_str(",\"samePageMarkEntry\":");
+    output.push_str(if same_page_mark_entry {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"anchorBaselineY\":");
+    push_optional_f32_json(
+        output,
+        anchor_source_grid.as_ref().map(|anchor| anchor.baseline_y),
+    );
+    output.push_str(",\"tableTopY\":");
+    push_optional_f32_json(output, table_page_origin.as_ref().map(|origin| origin.y));
+    output.push_str(",\"tableTopMinusAnchorBaselinePx\":");
+    push_optional_f32_json(
+        output,
+        table_page_origin.as_ref().and_then(|origin| {
+            anchor_source_grid
+                .as_ref()
+                .map(|anchor| origin.y - anchor.baseline_y)
+        }),
+    );
+    output.push_str(",\"expectedAdjacentRows\":");
+    output.push_str(if line_mark_record_gap_after_anchor == Some(1) {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePageGridCouplingReady\":");
+    output.push_str(if source_page_grid_coupling_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderPromotionContribution\":\"source-top-text-page-grid-coupling\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if source_page_grid_coupling_ready {
+        output.push_str("null");
+    } else {
+        output.push_str(&json_string("page-space-y-origin-unproven"));
+    }
+    output.push('}');
+    output.push_str(",\"sourceTopTextPlacementReady\":");
+    output.push_str(if source_top_text_placement_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"readinessBlockedReasons\":");
+    push_json_string_slice_array(output, &readiness_blocked_reasons);
+    output
+        .push_str(",\"renderPromotionContribution\":\"source-top-text-placement-readiness-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if source_top_text_placement_ready {
+        output.push_str("null");
+    } else {
+        match readiness_blocked_reasons.first() {
+            Some(reason) => output.push_str(&json_string(reason)),
+            None => output.push_str("null"),
+        }
+    }
+    output.push('}');
     output.push_str(
-        ",\"renderPromotionContribution\":\"prompt-to-table-source-adjacency-evidence-only\"",
+        ",\"renderPromotionContribution\":\"source-top-text-trailing-header-placement-coherence\"",
     );
     output.push_str(",\"renderPromotionBlockedReason\":");
-    output.push_str(&json_string("page-space-y-origin-unproven"));
+    if visible_width_semantics_ready {
+        output.push_str("null");
+    } else if source_placement_coherence_ready {
+        output.push_str(&json_string("source-total-width-semantics-unproven"));
+    } else {
+        output.push_str(&json_string("source-placement-coherence-unproven"));
+    }
     output.push('}');
+    TableGridSourceTopTextPlacementReadiness {
+        ready: source_top_text_placement_ready,
+        blocked_reasons: readiness_blocked_reasons,
+    }
 }
 
 fn push_table_grid_top_text_reference_coordinate_probe_json(
@@ -25543,24 +26968,28 @@ fn push_table_grid_source_only_horizontal_field_selector_json(
         .map(|grid| grid.column_count())
         .unwrap_or_else(|| candidate.max_column_segment_count().max(1));
     let selected_x = f32::from(word_14) - f32::from(first_slot_units);
+    let word_15 = page_mark_fields.get(15).copied();
+    let word_21 = page_mark_fields.get(21).copied();
     let selector = match compact_column_count {
-        2 => page_mark_fields.get(21).copied().map(|word_21| {
+        2 => word_21.map(|word_21| {
             (
                 "page-mark-word14-first-slot-word21-half-slot",
                 "compact-two-column-page-mark-word21-half-slot",
+                21usize,
                 word_21,
                 f32::from(first_slot_units) * 0.5,
                 "cross-table-half-first-column-slot",
                 f32::from(word_21) - f32::from(first_slot_units) * 0.5,
             )
         }),
-        3 => page_mark_fields.get(15).copied().and_then(|word_15| {
+        3 => word_15.and_then(|word_15| {
             stable_first_gap_units
                 .filter(|units| *units > 0)
                 .map(|units| {
                     (
                         "page-mark-word14-first-slot-word15-half-gap",
                         "compact-three-column-page-mark-word15-half-gap",
+                        15usize,
                         word_15,
                         f32::from(units) * 0.5,
                         "cross-table-half-first-intercell-gap",
@@ -25573,6 +27002,7 @@ fn push_table_grid_source_only_horizontal_field_selector_json(
     let Some((
         selected_frame_basis,
         selection_basis,
+        selected_width_word_index,
         page_mark_width_word,
         width_adjustment_units,
         width_adjustment_basis,
@@ -25621,10 +27051,118 @@ fn push_table_grid_source_only_horizontal_field_selector_json(
     output.push_str(&format!("{selected_x:.3}"));
     output.push_str(",\"selectedWidth\":");
     output.push_str(&format!("{selected_width:.3}"));
+    output.push_str(",\"sourceWidthFieldRoleGate\":");
+    push_table_grid_source_only_horizontal_width_field_role_gate_json(
+        output,
+        compact_column_count,
+        page_mark_field_source,
+        word_14,
+        word_15,
+        word_21,
+        first_slot_units,
+        stable_first_gap_units,
+        selected_width_word_index,
+        page_mark_width_word,
+        width_adjustment_units,
+        width_adjustment_basis,
+        selected_frame_basis,
+        selection_basis,
+    );
     output.push_str(",\"renderPromotionContribution\":\"source-only-horizontal-field-selector\"");
     output.push_str(",\"renderPromotionBlockedReason\":");
     output.push_str(&json_string(
         "cross-table-horizontal-field-semantics-unproven",
+    ));
+    output.push('}');
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_table_grid_source_only_horizontal_width_field_role_gate_json(
+    output: &mut String,
+    compact_column_count: usize,
+    page_mark_field_source: &'static str,
+    page_mark_x_word_14: u16,
+    page_mark_word_15: Option<u16>,
+    page_mark_word_21: Option<u16>,
+    first_column_slot_units: u16,
+    first_intercell_gap_units: Option<u16>,
+    selected_width_word_index: usize,
+    selected_width_word: u16,
+    selected_width_adjustment_units: f32,
+    selected_width_adjustment_basis: &'static str,
+    selected_frame_basis: &'static str,
+    selection_basis: &'static str,
+) {
+    let three_column_candidate_present = compact_column_count == 3
+        && page_mark_word_15.is_some()
+        && first_intercell_gap_units.is_some();
+    let two_column_candidate_present = compact_column_count == 2 && page_mark_word_21.is_some();
+    let selector_matches_compact_column_count = (compact_column_count == 2
+        && selected_width_word_index == 21)
+        || (compact_column_count == 3 && selected_width_word_index == 15);
+    let selected_width_field_role = match (compact_column_count, selected_width_word_index) {
+        (2, 21) => "compact-two-column-visible-width",
+        (3, 15) => "compact-three-column-visible-width",
+        (_, 21) => "word21-alternate-width-candidate",
+        (_, 15) => "word15-alternate-width-candidate",
+        _ => "unknown-width-field-role",
+    };
+
+    output.push_str(
+        "{\"source\":\"sparseSiblingSourceDerivedLayouts+/PageMark width-field role gate\"",
+    );
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false");
+    output.push_str(",\"pageMarkFieldSource\":");
+    output.push_str(&json_string(page_mark_field_source));
+    output.push_str(",\"compactColumnCount\":");
+    output.push_str(&compact_column_count.to_string());
+    output.push_str(",\"pageMarkXWord14\":");
+    output.push_str(&page_mark_x_word_14.to_string());
+    output.push_str(",\"pageMarkWord15\":");
+    push_optional_u16_json(output, page_mark_word_15);
+    output.push_str(",\"pageMarkWord21\":");
+    push_optional_u16_json(output, page_mark_word_21);
+    output.push_str(",\"firstColumnSlotUnits\":");
+    output.push_str(&first_column_slot_units.to_string());
+    output.push_str(",\"firstIntercellGapUnits\":");
+    push_optional_u16_json(output, first_intercell_gap_units);
+    output.push_str(",\"selectedWidthWordIndex\":");
+    output.push_str(&selected_width_word_index.to_string());
+    output.push_str(",\"selectedWidthWord\":");
+    output.push_str(&selected_width_word.to_string());
+    output.push_str(",\"selectedWidthFieldRole\":");
+    output.push_str(&json_string(selected_width_field_role));
+    output.push_str(",\"selectedWidthAdjustmentUnits\":");
+    output.push_str(&format!("{selected_width_adjustment_units:.3}"));
+    output.push_str(",\"selectedWidthAdjustmentBasis\":");
+    output.push_str(&json_string(selected_width_adjustment_basis));
+    output.push_str(",\"selectedFrameBasis\":");
+    output.push_str(&json_string(selected_frame_basis));
+    output.push_str(",\"selectionBasis\":");
+    output.push_str(&json_string(selection_basis));
+    output.push_str(",\"twoColumnWidthCandidatePresent\":");
+    output.push_str(if two_column_candidate_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"threeColumnWidthCandidatePresent\":");
+    output.push_str(if three_column_candidate_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"selectorMatchesCompactColumnCount\":");
+    output.push_str(if selector_matches_compact_column_count {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderPromotionContribution\":\"source-horizontal-width-field-role-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(
+        "width-field-role-semantics-needs-cross-sample-validation",
     ));
     output.push('}');
 }
@@ -27026,6 +28564,11 @@ fn push_table_grid_page_mark_scoped_y_transform_probe_json(
     });
     output.push_str(",\"matchedRawRecordHeaderIndex\":");
     push_option_usize_json(output, single_raw_header_index);
+    output.push_str(",\"referenceBBoxUsed\":true");
+    output.push_str(",\"referenceTargetBasis\":\"referenceTableBBox.rowTopTargets\"");
+    output.push_str(
+        ",\"sourceOnlyReplacementBlockedReason\":\"page-mark-scoped-y-transform-targets-reference-backed\"",
+    );
     output.push_str(",\"valueCandidateCount\":");
     output.push_str(&value_candidates.len().to_string());
     output.push_str(",\"rowTopTargets\":");
@@ -27690,6 +29233,14 @@ fn push_table_grid_page_mark_subrecord_line_span_readiness_json(
     push_optional_i32_json(output, readiness.previous_row_span_max_abs_residual_units);
     output.push_str(",\"compactRowSpanMaxAbsResidualUnits\":");
     push_optional_i32_json(output, readiness.compact_row_span_max_abs_residual_units);
+    output.push_str(",\"subrecordSpanRoleGate\":");
+    push_table_grid_page_mark_subrecord_span_role_gate_json(
+        output,
+        readiness,
+        selected_complete,
+        previous_complete,
+        compact_complete,
+    );
     output.push_str(",\"pageYTransformDecoded\":false");
     output.push_str(",\"selectedPostRowGapSpanOrderedCoverage\":");
     push_table_grid_page_mark_subrecord_line_span_coverage_json(
@@ -27706,6 +29257,97 @@ fn push_table_grid_page_mark_subrecord_line_span_readiness_json(
     output.push_str(",\"renderPromotionBlockedReason\":");
     output.push_str(&json_string(
         "subrecord-line-spans-match-line-ranges-not-page-y-origin",
+    ));
+    output.push('}');
+}
+
+fn push_table_grid_page_mark_subrecord_span_role_gate_json(
+    output: &mut String,
+    readiness: &TableGridPageMarkSubrecordLineSpanReadiness,
+    selected_complete: bool,
+    previous_complete: bool,
+    compact_complete: bool,
+) {
+    let selected_hit_count = readiness.selected_post_row_gap_span_hit_count;
+    let previous_hit_count = readiness.previous_row_span_hit_count;
+    let compact_hit_count = readiness.compact_row_span_hit_count;
+    let row_span_hit_count = previous_hit_count.max(compact_hit_count);
+    let row_span_target_count = readiness
+        .previous_row_span_targets
+        .len()
+        .max(readiness.compact_row_span_targets.len());
+    let selected_target_count = readiness.selected_post_row_gap_span_targets.len();
+    let row_span_complete = previous_complete || compact_complete;
+    let selected_role_dominant = selected_hit_count > 0 && selected_hit_count > row_span_hit_count;
+    let row_span_role_dominant = row_span_hit_count > 0 && row_span_hit_count >= selected_hit_count;
+    let (dominant_span_role, dominant_span_role_hit_count) = if selected_role_dominant {
+        ("selected-post-row-gap", selected_hit_count)
+    } else if previous_hit_count >= compact_hit_count && previous_hit_count > 0 {
+        ("previous-row-span", previous_hit_count)
+    } else if compact_hit_count > 0 {
+        ("compact-row-span", compact_hit_count)
+    } else {
+        ("none", 0)
+    };
+
+    let mut blocked_reasons = Vec::new();
+    if selected_role_dominant {
+        blocked_reasons.push("subrecord-spans-prefer-post-row-gap-family");
+    }
+    if !selected_complete {
+        blocked_reasons.push("selected-post-row-gap-span-incomplete");
+    }
+    if !row_span_complete {
+        blocked_reasons.push("row-span-family-not-covered-by-subrecords");
+    }
+    if selected_role_dominant && !row_span_complete {
+        blocked_reasons.push("post-row-gap-match-is-not-visible-row-height");
+    }
+    blocked_reasons.push("subrecord-span-role-semantics-unproven");
+    blocked_reasons.push("page-y-origin-transform-undecoded");
+
+    output.push_str("{\"source\":\"/PageMark raw u16 subrecord line-span role classifier\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceBBoxUsed\":false,\"selectionReady\":false");
+    output.push_str(",\"dominantSpanRole\":");
+    output.push_str(&json_string(dominant_span_role));
+    output.push_str(",\"dominantSpanRoleHitCount\":");
+    output.push_str(&dominant_span_role_hit_count.to_string());
+    output.push_str(",\"selectedPostRowGapSpanHitCount\":");
+    output.push_str(&selected_hit_count.to_string());
+    output.push_str(",\"selectedPostRowGapSpanTargetCount\":");
+    output.push_str(&selected_target_count.to_string());
+    output.push_str(",\"selectedPostRowGapSpanComplete\":");
+    output.push_str(if selected_complete { "true" } else { "false" });
+    output.push_str(",\"rowSpanHitCount\":");
+    output.push_str(&row_span_hit_count.to_string());
+    output.push_str(",\"rowSpanTargetCount\":");
+    output.push_str(&row_span_target_count.to_string());
+    output.push_str(",\"previousRowSpanHitCount\":");
+    output.push_str(&previous_hit_count.to_string());
+    output.push_str(",\"compactRowSpanHitCount\":");
+    output.push_str(&compact_hit_count.to_string());
+    output.push_str(",\"rowSpanComplete\":");
+    output.push_str(if row_span_complete { "true" } else { "false" });
+    output.push_str(",\"selectedPostRowGapRoleDominant\":");
+    output.push_str(if selected_role_dominant {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"rowSpanRoleDominant\":");
+    output.push_str(if row_span_role_dominant {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"lineSpanRoleDecoded\":false,\"pageYTransformDecoded\":false");
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output.push_str(",\"renderPromotionContribution\":\"page-mark-subrecord-span-role-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(
+        "page-mark-subrecord-spans-match-post-row-gaps-not-row-heights",
     ));
     output.push('}');
 }
@@ -34373,6 +36015,76 @@ fn push_table_grid_sparse_sibling_column_promotion_readiness_json(
     output.push('}');
 }
 
+fn push_table_grid_sparse_sibling_derived_compact_cell_geometry_json(
+    output: &mut String,
+    document: &Document,
+    candidate: &TableCandidate,
+) {
+    let Some(evidence) = table_grid_sparse_table_sibling_evidence(document, candidate) else {
+        output.push_str("null");
+        return;
+    };
+    let column_count = candidate
+        .column_segment_grid_candidate()
+        .map(|grid| grid.column_count())
+        .unwrap_or_else(|| candidate.max_column_segment_count().max(1));
+    let candidate_row_count = candidate.intervals().len();
+    let matched_row_count = evidence.rows.len();
+    let required_cell_count = candidate.cell_count_candidate();
+    let matched_segment_count = evidence
+        .rows
+        .iter()
+        .map(|row| row.segments.len())
+        .sum::<usize>();
+    let matched_sparse_column_indexes =
+        table_grid_sparse_sibling_matched_sparse_column_indexes(&evidence.rows, column_count);
+    let derived_cell_geometry_coverage_complete = required_cell_count > 0
+        && matched_row_count == candidate_row_count
+        && matched_segment_count == required_cell_count
+        && evidence.compact_to_sparse_column_offset.is_some()
+        && matched_sparse_column_indexes.len() == column_count;
+
+    output
+        .push_str("{\"source\":\"sparseTableSiblingEvidence compact cell geometry prerequisite\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"candidateRowCount\":");
+    output.push_str(&candidate_row_count.to_string());
+    output.push_str(",\"matchedRowCount\":");
+    output.push_str(&matched_row_count.to_string());
+    output.push_str(",\"candidateSegmentCount\":");
+    output.push_str(&required_cell_count.to_string());
+    output.push_str(",\"matchedSegmentCount\":");
+    output.push_str(&matched_segment_count.to_string());
+    output.push_str(",\"compactToSparseColumnOffsetCandidate\":");
+    push_option_usize_json(output, evidence.compact_to_sparse_column_offset);
+    output.push_str(",\"matchedSparseColumnIndexes\":");
+    push_usize_array_json(output, &matched_sparse_column_indexes);
+    output.push_str(",\"derivedMatchedCellCount\":");
+    output.push_str(&matched_segment_count.to_string());
+    output.push_str(",\"requiredCellCount\":");
+    output.push_str(&required_cell_count.to_string());
+    output.push_str(",\"derivedCellGeometryCoverageComplete\":");
+    output.push_str(if derived_cell_geometry_coverage_complete {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePlacementPrerequisiteReady\":");
+    output.push_str(if derived_cell_geometry_coverage_complete {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(
+        ",\"renderPromotionContribution\":\"sparse-sibling-derived-geometry-prerequisite\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(
+        "sparse-sibling-derived-geometry-diagnostic-only",
+    ));
+    output.push('}');
+}
+
 fn table_grid_sparse_table_sibling_evidence<'a>(
     document: &'a Document,
     candidate: &TableCandidate,
@@ -35136,6 +36848,9 @@ fn table_grid_unit_bbox_slot_widths(
 
 fn push_table_grid_source_derived_layout_candidate_json(
     output: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    table_candidate: &TableCandidate,
     candidate: Option<&TableGridSourceDerivedLayout>,
 ) {
     let Some(candidate) = candidate else {
@@ -35143,16 +36858,25 @@ fn push_table_grid_source_derived_layout_candidate_json(
         return;
     };
 
-    let source = if candidate.line_mark_page_origin.is_some()
-        || candidate.page_origin_authority == "lineMarkPageGridStrideRawRecordIndex"
-    {
-        "documentTextLineHeaders+/LineMark+/PageMark"
-    } else {
-        "documentTextLineHeaders+fallbackTextAnchors"
+    let source = match candidate.provenance {
+        TableGridSourceDerivedLayoutProvenance::DecodedCompactPlacement => {
+            if candidate.line_mark_page_origin.is_some()
+                || candidate.page_origin_authority == "lineMarkPageGridStrideRawRecordIndex"
+            {
+                "documentTextLineHeaders+/LineMark+/PageMark"
+            } else {
+                "documentTextLineHeaders+fallbackTextAnchors"
+            }
+        }
+        TableGridSourceDerivedLayoutProvenance::SparseSiblingDerived => {
+            "sparseTableSiblingEvidence compact cell geometry candidate"
+        }
     };
     output.push_str("{\"source\":");
     output.push_str(&json_string(source));
     output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"provenance\":");
+    output.push_str(&json_string(candidate.provenance.as_str()));
     output.push_str(",\"projectionKind\":\"sourceDerivedDiagnosticProjection\"");
     output.push_str(",\"bbox\":");
     output.push_str(&format!(
@@ -35187,7 +36911,13 @@ fn push_table_grid_source_derived_layout_candidate_json(
     output.push_str(",\"xOriginInsetBasis\":");
     output.push_str(&json_string(candidate.x_origin_inset_basis));
     output.push_str(",\"horizontalUnitTransformReadiness\":");
-    push_table_grid_horizontal_unit_transform_readiness_json(output, candidate);
+    push_table_grid_horizontal_unit_transform_readiness_json(
+        output,
+        layout,
+        document,
+        table_candidate,
+        candidate,
+    );
     output.push_str(",\"rowHeight\":");
     output.push_str(&format!("{:.3}", candidate.row_height));
     output.push_str(",\"rowHeightBasis\":");
@@ -35241,6 +36971,9 @@ fn push_table_grid_source_derived_layout_candidate_json(
 
 fn push_table_grid_horizontal_unit_transform_readiness_json(
     output: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    table_candidate: &TableCandidate,
     candidate: &TableGridSourceDerivedLayout,
 ) {
     let selected_width_units = candidate.x_unit_end.saturating_sub(candidate.x_unit_start);
@@ -35251,6 +36984,8 @@ fn push_table_grid_horizontal_unit_transform_readiness_json(
         && candidate.line_header_rows_homogeneous
         && required_cell_header_count > 0
         && candidate.matched_cell_header_count >= required_cell_header_count;
+    let page_space_unit_scale_decoded =
+        table_grid_page_space_horizontal_transform_ready(Some(candidate));
 
     output.push_str("{\"source\":\"documentTextLineHeaders\"");
     output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
@@ -35301,28 +37036,47 @@ fn push_table_grid_horizontal_unit_transform_readiness_json(
     output.push_str(",\"xOriginInsetBasis\":");
     output.push_str(&json_string(candidate.x_origin_inset_basis));
     output.push_str(",\"totalWidthSemanticsGate\":");
-    push_table_grid_total_width_semantics_gate_json(output, candidate, selected_width_units);
+    push_table_grid_total_width_semantics_gate_json(
+        output,
+        layout,
+        document,
+        table_candidate,
+        candidate,
+        selected_width_units,
+    );
     output.push_str(",\"sourceOnlyUnitTransformReady\":");
     output.push_str(if source_only_unit_transform_ready {
         "true"
     } else {
         "false"
     });
-    output.push_str(",\"pageSpaceUnitScaleDecoded\":false");
+    output.push_str(",\"pageSpaceUnitScaleDecoded\":");
+    output.push_str(if page_space_unit_scale_decoded {
+        "true"
+    } else {
+        "false"
+    });
     output.push_str(
         ",\"renderPromotionContribution\":\"selected-table-horizontal-unit-transform-readiness\"",
     );
     output.push_str(",\"renderPromotionBlockedReason\":");
-    output.push_str(&json_string(if source_only_unit_transform_ready {
-        "page-space-unit-scale-unproven"
+    if page_space_unit_scale_decoded {
+        output.push_str("null");
     } else {
-        "horizontal-unit-transform-incomplete"
-    }));
+        output.push_str(&json_string(if source_only_unit_transform_ready {
+            "page-space-unit-scale-unproven"
+        } else {
+            "horizontal-unit-transform-incomplete"
+        }));
+    }
     output.push('}');
 }
 
 fn push_table_grid_total_width_semantics_gate_json(
     output: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    table_candidate: &TableCandidate,
     candidate: &TableGridSourceDerivedLayout,
     selected_width_units: u16,
 ) {
@@ -35334,6 +37088,34 @@ fn push_table_grid_total_width_semantics_gate_json(
     let trailing_slot_evidence_present = !candidate.x_unit_trailing_slot_width_units.is_empty()
         || candidate.x_unit_included_trailing_header_count > 0;
     let full_extent_trailing_units = full_extent_units.saturating_sub(selected_width_units);
+    let selected_visible_range_source_evidence_ready = selected_equals_full_extent
+        || (selected_is_subset_of_full_extent
+            && trailing_slot_evidence_present
+            && candidate.x_unit_trailing_header_included
+            && candidate.x_unit_included_trailing_header_count > 0
+            && candidate.x_unit_all_rows_agree);
+    let source_placement_coherence_readiness =
+        table_grid_source_top_text_placement_readiness_for_candidate(
+            layout,
+            document,
+            table_candidate,
+        );
+    let source_placement_coherence_gate_resolved = selected_visible_range_source_evidence_ready
+        && !selected_equals_full_extent
+        && source_placement_coherence_readiness
+            .as_ref()
+            .is_some_and(|readiness| readiness.ready);
+    let source_placement_coherence_gate_required =
+        selected_visible_range_source_evidence_ready && !selected_equals_full_extent;
+    let render_promotion_next_gate = if selected_equals_full_extent {
+        None
+    } else if source_placement_coherence_gate_resolved {
+        None
+    } else if source_placement_coherence_gate_required {
+        Some("source-table-placement-coherence-gate")
+    } else {
+        Some("source-total-width-semantics-decoder")
+    };
 
     output.push_str("{\"source\":\"documentTextLineHeaders total-width semantics gate\"");
     output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
@@ -35371,6 +37153,46 @@ fn push_table_grid_total_width_semantics_gate_json(
     });
     output.push_str(",\"trailingSlotWidthUnits\":");
     push_u16_array_json(output, &candidate.x_unit_trailing_slot_width_units);
+    output.push_str(",\"selectedVisibleRangeSourceEvidenceReady\":");
+    output.push_str(if selected_visible_range_source_evidence_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePlacementCoherenceGateRequired\":");
+    output.push_str(
+        if source_placement_coherence_gate_required && !source_placement_coherence_gate_resolved {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"sourcePlacementCoherenceGateEvidencePresent\":");
+    output.push_str(if source_placement_coherence_readiness.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePlacementCoherenceGateResolved\":");
+    output.push_str(if source_placement_coherence_gate_resolved {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePlacementCoherenceGateBlockedReasons\":");
+    match source_placement_coherence_readiness.as_ref() {
+        Some(readiness) => push_json_string_slice_array(output, &readiness.blocked_reasons),
+        None if source_placement_coherence_gate_required => push_json_string_slice_array(
+            output,
+            &["source-table-placement-coherence-evidence-absent"],
+        ),
+        None => push_json_string_slice_array(output, &[]),
+    }
+    output.push_str(",\"renderPromotionNextGate\":");
+    match render_promotion_next_gate {
+        Some(gate) => output.push_str(&json_string(gate)),
+        None => output.push_str("null"),
+    }
     output.push_str(",\"renderWidthBasisCandidate\":");
     if selected_equals_full_extent {
         output.push_str(&json_string("selected-range-equals-full-extent"));
@@ -35385,8 +37207,12 @@ fn push_table_grid_total_width_semantics_gate_json(
     }
     output.push_str(",\"renderPromotionContribution\":\"source-total-width-semantics-gate\"");
     output.push_str(",\"renderPromotionBlockedReason\":");
-    if selected_equals_full_extent {
+    if selected_equals_full_extent || source_placement_coherence_gate_resolved {
         output.push_str("null");
+    } else if source_placement_coherence_gate_required {
+        output.push_str(&json_string(
+            "source-table-placement-coherence-gate-required",
+        ));
     } else {
         output.push_str(&json_string("source-total-width-semantics-unproven"));
     }
@@ -35753,6 +37579,21 @@ fn push_table_grid_page_space_solver_json(
         row_height_solver_ready,
         y_origin_solver_ready,
     );
+    output.push_str(",\"sourceOnlyAxisAdmissionGate\":");
+    push_table_grid_source_only_axis_admission_gate_json(
+        output,
+        layout,
+        document,
+        lines,
+        candidate,
+        source_layout,
+        source_layout_renderable,
+        source_column_split_ready,
+        page_space_horizontal_transform_ready,
+        row_height_solver_ready,
+        y_origin_solver_ready,
+        subrecord_span_readiness.as_ref(),
+    );
     output.push_str(",\"pageSpaceHorizontalTransformGate\":");
     push_table_grid_page_space_horizontal_transform_gate_json(
         output,
@@ -35792,6 +37633,530 @@ fn push_table_grid_page_space_solver_json(
     } else {
         output.push_str("null");
     }
+    output.push('}');
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_table_grid_source_only_axis_admission_gate_json(
+    output: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    lines: &[PageTextLine],
+    candidate: &TableCandidate,
+    source_layout: Option<&TableGridSourceDerivedLayout>,
+    source_layout_renderable: bool,
+    source_column_split_ready: bool,
+    page_space_horizontal_transform_ready: bool,
+    row_height_solver_ready: bool,
+    y_origin_solver_ready: bool,
+    subrecord_span_readiness: Option<&TableGridPageMarkSubrecordLineSpanReadiness>,
+) {
+    let horizontal_supports = table_grid_page_space_horizontal_frame_candidate_supports(
+        layout,
+        document,
+        lines,
+        candidate,
+        source_layout,
+    );
+    let mut horizontal_groups: BTreeMap<(i32, i32), Vec<TableGridHorizontalFrameCandidateSupport>> =
+        BTreeMap::new();
+    for support in horizontal_supports.iter().cloned() {
+        horizontal_groups
+            .entry((
+                rounded_milli(support.selected_x),
+                rounded_milli(support.selected_width),
+            ))
+            .or_default()
+            .push(support);
+    }
+    let horizontal_best_support_count = horizontal_groups
+        .values()
+        .map(|supports| supports.len())
+        .max()
+        .unwrap_or(0);
+    let horizontal_best_group_count = horizontal_groups
+        .values()
+        .filter(|supports| supports.len() == horizontal_best_support_count)
+        .count();
+    let horizontal_unique_best_supported =
+        horizontal_best_support_count > 1 && horizontal_best_group_count == 1;
+    let horizontal_best_group = horizontal_groups.values().find(|supports| {
+        supports.len() == horizontal_best_support_count && horizontal_unique_best_supported
+    });
+    let horizontal_selector_candidate_present = horizontal_supports
+        .iter()
+        .any(|support| support.contribution == "source-only-horizontal-field-selector");
+    let horizontal_selector_in_best_group = horizontal_best_group.is_some_and(|supports| {
+        supports
+            .iter()
+            .any(|support| support.contribution == "source-only-horizontal-field-selector")
+    });
+    let horizontal_best_support = horizontal_best_group.and_then(|supports| supports.first());
+
+    let cross_table_row_boundary_offset_probe =
+        table_grid_cross_table_row_boundary_offset_probe(document, candidate);
+    let y_supports = table_grid_source_only_page_y_origin_candidate_supports(
+        document,
+        candidate,
+        source_layout,
+        cross_table_row_boundary_offset_probe.as_ref(),
+        subrecord_span_readiness,
+    );
+    let mut y_groups: BTreeMap<
+        (i32, Option<i32>),
+        Vec<TableGridSourceOnlyPageYOriginCandidateSupport>,
+    > = BTreeMap::new();
+    for support in y_supports.iter().cloned() {
+        y_groups
+            .entry((
+                rounded_milli(support.selected_y),
+                support.row_height.map(rounded_milli),
+            ))
+            .or_default()
+            .push(support);
+    }
+    let y_best_support_count = y_groups
+        .values()
+        .map(|supports| supports.len())
+        .max()
+        .unwrap_or(0);
+    let y_best_group_count = y_groups
+        .values()
+        .filter(|supports| supports.len() == y_best_support_count)
+        .count();
+    let y_unique_best_supported = y_best_support_count > 1 && y_best_group_count == 1;
+    let y_best_group = y_groups
+        .values()
+        .find(|supports| supports.len() == y_best_support_count && y_unique_best_supported);
+    let y_candidate_best_group = y_best_group.filter(|supports| {
+        table_grid_source_only_page_y_origin_group_supports_candidate(supports, candidate)
+    });
+    let y_fallback_selector_group = if y_candidate_best_group.is_none() {
+        table_grid_source_only_page_y_origin_fallback_selector_group(&y_groups, candidate)
+    } else {
+        None
+    };
+    let y_selector_group = y_candidate_best_group.or(y_fallback_selector_group.as_ref());
+    let y_selector_support = y_selector_group.and_then(|supports| supports.first());
+    let y_selector_uses_single_support_fallback =
+        y_candidate_best_group.is_none() && y_fallback_selector_group.is_some();
+    let y_selector_table_candidate_indexes = y_selector_group
+        .map(|supports| {
+            supports
+                .iter()
+                .filter_map(|support| support.table_candidate_index)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let y_cross_table_previous_row_span_table_candidate_count = y_groups
+        .values()
+        .flatten()
+        .filter(|support| {
+            table_grid_source_only_page_y_origin_support_is_cross_table_previous_row_span(support)
+        })
+        .filter_map(|support| support.table_candidate_index)
+        .collect::<BTreeSet<_>>()
+        .len();
+    let y_selector_support_fragmented_by_table = !y_selector_uses_single_support_fallback
+        && y_cross_table_previous_row_span_table_candidate_count > 1
+        && y_selector_table_candidate_indexes.len()
+            < y_cross_table_previous_row_span_table_candidate_count;
+    let y_selector_candidate_present = y_selector_group.is_some();
+    let y_selector_support_count = y_selector_group.map(|supports| supports.len()).unwrap_or(0);
+    let y_selector_support_blocked_reasons = y_selector_group
+        .map(|supports| table_grid_source_only_page_y_origin_supports_blocked_reasons(supports))
+        .unwrap_or_default();
+    let page_mark_absolute_y_slot_agreement =
+        table_grid_source_only_page_mark_absolute_y_slot_agreement(
+            document,
+            candidate,
+            cross_table_row_boundary_offset_probe.as_ref(),
+            subrecord_span_readiness,
+        );
+    let page_mark_absolute_y_slot_semantics_ready =
+        page_mark_absolute_y_slot_agreement.semantics_ready();
+    let page_mark_absolute_y_slot_blocked_reason =
+        table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(
+            &page_mark_absolute_y_slot_agreement,
+        );
+    let y_selector_cross_table_support_present = y_selector_group.is_some_and(|supports| {
+        supports
+            .iter()
+            .any(table_grid_source_only_page_y_origin_support_is_cross_table_previous_row_span)
+    });
+    let y_selector_agreement_admissible = y_selector_candidate_present
+        && y_unique_best_supported
+        && !y_selector_uses_single_support_fallback
+        && !y_selector_support_fragmented_by_table
+        && y_selector_cross_table_support_present;
+    let active_source_layout_admission_ready =
+        source_layout_renderable && page_space_horizontal_transform_ready && y_origin_solver_ready;
+    let y_selector_admission_blocked_reason = if active_source_layout_admission_ready {
+        "none"
+    } else if !y_selector_candidate_present {
+        "source-y-origin-selector-absent"
+    } else if y_selector_uses_single_support_fallback {
+        "source-y-origin-selector-single-support-fallback-not-render-admissible"
+    } else if y_selector_support_fragmented_by_table {
+        "source-y-origin-selector-fragmented-by-table-not-render-admissible"
+    } else if !y_unique_best_supported {
+        "source-y-origin-selector-agreement-unproven"
+    } else if !y_selector_cross_table_support_present {
+        "source-y-origin-selector-cross-table-support-absent"
+    } else if !y_origin_solver_ready {
+        "source-y-axis-not-render-admissible"
+    } else {
+        "none"
+    };
+    let source_gap_to_page_line_gap_readiness_hints =
+        table_grid_source_gap_to_page_line_gap_readiness_hints(
+            cross_table_row_boundary_offset_probe.as_ref(),
+        );
+    let source_gap_to_page_line_gap_table_family_transform_required =
+        y_selector_cross_table_support_present
+            || cross_table_row_boundary_offset_probe
+                .as_ref()
+                .is_some_and(|probe| probe.all_offsets_require_transform);
+    let axis_candidate_row_height = y_selector_support
+        .and_then(|support| support.row_height)
+        .or_else(|| source_layout.map(|layout| layout.row_height));
+    let axis_candidate_present = horizontal_best_support.is_some() && y_selector_support.is_some();
+    let axis_candidate_bbox_present = axis_candidate_present && axis_candidate_row_height.is_some();
+
+    let mut blocked_reasons = Vec::new();
+    if source_layout.is_none() {
+        blocked_reasons.push("source-derived-layout-candidate-absent");
+    }
+    if !source_column_split_ready {
+        blocked_reasons.push("source-column-split-not-ready");
+    }
+    if !row_height_solver_ready {
+        blocked_reasons.push("source-row-height-not-ready");
+    }
+    if !active_source_layout_admission_ready {
+        if horizontal_groups.is_empty() {
+            blocked_reasons.push("source-horizontal-frame-candidates-absent");
+        } else if !horizontal_unique_best_supported {
+            blocked_reasons.push("source-horizontal-frame-candidate-agreement-unproven");
+        }
+        if !horizontal_selector_candidate_present {
+            blocked_reasons.push("source-only-horizontal-selector-absent");
+        } else if !horizontal_selector_in_best_group {
+            blocked_reasons.push("source-only-horizontal-selector-not-in-best-agreement-group");
+        }
+        if !page_space_horizontal_transform_ready {
+            blocked_reasons.push("source-horizontal-axis-not-render-admissible");
+        }
+        if y_groups.is_empty() {
+            blocked_reasons.push("source-y-origin-candidates-absent");
+        } else if !y_unique_best_supported && !y_selector_uses_single_support_fallback {
+            blocked_reasons.push("source-y-origin-candidate-agreement-unproven");
+        }
+        if !y_selector_candidate_present {
+            blocked_reasons.push("source-y-origin-selector-absent");
+        }
+        if y_selector_uses_single_support_fallback {
+            blocked_reasons.push("source-y-origin-selector-single-support-fallback");
+        }
+        if y_selector_support_fragmented_by_table {
+            blocked_reasons.push("source-y-origin-selector-fragmented-by-table");
+        }
+    }
+    if source_gap_to_page_line_gap_table_family_transform_required
+        && let Some(reason) =
+            source_gap_to_page_line_gap_readiness_hints.table_family_transform_blocked_reason()
+    {
+        blocked_reasons.push(reason);
+    }
+    if !y_origin_solver_ready {
+        blocked_reasons.push("source-y-axis-not-render-admissible");
+    }
+    if !source_layout_renderable {
+        blocked_reasons.push("source-derived-layout-not-renderable");
+    }
+    let admission_ready = active_source_layout_admission_ready || blocked_reasons.is_empty();
+
+    output.push_str("{\"source\":\"pageSpaceHorizontalTransformGate+sourcePageYTransformGate source-only selector coupling\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceBBoxUsedForSelection\":false");
+    output.push_str(",\"admissionReady\":");
+    output.push_str(if admission_ready { "true" } else { "false" });
+    output.push_str(",\"activeSourceLayoutAdmissionReady\":");
+    output.push_str(if active_source_layout_admission_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"activeSourceLayoutAdmissionBasis\":");
+    if active_source_layout_admission_ready {
+        output.push_str(&json_string("source-derived-page-space-solver"));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"sourceOnlySelectorFallbackIgnoredByActiveSourceLayout\":");
+    output.push_str(
+        if active_source_layout_admission_ready
+            && (!horizontal_selector_candidate_present || y_selector_uses_single_support_fallback)
+        {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"sourceLayoutCandidatePresent\":");
+    output.push_str(if source_layout.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceLayoutRenderable\":");
+    output.push_str(if source_layout_renderable {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"horizontalAxisReady\":");
+    output.push_str(if page_space_horizontal_transform_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"horizontalSelectorCandidatePresent\":");
+    output.push_str(if horizontal_selector_candidate_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"horizontalSelectorInBestAgreementGroup\":");
+    output.push_str(if horizontal_selector_in_best_group {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"horizontalCandidateCount\":");
+    output.push_str(&horizontal_supports.len().to_string());
+    output.push_str(",\"horizontalAgreementGroupCount\":");
+    output.push_str(&horizontal_groups.len().to_string());
+    output.push_str(",\"horizontalBestSupportCount\":");
+    output.push_str(&horizontal_best_support_count.to_string());
+    output.push_str(",\"horizontalUniqueBestSupported\":");
+    output.push_str(if horizontal_unique_best_supported {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"horizontalBestSupportedSelectedX\":");
+    match horizontal_best_support {
+        Some(support) => output.push_str(&format!("{:.3}", support.selected_x)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"horizontalBestSupportedSelectedWidth\":");
+    match horizontal_best_support {
+        Some(support) => output.push_str(&format!("{:.3}", support.selected_width)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"horizontalBestSupportedFrameBases\":");
+    match horizontal_best_group {
+        Some(supports) => {
+            let frame_bases = supports
+                .iter()
+                .map(|support| support.frame_basis)
+                .collect::<Vec<_>>();
+            push_json_string_slice_array(output, &frame_bases);
+        }
+        None => output.push_str("[]"),
+    }
+    output.push_str(",\"yAxisReady\":");
+    output.push_str(if y_origin_solver_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"ySelectorCandidatePresent\":");
+    output.push_str(if y_selector_candidate_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"ySelectorSingleSupportFallback\":");
+    output.push_str(if y_selector_uses_single_support_fallback {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"ySelectorSupportFragmentedByTable\":");
+    output.push_str(if y_selector_support_fragmented_by_table {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"ySelectorSupportCount\":");
+    output.push_str(&y_selector_support_count.to_string());
+    output.push_str(",\"ySelectorCrossTableSupportPresent\":");
+    output.push_str(if y_selector_cross_table_support_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"ySelectorAgreementAdmissible\":");
+    output.push_str(if y_selector_agreement_admissible {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"ySelectorAdmissionBlockedReason\":");
+    output.push_str(&json_string(y_selector_admission_blocked_reason));
+    output.push_str(",\"ySelectorSupportBlockedReasons\":");
+    push_json_string_slice_array(output, &y_selector_support_blocked_reasons);
+    output.push_str(",\"sourceGapToPageLineGapTransformAdmissionGate\":");
+    push_table_grid_source_gap_to_page_line_gap_transform_admission_gate_json(
+        output,
+        "sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate",
+        &source_gap_to_page_line_gap_readiness_hints,
+    );
+    output.push_str(",\"pageMarkAbsoluteYSlotSemanticsReady\":");
+    output.push_str(if page_mark_absolute_y_slot_semantics_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"pageMarkAbsoluteYSlotBlockedReason\":");
+    output.push_str(&json_string(page_mark_absolute_y_slot_blocked_reason));
+    output.push_str(",\"pageMarkAbsoluteYSlotResidualPx\":");
+    push_optional_f32_json(output, page_mark_absolute_y_slot_agreement.residual_px);
+    output.push_str(",\"yCandidateCount\":");
+    output.push_str(&y_supports.len().to_string());
+    output.push_str(",\"yAgreementGroupCount\":");
+    output.push_str(&y_groups.len().to_string());
+    output.push_str(",\"yBestSupportCount\":");
+    output.push_str(&y_best_support_count.to_string());
+    output.push_str(",\"yUniqueBestSupported\":");
+    output.push_str(if y_unique_best_supported {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"ySelectedOriginBasis\":");
+    match y_selector_support {
+        Some(support) => output.push_str(&json_string(support.origin_basis)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"ySelectedY\":");
+    match y_selector_support {
+        Some(support) => output.push_str(&format!("{:.3}", support.selected_y)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"ySelectedRowHeight\":");
+    match y_selector_support {
+        Some(support) => push_optional_f32_json(output, support.row_height),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"ySelectorTableCandidateIndexes\":");
+    push_usize_array_json(output, &y_selector_table_candidate_indexes);
+    output.push_str(",\"sourceOnlyAxisCandidateBBox\":");
+    push_table_grid_source_only_axis_candidate_bbox_json(
+        output,
+        candidate,
+        horizontal_best_support,
+        y_selector_support,
+        axis_candidate_row_height,
+        axis_candidate_present,
+        axis_candidate_bbox_present,
+        admission_ready,
+        active_source_layout_admission_ready,
+    );
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output
+        .push_str(",\"renderPromotionContribution\":\"source-only-axis-selector-admission-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if admission_ready {
+        output.push_str("null");
+    } else {
+        output.push_str(&json_string(
+            "source-page-space-axis-selector-coupling-unproven",
+        ));
+    }
+    output.push('}');
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_table_grid_source_only_axis_candidate_bbox_json(
+    output: &mut String,
+    candidate: &TableCandidate,
+    horizontal_support: Option<&TableGridHorizontalFrameCandidateSupport>,
+    y_support: Option<&TableGridSourceOnlyPageYOriginCandidateSupport>,
+    row_height: Option<f32>,
+    candidate_present: bool,
+    bbox_present: bool,
+    admission_ready: bool,
+    active_source_layout_admission_ready: bool,
+) {
+    let render_promotion_blocked_reason = if active_source_layout_admission_ready {
+        "active-source-layout-admission-uses-source-derived-layout-not-selector-bbox"
+    } else if horizontal_support.is_none() {
+        "source-only-axis-horizontal-candidate-absent"
+    } else if y_support.is_none() {
+        "source-only-axis-y-candidate-absent"
+    } else if row_height.is_none() {
+        "source-only-axis-row-height-candidate-absent"
+    } else if !admission_ready {
+        "source-page-space-axis-selector-coupling-unproven"
+    } else {
+        "source-only-axis-candidate-bbox-diagnostic-only"
+    };
+
+    output.push_str("{\"source\":\"sourceOnlyAxisAdmissionGate.sourceOnlyAxisCandidateBBox\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false");
+    output.push_str(",\"candidatePresent\":");
+    output.push_str(if candidate_present { "true" } else { "false" });
+    output.push_str(",\"bboxPresent\":");
+    output.push_str(if bbox_present { "true" } else { "false" });
+    output.push_str(",\"horizontalCandidatePresent\":");
+    output.push_str(if horizontal_support.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"yCandidatePresent\":");
+    output.push_str(if y_support.is_some() { "true" } else { "false" });
+    output.push_str(",\"rowHeightCandidatePresent\":");
+    output.push_str(if row_height.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"rowCount\":");
+    output.push_str(&candidate.intervals().len().to_string());
+    output.push_str(",\"horizontalFrameBasis\":");
+    match horizontal_support {
+        Some(support) => output.push_str(&json_string(support.frame_basis)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"yOriginBasis\":");
+    match y_support {
+        Some(support) => output.push_str(&json_string(support.origin_basis)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"rowHeight\":");
+    push_optional_f32_json(output, row_height);
+    output.push_str(",\"bbox\":");
+    if let (Some(horizontal), Some(y), Some(row_height)) =
+        (horizontal_support, y_support, row_height)
+    {
+        let height = row_height * candidate.intervals().len() as f32;
+        output.push_str(&format!(
+            "{{\"x\":{:.3},\"y\":{:.3},\"width\":{:.3},\"height\":{:.3}}}",
+            horizontal.selected_x, y.selected_y, horizontal.selected_width, height
+        ));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"renderPromotionContribution\":\"source-only-axis-candidate-bbox\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(render_promotion_blocked_reason));
     output.push('}');
 }
 
@@ -35952,6 +38317,16 @@ fn push_table_grid_page_space_horizontal_transform_gate_json(
         Some(layout) => output.push_str(&json_string(layout.x_origin_inset_basis)),
         None => output.push_str("null"),
     }
+    output.push_str(",\"sourceFrameAdmissionGate\":");
+    push_table_grid_page_space_horizontal_source_frame_admission_gate_json(
+        output,
+        layout,
+        document,
+        lines,
+        candidate,
+        source_layout,
+        page_space_horizontal_transform_ready,
+    );
     output.push_str(",\"sourceFrameHypotheses\":");
     push_table_grid_page_space_horizontal_frame_hypotheses_json(
         output,
@@ -35988,6 +38363,301 @@ fn push_table_grid_page_space_horizontal_transform_gate_json(
         ));
     }
     output.push('}');
+}
+
+fn push_table_grid_page_space_horizontal_source_frame_admission_gate_json(
+    output: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    lines: &[PageTextLine],
+    candidate: &TableCandidate,
+    source_layout: Option<&TableGridSourceDerivedLayout>,
+    page_space_horizontal_transform_ready: bool,
+) {
+    output.push_str("{\"source\":\"sourceDerivedLayoutCandidate+sourceFrameAdmission\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"promotionReady\":");
+    output.push_str(if page_space_horizontal_transform_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceFrameDecoded\":");
+    output.push_str(if page_space_horizontal_transform_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderFrameBasis\":");
+    if page_space_horizontal_transform_ready {
+        output.push_str(&json_string(
+            "page-body-frame+documentTextLineHeaderUnitTransform",
+        ));
+    } else {
+        output.push_str("null");
+    }
+
+    match source_layout {
+        Some(source_layout) => {
+            let selected_start_units = f32::from(source_layout.x_unit_start);
+            let selected_width_units = f32::from(
+                source_layout
+                    .x_unit_end
+                    .saturating_sub(source_layout.x_unit_start),
+            );
+            let full_extent_units = f32::from(source_layout.x_unit_full_extent_units);
+            let body_unit_px = if full_extent_units > 0.0 {
+                Some(layout.body_width_px() / full_extent_units)
+            } else {
+                None
+            };
+            let selected_x_without_inset =
+                body_unit_px.map(|unit_px| layout.margin_px() + selected_start_units * unit_px);
+            let selected_x_with_inset = body_unit_px.map(|unit_px| {
+                layout.margin_px()
+                    + (selected_start_units + source_layout.x_origin_inset_units) * unit_px
+            });
+            output.push_str(",\"selectedX\":");
+            output.push_str(&format!("{:.3}", source_layout.x));
+            output.push_str(",\"selectedWidth\":");
+            output.push_str(&format!("{:.3}", source_layout.width));
+            output.push_str(",\"selectedStartUnits\":");
+            output.push_str(&format!("{selected_start_units:.3}"));
+            output.push_str(",\"selectedWidthUnits\":");
+            output.push_str(&format!("{selected_width_units:.3}"));
+            output.push_str(",\"fullExtentUnits\":");
+            output.push_str(&format!("{full_extent_units:.3}"));
+            output.push_str(",\"xOriginInsetUnits\":");
+            output.push_str(&format!("{:.3}", source_layout.x_origin_inset_units));
+            output.push_str(",\"xOriginInsetBasis\":");
+            output.push_str(&json_string(source_layout.x_origin_inset_basis));
+            output.push_str(",\"xOriginInsetApplied\":");
+            output.push_str(if source_layout.x_origin_inset_units != 0.0 {
+                "true"
+            } else {
+                "false"
+            });
+            output.push_str(",\"pageBodyFrameX\":");
+            output.push_str(&format!("{:.3}", layout.margin_px()));
+            output.push_str(",\"pageBodyFrameWidth\":");
+            output.push_str(&format!("{:.3}", layout.body_width_px()));
+            output.push_str(",\"pageBodyUnitPx\":");
+            push_optional_f32_json(output, body_unit_px);
+            output.push_str(",\"selectedXWithoutInset\":");
+            push_optional_f32_json(output, selected_x_without_inset);
+            output.push_str(",\"selectedXWithInset\":");
+            push_optional_f32_json(output, selected_x_with_inset);
+        }
+        None => {
+            output.push_str(",\"selectedX\":null,\"selectedWidth\":null");
+            output.push_str(",\"selectedStartUnits\":null,\"selectedWidthUnits\":null");
+            output.push_str(",\"fullExtentUnits\":null,\"xOriginInsetUnits\":null");
+            output.push_str(",\"xOriginInsetBasis\":null,\"xOriginInsetApplied\":false");
+            output.push_str(",\"pageBodyFrameX\":");
+            output.push_str(&format!("{:.3}", layout.margin_px()));
+            output.push_str(",\"pageBodyFrameWidth\":");
+            output.push_str(&format!("{:.3}", layout.body_width_px()));
+            output.push_str(
+                ",\"pageBodyUnitPx\":null,\"selectedXWithoutInset\":null,\"selectedXWithInset\":null",
+            );
+        }
+    }
+
+    let page_mark_agreement = table_grid_page_mark_horizontal_best_agreement_group(
+        &table_grid_page_space_horizontal_frame_candidate_supports(
+            layout,
+            document,
+            lines,
+            candidate,
+            source_layout,
+        ),
+    );
+    output.push_str(",\"pageMarkRawAgreementPresent\":");
+    output.push_str(if page_mark_agreement.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    match page_mark_agreement
+        .as_ref()
+        .and_then(|supports| supports.first())
+    {
+        Some(first) => {
+            output.push_str(",\"pageMarkRawAgreementSelectedX\":");
+            output.push_str(&format!("{:.3}", first.selected_x));
+            output.push_str(",\"pageMarkRawAgreementSelectedWidth\":");
+            output.push_str(&format!("{:.3}", first.selected_width));
+            output.push_str(",\"pageMarkRawAgreementSupportCount\":");
+            output.push_str(
+                &page_mark_agreement
+                    .as_ref()
+                    .map(|supports| supports.len())
+                    .unwrap_or(0)
+                    .to_string(),
+            );
+            output.push_str(",\"pageMarkRawAgreementFrameBases\":");
+            let frame_bases = page_mark_agreement
+                .as_ref()
+                .map(|supports| {
+                    supports
+                        .iter()
+                        .map(|support| support.frame_basis)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            push_json_string_slice_array(output, &frame_bases);
+            output.push_str(",\"pageMarkRawAgreementContributions\":");
+            let contributions = page_mark_agreement
+                .as_ref()
+                .map(|supports| {
+                    supports
+                        .iter()
+                        .map(|support| support.contribution)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            push_json_string_slice_array(output, &contributions);
+            output.push_str(",\"pageMarkRawAgreementBlockedReasons\":");
+            let blocked_reasons = page_mark_agreement
+                .as_ref()
+                .map(|supports| {
+                    supports
+                        .iter()
+                        .map(|support| support.blocked_reason)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            push_json_string_slice_array(output, &blocked_reasons);
+            output.push_str(",\"sourceFrameVsPageMarkAgreementXResidualPx\":");
+            push_optional_f32_json(
+                output,
+                source_layout.map(|layout| layout.x - first.selected_x),
+            );
+            output.push_str(",\"sourceFrameVsPageMarkAgreementWidthResidualPx\":");
+            push_optional_f32_json(
+                output,
+                source_layout.map(|layout| layout.width - first.selected_width),
+            );
+            output.push_str(",\"pageMarkRawAgreementConflictsWithRenderFrame\":");
+            let conflicts = source_layout.is_some_and(|layout| {
+                (layout.x - first.selected_x).abs() > 2.0
+                    || (layout.width - first.selected_width).abs() > 2.0
+            });
+            output.push_str(if conflicts { "true" } else { "false" });
+            output.push_str(",\"pageMarkRawAgreementRenderPromotionBlockedReason\":");
+            output.push_str(&json_string(
+                "page-mark-horizontal-field-semantics-unproven",
+            ));
+        }
+        None => {
+            output.push_str(",\"pageMarkRawAgreementSelectedX\":null");
+            output.push_str(",\"pageMarkRawAgreementSelectedWidth\":null");
+            output.push_str(",\"pageMarkRawAgreementSupportCount\":0");
+            output.push_str(",\"pageMarkRawAgreementFrameBases\":[]");
+            output.push_str(",\"pageMarkRawAgreementContributions\":[]");
+            output.push_str(",\"pageMarkRawAgreementBlockedReasons\":[]");
+            output.push_str(",\"sourceFrameVsPageMarkAgreementXResidualPx\":null");
+            output.push_str(",\"sourceFrameVsPageMarkAgreementWidthResidualPx\":null");
+            output.push_str(",\"pageMarkRawAgreementConflictsWithRenderFrame\":false");
+            output.push_str(",\"pageMarkRawAgreementRenderPromotionBlockedReason\":null");
+        }
+    }
+    output.push_str(",\"sourceTopTextPlacementCoherenceMirror\":");
+    push_table_grid_source_top_text_placement_coherence_mirror_json(
+        output, layout, document, candidate,
+    );
+    output.push_str(",\"renderPromotionContribution\":\"source-horizontal-frame-admission-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if page_space_horizontal_transform_ready {
+        output.push_str("null");
+    } else {
+        output.push_str(&json_string(
+            "table-horizontal-page-space-transform-incomplete",
+        ));
+    }
+    output.push('}');
+}
+
+fn push_table_grid_source_top_text_placement_coherence_mirror_json(
+    output: &mut String,
+    layout: PageLayout,
+    document: &Document,
+    candidate: &TableCandidate,
+) {
+    let readiness =
+        table_grid_source_top_text_placement_readiness_for_candidate(layout, document, candidate);
+    output.push_str(
+        "{\"source\":\"topTextTableSourceGapEvidence.sourceTablePlacementCoherenceGate\"",
+    );
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"sourceTopTextPlacementEvidencePresent\":");
+    output.push_str(if readiness.is_some() { "true" } else { "false" });
+    output.push_str(",\"sourceTopTextPlacementReady\":");
+    output.push_str(
+        if readiness.as_ref().is_some_and(|readiness| readiness.ready) {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"readinessBlockedReasons\":");
+    match readiness.as_ref() {
+        Some(readiness) => push_json_string_slice_array(output, &readiness.blocked_reasons),
+        None => {
+            push_json_string_slice_array(output, &["source-top-text-placement-evidence-absent"])
+        }
+    }
+    output.push_str(
+        ",\"renderPromotionContribution\":\"source-horizontal-frame-top-text-placement-coherence\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    match readiness
+        .as_ref()
+        .and_then(TableGridSourceTopTextPlacementReadiness::blocked_reason)
+    {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None if readiness.as_ref().is_some_and(|readiness| readiness.ready) => {
+            output.push_str("null")
+        }
+        None => output.push_str(&json_string("source-top-text-placement-evidence-absent")),
+    }
+    output.push('}');
+}
+
+fn table_grid_page_mark_horizontal_best_agreement_group(
+    supports: &[TableGridHorizontalFrameCandidateSupport],
+) -> Option<Vec<TableGridHorizontalFrameCandidateSupport>> {
+    let mut groups: BTreeMap<(i32, i32), Vec<TableGridHorizontalFrameCandidateSupport>> =
+        BTreeMap::new();
+    for support in supports
+        .iter()
+        .filter(|support| support.frame_basis.starts_with("page-mark"))
+    {
+        groups
+            .entry((
+                rounded_milli(support.selected_x),
+                rounded_milli(support.selected_width),
+            ))
+            .or_default()
+            .push(support.clone());
+    }
+    let best_support_count = groups
+        .values()
+        .map(|supports| supports.len())
+        .max()
+        .unwrap_or(0);
+    let best_group_count = groups
+        .values()
+        .filter(|supports| supports.len() == best_support_count)
+        .count();
+    (best_support_count > 1 && best_group_count == 1)
+        .then(|| {
+            groups
+                .values()
+                .find(|supports| supports.len() == best_support_count)
+                .cloned()
+        })
+        .flatten()
 }
 
 fn push_table_grid_page_space_horizontal_frame_hypotheses_json(
@@ -36976,6 +39646,7 @@ fn push_table_grid_source_page_y_transform_gate_json(
     push_table_grid_source_only_page_y_origin_hypothesis_json(
         output,
         document,
+        candidate,
         source_layout,
         subrecord_span_readiness,
         cross_table_ordering_probe.as_ref(),
@@ -37020,6 +39691,23 @@ fn push_table_grid_source_page_y_transform_gate_json(
         cross_table_row_boundary_offset_probe.as_ref(),
         subrecord_span_readiness,
     );
+    output.push_str(",\"sourceOnlyPageYRenderAdmissionGate\":");
+    push_table_grid_source_only_page_y_render_admission_gate_json(
+        output,
+        document,
+        candidate,
+        source_layout,
+        subrecord_span_readiness,
+        cross_table_ordering_probe.as_ref(),
+        cross_table_row_boundary_offset_probe.as_ref(),
+        y_origin_solver_ready,
+        line_mark_rows_exact_and_contiguous,
+        selected_complete,
+        selected_ordered_unique_complete,
+        previous_complete,
+        previous_ordered_unique_complete,
+        compact_complete,
+    );
     output.push_str(",\"blockedReasons\":");
     push_json_string_slice_array(output, &blocked_reasons);
     output.push_str(",\"renderPromotionContribution\":\"source-page-y-transform-gate\"");
@@ -37028,6 +39716,347 @@ fn push_table_grid_source_page_y_transform_gate_json(
         output.push_str("null");
     } else {
         output.push_str(&json_string("source-page-y-transform-not-decoded"));
+    }
+    output.push('}');
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_table_grid_source_only_page_y_render_admission_gate_json(
+    output: &mut String,
+    document: &Document,
+    candidate: &TableCandidate,
+    source_layout: Option<&TableGridSourceDerivedLayout>,
+    subrecord_span_readiness: Option<&TableGridPageMarkSubrecordLineSpanReadiness>,
+    cross_table_ordering_probe: Option<&TableGridCrossTableSubrecordOrderingProbe>,
+    cross_table_row_boundary_offset_probe: Option<&TableGridCrossTableRowBoundaryOffsetProbe>,
+    y_origin_solver_ready: bool,
+    line_mark_rows_exact_and_contiguous: bool,
+    selected_complete: bool,
+    selected_ordered_unique_complete: bool,
+    previous_complete: bool,
+    previous_ordered_unique_complete: bool,
+    compact_complete: bool,
+) {
+    let source_layout_candidate_present = source_layout.is_some();
+    let direct_line_mark_page_origin_present = source_layout.is_some_and(|layout| {
+        layout.line_mark_page_origin.is_some() && layout.page_origin_authority == "lineMarkPageGrid"
+    });
+    let line_mark_page_origin_stride_present =
+        source_layout.is_some_and(|layout| layout.line_mark_page_origin_stride.is_some());
+    let cross_table_line_domain_present = cross_table_row_boundary_offset_probe
+        .is_some_and(|probe| !probe.combined_line_mark_record_y_tops_px.is_empty());
+    let cross_table_order_regresses = cross_table_ordering_probe.is_some_and(|probe| {
+        !probe.monotonic_raw_record_scan_index
+            || !probe.monotonic_line_start_candidate
+            || probe.family_reused_after_later_family
+    });
+    let cross_table_row_boundary_offset_transform_required = cross_table_row_boundary_offset_probe
+        .is_some_and(|probe| probe.all_offsets_require_transform);
+    let direct_line_mark_origin_admissible = direct_line_mark_page_origin_present
+        && line_mark_rows_exact_and_contiguous
+        && y_origin_solver_ready;
+
+    let page_mark_absolute_y_slot_agreement =
+        table_grid_source_only_page_mark_absolute_y_slot_agreement(
+            document,
+            candidate,
+            cross_table_row_boundary_offset_probe,
+            subrecord_span_readiness,
+        );
+    let page_mark_absolute_y_slot_semantics_ready =
+        page_mark_absolute_y_slot_agreement.semantics_ready();
+    let page_mark_absolute_y_slot_blocked_reason =
+        table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(
+            &page_mark_absolute_y_slot_agreement,
+        );
+    let source_gap_to_page_line_gap_readiness_hints =
+        table_grid_source_gap_to_page_line_gap_readiness_hints(
+            cross_table_row_boundary_offset_probe,
+        );
+    let source_gap_to_page_line_gap_table_family_transform_required =
+        cross_table_line_domain_present || cross_table_row_boundary_offset_transform_required;
+
+    let y_supports = table_grid_source_only_page_y_origin_candidate_supports(
+        document,
+        candidate,
+        source_layout,
+        cross_table_row_boundary_offset_probe,
+        subrecord_span_readiness,
+    );
+    let mut y_groups: BTreeMap<
+        (i32, Option<i32>),
+        Vec<TableGridSourceOnlyPageYOriginCandidateSupport>,
+    > = BTreeMap::new();
+    for support in y_supports.iter().cloned() {
+        y_groups
+            .entry((
+                rounded_milli(support.selected_y),
+                support.row_height.map(rounded_milli),
+            ))
+            .or_default()
+            .push(support);
+    }
+    let y_best_support_count = y_groups
+        .values()
+        .map(|supports| supports.len())
+        .max()
+        .unwrap_or(0);
+    let y_best_group_count = y_groups
+        .values()
+        .filter(|supports| supports.len() == y_best_support_count)
+        .count();
+    let y_unique_best_supported = y_best_support_count > 1 && y_best_group_count == 1;
+    let y_best_group = y_groups
+        .values()
+        .find(|supports| supports.len() == y_best_support_count && y_unique_best_supported);
+    let y_candidate_best_group = y_best_group.filter(|supports| {
+        table_grid_source_only_page_y_origin_group_supports_candidate(supports, candidate)
+    });
+    let y_fallback_selector_group = if y_candidate_best_group.is_none() {
+        table_grid_source_only_page_y_origin_fallback_selector_group(&y_groups, candidate)
+    } else {
+        None
+    };
+    let y_selector_group = y_candidate_best_group.or(y_fallback_selector_group.as_ref());
+    let y_selector_uses_single_support_fallback =
+        y_candidate_best_group.is_none() && y_fallback_selector_group.is_some();
+    let y_selector_support_count = y_selector_group.map(|supports| supports.len()).unwrap_or(0);
+    let y_selector_table_candidate_indexes = y_selector_group
+        .map(|supports| {
+            supports
+                .iter()
+                .filter_map(|support| support.table_candidate_index)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let cross_table_previous_row_span_table_candidate_count = y_groups
+        .values()
+        .flatten()
+        .filter(|support| {
+            table_grid_source_only_page_y_origin_support_is_cross_table_previous_row_span(support)
+        })
+        .filter_map(|support| support.table_candidate_index)
+        .collect::<BTreeSet<_>>()
+        .len();
+    let y_selector_support_fragmented_by_table = !y_selector_uses_single_support_fallback
+        && cross_table_previous_row_span_table_candidate_count > 1
+        && y_selector_table_candidate_indexes.len()
+            < cross_table_previous_row_span_table_candidate_count;
+    let y_selector_support_blocked_reasons = y_selector_group
+        .map(|supports| table_grid_source_only_page_y_origin_supports_blocked_reasons(supports))
+        .unwrap_or_default();
+    let y_selector_blocked_reason = if y_selector_group.is_none() {
+        "source-y-origin-selector-absent"
+    } else if y_selector_uses_single_support_fallback {
+        "source-y-origin-selector-single-support-fallback-not-render-admissible"
+    } else if y_selector_support_fragmented_by_table {
+        "source-y-origin-selector-fragmented-by-table-not-render-admissible"
+    } else if !y_unique_best_supported {
+        "source-y-origin-selector-agreement-unproven"
+    } else if !y_selector_support_blocked_reasons.is_empty() {
+        "source-y-origin-selector-support-blocked"
+    } else {
+        "none"
+    };
+
+    let admission_ready = direct_line_mark_origin_admissible;
+    let mut blocked_reasons = Vec::new();
+    if !admission_ready {
+        if !source_layout_candidate_present {
+            blocked_reasons.push("source-derived-layout-candidate-absent");
+        }
+        if !direct_line_mark_page_origin_present {
+            blocked_reasons.push("direct-line-mark-page-origin-absent");
+        }
+        if line_mark_page_origin_stride_present {
+            blocked_reasons.push("line-mark-record-stride-to-page-y-transform-unproven");
+        }
+        if source_layout.is_some_and(|layout| layout.page_origin_authority != "lineMarkPageGrid") {
+            blocked_reasons.push("page-origin-authority-not-renderable-line-mark-page-grid");
+        }
+        if !line_mark_rows_exact_and_contiguous {
+            blocked_reasons.push("line-mark-rows-not-exact-source-boundaries");
+        }
+        if cross_table_line_domain_present {
+            blocked_reasons.push("cross-table-line-domain-not-page-space-origin");
+        }
+        if selected_complete {
+            blocked_reasons.push("selected-post-row-gap-spans-not-page-y-origin");
+            if !selected_ordered_unique_complete {
+                blocked_reasons.push("selected-post-row-gap-coverage-not-row-unique");
+            }
+        }
+        if previous_complete {
+            blocked_reasons.push("previous-row-span-spans-require-page-origin-transform");
+            if !previous_ordered_unique_complete {
+                blocked_reasons.push("previous-row-span-coverage-not-row-unique");
+            }
+        }
+        if compact_complete {
+            blocked_reasons.push("compact-row-span-spans-do-not-decode-page-y-origin");
+        }
+        if cross_table_order_regresses {
+            blocked_reasons.push("source-order-vs-subrecord-order-contradiction");
+        }
+        if cross_table_row_boundary_offset_transform_required {
+            blocked_reasons.push("cross-table-row-boundary-offset-transform-required");
+        }
+        if page_mark_absolute_y_slot_blocked_reason != "none" {
+            blocked_reasons.push(page_mark_absolute_y_slot_blocked_reason);
+        }
+        if y_selector_blocked_reason != "none" {
+            blocked_reasons.push(y_selector_blocked_reason);
+        }
+        if source_gap_to_page_line_gap_table_family_transform_required
+            && let Some(reason) =
+                source_gap_to_page_line_gap_readiness_hints.table_family_transform_blocked_reason()
+        {
+            blocked_reasons.push(reason);
+        }
+        if !y_origin_solver_ready {
+            blocked_reasons.push("decoded-line-mark-page-y-transform-missing");
+        }
+    }
+
+    output.push_str(
+        "{\"source\":\"sourcePageYTransformGate source-only page-y render admission gate\"",
+    );
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceBBoxUsed\":false,\"admissionReady\":");
+    output.push_str(if admission_ready { "true" } else { "false" });
+    output.push_str(",\"directLineMarkOriginAdmissible\":");
+    output.push_str(if direct_line_mark_origin_admissible {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceLayoutCandidatePresent\":");
+    output.push_str(if source_layout_candidate_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"pageOriginAuthority\":");
+    match source_layout {
+        Some(layout) => output.push_str(&json_string(layout.page_origin_authority)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"lineMarkRowsExactAndContiguous\":");
+    output.push_str(if line_mark_rows_exact_and_contiguous {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"lineMarkPageOriginPresent\":");
+    output.push_str(if direct_line_mark_page_origin_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"lineMarkPageOriginStridePresent\":");
+    output.push_str(if line_mark_page_origin_stride_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"crossTableLineDomainPresent\":");
+    output.push_str(if cross_table_line_domain_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"selectedPostRowGapSpanComplete\":");
+    output.push_str(if selected_complete { "true" } else { "false" });
+    output.push_str(",\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":");
+    output.push_str(if selected_ordered_unique_complete {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"previousRowSpanComplete\":");
+    output.push_str(if previous_complete { "true" } else { "false" });
+    output.push_str(",\"previousRowSpanOrderedUniqueCoverageComplete\":");
+    output.push_str(if previous_ordered_unique_complete {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"compactRowSpanComplete\":");
+    output.push_str(if compact_complete { "true" } else { "false" });
+    output.push_str(",\"sourceOnlySelectorPresent\":");
+    output.push_str(if y_selector_group.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceOnlySelectorSingleSupportFallback\":");
+    output.push_str(if y_selector_uses_single_support_fallback {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceOnlySelectorSupportCount\":");
+    output.push_str(&y_selector_support_count.to_string());
+    output.push_str(",\"sourceOnlySelectorSupportFragmentedByTable\":");
+    output.push_str(if y_selector_support_fragmented_by_table {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceOnlySelectorBlockedReason\":");
+    output.push_str(&json_string(y_selector_blocked_reason));
+    output.push_str(",\"sourceOnlySelectorSupportBlockedReasons\":");
+    push_json_string_slice_array(output, &y_selector_support_blocked_reasons);
+    output.push_str(",\"sourceGapToPageLineGapTransformAdmissionGate\":");
+    push_table_grid_source_gap_to_page_line_gap_transform_admission_gate_json(
+        output,
+        "sourceOnlyPageYRenderAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate",
+        &source_gap_to_page_line_gap_readiness_hints,
+    );
+    output.push_str(",\"sourceGapToPageLineGapTableFamilyTransformRequired\":");
+    output.push_str(
+        if source_gap_to_page_line_gap_table_family_transform_required {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"sourceGapToPageLineGapTableFamilyTransformStable\":");
+    output.push_str(
+        if source_gap_to_page_line_gap_readiness_hints
+            .table_family_source_gap_to_page_line_gap_transform_stable()
+        {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"sourceGapToPageLineGapTableFamilyTransformBlockedReason\":");
+    match source_gap_to_page_line_gap_readiness_hints.table_family_transform_blocked_reason() {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"pageMarkAbsoluteYSlotSemanticsReady\":");
+    output.push_str(if page_mark_absolute_y_slot_semantics_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"pageMarkAbsoluteYSlotBlockedReason\":");
+    output.push_str(&json_string(page_mark_absolute_y_slot_blocked_reason));
+    output.push_str(",\"pageMarkAbsoluteYSlotResidualPx\":");
+    push_optional_f32_json(output, page_mark_absolute_y_slot_agreement.residual_px);
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output
+        .push_str(",\"renderPromotionContribution\":\"source-only-page-y-render-admission-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if admission_ready {
+        output.push_str("null");
+    } else {
+        output.push_str(&json_string("source-page-y-render-admission-not-ready"));
     }
     output.push('}');
 }
@@ -37079,25 +40108,28 @@ fn push_table_grid_line_domain_post_row_gap_projection_probe_json(
             .ordered_unique_coverage_complete
     });
 
-    let mut blocked_reasons = Vec::new();
+    let mut source_only_blocked_reasons = Vec::new();
     if line_domain_y.is_none() {
-        blocked_reasons.push("line-domain-y-candidate-absent");
+        source_only_blocked_reasons.push("line-domain-y-candidate-absent");
     }
     if selected_span_units.is_none() {
-        blocked_reasons.push("selected-post-row-gap-span-candidate-absent");
+        source_only_blocked_reasons.push("selected-post-row-gap-span-candidate-absent");
     }
-    blocked_reasons.push("cross-domain-source-units-treated-as-px");
-    blocked_reasons.push("selected-spacing-records-are-post-row-gap-family");
+    source_only_blocked_reasons.push("cross-domain-source-units-treated-as-px");
+    source_only_blocked_reasons.push("selected-spacing-records-are-post-row-gap-family");
     if !selected_complete {
-        blocked_reasons.push("selected-post-row-gap-span-incomplete");
+        source_only_blocked_reasons.push("selected-post-row-gap-span-incomplete");
     }
     if !selected_ordered_unique_complete {
-        blocked_reasons.push("selected-post-row-gap-span-not-ordered-unique");
+        source_only_blocked_reasons.push("selected-post-row-gap-span-not-ordered-unique");
     }
+    let mut blocked_reasons = source_only_blocked_reasons.clone();
     if reference_top_y.is_some() {
         blocked_reasons.push("reference-only-validation");
     }
     blocked_reasons.push("page-y-origin-transform-undecoded");
+    let mut source_only_projection_blocked_reasons = source_only_blocked_reasons.clone();
+    source_only_projection_blocked_reasons.push("page-y-origin-transform-undecoded");
 
     output.push_str(
         "{\"source\":\"sourcePageYTransformGate line-domain + post-row-gap span projection\"",
@@ -37133,6 +40165,16 @@ fn push_table_grid_line_domain_post_row_gap_projection_probe_json(
     push_optional_f32_json(output, residual_px.map(f32::abs));
     output.push_str(",\"withinTwoPx\":");
     output.push_str(if within_two_px { "true" } else { "false" });
+    output.push_str(",\"sourceOnlyProjectionDomainGate\":");
+    push_table_grid_line_domain_post_row_gap_source_only_projection_domain_gate_json(
+        output,
+        line_domain_y,
+        selected_span_units,
+        selected_complete,
+        selected_ordered_unique_complete,
+        projected_y,
+        &source_only_projection_blocked_reasons,
+    );
     output.push_str(",\"blockedReasons\":");
     push_json_string_slice_array(output, &blocked_reasons);
     output
@@ -37141,6 +40183,70 @@ fn push_table_grid_line_domain_post_row_gap_projection_probe_json(
     output.push_str(&json_string(
         "line-domain-post-row-gap-projection-crosses-source-unit-domain",
     ));
+    output.push('}');
+}
+
+fn push_table_grid_line_domain_post_row_gap_source_only_projection_domain_gate_json(
+    output: &mut String,
+    line_domain_y: Option<f32>,
+    selected_span_units: Option<usize>,
+    selected_complete: bool,
+    selected_ordered_unique_complete: bool,
+    projected_y: Option<f32>,
+    blocked_reasons: &[&str],
+) {
+    let source_projection_present = line_domain_y.is_some() && selected_span_units.is_some();
+    output.push_str("{\"source\":\"sourcePageYTransformGate source-only line-domain/post-row-gap projection domain gate\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceBBoxUsed\":false,\"selectionReady\":false");
+    output.push_str(",\"sourceProjectionPresent\":");
+    output.push_str(if source_projection_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"lineDomainPresent\":");
+    output.push_str(if line_domain_y.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"selectedPostRowGapSpanPresent\":");
+    output.push_str(if selected_span_units.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"selectedPostRowGapSpanComplete\":");
+    output.push_str(if selected_complete { "true" } else { "false" });
+    output.push_str(",\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":");
+    output.push_str(if selected_ordered_unique_complete {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(
+        ",\"sourceUnitDomain\":\"line-mark-record-y-plus-page-mark-subrecord-gap-units\"",
+    );
+    output.push_str(",\"lineDomainY\":");
+    push_optional_f32_json(output, line_domain_y);
+    output.push_str(",\"selectedPostRowGapSpanFirstUnits\":");
+    push_optional_usize_json(output, selected_span_units);
+    output.push_str(",\"projectedY\":");
+    push_optional_f32_json(output, projected_y);
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, blocked_reasons);
+    output.push_str(",\"renderPromotionContribution\":\"source-only-line-domain-post-row-gap-projection-domain-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if blocked_reasons.is_empty() {
+        output.push_str("null");
+    } else if blocked_reasons.contains(&"cross-domain-source-units-treated-as-px") {
+        output.push_str(&json_string(
+            "line-domain-post-row-gap-projection-crosses-source-unit-domain",
+        ));
+    } else {
+        output.push_str(&json_string(blocked_reasons[0]));
+    }
     output.push('}');
 }
 
@@ -37160,13 +40266,48 @@ struct TableGridSourceOnlyPageMarkAbsoluteYSlotCandidate {
     value_px: f32,
 }
 
-fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
-    output: &mut String,
+#[derive(Debug, Clone)]
+struct TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
+    line_domain_y: Option<f32>,
+    selected_span_units: Option<usize>,
+    line_domain_projected_y: Option<f32>,
+    candidates: Vec<TableGridSourceOnlyPageMarkAbsoluteYSlotCandidate>,
+    best_absolute_y_slot: Option<TableGridSourceOnlyPageMarkAbsoluteYSlotCandidate>,
+    residual_px: Option<f32>,
+    agrees: bool,
+}
+
+impl TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
+    fn semantics_ready(&self) -> bool {
+        self.line_domain_projected_y.is_some() && self.best_absolute_y_slot.is_some() && self.agrees
+    }
+}
+
+fn table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(
+    agreement: &TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement,
+) -> &'static str {
+    if agreement.semantics_ready() {
+        "none"
+    } else if agreement.best_absolute_y_slot.is_some()
+        && agreement.line_domain_projected_y.is_some()
+        && !agreement.agrees
+    {
+        "line-domain-projection-disagrees-with-page-mark-absolute-y-slot"
+    } else if agreement.best_absolute_y_slot.is_none() {
+        "page-mark-absolute-y-slot-absent"
+    } else if agreement.line_domain_projected_y.is_none() {
+        "line-domain-plus-span-projection-absent"
+    } else {
+        "page-mark-absolute-y-slot-semantics-unproven"
+    }
+}
+
+fn table_grid_source_only_page_mark_absolute_y_slot_agreement(
     document: &Document,
     candidate: &TableCandidate,
     cross_table_row_boundary_offset_probe: Option<&TableGridCrossTableRowBoundaryOffsetProbe>,
     subrecord_span_readiness: Option<&TableGridPageMarkSubrecordLineSpanReadiness>,
-) {
+) -> TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
     let line_domain_y = cross_table_row_boundary_offset_probe.and_then(|probe| {
         probe
             .tables
@@ -37188,40 +40329,77 @@ fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
         document,
         subrecord_span_readiness,
     );
-    let best_absolute_y_slot = candidates.iter().min_by(|left, right| {
-        let left_residual = line_domain_projected_y
-            .map(|projected_y| (left.value_px - projected_y).abs())
-            .unwrap_or(0.0);
-        let right_residual = line_domain_projected_y
-            .map(|projected_y| (right.value_px - projected_y).abs())
-            .unwrap_or(0.0);
-        option_f32_order(Some(left_residual), Some(right_residual))
-            .then_with(|| left.byte_offset.cmp(&right.byte_offset))
-    });
-    let absolute_y_slot_y = best_absolute_y_slot.map(|slot| slot.value_px);
+    let best_absolute_y_slot = candidates
+        .iter()
+        .min_by(|left, right| {
+            let left_residual = line_domain_projected_y
+                .map(|projected_y| (left.value_px - projected_y).abs())
+                .unwrap_or(0.0);
+            let right_residual = line_domain_projected_y
+                .map(|projected_y| (right.value_px - projected_y).abs())
+                .unwrap_or(0.0);
+            option_f32_order(Some(left_residual), Some(right_residual))
+                .then_with(|| left.byte_offset.cmp(&right.byte_offset))
+        })
+        .cloned();
+    let absolute_y_slot_y = best_absolute_y_slot.as_ref().map(|slot| slot.value_px);
     let residual_px = line_domain_projected_y
         .zip(absolute_y_slot_y)
         .map(|(projected_y, absolute_y)| projected_y - absolute_y);
     let agrees = residual_px.is_some_and(|residual| residual.abs() <= 2.0);
+
+    TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
+        line_domain_y,
+        selected_span_units,
+        line_domain_projected_y,
+        candidates,
+        best_absolute_y_slot,
+        residual_px,
+        agrees,
+    }
+}
+
+fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
+    output: &mut String,
+    document: &Document,
+    candidate: &TableCandidate,
+    cross_table_row_boundary_offset_probe: Option<&TableGridCrossTableRowBoundaryOffsetProbe>,
+    subrecord_span_readiness: Option<&TableGridPageMarkSubrecordLineSpanReadiness>,
+) {
+    let agreement = table_grid_source_only_page_mark_absolute_y_slot_agreement(
+        document,
+        candidate,
+        cross_table_row_boundary_offset_probe,
+        subrecord_span_readiness,
+    );
+    let absolute_y_slot_y = agreement
+        .best_absolute_y_slot
+        .as_ref()
+        .map(|slot| slot.value_px);
     let lineage_class = if absolute_y_slot_y.is_some() {
         "page-mark-absolute-y-slot"
-    } else if line_domain_projected_y.is_some() {
+    } else if agreement.line_domain_projected_y.is_some() {
         "line-domain-plus-span-projection"
     } else {
         "no-source-absolute-y-slot"
     };
 
     let mut blocked_reasons = Vec::new();
-    if best_absolute_y_slot.is_none() {
+    if agreement.best_absolute_y_slot.is_none() {
         blocked_reasons.push("page-mark-absolute-y-slot-absent");
     }
-    if line_domain_projected_y.is_none() {
+    if agreement.line_domain_projected_y.is_none() {
         blocked_reasons.push("line-domain-plus-span-projection-absent");
     }
-    if best_absolute_y_slot.is_some() && line_domain_projected_y.is_some() && !agrees {
+    if agreement.best_absolute_y_slot.is_some()
+        && agreement.line_domain_projected_y.is_some()
+        && !agreement.agrees
+    {
         blocked_reasons.push("line-domain-projection-disagrees-with-page-mark-absolute-y-slot");
     }
-    blocked_reasons.push("page-mark-absolute-y-slot-semantics-unproven");
+    if !agreement.semantics_ready() {
+        blocked_reasons.push("page-mark-absolute-y-slot-semantics-unproven");
+    }
     blocked_reasons.push("page-y-origin-transform-undecoded");
 
     output.push_str(
@@ -37233,11 +40411,11 @@ fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
         ",\"projectionKind\":\"line-domain-y-plus-post-row-gap-vs-page-mark-absolute-y-slot\"",
     );
     output.push_str(",\"lineDomainY\":");
-    push_optional_f32_json(output, line_domain_y);
+    push_optional_f32_json(output, agreement.line_domain_y);
     output.push_str(",\"selectedPostRowGapSpanFirstUnits\":");
-    push_optional_usize_json(output, selected_span_units);
+    push_optional_usize_json(output, agreement.selected_span_units);
     output.push_str(",\"lineDomainProjectedY\":");
-    push_optional_f32_json(output, line_domain_projected_y);
+    push_optional_f32_json(output, agreement.line_domain_projected_y);
     output.push_str(",\"absoluteYSlotPresent\":");
     output.push_str(if absolute_y_slot_y.is_some() {
         "true"
@@ -37245,20 +40423,20 @@ fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
         "false"
     });
     output.push_str(",\"bestAbsoluteYSlot\":");
-    match best_absolute_y_slot {
+    match agreement.best_absolute_y_slot.as_ref() {
         Some(slot) => push_table_grid_source_only_page_mark_absolute_y_slot_candidate_json(
             output,
             slot,
-            Some(&candidates),
+            Some(&agreement.candidates),
         ),
         None => output.push_str("null"),
     }
     output.push_str(",\"absoluteYSlotY\":");
     push_optional_f32_json(output, absolute_y_slot_y);
     output.push_str(",\"lineDomainProjectionVsAbsoluteYSlotResidualPx\":");
-    push_optional_f32_json(output, residual_px);
+    push_optional_f32_json(output, agreement.residual_px);
     output.push_str(",\"lineDomainProjectionAgreesWithAbsoluteYSlot\":");
-    output.push_str(if agrees { "true" } else { "false" });
+    output.push_str(if agreement.agrees { "true" } else { "false" });
     output.push_str(",\"lineageClass\":");
     output.push_str(&json_string(lineage_class));
     output.push_str(",\"blockedReasons\":");
@@ -37267,7 +40445,11 @@ fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
         ",\"renderPromotionContribution\":\"source-only-page-mark-absolute-y-slot-gate\"",
     );
     output.push_str(",\"renderPromotionBlockedReason\":");
-    output.push_str(&json_string("page-mark-absolute-y-slot-semantics-unproven"));
+    if blocked_reasons.is_empty() {
+        output.push_str("null");
+    } else {
+        output.push_str(&json_string(blocked_reasons[0]));
+    }
     output.push('}');
 }
 
@@ -37446,14 +40628,103 @@ struct TableGridSourceGapToPageLineGapReadinessHints {
     segment_offset_units_per_page_line_gap_spread: Option<f32>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct TableGridSourceGapToPageLineGapTransformCandidateSummary {
+    kind: &'static str,
+    max_abs_delta_units: Option<i32>,
+    units_per_page_line_gap_spread: Option<f32>,
+}
+
 impl TableGridSourceGapToPageLineGapReadinessHints {
     fn source_gap_to_page_line_gap_transform_stable(&self) -> bool {
         self.transition_count > 0 && self.best_candidate_max_abs_delta_units == Some(0)
     }
 
+    fn table_family_source_gap_to_page_line_gap_transform_stable(&self) -> bool {
+        self.source_gap_to_page_line_gap_transform_stable()
+            && self.all_transitions_same_page_mark_entry
+    }
+
     fn transform_blocked_reason(&self) -> Option<&'static str> {
         (!self.source_gap_to_page_line_gap_transform_stable())
             .then_some("source-gap-to-page-line-gap-transform-not-stable")
+    }
+
+    fn table_family_transform_blocked_reason(&self) -> Option<&'static str> {
+        if self.transition_count == 0 {
+            Some("source-gap-to-page-line-gap-transform-evidence-absent")
+        } else if !self.all_transitions_same_page_mark_entry {
+            Some("source-gap-to-page-line-gap-transform-crosses-page-mark-entries")
+        } else if !self.source_gap_to_page_line_gap_transform_stable() {
+            Some("source-gap-to-page-line-gap-transform-unstable-across-table-family")
+        } else {
+            None
+        }
+    }
+
+    fn transform_candidate_summaries(
+        &self,
+    ) -> [TableGridSourceGapToPageLineGapTransformCandidateSummary; 3] {
+        [
+            TableGridSourceGapToPageLineGapTransformCandidateSummary {
+                kind: "direct-source-range-gap",
+                max_abs_delta_units: self.source_range_gap_to_page_line_gap_max_abs_delta_units,
+                units_per_page_line_gap_spread: self.source_range_units_per_page_line_gap_spread,
+            },
+            TableGridSourceGapToPageLineGapTransformCandidateSummary {
+                kind: "direct-row-source-start-gap",
+                max_abs_delta_units: self.row_source_start_gap_to_page_line_gap_max_abs_delta_units,
+                units_per_page_line_gap_spread: self
+                    .row_source_start_units_per_page_line_gap_spread,
+            },
+            TableGridSourceGapToPageLineGapTransformCandidateSummary {
+                kind: "segment-offset-gap",
+                max_abs_delta_units: self.segment_offset_gap_to_page_line_gap_max_abs_delta_units,
+                units_per_page_line_gap_spread: self.segment_offset_units_per_page_line_gap_spread,
+            },
+        ]
+    }
+
+    fn transform_candidate_count(&self) -> usize {
+        self.transform_candidate_summaries()
+            .iter()
+            .filter(|candidate| candidate.max_abs_delta_units.is_some())
+            .count()
+    }
+
+    fn exact_transform_candidate_count(&self) -> usize {
+        self.transform_candidate_summaries()
+            .iter()
+            .filter(|candidate| candidate.max_abs_delta_units == Some(0))
+            .count()
+    }
+
+    fn best_candidate_transition_coverage_count(&self) -> usize {
+        if self.best_candidate_transform_kind.is_some() {
+            self.transition_count
+        } else {
+            0
+        }
+    }
+
+    fn best_candidate_units_per_page_line_gap_spread(&self) -> Option<f32> {
+        let best_kind = self.best_candidate_transform_kind?;
+        self.transform_candidate_summaries()
+            .iter()
+            .find(|candidate| candidate.kind == best_kind)
+            .and_then(|candidate| candidate.units_per_page_line_gap_spread)
+    }
+
+    fn lowest_spread_candidate(&self) -> Option<(&'static str, f32)> {
+        let summaries = self.transform_candidate_summaries();
+        summaries
+            .iter()
+            .filter_map(|candidate| {
+                candidate
+                    .units_per_page_line_gap_spread
+                    .map(|spread| (candidate.kind, spread))
+            })
+            .min_by(|left, right| left.1.total_cmp(&right.1))
     }
 }
 
@@ -37617,6 +40888,30 @@ fn push_table_grid_source_gap_to_page_line_gap_readiness_hints_json(
     }
     output.push_str(",\"bestCandidateMaxAbsDeltaUnits\":");
     push_optional_i32_json(output, hints.best_candidate_max_abs_delta_units);
+    output.push_str(",\"transformCandidateCount\":");
+    output.push_str(&hints.transform_candidate_count().to_string());
+    output.push_str(",\"exactTransformCandidateCount\":");
+    output.push_str(&hints.exact_transform_candidate_count().to_string());
+    output.push_str(",\"bestCandidateTransitionCoverageCount\":");
+    output.push_str(&hints.best_candidate_transition_coverage_count().to_string());
+    output.push_str(",\"bestCandidateUnitsPerPageLineGapSpread\":");
+    push_optional_f32_json(
+        output,
+        hints.best_candidate_units_per_page_line_gap_spread(),
+    );
+    let lowest_spread_candidate = hints.lowest_spread_candidate();
+    output.push_str(",\"lowestSpreadCandidateTransformKind\":");
+    if let Some((kind, _)) = lowest_spread_candidate {
+        output.push_str(&json_string(kind));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"lowestSpreadUnitsPerPageLineGapSpread\":");
+    push_optional_f32_json(output, lowest_spread_candidate.map(|(_, spread)| spread));
+    output.push_str(",\"transformCandidateSummaries\":");
+    push_table_grid_source_gap_to_page_line_gap_transform_candidate_summaries_json(output, hints);
+    output.push_str(",\"declinedTransformCandidates\":");
+    push_table_grid_source_gap_to_page_line_gap_declined_transform_candidates_json(output, hints);
     output.push_str(",\"sourceRangeUnitsPerPageLineGapSpread\":");
     push_optional_f32_json(output, hints.source_range_units_per_page_line_gap_spread);
     output.push_str(",\"rowSourceStartUnitsPerPageLineGapSpread\":");
@@ -37632,6 +40927,19 @@ fn push_table_grid_source_gap_to_page_line_gap_readiness_hints_json(
     } else {
         "false"
     });
+    output.push_str(",\"tableFamilySourceGapToPageLineGapTransformStable\":");
+    output.push_str(
+        if hints.table_family_source_gap_to_page_line_gap_transform_stable() {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"tableFamilyTransformBlockedReason\":");
+    match hints.table_family_transform_blocked_reason() {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
+    }
     output.push_str(",\"renderPromotionBlockedReason\":");
     match hints.transform_blocked_reason() {
         Some(reason) => output.push_str(&json_string(reason)),
@@ -37640,10 +40948,223 @@ fn push_table_grid_source_gap_to_page_line_gap_readiness_hints_json(
     output.push('}');
 }
 
+fn push_table_grid_source_gap_to_page_line_gap_transform_admission_gate_json(
+    output: &mut String,
+    source: &'static str,
+    hints: &TableGridSourceGapToPageLineGapReadinessHints,
+) {
+    let transform_ready = hints.source_gap_to_page_line_gap_transform_stable();
+    let table_family_transform_ready =
+        hints.table_family_source_gap_to_page_line_gap_transform_stable();
+    let mut declared_blockers = Vec::new();
+    if hints.transition_count == 0 {
+        declared_blockers.push("source-gap-to-page-line-gap-transform-evidence-absent");
+    }
+    if !transform_ready {
+        declared_blockers.push("source-gap-to-page-line-gap-transform-not-stable");
+    }
+    if let Some(reason) = hints.table_family_transform_blocked_reason()
+        && !declared_blockers.contains(&reason)
+    {
+        declared_blockers.push(reason);
+    }
+    if !transform_ready {
+        declared_blockers.push("source-gap-to-page-line-gap-transform-undecoded");
+    }
+
+    output.push_str("{\"source\":");
+    output.push_str(&json_string(source));
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false");
+    output.push_str(",\"transformDomain\":");
+    output.push_str(&json_string("source-unit-gap-to-page-mark-line-index-gap"));
+    output.push_str(",\"canDecodeSourceTransform\":");
+    output.push_str(if transform_ready { "true" } else { "false" });
+    output.push_str(",\"tableFamilyTransformStable\":");
+    output.push_str(if table_family_transform_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"tableFamilyTransformBlockedReason\":");
+    match hints.table_family_transform_blocked_reason() {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"transitionCount\":");
+    output.push_str(&hints.transition_count.to_string());
+    output.push_str(",\"allTransitionsSamePageMarkEntry\":");
+    output.push_str(if hints.all_transitions_same_page_mark_entry {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"bestCandidateTransformKind\":");
+    match hints.best_candidate_transform_kind {
+        Some(kind) => output.push_str(&json_string(kind)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"bestCandidateMaxAbsDeltaUnits\":");
+    push_optional_i32_json(output, hints.best_candidate_max_abs_delta_units);
+    output.push_str(",\"transformCandidateCount\":");
+    output.push_str(&hints.transform_candidate_count().to_string());
+    output.push_str(",\"exactTransformCandidateCount\":");
+    output.push_str(&hints.exact_transform_candidate_count().to_string());
+    output.push_str(",\"bestCandidateTransitionCoverageCount\":");
+    output.push_str(&hints.best_candidate_transition_coverage_count().to_string());
+    output.push_str(",\"bestCandidateUnitsPerPageLineGapSpread\":");
+    push_optional_f32_json(
+        output,
+        hints.best_candidate_units_per_page_line_gap_spread(),
+    );
+    let lowest_spread_candidate = hints.lowest_spread_candidate();
+    output.push_str(",\"lowestSpreadCandidateTransformKind\":");
+    if let Some((kind, _)) = lowest_spread_candidate {
+        output.push_str(&json_string(kind));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"lowestSpreadUnitsPerPageLineGapSpread\":");
+    push_optional_f32_json(output, lowest_spread_candidate.map(|(_, spread)| spread));
+    output.push_str(",\"declinedTransformCandidates\":");
+    push_table_grid_source_gap_to_page_line_gap_declined_transform_candidates_json(output, hints);
+    output.push_str(",\"declaredBlockers\":");
+    push_json_string_slice_array(output, &declared_blockers);
+    output.push_str(
+        ",\"renderPromotionContribution\":\"source-gap-to-page-line-gap-transform-admission-gate\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if transform_ready {
+        output.push_str("null");
+    } else if hints.transition_count == 0 {
+        output.push_str(&json_string(
+            "source-gap-to-page-line-gap-transform-evidence-absent",
+        ));
+    } else {
+        output.push_str(&json_string(
+            "source-gap-to-page-line-gap-transform-not-stable",
+        ));
+    }
+    output.push('}');
+}
+
+fn push_table_grid_source_gap_to_page_line_gap_transform_candidate_summaries_json(
+    output: &mut String,
+    hints: &TableGridSourceGapToPageLineGapReadinessHints,
+) {
+    output.push('[');
+    for (index, candidate) in hints.transform_candidate_summaries().iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_table_grid_source_gap_to_page_line_gap_transform_candidate_summary_json(
+            output, hints, candidate,
+        );
+    }
+    output.push(']');
+}
+
+fn push_table_grid_source_gap_to_page_line_gap_declined_transform_candidates_json(
+    output: &mut String,
+    hints: &TableGridSourceGapToPageLineGapReadinessHints,
+) {
+    output.push('[');
+    let mut first = true;
+    for candidate in hints.transform_candidate_summaries() {
+        if table_grid_source_gap_to_page_line_gap_decline_reason(&candidate, hints).is_none() {
+            continue;
+        }
+        if !first {
+            output.push(',');
+        }
+        first = false;
+        push_table_grid_source_gap_to_page_line_gap_transform_candidate_summary_json(
+            output, hints, &candidate,
+        );
+    }
+    output.push(']');
+}
+
+fn push_table_grid_source_gap_to_page_line_gap_transform_candidate_summary_json(
+    output: &mut String,
+    hints: &TableGridSourceGapToPageLineGapReadinessHints,
+    candidate: &TableGridSourceGapToPageLineGapTransformCandidateSummary,
+) {
+    let selected = hints.best_candidate_transform_kind == Some(candidate.kind);
+    output.push_str("{\"transformKind\":");
+    output.push_str(&json_string(candidate.kind));
+    output.push_str(",\"selected\":");
+    output.push_str(if selected { "true" } else { "false" });
+    output.push_str(",\"stable\":");
+    output.push_str(if candidate.max_abs_delta_units == Some(0) {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"transitionCoverageCount\":");
+    if candidate.max_abs_delta_units.is_some() {
+        output.push_str(&hints.transition_count.to_string());
+    } else {
+        output.push('0');
+    }
+    output.push_str(",\"maxAbsDeltaUnits\":");
+    push_optional_i32_json(output, candidate.max_abs_delta_units);
+    output.push_str(",\"unitsPerPageLineGapSpread\":");
+    push_optional_f32_json(output, candidate.units_per_page_line_gap_spread);
+    output.push_str(",\"declineReason\":");
+    if let Some(reason) = table_grid_source_gap_to_page_line_gap_decline_reason(candidate, hints) {
+        output.push_str(&json_string(reason));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if let Some(reason) = table_grid_source_gap_to_page_line_gap_candidate_blocked_reason(candidate)
+    {
+        output.push_str(&json_string(reason));
+    } else {
+        output.push_str("null");
+    }
+    output.push('}');
+}
+
+fn table_grid_source_gap_to_page_line_gap_decline_reason(
+    candidate: &TableGridSourceGapToPageLineGapTransformCandidateSummary,
+    hints: &TableGridSourceGapToPageLineGapReadinessHints,
+) -> Option<&'static str> {
+    if hints.best_candidate_transform_kind == Some(candidate.kind) {
+        return None;
+    }
+    let Some(candidate_delta) = candidate.max_abs_delta_units else {
+        return Some("transform-candidate-evidence-absent");
+    };
+    let Some(best_delta) = hints.best_candidate_max_abs_delta_units else {
+        return Some("transform-candidate-not-selected-without-best-transform");
+    };
+    if candidate_delta > best_delta {
+        Some("higher-max-delta-than-selected-transform")
+    } else if candidate_delta == best_delta {
+        Some("tie-not-selected-by-candidate-order")
+    } else {
+        Some("transform-candidate-not-selected")
+    }
+}
+
+fn table_grid_source_gap_to_page_line_gap_candidate_blocked_reason(
+    candidate: &TableGridSourceGapToPageLineGapTransformCandidateSummary,
+) -> Option<&'static str> {
+    if candidate.max_abs_delta_units.is_none() {
+        Some("transform-candidate-evidence-absent")
+    } else if candidate.max_abs_delta_units != Some(0) {
+        Some("source-gap-to-page-line-gap-transform-not-stable")
+    } else {
+        None
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn push_table_grid_source_only_page_y_origin_hypothesis_json(
     output: &mut String,
     document: &Document,
+    candidate: &TableCandidate,
     source_layout: Option<&TableGridSourceDerivedLayout>,
     subrecord_span_readiness: Option<&TableGridPageMarkSubrecordLineSpanReadiness>,
     cross_table_ordering_probe: Option<&TableGridCrossTableSubrecordOrderingProbe>,
@@ -37667,15 +41188,19 @@ fn push_table_grid_source_only_page_y_origin_hypothesis_json(
             probe.all_records_within_single_page_mark_entry
                 && !probe.combined_line_mark_record_y_tops_px.is_empty()
         });
-    let page_mark_absolute_y_slot_candidates = if source_layout.is_some() {
-        table_grid_source_only_page_mark_absolute_y_slot_candidates(
+    let page_mark_absolute_y_slot_agreement = if source_layout.is_some() {
+        Some(table_grid_source_only_page_mark_absolute_y_slot_agreement(
             document,
+            candidate,
+            cross_table_row_boundary_offset_probe,
             subrecord_span_readiness,
-        )
+        ))
     } else {
-        Vec::new()
+        None
     };
-    let page_mark_absolute_y_slot = page_mark_absolute_y_slot_candidates.first();
+    let page_mark_absolute_y_slot = page_mark_absolute_y_slot_agreement
+        .as_ref()
+        .and_then(|agreement| agreement.best_absolute_y_slot.as_ref());
     let page_mark_absolute_y_slot_present = page_mark_absolute_y_slot.is_some();
     let candidate_present = line_mark_page_origin_present
         || line_mark_page_origin_stride_present
@@ -37877,7 +41402,12 @@ fn push_table_grid_source_only_page_y_origin_hypothesis_json(
     output.push_str(",\"pageMarkAbsoluteYSlotY\":");
     push_optional_f32_json(output, page_mark_absolute_y_slot.map(|slot| slot.value_px));
     output.push_str(",\"pageMarkAbsoluteYSlotBlockedReason\":");
-    if page_mark_absolute_y_slot_present {
+    if page_mark_absolute_y_slot_agreement
+        .as_ref()
+        .is_some_and(TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement::semantics_ready)
+    {
+        output.push_str("null");
+    } else if page_mark_absolute_y_slot_present {
         output.push_str(&json_string("page-mark-absolute-y-slot-semantics-unproven"));
     } else {
         output.push_str("null");
@@ -37975,7 +41505,9 @@ fn push_table_grid_source_only_page_y_origin_hypothesis_json(
         Some(slot) => push_table_grid_source_only_page_mark_absolute_y_slot_candidate_json(
             output,
             slot,
-            Some(&page_mark_absolute_y_slot_candidates),
+            page_mark_absolute_y_slot_agreement
+                .as_ref()
+                .map(|agreement| agreement.candidates.as_slice()),
         ),
         None => output.push_str("null"),
     }
@@ -38137,6 +41669,7 @@ struct TableGridSourceOnlyPageYOriginCandidateSupport {
     table_candidate_index: Option<usize>,
     contribution: &'static str,
     blocked_reason: &'static str,
+    extra_blocked_reasons: Vec<&'static str>,
 }
 
 fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
@@ -38181,6 +41714,26 @@ fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
     let best_group = groups
         .values()
         .find(|supports| supports.len() == best_support_count && unique_best_supported);
+    let candidate_best_group = best_group.filter(|supports| {
+        table_grid_source_only_page_y_origin_group_supports_candidate(supports, candidate)
+    });
+    let fallback_selector_group = if candidate_best_group.is_none() {
+        table_grid_source_only_page_y_origin_fallback_selector_group(&groups, candidate)
+    } else {
+        None
+    };
+    let best_supported_table_candidate_indexes = best_group
+        .map(|supports| {
+            supports
+                .iter()
+                .filter_map(|support| support.table_candidate_index)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let best_supported_table_candidate_count = best_supported_table_candidate_indexes.len();
+    let best_supported_covers_multiple_table_candidates = best_supported_table_candidate_count > 1;
     let selection_ready = false;
     let cross_table_previous_row_span_support_count = groups
         .values()
@@ -38189,6 +41742,18 @@ fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
             table_grid_source_only_page_y_origin_support_is_cross_table_previous_row_span(support)
         })
         .count();
+    let cross_table_previous_row_span_table_candidate_indexes = groups
+        .values()
+        .flatten()
+        .filter(|support| {
+            table_grid_source_only_page_y_origin_support_is_cross_table_previous_row_span(support)
+        })
+        .filter_map(|support| support.table_candidate_index)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let cross_table_previous_row_span_table_candidate_count =
+        cross_table_previous_row_span_table_candidate_indexes.len();
     let cross_table_previous_row_span_unique_best_supported = best_group.is_some_and(|supports| {
         supports
             .iter()
@@ -38196,19 +41761,23 @@ fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
     });
     let cross_table_previous_row_span_group_blocked_reasons = best_group
         .filter(|_| cross_table_previous_row_span_unique_best_supported)
-        .map(|supports| {
-            supports
-                .iter()
-                .filter_map(|support| {
-                    (support.blocked_reason != "none").then_some(support.blocked_reason)
-                })
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>()
-        })
+        .map(|supports| table_grid_source_only_page_y_origin_supports_blocked_reasons(supports))
         .unwrap_or_default();
     let cross_table_previous_row_span_ready = cross_table_previous_row_span_unique_best_supported
         && cross_table_previous_row_span_group_blocked_reasons.is_empty();
+    let cross_table_previous_row_span_best_group_table_coverage_ratio =
+        if cross_table_previous_row_span_table_candidate_count == 0 {
+            None
+        } else {
+            Some(
+                best_supported_table_candidate_count as f32
+                    / cross_table_previous_row_span_table_candidate_count as f32,
+            )
+        };
+    let cross_table_previous_row_span_support_fragmented_by_table =
+        cross_table_previous_row_span_table_candidate_count > 1
+            && best_supported_table_candidate_count
+                < cross_table_previous_row_span_table_candidate_count;
 
     let mut blocked_reasons = Vec::new();
     if groups.is_empty() {
@@ -38222,6 +41791,12 @@ fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
     }
     if unique_best_supported {
         blocked_reasons.push("source-page-y-origin-field-semantics-still-unproven");
+    }
+    if unique_best_supported && !best_supported_covers_multiple_table_candidates {
+        blocked_reasons.push("source-page-y-origin-best-support-not-cross-table");
+    }
+    if cross_table_previous_row_span_support_fragmented_by_table {
+        blocked_reasons.push("cross-table-previous-row-span-support-fragmented-by-table");
     }
 
     output
@@ -38269,8 +41844,25 @@ fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
         }
         None => output.push_str("[]"),
     }
+    output.push_str(",\"bestSupportedTableCandidateIndexes\":");
+    push_usize_array_json(output, &best_supported_table_candidate_indexes);
+    output.push_str(",\"bestSupportedTableCandidateCount\":");
+    output.push_str(&best_supported_table_candidate_count.to_string());
+    output.push_str(",\"bestSupportedCoversMultipleTableCandidates\":");
+    output.push_str(if best_supported_covers_multiple_table_candidates {
+        "true"
+    } else {
+        "false"
+    });
     output.push_str(",\"crossTablePreviousRowSpanSupportCount\":");
     output.push_str(&cross_table_previous_row_span_support_count.to_string());
+    output.push_str(",\"crossTablePreviousRowSpanTableCandidateIndexes\":");
+    push_usize_array_json(
+        output,
+        &cross_table_previous_row_span_table_candidate_indexes,
+    );
+    output.push_str(",\"crossTablePreviousRowSpanTableCandidateCount\":");
+    output.push_str(&cross_table_previous_row_span_table_candidate_count.to_string());
     output.push_str(",\"crossTablePreviousRowSpanUniqueBestSupported\":");
     output.push_str(if cross_table_previous_row_span_unique_best_supported {
         "true"
@@ -38283,8 +41875,40 @@ fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
     } else {
         "false"
     });
+    output.push_str(",\"crossTablePreviousRowSpanBestGroupCoversMultipleTables\":");
+    output.push_str(
+        if cross_table_previous_row_span_unique_best_supported
+            && best_supported_covers_multiple_table_candidates
+        {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"crossTablePreviousRowSpanBestGroupTableCoverageRatio\":");
+    push_optional_f32_json(
+        output,
+        cross_table_previous_row_span_best_group_table_coverage_ratio,
+    );
+    output.push_str(",\"crossTablePreviousRowSpanSupportFragmentedByTable\":");
+    output.push_str(
+        if cross_table_previous_row_span_support_fragmented_by_table {
+            "true"
+        } else {
+            "false"
+        },
+    );
     output.push_str(",\"crossTablePreviousRowSpanReadinessBlockedReasons\":");
     push_json_string_slice_array(output, &cross_table_previous_row_span_group_blocked_reasons);
+    output.push_str(",\"sourceOnlyPageYOriginSelector\":");
+    push_table_grid_source_only_page_y_origin_selector_json(
+        output,
+        candidate,
+        candidate_best_group,
+        fallback_selector_group.as_ref(),
+        best_supported_covers_multiple_table_candidates,
+        cross_table_previous_row_span_support_fragmented_by_table,
+    );
     output.push_str(",\"agreementGroups\":[");
     for (index, supports) in groups.values().enumerate() {
         if index > 0 {
@@ -38318,10 +41942,7 @@ fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
             .collect::<Vec<_>>();
         push_json_string_slice_array(output, &contributions);
         output.push_str(",\"blockedReasons\":");
-        let blocked = supports
-            .iter()
-            .map(|support| support.blocked_reason)
-            .collect::<Vec<_>>();
+        let blocked = table_grid_source_only_page_y_origin_supports_blocked_reasons(supports);
         push_json_string_slice_array(output, &blocked);
         output.push('}');
     }
@@ -38334,6 +41955,192 @@ fn push_table_grid_source_only_page_y_origin_candidate_agreement_gate_json(
     output.push_str(",\"renderPromotionBlockedReason\":");
     output.push_str(&json_string("source-page-y-origin-agreement-unproven"));
     output.push('}');
+}
+
+fn push_table_grid_source_only_page_y_origin_selector_json(
+    output: &mut String,
+    candidate: &TableCandidate,
+    best_group: Option<&Vec<TableGridSourceOnlyPageYOriginCandidateSupport>>,
+    fallback_group: Option<&Vec<TableGridSourceOnlyPageYOriginCandidateSupport>>,
+    best_supported_covers_multiple_table_candidates: bool,
+    cross_table_previous_row_span_support_fragmented_by_table: bool,
+) {
+    let Some(selector_group) = best_group.or(fallback_group) else {
+        output.push_str("null");
+        return;
+    };
+    let Some(first) = selector_group.first() else {
+        output.push_str("null");
+        return;
+    };
+    let using_single_support_fallback = best_group.is_none() && fallback_group.is_some();
+    let best_table_candidate_indexes = selector_group
+        .iter()
+        .filter_map(|support| support.table_candidate_index)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let origin_bases = selector_group
+        .iter()
+        .map(|support| support.origin_basis)
+        .collect::<Vec<_>>();
+    let contributions = selector_group
+        .iter()
+        .map(|support| support.contribution)
+        .collect::<Vec<_>>();
+    let mut blocked_reasons =
+        table_grid_source_only_page_y_origin_supports_blocked_reasons(selector_group);
+    if using_single_support_fallback {
+        blocked_reasons.push("single-source-y-origin-support-unproven");
+    }
+    let selector_support_covers_multiple_table_candidates = if using_single_support_fallback {
+        best_table_candidate_indexes.len() > 1
+    } else {
+        best_supported_covers_multiple_table_candidates
+    };
+    let selector_support_fragmented_by_table =
+        !using_single_support_fallback && cross_table_previous_row_span_support_fragmented_by_table;
+    let selector_blocked_reason = if using_single_support_fallback {
+        "single-source-y-origin-support-unproven"
+    } else if selector_support_fragmented_by_table {
+        "cross-table-previous-row-span-support-fragmented-by-table"
+    } else if !selector_support_covers_multiple_table_candidates {
+        "source-page-y-origin-best-support-not-cross-table"
+    } else {
+        "source-page-y-origin-field-semantics-still-unproven"
+    };
+
+    output.push_str(
+        "{\"source\":\"sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector\"",
+    );
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false");
+    output.push_str(",\"tableCandidateIndex\":");
+    output.push_str(&candidate.index().to_string());
+    output.push_str(",\"selectionBasis\":");
+    output.push_str(&json_string(if using_single_support_fallback {
+        "single-support-source-only-y-origin-fallback"
+    } else {
+        "best-supported-source-only-y-origin-agreement-group"
+    }));
+    output.push_str(",\"singleSupportFallback\":");
+    output.push_str(if using_single_support_fallback {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"selectedOriginBasis\":");
+    output.push_str(&json_string(first.origin_basis));
+    output.push_str(",\"selectedY\":");
+    output.push_str(&format!("{:.3}", first.selected_y));
+    output.push_str(",\"selectedRowHeight\":");
+    push_optional_f32_json(output, first.row_height);
+    output.push_str(",\"supportCount\":");
+    output.push_str(&selector_group.len().to_string());
+    output.push_str(",\"supportOriginBases\":");
+    push_json_string_slice_array(output, &origin_bases);
+    output.push_str(",\"supportTableCandidateIndexes\":");
+    push_usize_array_json(output, &best_table_candidate_indexes);
+    output.push_str(",\"supportCoversMultipleTableCandidates\":");
+    output.push_str(if selector_support_covers_multiple_table_candidates {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"supportFragmentedByTable\":");
+    output.push_str(if selector_support_fragmented_by_table {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"contributions\":");
+    push_json_string_slice_array(output, &contributions);
+    output.push_str(",\"supportBlockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output.push_str(",\"renderPromotionContribution\":\"source-only-page-y-origin-selector\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(selector_blocked_reason));
+    output.push('}');
+}
+
+fn table_grid_source_only_page_y_origin_fallback_selector_group(
+    groups: &BTreeMap<(i32, Option<i32>), Vec<TableGridSourceOnlyPageYOriginCandidateSupport>>,
+    candidate: &TableCandidate,
+) -> Option<Vec<TableGridSourceOnlyPageYOriginCandidateSupport>> {
+    groups
+        .values()
+        .filter(|supports| {
+            !supports.is_empty()
+                && table_grid_source_only_page_y_origin_group_supports_candidate(
+                    supports, candidate,
+                )
+        })
+        .min_by(|left, right| {
+            let left_support = left.first().unwrap();
+            let right_support = right.first().unwrap();
+            table_grid_source_only_page_y_origin_fallback_rank(left_support)
+                .cmp(&table_grid_source_only_page_y_origin_fallback_rank(
+                    right_support,
+                ))
+                .then_with(|| {
+                    left_support
+                        .table_candidate_index
+                        .unwrap_or(usize::MAX)
+                        .cmp(&right_support.table_candidate_index.unwrap_or(usize::MAX))
+                })
+                .then_with(|| {
+                    rounded_milli(left_support.selected_y)
+                        .cmp(&rounded_milli(right_support.selected_y))
+                })
+                .then_with(|| left_support.origin_basis.cmp(right_support.origin_basis))
+        })
+        .cloned()
+}
+
+fn table_grid_source_only_page_y_origin_group_supports_candidate(
+    supports: &[TableGridSourceOnlyPageYOriginCandidateSupport],
+    candidate: &TableCandidate,
+) -> bool {
+    let mut has_table_specific_support = false;
+    for support in supports {
+        if let Some(table_candidate_index) = support.table_candidate_index {
+            has_table_specific_support = true;
+            if table_candidate_index == candidate.index() {
+                return true;
+            }
+        }
+    }
+    if has_table_specific_support {
+        return false;
+    }
+    supports
+        .iter()
+        .any(table_grid_source_only_page_y_origin_support_is_candidate_local_unindexed)
+}
+
+fn table_grid_source_only_page_y_origin_support_is_candidate_local_unindexed(
+    support: &TableGridSourceOnlyPageYOriginCandidateSupport,
+) -> bool {
+    support.table_candidate_index.is_none()
+        && !matches!(
+            support.origin_basis,
+            "cross-table-combined-previous-row-span-first-record"
+        )
+}
+
+fn table_grid_source_only_page_y_origin_fallback_rank(
+    support: &TableGridSourceOnlyPageYOriginCandidateSupport,
+) -> usize {
+    match support.origin_basis {
+        "line-mark-page-origin-direct" => 0,
+        "page-mark-absolute-y-slot-field2-tail-block16-word11" => 1,
+        "line-mark-stride-raw-record-index-first-row" => 2,
+        "line-mark-stride-collapsed-record-index-first-row" => 3,
+        "cross-table-combined-previous-row-span-first-record" => 4,
+        "cross-table-previous-row-span-table-first-row" => 5,
+        "cross-table-selected-spacing-table-first-row" => 6,
+        _ => 100,
+    }
 }
 
 fn push_table_grid_source_only_page_y_origin_domain_gate_json(
@@ -38405,6 +42212,10 @@ fn push_table_grid_source_only_page_y_origin_domain_gate_json(
         });
     let page_space_origin_decoded =
         direct_line_mark_page_space_origin_present && !line_domain_requires_offset_transform;
+    let source_gap_to_page_line_gap_readiness_hints =
+        table_grid_source_gap_to_page_line_gap_readiness_hints(
+            cross_table_row_boundary_offset_probe,
+        );
 
     let mut blocked_reasons = Vec::new();
     if !direct_line_mark_page_space_origin_present {
@@ -38487,6 +42298,12 @@ fn push_table_grid_source_only_page_y_origin_domain_gate_json(
         output,
         cross_table_row_boundary_offset_probe,
         same_page_mark_entry_transition_count,
+    );
+    output.push_str(",\"sourceGapToPageLineGapTransformAdmissionGate\":");
+    push_table_grid_source_gap_to_page_line_gap_transform_admission_gate_json(
+        output,
+        "sourceOnlyPageYOriginDomainGate.sourceGapToPageLineGapTransformAdmissionGate",
+        &source_gap_to_page_line_gap_readiness_hints,
     );
     output.push_str(",\"lineDomainRequiresOffsetTransform\":");
     output.push_str(if line_domain_requires_offset_transform {
@@ -39028,24 +42845,39 @@ fn table_grid_source_only_page_y_origin_candidate_supports(
             }
         }
     }
-    if source_layout.is_some() {
-        let absolute_y_slot_candidates =
-            table_grid_source_only_page_mark_absolute_y_slot_candidates(
-                document,
-                subrecord_span_readiness,
-            );
-        if let Some(slot) = absolute_y_slot_candidates.first()
+    if source_layout.is_some_and(table_grid_source_layout_supports_page_mark_absolute_y_slot) {
+        let absolute_y_slot_agreement = table_grid_source_only_page_mark_absolute_y_slot_agreement(
+            document,
+            candidate,
+            cross_table_row_boundary_offset_probe,
+            subrecord_span_readiness,
+        );
+        if let Some(slot) = absolute_y_slot_agreement.best_absolute_y_slot.as_ref()
             && slot.field_index == 2
             && slot.tail_block16_word_index == Some(11)
         {
-            push_table_grid_source_only_page_y_origin_candidate_support(
+            let blocked_reason = if absolute_y_slot_agreement.semantics_ready() {
+                "none"
+            } else {
+                "page-mark-absolute-y-slot-semantics-unproven"
+            };
+            let mut extra_blocked_reasons = Vec::new();
+            if absolute_y_slot_agreement.best_absolute_y_slot.is_some()
+                && absolute_y_slot_agreement.line_domain_projected_y.is_some()
+                && !absolute_y_slot_agreement.agrees
+            {
+                extra_blocked_reasons
+                    .push("line-domain-projection-disagrees-with-page-mark-absolute-y-slot");
+            }
+            push_table_grid_source_only_page_y_origin_candidate_support_with_extra_blockers(
                 &mut supports,
                 "page-mark-absolute-y-slot-field2-tail-block16-word11",
                 slot.value_px,
                 None,
                 Some(candidate.index()),
                 "source-only-page-mark-absolute-y-slot-y-origin",
-                "page-mark-absolute-y-slot-semantics-unproven",
+                blocked_reason,
+                &extra_blocked_reasons,
             );
         }
     }
@@ -39089,6 +42921,13 @@ fn table_grid_source_only_page_y_origin_candidate_supports(
     supports
 }
 
+fn table_grid_source_layout_supports_page_mark_absolute_y_slot(
+    layout: &TableGridSourceDerivedLayout,
+) -> bool {
+    layout.page_origin_authority == "lineMarkPageGridStrideRawRecordIndex"
+        && layout.line_mark_page_origin_stride.is_some()
+}
+
 fn table_grid_cross_table_previous_row_span_y_origin_support_count(
     cross_table_row_boundary_offset_probe: Option<&TableGridCrossTableRowBoundaryOffsetProbe>,
 ) -> usize {
@@ -39122,6 +42961,29 @@ fn push_table_grid_source_only_page_y_origin_candidate_support(
     contribution: &'static str,
     blocked_reason: &'static str,
 ) {
+    push_table_grid_source_only_page_y_origin_candidate_support_with_extra_blockers(
+        supports,
+        origin_basis,
+        selected_y,
+        row_height,
+        table_candidate_index,
+        contribution,
+        blocked_reason,
+        &[],
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_table_grid_source_only_page_y_origin_candidate_support_with_extra_blockers(
+    supports: &mut Vec<TableGridSourceOnlyPageYOriginCandidateSupport>,
+    origin_basis: &'static str,
+    selected_y: f32,
+    row_height: Option<f32>,
+    table_candidate_index: Option<usize>,
+    contribution: &'static str,
+    blocked_reason: &'static str,
+    extra_blocked_reasons: &[&'static str],
+) {
     if !selected_y.is_finite() || row_height.is_some_and(|height| !height.is_finite()) {
         return;
     }
@@ -39132,7 +42994,31 @@ fn push_table_grid_source_only_page_y_origin_candidate_support(
         table_candidate_index,
         contribution,
         blocked_reason,
+        extra_blocked_reasons: extra_blocked_reasons.to_vec(),
     });
+}
+
+fn table_grid_source_only_page_y_origin_supports_blocked_reasons(
+    supports: &[TableGridSourceOnlyPageYOriginCandidateSupport],
+) -> Vec<&'static str> {
+    let mut reasons = BTreeSet::new();
+    for support in supports {
+        table_grid_insert_source_only_page_y_origin_blocker(&mut reasons, support.blocked_reason);
+        for reason in &support.extra_blocked_reasons {
+            table_grid_insert_source_only_page_y_origin_blocker(&mut reasons, reason);
+        }
+    }
+    reasons.into_iter().collect()
+}
+
+fn table_grid_insert_source_only_page_y_origin_blocker(
+    reasons: &mut BTreeSet<&'static str>,
+    reason: &'static str,
+) {
+    if reason == "none" {
+        return;
+    }
+    reasons.insert(reason);
 }
 
 fn push_table_grid_line_mark_page_origin_candidate_json(
@@ -41419,7 +45305,7 @@ fn push_page_layer_image_payload_diagnostic_json(
     output.push_str(&format!(
         "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{height:.3}}}"
     ));
-    output.push_str(",\"source\":\"objectStreamCandidate\",\"projectionKind\":\"diagnosticProjection\",\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":false,\"renderable\":true");
+    output.push_str(",\"source\":\"objectStreamCandidate\",\"projectionKind\":\"diagnosticProjection\",\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":false");
     output.push_str(",\"sourcePath\":");
     output.push_str(&json_string(diagnostic.candidate.path()));
     output.push_str(",\"objectCandidateIndex\":");
@@ -41434,6 +45320,9 @@ fn push_page_layer_image_payload_diagnostic_json(
     output.push_str(&dimensions.height().to_string());
     output.push_str(",\"payloadLength\":");
     output.push_str(&diagnostic.span.len().to_string());
+    output.push_str(",\"objectEnvelope\":");
+    push_object_image_payload_envelope_json(output, diagnostic.span.envelope());
+    push_image_payload_render_gate_json(output, diagnostic);
     output.push('}');
 }
 
@@ -41685,6 +45574,16 @@ fn push_page_layer_success_data_test_title_art_projection_json(
     output.push('}');
     output.push_str(",\"horizontalPlacementGate\":");
     push_success_data_test_title_art_horizontal_placement_json(output, horizontal_placement);
+    output.push_str(",\"sourceFrameRenderTrace\":");
+    push_success_data_test_title_art_source_frame_render_trace_json(
+        output,
+        source_frame_candidate,
+        diagnostic.frame_record,
+        diagnostic.frame.frame_ref(),
+        horizontal_placement,
+        frame_scale_y_basis,
+        frame_scale_y_source_units,
+    );
     output.push_str(",\"contentTopAdjustment\":{\"sourceUnits\":");
     if let Some(frame) = source_frame_candidate {
         output.push_str(&frame.content_top().to_string());
@@ -41927,6 +45826,18 @@ fn push_page_layer_success_data_test_title_art_projection_json(
         .unwrap_or_default();
     output.push_str(",\"extrusionTexturePathCount\":");
     output.push_str(&extrusion_texture_paths.len().to_string());
+    output.push_str(",\"extrusionTextureClipGate\":");
+    push_success_data_test_title_art_extrusion_texture_clip_gate_json(
+        output,
+        extrusion_texture_paths.len(),
+        "source-shadow-outline",
+    );
+    output.push_str(",\"titleTextureGeometryRoleGate\":");
+    push_success_data_test_title_art_texture_geometry_role_gate_json(
+        output,
+        snapshot,
+        &extrusion_texture_paths,
+    );
     output.push_str(",\"extrusionTextureRecord70Word0Values\":");
     push_u32_hex_array_json(
         output,
@@ -41965,14 +45876,12 @@ fn push_page_layer_success_data_test_title_art_projection_json(
         output.push_str("null");
     }
     output.push_str(",\"extrusionTextureEffectRenderPromoted\":");
-    output.push_str(if extrusion_texture_effect.is_some() {
-        "true"
-    } else {
-        "false"
-    });
+    output.push_str("false");
     output.push_str(",\"extrusionTextureEffectRenderPromotionBlockedReason\":");
     if extrusion_texture_effect.is_some() {
-        output.push_str(&json_string("none"));
+        output.push_str(&json_string(
+            "record70-separates-shadow-but-not-interstitial-texture-from-main",
+        ));
     } else {
         output.push_str("null");
     }
@@ -42044,6 +45953,8 @@ fn push_page_layer_success_data_test_title_art_projection_json(
         snapshot,
         source_paint_candidate,
     );
+    output.push_str(",\"frontFillWindingGate\":");
+    push_success_data_test_title_art_front_fill_winding_gate_json(output, snapshot);
     output.push_str(",\"sourceFrameCandidate\":");
     if let Some(frame) = source_frame_candidate {
         output.push_str("{\"source\":\"JSFart2Contents\",\"left\":");
@@ -43338,6 +47249,11 @@ fn push_page_layer_fdm_frame_diagnostic_json(
         "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{height:.3}}}"
     ));
     output.push_str(",\"source\":\"fdmIndex+frame\",\"projectionKind\":\"fdmFrameDiagnosticProjection\",\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":false,\"renderable\":false,\"referenceBacked\":true");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(fdm_entry_frame_render_blocked_reason(
+        diagnostic.candidate,
+        diagnostic.entry,
+    )));
     output.push_str(",\"sourcePath\":");
     output.push_str(&json_string(diagnostic.candidate.path()));
     output.push_str(",\"objectCandidateIndex\":");
@@ -43360,6 +47276,11 @@ fn push_page_layer_fdm_frame_diagnostic_json(
     output.push_str(
         &fdm_entry_complete_payload_count(diagnostic.candidate, diagnostic.entry).to_string(),
     );
+    output.push_str(",\"imagePayloadExtractionStatus\":");
+    output.push_str(&json_string(fdm_entry_image_payload_extraction_status(
+        diagnostic.candidate,
+        diagnostic.entry,
+    )));
     output.push_str(",\"matchedFrameRecord\":{\"sourcePath\":");
     output.push_str(&json_string(diagnostic.frame_record.source_path()));
     output.push_str(",\"rowIndex\":");
@@ -43443,6 +47364,170 @@ fn push_page_layer_fdm_command_diagnostic_json(
     output.push('}');
     output.push_str(",\"projectionViewport\":");
     push_fdm_projection_viewport_json(output, layout);
+    output.push('}');
+}
+
+fn push_page_layer_fdm_projection_extent_summary_json(
+    output: &mut String,
+    layout: PageLayout,
+    command_diagnostics: &[FdmCommandDiagnostic<'_>],
+    primitive_diagnostics: &[FdmCommandDiagnostic<'_>],
+    active_extent: FdmCommandProjectionExtent,
+) {
+    let primitive_extent = fdm_vector_primitive_source_projection_extent(primitive_diagnostics);
+    let index_entry_extent = fdm_index_entry_projection_extent(command_diagnostics);
+    output.push_str("{\"type\":\"fdmProjectionExtentSummary\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":0.000,\"y\":0.000,\"width\":{:.3},\"height\":{:.3}}}",
+        layout.width_px(),
+        layout.height_px()
+    ));
+    output.push_str(",\"source\":\"FDMVector command bboxes+FDMIndex entry bboxes\"");
+    output.push_str(",\"projectionKind\":\"fdmProjectionExtentSummary\"");
+    output.push_str(",\"decoded\":false,\"diagnosticOnly\":true,\"geometryDecoded\":true,\"placementProven\":false,\"renderable\":false,\"referenceBacked\":true,\"sourceBacked\":true");
+    output.push_str(",\"activeRenderExtentBasis\":\"fdmVectorCommandBboxExtent\"");
+    output.push_str(",\"renderPromotionBlockedReason\":\"fdm-vector-page-placement-transform-source-fields-unproven\"");
+    output.push_str(",\"commandDiagnosticCount\":");
+    output.push_str(&command_diagnostics.len().to_string());
+    output.push_str(",\"renderedPrimitiveDiagnosticCount\":");
+    output.push_str(&primitive_diagnostics.len().to_string());
+    output.push_str(",\"fdmIndexEntryCount\":");
+    output.push_str(&fdm_index_entry_count(command_diagnostics).to_string());
+    output.push_str(",\"activeCommandExtent\":");
+    push_fdm_command_projection_extent_json(output, active_extent);
+    output.push_str(",\"renderedPrimitiveExtent\":");
+    push_optional_fdm_command_projection_extent_json(output, primitive_extent);
+    output.push_str(",\"fdmIndexEntryExtent\":");
+    push_optional_fdm_command_projection_extent_json(output, index_entry_extent);
+    output.push_str(",\"extentAgreement\":{\"commandMatchesRenderedPrimitives\":");
+    output.push_str(&(primitive_extent == Some(active_extent)).to_string());
+    output.push_str(",\"commandMatchesFdmIndexEntries\":");
+    output.push_str(&(index_entry_extent == Some(active_extent)).to_string());
+    output.push_str(",\"renderedPrimitivesMatchFdmIndexEntries\":");
+    output.push_str(
+        &(primitive_extent.is_some() && primitive_extent == index_entry_extent).to_string(),
+    );
+    output.push('}');
+    output.push_str(",\"extentResiduals\":{\"commandVsRenderedPrimitives\":");
+    push_fdm_command_projection_extent_residual_json(output, Some(active_extent), primitive_extent);
+    output.push_str(",\"commandVsFdmIndexEntries\":");
+    push_fdm_command_projection_extent_residual_json(
+        output,
+        Some(active_extent),
+        index_entry_extent,
+    );
+    output.push_str(",\"renderedPrimitivesVsFdmIndexEntries\":");
+    push_fdm_command_projection_extent_residual_json(output, primitive_extent, index_entry_extent);
+    output.push('}');
+    output.push_str(",\"projectionViewport\":");
+    push_fdm_projection_viewport_json(output, layout);
+    output.push('}');
+}
+
+fn fdm_index_entry_count(diagnostics: &[FdmCommandDiagnostic<'_>]) -> usize {
+    diagnostics
+        .iter()
+        .map(|diagnostic| (diagnostic.candidate_index, diagnostic.entry.row_index()))
+        .collect::<BTreeSet<_>>()
+        .len()
+}
+
+fn fdm_index_entry_projection_extent(
+    diagnostics: &[FdmCommandDiagnostic<'_>],
+) -> Option<FdmCommandProjectionExtent> {
+    let mut seen = BTreeSet::<(usize, usize)>::new();
+    let mut extent = None;
+    for diagnostic in diagnostics {
+        if !seen.insert((diagnostic.candidate_index, diagnostic.entry.row_index())) {
+            continue;
+        }
+        extent = fdm_bbox_extent_union(
+            extent,
+            normalize_fdm_index_entry_bbox(diagnostic.entry.bbox()),
+        );
+    }
+    extent.map(|(left, top, right, bottom)| FdmCommandProjectionExtent {
+        left,
+        top,
+        right,
+        bottom,
+    })
+}
+
+fn fdm_vector_primitive_source_projection_extent(
+    diagnostics: &[FdmCommandDiagnostic<'_>],
+) -> Option<FdmCommandProjectionExtent> {
+    let extent = diagnostics
+        .iter()
+        .filter_map(|diagnostic| fdm_vector_command_source_bbox(diagnostic.command))
+        .map(normalize_fdm_bbox)
+        .fold(None, fdm_bbox_extent_union)?;
+    Some(FdmCommandProjectionExtent {
+        left: extent.0,
+        top: extent.1,
+        right: extent.2,
+        bottom: extent.3,
+    })
+}
+
+fn push_optional_fdm_command_projection_extent_json(
+    output: &mut String,
+    extent: Option<FdmCommandProjectionExtent>,
+) {
+    if let Some(extent) = extent {
+        push_fdm_command_projection_extent_json(output, extent);
+    } else {
+        output.push_str("null");
+    }
+}
+
+fn push_fdm_command_projection_extent_json(
+    output: &mut String,
+    extent: FdmCommandProjectionExtent,
+) {
+    output.push_str("{\"left\":");
+    output.push_str(&extent.left.to_string());
+    output.push_str(",\"top\":");
+    output.push_str(&extent.top.to_string());
+    output.push_str(",\"right\":");
+    output.push_str(&extent.right.to_string());
+    output.push_str(",\"bottom\":");
+    output.push_str(&extent.bottom.to_string());
+    output.push_str(",\"spanX\":");
+    output.push_str(&(extent.right - extent.left).to_string());
+    output.push_str(",\"spanY\":");
+    output.push_str(&(extent.bottom - extent.top).to_string());
+    output.push('}');
+}
+
+fn push_fdm_command_projection_extent_residual_json(
+    output: &mut String,
+    left: Option<FdmCommandProjectionExtent>,
+    right: Option<FdmCommandProjectionExtent>,
+) {
+    let (Some(left), Some(right)) = (left, right) else {
+        output.push_str("null");
+        return;
+    };
+    let left_delta = right.left - left.left;
+    let top_delta = right.top - left.top;
+    let right_delta = right.right - left.right;
+    let bottom_delta = right.bottom - left.bottom;
+    let max_abs_delta = left_delta
+        .abs()
+        .max(top_delta.abs())
+        .max(right_delta.abs())
+        .max(bottom_delta.abs());
+    output.push_str("{\"leftDelta\":");
+    output.push_str(&left_delta.to_string());
+    output.push_str(",\"topDelta\":");
+    output.push_str(&top_delta.to_string());
+    output.push_str(",\"rightDelta\":");
+    output.push_str(&right_delta.to_string());
+    output.push_str(",\"bottomDelta\":");
+    output.push_str(&bottom_delta.to_string());
+    output.push_str(",\"maxAbsDelta\":");
+    output.push_str(&max_abs_delta.to_string());
     output.push('}');
 }
 
@@ -43658,6 +47743,1252 @@ fn push_page_layer_fdm_vector_primitive_large_span_blocked_json(
     output.push_str(",\"projectionViewport\":");
     push_fdm_projection_viewport_json(output, layout);
     output.push('}');
+}
+
+fn push_page_layer_fdm_text_mask_cohort_summary_json(
+    output: &mut String,
+    layout: PageLayout,
+    cohorts: &[FdmTextMaskCohortDiagnosticSummary],
+    text_projection: &ShanaiLanTextProjection,
+) {
+    output.push_str("{\"type\":\"fdmTextMaskCohortSummary\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":0.000,\"y\":0.000,\"width\":{:.3},\"height\":{:.3}}}",
+        layout.width_px(),
+        layout.height_px()
+    ));
+    output.push_str(",\"source\":\"fdmVectorCommandPrimitive+documentTextGroupLineProjection\"");
+    output.push_str(",\"projectionKind\":\"fdmTextMaskCohortSummary\"");
+    output.push_str(",\"basis\":\"fdmVectorClosedFillCohort+documentTextRightNeighbor\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":true,\"placementProven\":false,\"diagnosticOnly\":true,\"renderable\":false");
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"fdm-text-mask-document-text-alignment-unproven\"",
+    );
+    output.push_str(",\"candidatePredicate\":{\"minPrimitiveCount\":");
+    output.push_str(&FDM_TEXT_MASK_COHORT_MIN_PRIMITIVES.to_string());
+    output.push_str(",\"maxCohorts\":");
+    output.push_str(&FDM_TEXT_MASK_COHORT_LIMIT.to_string());
+    output.push_str(",\"rightNeighborMaxGapFactor\":");
+    output.push_str(&format!("{FDM_TEXT_MASK_RIGHT_NEIGHBOR_MAX_GAP_FACTOR:.3}"));
+    output.push_str(",\"requiresClosedFillPrimitive\":true,\"requiresBlackOrWhiteFill\":true}");
+    output.push_str(",\"cohortCount\":");
+    output.push_str(&cohorts.len().to_string());
+    output.push_str(",\"rightNeighborCandidateCount\":");
+    output.push_str(
+        &cohorts
+            .iter()
+            .filter(|cohort| {
+                fdm_text_mask_cohort_right_neighbor_text_slot(cohort, text_projection).is_some()
+            })
+            .count()
+            .to_string(),
+    );
+    output.push_str(",\"topTextLikeComponentCandidateCount\":");
+    output.push_str(
+        &cohorts
+            .iter()
+            .filter(|cohort| cohort.top_text_like_component.is_some())
+            .count()
+            .to_string(),
+    );
+    output.push_str(",\"componentRightNeighborCandidateCount\":");
+    output.push_str(
+        &cohorts
+            .iter()
+            .filter(|cohort| {
+                cohort
+                    .top_text_like_component
+                    .and_then(|component| component.projected_bbox)
+                    .and_then(|bbox| {
+                        fdm_text_mask_bbox_right_neighbor_text_slot(bbox, text_projection)
+                    })
+                    .is_some()
+            })
+            .count()
+            .to_string(),
+    );
+    output.push_str(",\"cohorts\":[");
+    for (index, cohort) in cohorts.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_fdm_text_mask_cohort_json(output, cohort, text_projection);
+    }
+    output.push_str("]}");
+}
+
+fn push_page_layer_fdm_text_mask_source_transform_candidate_summary_json(
+    output: &mut String,
+    layout: PageLayout,
+    cohorts: &[FdmTextMaskCohortDiagnosticSummary],
+    text_projection: &ShanaiLanTextProjection,
+) {
+    let candidates = fdm_text_mask_source_transform_candidates(cohorts, text_projection);
+    let bridge_candidate_count = candidates
+        .iter()
+        .filter(|candidate| candidate.metrics.source_bbox_within_pre_fragment_projection)
+        .count();
+    let row_anchor_ambiguous_count = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate
+                .slot
+                .line_header_same_segment_group_run_distinct_text_group_count
+                .is_some_and(|count| count > 1)
+        })
+        .count();
+    let slot_not_split_count = candidates
+        .iter()
+        .filter(|candidate| !candidate.slot.split_from_text_run)
+        .count();
+    let cohort_component_agreement_count = candidates
+        .iter()
+        .filter(|candidate| candidate.cohort_component_agreement)
+        .count();
+
+    output.push_str("{\"type\":\"fdmTextMaskSourceTransformCandidateSummary\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":0.000,\"y\":0.000,\"width\":{:.3},\"height\":{:.3}}}",
+        layout.width_px(),
+        layout.height_px()
+    ));
+    output.push_str(",\"source\":\"fdmVectorClosedFillComponent+/DocumentText pre-fragment span\"");
+    output.push_str(",\"projectionKind\":\"fdmTextMaskSourceTransformCandidateSummary\"");
+    output.push_str(",\"basis\":\"topTextLikeComponent+preFragmentGridOffset\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementProven\":false,\"diagnosticOnly\":true,\"renderable\":false");
+    output.push_str(",\"renderPromotionBlockedReason\":\"fdm-source-to-document-text-transform-reference-backed-and-row-anchor-unproven\"");
+    output.push_str(",\"candidatePredicate\":{\"requiresTopTextLikeComponent\":true,\"requiresComponentSourceBbox\":true,\"requiresRightNeighborDocumentTextSlot\":true,\"requiresPreFragmentSpan\":true}");
+    output.push_str(",\"candidateCount\":");
+    output.push_str(&candidates.len().to_string());
+    output.push_str(",\"preFragmentBridgeCandidateCount\":");
+    output.push_str(&bridge_candidate_count.to_string());
+    output.push_str(",\"cohortComponentAgreementCount\":");
+    output.push_str(&cohort_component_agreement_count.to_string());
+    output.push_str(",\"rowAnchorAmbiguousCandidateCount\":");
+    output.push_str(&row_anchor_ambiguous_count.to_string());
+    output.push_str(",\"slotNotSplitCandidateCount\":");
+    output.push_str(&slot_not_split_count.to_string());
+    output.push_str(",\"sourceUnitsPerTextGridUnitXRange\":");
+    push_fdm_text_mask_source_transform_ratio_range_json(output, &candidates);
+    output.push_str(",\"promotionGate\":{\"sourceBacked\":true,\"referenceBacked\":true,\"promotionReady\":false,\"blockedReasons\":[\"document-text-grid-origin-reference-backed\",\"line-header-y-run-placement-semantics-unproven\",\"document-text-pre-fragment-fdm-mask-role-unproven\",\"fdm-text-mask-to-document-text-baseline-transform-unproven\",\"fdm-source-transform-cross-sample-support-missing\"],\"renderPromotionBlockedReason\":\"fdm-source-to-document-text-transform-reference-backed-and-row-anchor-unproven\"}");
+    output.push_str(",\"candidates\":[");
+    for (index, candidate) in candidates.iter().take(8).enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_fdm_text_mask_source_transform_candidate_json(output, *candidate);
+    }
+    output.push_str("]}");
+}
+
+fn push_fdm_text_mask_source_transform_ratio_range_json(
+    output: &mut String,
+    candidates: &[FdmTextMaskSourceTransformCandidate<'_>],
+) {
+    let mut ratios = candidates
+        .iter()
+        .map(|candidate| candidate.source_units_per_text_grid_unit_x)
+        .filter(|ratio| ratio.is_finite());
+    let Some(first) = ratios.next() else {
+        output.push_str("null");
+        return;
+    };
+    let (mut min_ratio, mut max_ratio) = (first, first);
+    for ratio in ratios {
+        min_ratio = min_ratio.min(ratio);
+        max_ratio = max_ratio.max(ratio);
+    }
+    output.push_str("{\"min\":");
+    output.push_str(&format!("{min_ratio:.3}"));
+    output.push_str(",\"max\":");
+    output.push_str(&format!("{max_ratio:.3}"));
+    output.push('}');
+}
+
+fn push_fdm_text_mask_source_transform_candidate_json(
+    output: &mut String,
+    candidate: FdmTextMaskSourceTransformCandidate<'_>,
+) {
+    output.push_str("{\"rowIndex\":");
+    output.push_str(&candidate.row_index.to_string());
+    output.push_str(",\"candidateClass\":");
+    output.push_str(&json_string(candidate.candidate_class));
+    output.push_str(",\"componentIndex\":");
+    push_option_usize_json(output, candidate.component_index);
+    output.push_str(",\"slotIndex\":");
+    output.push_str(&candidate.slot_index.to_string());
+    output.push_str(",\"slotText\":");
+    output.push_str(&json_string(&candidate.slot.text));
+    output.push_str(",\"slotSourceUnitRange\":");
+    output.push_str(&source_range_json(
+        candidate.slot.source_span.unit_start(),
+        candidate.slot.source_span.unit_end(),
+    ));
+    output.push_str(",\"slotGroupIndex\":");
+    match candidate.slot.group_index {
+        Some(group_index) => output.push_str(&group_index.to_string()),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"sourceBbox\":");
+    push_fdm_normalized_bbox_json(output, candidate.source_bbox);
+    output.push_str(",\"currentProjectedBbox\":");
+    push_bbox_tuple_json(output, candidate.projected_bbox);
+    output.push_str(",\"currentProjectionGridOffsetRange\":{\"start\":");
+    output.push_str(&format!("{:.3}", candidate.current_projection_grid_start));
+    output.push_str(",\"end\":");
+    output.push_str(&format!("{:.3}", candidate.current_projection_grid_end));
+    output.push_str(",\"span\":");
+    output.push_str(&format!("{:.3}", candidate.current_projection_grid_span));
+    output.push('}');
+    output.push_str(",\"sourceXTransformCandidate\":{\"sourceUnitsPerTextGridUnit\":");
+    output.push_str(&format!(
+        "{:.3}",
+        candidate.source_units_per_text_grid_unit_x
+    ));
+    output.push_str(",\"lineStartSourceX\":");
+    output.push_str(&format!("{:.3}", candidate.line_start_source_x));
+    output.push_str(",\"textStartSourceX\":");
+    output.push_str(&format!("{:.3}", candidate.text_start_source_x));
+    output.push_str(",\"sourceGapToTextStartX\":");
+    output.push_str(&format!("{:.3}", candidate.source_gap_to_text_start_x));
+    output.push_str(",\"transformAuthorityProven\":false}");
+    output.push_str(",\"preFragmentBridge\":{\"preFragmentUnitCount\":");
+    output.push_str(&candidate.metrics.pre_fragment_unit_count.to_string());
+    output.push_str(",\"preFragmentGridUnits\":");
+    output.push_str(&candidate.metrics.pre_fragment_grid_units.to_string());
+    output.push_str(",\"sourceBboxWithinPreFragmentProjection\":");
+    output.push_str(
+        &candidate
+            .metrics
+            .source_bbox_within_pre_fragment_projection
+            .to_string(),
+    );
+    output.push_str(",\"sourceBboxRightToTextStartGapPx\":");
+    output.push_str(&format!(
+        "{:.3}",
+        candidate.metrics.source_bbox_right_to_text_start_px
+    ));
+    output.push_str(",\"baselineResidualPx\":");
+    output.push_str(&format!(
+        "{:.3}",
+        candidate.metrics.text_baseline_minus_source_bottom_px
+    ));
+    output.push('}');
+    output.push_str(",\"cohortComponentAgreement\":");
+    output.push_str(&candidate.cohort_component_agreement.to_string());
+    output.push_str(",\"rowAnchorAmbiguous\":");
+    output.push_str(
+        &candidate
+            .slot
+            .line_header_same_segment_group_run_distinct_text_group_count
+            .is_some_and(|count| count > 1)
+            .to_string(),
+    );
+    output.push_str(",\"splitFromTextRun\":");
+    output.push_str(&candidate.slot.split_from_text_run.to_string());
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"fdm-source-transform-candidate-diagnostic-only\"}",
+    );
+}
+
+fn push_fdm_text_mask_cohort_json(
+    output: &mut String,
+    cohort: &FdmTextMaskCohortDiagnosticSummary,
+    text_projection: &ShanaiLanTextProjection,
+) {
+    output.push_str("{\"rowIndex\":");
+    output.push_str(&cohort.row_index.to_string());
+    output.push_str(",\"primitiveCount\":");
+    output.push_str(&cohort.primitive_count.to_string());
+    output.push_str(",\"blackFillPrimitiveCount\":");
+    output.push_str(&cohort.black_fill_primitive_count.to_string());
+    output.push_str(",\"whiteFillPrimitiveCount\":");
+    output.push_str(&cohort.white_fill_primitive_count.to_string());
+    output.push_str(",\"counterOverlayCount\":");
+    output.push_str(&cohort.counter_overlay_count.to_string());
+    output.push_str(",\"commandIndexMin\":");
+    push_option_usize_json(output, cohort.command_index_min);
+    output.push_str(",\"commandIndexMax\":");
+    push_option_usize_json(output, cohort.command_index_max);
+    output.push_str(",\"relativeOffsetMin\":");
+    push_option_usize_json(output, cohort.relative_offset_min);
+    output.push_str(",\"relativeOffsetMax\":");
+    push_option_usize_json(output, cohort.relative_offset_max);
+    output.push_str(",\"projectedBbox\":");
+    if let Some(bbox) = cohort.projected_bbox {
+        push_bbox_tuple_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"sourceBbox\":");
+    if let Some(bbox) = cohort.source_bbox {
+        push_fdm_normalized_bbox_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"rightNeighborTextSlotCandidate\":");
+    push_fdm_text_mask_right_neighbor_text_slot_json(
+        output,
+        cohort.projected_bbox,
+        text_projection,
+        "right-neighbor-overlapping-y",
+    );
+    output.push_str(",\"componentCount\":");
+    output.push_str(&cohort.component_count.to_string());
+    output.push_str(",\"topTextLikeComponentCandidate\":");
+    if let Some(component) = cohort.top_text_like_component {
+        push_fdm_text_mask_component_json(output, component, text_projection);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"rightNeighborPromotionReadiness\":");
+    push_fdm_text_mask_right_neighbor_promotion_readiness_json(output, cohort, text_projection);
+    output.push('}');
+}
+
+fn push_fdm_text_mask_component_json(
+    output: &mut String,
+    component: FdmTextMaskComponentDiagnosticSummary,
+    text_projection: &ShanaiLanTextProjection,
+) {
+    output.push_str("{\"source\":\"fdmVectorClosedFillComponent\",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":true,\"placementProven\":false,\"diagnosticOnly\":true,\"renderable\":false");
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"fdm-text-mask-component-to-document-text-alignment-unproven\"",
+    );
+    output.push_str(",\"componentIndex\":");
+    output.push_str(&component.component_index.to_string());
+    output.push_str(",\"primitiveCount\":");
+    output.push_str(&component.primitive_count.to_string());
+    output.push_str(",\"blackFillPrimitiveCount\":");
+    output.push_str(&component.black_fill_primitive_count.to_string());
+    output.push_str(",\"whiteFillPrimitiveCount\":");
+    output.push_str(&component.white_fill_primitive_count.to_string());
+    output.push_str(",\"counterOverlayCount\":");
+    output.push_str(&component.counter_overlay_count.to_string());
+    output.push_str(",\"commandIndexMin\":");
+    push_option_usize_json(output, component.command_index_min);
+    output.push_str(",\"commandIndexMax\":");
+    push_option_usize_json(output, component.command_index_max);
+    output.push_str(",\"relativeOffsetMin\":");
+    push_option_usize_json(output, component.relative_offset_min);
+    output.push_str(",\"relativeOffsetMax\":");
+    push_option_usize_json(output, component.relative_offset_max);
+    output.push_str(",\"projectedBbox\":");
+    if let Some(bbox) = component.projected_bbox {
+        push_bbox_tuple_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"sourceBbox\":");
+    if let Some(bbox) = component.source_bbox {
+        push_fdm_normalized_bbox_json(output, bbox);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"rightNeighborTextSlotCandidate\":");
+    push_fdm_text_mask_right_neighbor_text_slot_json(
+        output,
+        component.projected_bbox,
+        text_projection,
+        "component-right-neighbor-overlapping-y",
+    );
+    output.push('}');
+}
+
+fn push_fdm_text_mask_right_neighbor_promotion_readiness_json(
+    output: &mut String,
+    cohort: &FdmTextMaskCohortDiagnosticSummary,
+    text_projection: &ShanaiLanTextProjection,
+) {
+    let cohort_candidates = cohort
+        .projected_bbox
+        .map(|bbox| fdm_text_mask_bbox_right_neighbor_text_slot_candidates(bbox, text_projection))
+        .unwrap_or_default();
+    let component_bbox = cohort
+        .top_text_like_component
+        .and_then(|component| component.projected_bbox);
+    let component_candidates = component_bbox
+        .map(|bbox| fdm_text_mask_bbox_right_neighbor_text_slot_candidates(bbox, text_projection))
+        .unwrap_or_default();
+    let cohort_best = cohort_candidates.first().copied();
+    let component_best = component_candidates.first().copied();
+    let Some((selected, selected_bbox, selected_candidates)) = component_best
+        .and_then(|candidate| Some((candidate, component_bbox?, &component_candidates)))
+        .or_else(|| {
+            cohort_best
+                .and_then(|candidate| Some((candidate, cohort.projected_bbox?, &cohort_candidates)))
+        })
+    else {
+        output.push_str("null");
+        return;
+    };
+    let metrics =
+        fdm_text_mask_pre_fragment_bridge_metrics(selected_bbox, text_projection, selected.slot);
+    let cohort_component_agreement =
+        cohort_best
+            .zip(component_best)
+            .is_some_and(|(cohort, component)| {
+                fdm_text_mask_right_neighbor_candidates_same_slot(cohort, component)
+            });
+    let second_best = selected_candidates.get(1).copied();
+    let gap_margin_px = second_best.map(|candidate| candidate.gap_px.abs() - selected.gap_px.abs());
+    let row_anchor_ambiguous = selected
+        .slot
+        .line_header_same_segment_group_run_distinct_text_group_count
+        .is_some_and(|count| count > 1);
+
+    output.push_str("{\"type\":\"fdmTextMaskRightNeighborPromotionReadiness\"");
+    output.push_str(",\"source\":\"fdmVectorClosedFillCohort+/DocumentText\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderPromoted\":false");
+    output.push_str(",\"cohortSlot\":");
+    push_fdm_text_mask_right_neighbor_readiness_slot_json(output, cohort_best);
+    output.push_str(",\"componentSlot\":");
+    push_fdm_text_mask_right_neighbor_readiness_slot_json(output, component_best);
+    output.push_str(",\"cohortComponentAgreement\":");
+    output.push_str(&cohort_component_agreement.to_string());
+    output.push_str(",\"bestGapPx\":");
+    output.push_str(&format!("{:.3}", selected.gap_px));
+    output.push_str(",\"secondBestGapPx\":");
+    if let Some(second_best) = second_best {
+        output.push_str(&format!("{:.3}", second_best.gap_px));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"gapMarginPx\":");
+    if let Some(gap_margin_px) = gap_margin_px {
+        output.push_str(&format!("{gap_margin_px:.3}"));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"splitFromTextRun\":");
+    output.push_str(&selected.slot.split_from_text_run.to_string());
+    output.push_str(",\"fragmentCount\":");
+    output.push_str(&selected.slot.fragment_context.fragment_count.to_string());
+    output.push_str(",\"preFragmentUnitCount\":");
+    output.push_str(&metrics.pre_fragment_unit_count.to_string());
+    output.push_str(",\"sourceBboxWithinPreFragmentProjection\":");
+    output.push_str(
+        &metrics
+            .source_bbox_within_pre_fragment_projection
+            .to_string(),
+    );
+    output.push_str(",\"sourceBboxBeginsAfterLineStart\":");
+    output.push_str(&metrics.source_begins_after_line_start.to_string());
+    output.push_str(",\"sourceBboxEndsBeforeTextStart\":");
+    output.push_str(&metrics.source_ends_before_text_start.to_string());
+    output.push_str(",\"sameSegmentGroupRunDistinctTextGroupCount\":");
+    push_option_usize_json(
+        output,
+        selected
+            .slot
+            .line_header_same_segment_group_run_distinct_text_group_count,
+    );
+    output.push_str(",\"rowAnchorAmbiguous\":");
+    output.push_str(&row_anchor_ambiguous.to_string());
+    output.push_str(",\"baselineResidualPx\":");
+    output.push_str(&format!(
+        "{:.3}",
+        metrics.text_baseline_minus_source_bottom_px
+    ));
+    output.push_str(",\"promotionReady\":false,\"blockedReasons\":");
+    push_fdm_text_mask_promotion_blocked_reasons_json(
+        output,
+        cohort_best,
+        component_best,
+        cohort_component_agreement,
+        selected.slot,
+        metrics,
+        row_anchor_ambiguous,
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":\"fdm-text-mask-right-neighbor-promotion-readiness-blocked\"}");
+}
+
+fn push_fdm_text_mask_right_neighbor_readiness_slot_json(
+    output: &mut String,
+    candidate: Option<FdmTextMaskRightNeighborCandidate<'_>>,
+) {
+    let Some(candidate) = candidate else {
+        output.push_str("null");
+        return;
+    };
+    output.push_str("{\"slotIndex\":");
+    output.push_str(&candidate.slot_index.to_string());
+    output.push_str(",\"text\":");
+    output.push_str(&json_string(&candidate.slot.text));
+    output.push_str(",\"bbox\":");
+    push_bbox_tuple_json(output, candidate.bbox);
+    output.push_str(",\"horizontalGapPx\":");
+    output.push_str(&format!("{:.3}", candidate.gap_px));
+    output.push_str(",\"verticalOverlapPx\":");
+    output.push_str(&format!("{:.3}", candidate.vertical_overlap_px));
+    output.push_str(",\"centerDeltaYPx\":");
+    output.push_str(&format!("{:.3}", candidate.center_delta_y_px));
+    output.push_str(",\"groupIndex\":");
+    match candidate.slot.group_index {
+        Some(group_index) => output.push_str(&group_index.to_string()),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"sourceUnitRange\":");
+    output.push_str(&source_range_json(
+        candidate.slot.source_span.unit_start(),
+        candidate.slot.source_span.unit_end(),
+    ));
+    output.push_str(",\"splitFromTextRun\":");
+    output.push_str(&candidate.slot.split_from_text_run.to_string());
+    output.push('}');
+}
+
+fn push_fdm_text_mask_promotion_blocked_reasons_json(
+    output: &mut String,
+    cohort_best: Option<FdmTextMaskRightNeighborCandidate<'_>>,
+    component_best: Option<FdmTextMaskRightNeighborCandidate<'_>>,
+    cohort_component_agreement: bool,
+    selected_slot: &ShanaiLanTextSlot,
+    metrics: FdmTextMaskPreFragmentBridgeMetrics,
+    row_anchor_ambiguous: bool,
+) {
+    let mut reasons = Vec::<&str>::new();
+    if cohort_best.is_none() {
+        reasons.push("fdm-text-mask-cohort-right-neighbor-missing");
+    }
+    if component_best.is_none() {
+        reasons.push("fdm-text-mask-component-right-neighbor-missing");
+    }
+    if !cohort_component_agreement {
+        reasons.push("fdm-text-mask-cohort-component-slot-disagreement");
+    }
+    if !selected_slot.split_from_text_run {
+        reasons.push("document-text-slot-not-split-from-text-run");
+    }
+    if metrics.pre_fragment_unit_count == 0 {
+        reasons.push("document-text-pre-fragment-empty");
+    }
+    if !metrics.source_bbox_within_pre_fragment_projection {
+        reasons.push("fdm-bbox-outside-document-text-pre-fragment-projection");
+    }
+    if row_anchor_ambiguous {
+        reasons.push("line-header-y-run-placement-semantics-unproven");
+    }
+    reasons.push("document-text-pre-fragment-fdm-mask-role-unproven");
+    reasons.push("fdm-text-mask-to-document-text-baseline-transform-unproven");
+    reasons.push("fdm-text-mask-promotion-cross-sample-support-missing");
+
+    output.push('[');
+    for (index, reason) in reasons.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str(&json_string(reason));
+    }
+    output.push(']');
+}
+
+fn fdm_text_mask_right_neighbor_candidates_same_slot(
+    left: FdmTextMaskRightNeighborCandidate<'_>,
+    right: FdmTextMaskRightNeighborCandidate<'_>,
+) -> bool {
+    left.slot_index == right.slot_index
+}
+
+fn push_fdm_text_mask_right_neighbor_text_slot_json(
+    output: &mut String,
+    source_bbox: Option<(f32, f32, f32, f32)>,
+    text_projection: &ShanaiLanTextProjection,
+    candidate_relation: &'static str,
+) {
+    let Some(source_bbox) = source_bbox else {
+        output.push_str("null");
+        return;
+    };
+    let Some((slot, bbox, gap_px, vertical_overlap_px, center_delta_y_px)) =
+        fdm_text_mask_bbox_right_neighbor_text_slot(source_bbox, text_projection)
+    else {
+        output.push_str("null");
+        return;
+    };
+
+    output.push_str("{\"source\":\"/DocumentText\",\"sourceBacked\":true,\"decoded\":false,\"candidateRelation\":");
+    output.push_str(&json_string(candidate_relation));
+    output.push_str(",\"text\":");
+    output.push_str(&json_string(&slot.text));
+    output.push_str(",\"bbox\":");
+    push_bbox_tuple_json(output, bbox);
+    output.push_str(",\"horizontalGapPx\":");
+    output.push_str(&format!("{gap_px:.3}"));
+    output.push_str(",\"verticalOverlapPx\":");
+    output.push_str(&format!("{vertical_overlap_px:.3}"));
+    output.push_str(",\"centerDeltaYPx\":");
+    output.push_str(&format!("{center_delta_y_px:.3}"));
+    output.push_str(",\"groupIndex\":");
+    match slot.group_index {
+        Some(group_index) => output.push_str(&group_index.to_string()),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"lineOffsetUnits\":");
+    output.push_str(&slot.line_offset_units.to_string());
+    output.push_str(",\"leadingUnits\":");
+    output.push_str(&slot.leading_units.to_string());
+    output.push_str(",\"fragmentStartUnits\":");
+    output.push_str(&slot.fragment_start_units.to_string());
+    output.push_str(",\"sourceByteRange\":");
+    output.push_str(&source_range_json(
+        slot.source_span.byte_start(),
+        slot.source_span.byte_end(),
+    ));
+    output.push_str(",\"sourceUnitRange\":");
+    output.push_str(&source_range_json(
+        slot.source_span.unit_start(),
+        slot.source_span.unit_end(),
+    ));
+    output.push_str(",\"leadingWhitespaceBridgeCandidate\":");
+    push_fdm_text_mask_leading_whitespace_bridge_candidate_json(
+        output,
+        source_bbox,
+        text_projection,
+        slot,
+    );
+    output.push_str(",\"lineHeaderYPlacementCandidate\":");
+    if slot.line_header_same_segment_group_run.is_some() {
+        output.push_str("{\"renderPromotionBlockedReason\":\"line-header-y-run-placement-semantics-unproven\",\"renderPromotionBlockedDetail\":");
+        output.push_str(&json_string(
+            if slot
+                .line_header_same_segment_group_run_distinct_text_group_count
+                .is_some_and(|count| count > 1)
+            {
+                "same-segment-run-spans-multiple-visible-text-rows"
+            } else {
+                "line-header-y-run-transform-undecoded"
+            },
+        ));
+        output.push('}');
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"alignmentPromotionBlockedReason\":\"fdm-text-mask-to-document-text-baseline-transform-unproven\"}");
+}
+
+fn fdm_text_mask_pre_fragment_bridge_metrics(
+    source_bbox: (f32, f32, f32, f32),
+    text_projection: &ShanaiLanTextProjection,
+    slot: &ShanaiLanTextSlot,
+) -> FdmTextMaskPreFragmentBridgeMetrics {
+    let parent_span = &slot.fragment_context.parent_source_span;
+    let pre_fragment_unit_count = slot
+        .source_span
+        .unit_start()
+        .saturating_sub(parent_span.unit_start());
+    let pre_fragment_grid_units = (slot.leading_units + slot.fragment_start_units) * 2;
+    let pre_fragment_projected_width_px =
+        pre_fragment_grid_units as f32 * text_projection.grid_unit_px;
+    let line_start_x = slot.x - pre_fragment_projected_width_px;
+    let text_start_x = slot.x;
+    let source_right = source_bbox.0 + source_bbox.2;
+    let source_bottom = source_bbox.1 + source_bbox.3;
+    let source_begins_after_line_start = source_bbox.0 >= line_start_x - 0.5;
+    let source_ends_before_text_start = source_right <= text_start_x + 0.5;
+    let source_bbox_within_pre_fragment_projection =
+        source_begins_after_line_start && source_ends_before_text_start;
+    let text_baseline_y = shanai_lan_text_baseline_y(slot);
+
+    FdmTextMaskPreFragmentBridgeMetrics {
+        pre_fragment_unit_count,
+        pre_fragment_grid_units,
+        pre_fragment_projected_width_px,
+        line_start_x,
+        text_start_x,
+        source_begins_after_line_start,
+        source_ends_before_text_start,
+        source_bbox_within_pre_fragment_projection,
+        source_bbox_right_to_text_start_px: text_start_x - source_right,
+        text_baseline_minus_source_bottom_px: text_baseline_y - source_bottom,
+    }
+}
+
+fn push_fdm_text_mask_leading_whitespace_bridge_candidate_json(
+    output: &mut String,
+    source_bbox: (f32, f32, f32, f32),
+    text_projection: &ShanaiLanTextProjection,
+    slot: &ShanaiLanTextSlot,
+) {
+    let parent_span = &slot.fragment_context.parent_source_span;
+    let metrics = fdm_text_mask_pre_fragment_bridge_metrics(source_bbox, text_projection, slot);
+    if metrics.pre_fragment_unit_count == 0
+        && slot.leading_units == 0
+        && slot.fragment_start_units == 0
+    {
+        output.push_str("null");
+        return;
+    }
+
+    output.push_str("{\"source\":\"fdmTextMaskBbox+/DocumentText pre-fragment span\",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderPromoted\":false");
+    output
+        .push_str(",\"candidateClass\":\"fdm-bbox-inside-document-text-pre-fragment-projection\"");
+    output.push_str(",\"bridgeCandidate\":");
+    output.push_str(
+        &metrics
+            .source_bbox_within_pre_fragment_projection
+            .to_string(),
+    );
+    output.push_str(",\"parentTextRunSourceByteRange\":");
+    output.push_str(&source_range_json(
+        parent_span.byte_start(),
+        parent_span.byte_end(),
+    ));
+    output.push_str(",\"parentTextRunSourceUnitRange\":");
+    output.push_str(&source_range_json(
+        parent_span.unit_start(),
+        parent_span.unit_end(),
+    ));
+    output.push_str(",\"preFragmentSourceByteRange\":");
+    output.push_str(&source_range_json(
+        parent_span.byte_start(),
+        slot.source_span.byte_start(),
+    ));
+    output.push_str(",\"preFragmentSourceUnitRange\":");
+    output.push_str(&source_range_json(
+        parent_span.unit_start(),
+        slot.source_span.unit_start(),
+    ));
+    output.push_str(",\"preFragmentUnitCount\":");
+    output.push_str(&metrics.pre_fragment_unit_count.to_string());
+    output.push_str(",\"leadingDisplayUnits\":");
+    output.push_str(&slot.leading_units.to_string());
+    output.push_str(",\"fragmentStartUnits\":");
+    output.push_str(&slot.fragment_start_units.to_string());
+    output.push_str(",\"preFragmentProjectionGridUnits\":");
+    output.push_str(&metrics.pre_fragment_grid_units.to_string());
+    output.push_str(",\"preFragmentProjectedWidthPx\":");
+    output.push_str(&format!("{:.3}", metrics.pre_fragment_projected_width_px));
+    output.push_str(",\"lineStartX\":");
+    output.push_str(&format!("{:.3}", metrics.line_start_x));
+    output.push_str(",\"textStartX\":");
+    output.push_str(&format!("{:.3}", metrics.text_start_x));
+    output.push_str(",\"sourceBboxOffsetFromLineStartPx\":");
+    output.push_str(&format!("{:.3}", source_bbox.0 - metrics.line_start_x));
+    output.push_str(",\"sourceBboxEndOffsetFromLineStartPx\":");
+    output.push_str(&format!(
+        "{:.3}",
+        source_bbox.0 + source_bbox.2 - metrics.line_start_x
+    ));
+    output.push_str(",\"sourceBboxWithinPreFragmentProjection\":");
+    output.push_str(
+        &metrics
+            .source_bbox_within_pre_fragment_projection
+            .to_string(),
+    );
+    output.push_str(",\"sourceBboxBeginsAfterLineStart\":");
+    output.push_str(&metrics.source_begins_after_line_start.to_string());
+    output.push_str(",\"sourceBboxEndsBeforeTextStart\":");
+    output.push_str(&metrics.source_ends_before_text_start.to_string());
+    output.push_str(",\"sourceBboxRightToTextStartGapPx\":");
+    output.push_str(&format!(
+        "{:.3}",
+        metrics.source_bbox_right_to_text_start_px
+    ));
+    output.push_str(",\"textBaselineMinusSourceBottomPx\":");
+    output.push_str(&format!(
+        "{:.3}",
+        metrics.text_baseline_minus_source_bottom_px
+    ));
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"document-text-pre-fragment-fdm-mask-role-unproven\"}",
+    );
+}
+
+fn fdm_text_mask_source_transform_candidates<'a>(
+    cohorts: &[FdmTextMaskCohortDiagnosticSummary],
+    text_projection: &'a ShanaiLanTextProjection,
+) -> Vec<FdmTextMaskSourceTransformCandidate<'a>> {
+    if text_projection.grid_unit_px <= 0.0 {
+        return Vec::new();
+    }
+
+    cohorts
+        .iter()
+        .filter_map(|cohort| {
+            let component = cohort.top_text_like_component?;
+            let projected_bbox = component.projected_bbox?;
+            let source_bbox = component.source_bbox?;
+            if projected_bbox.2 <= 0.0 {
+                return None;
+            }
+
+            let component_candidates = fdm_text_mask_bbox_right_neighbor_text_slot_candidates(
+                projected_bbox,
+                text_projection,
+            );
+            let selected = component_candidates.first().copied()?;
+            let cohort_component_agreement = cohort
+                .projected_bbox
+                .map(|bbox| {
+                    fdm_text_mask_bbox_right_neighbor_text_slot_candidates(bbox, text_projection)
+                })
+                .and_then(|candidates| candidates.first().copied())
+                .is_some_and(|cohort_candidate| {
+                    fdm_text_mask_right_neighbor_candidates_same_slot(cohort_candidate, selected)
+                });
+            let metrics = fdm_text_mask_pre_fragment_bridge_metrics(
+                projected_bbox,
+                text_projection,
+                selected.slot,
+            );
+            if metrics.pre_fragment_unit_count == 0 {
+                return None;
+            }
+
+            let current_projection_grid_start =
+                (projected_bbox.0 - metrics.line_start_x) / text_projection.grid_unit_px;
+            let current_projection_grid_end = (projected_bbox.0 + projected_bbox.2
+                - metrics.line_start_x)
+                / text_projection.grid_unit_px;
+            let current_projection_grid_span =
+                current_projection_grid_end - current_projection_grid_start;
+            if current_projection_grid_span <= 0.0 {
+                return None;
+            }
+
+            let source_span_x = (source_bbox.2 - source_bbox.0).max(1) as f32;
+            let source_units_per_text_grid_unit_x = source_span_x / current_projection_grid_span;
+            let line_start_source_x = source_bbox.0 as f32
+                - current_projection_grid_start * source_units_per_text_grid_unit_x;
+            let text_start_source_x = line_start_source_x
+                + metrics.pre_fragment_grid_units as f32 * source_units_per_text_grid_unit_x;
+            let source_gap_to_text_start_x = text_start_source_x - source_bbox.2 as f32;
+
+            [
+                current_projection_grid_start,
+                current_projection_grid_end,
+                current_projection_grid_span,
+                source_units_per_text_grid_unit_x,
+                line_start_source_x,
+                text_start_source_x,
+                source_gap_to_text_start_x,
+            ]
+            .into_iter()
+            .all(f32::is_finite)
+            .then_some(FdmTextMaskSourceTransformCandidate {
+                row_index: cohort.row_index,
+                candidate_class: "top-text-like-component-to-document-text-pre-fragment",
+                component_index: Some(component.component_index),
+                slot_index: selected.slot_index,
+                slot: selected.slot,
+                source_bbox,
+                projected_bbox,
+                metrics,
+                cohort_component_agreement,
+                current_projection_grid_start,
+                current_projection_grid_end,
+                current_projection_grid_span,
+                source_units_per_text_grid_unit_x,
+                line_start_source_x,
+                text_start_source_x,
+                source_gap_to_text_start_x,
+            })
+        })
+        .collect()
+}
+
+fn fdm_text_mask_cohort_summaries(
+    layout: PageLayout,
+    diagnostics: &[FdmCommandDiagnostic<'_>],
+    extent: FdmCommandProjectionExtent,
+) -> Vec<FdmTextMaskCohortDiagnosticSummary> {
+    let mut by_row = BTreeMap::<usize, FdmTextMaskCohortDiagnosticSummary>::new();
+    let mut primitives_by_row =
+        BTreeMap::<usize, Vec<FdmTextMaskPrimitiveDiagnosticSummary>>::new();
+    for diagnostic in diagnostics.iter().copied() {
+        if !fdm_text_mask_cohort_primitive_candidate(diagnostic.command) {
+            continue;
+        }
+        let Some(bbox) = fdm_path_diagnostic_bbox(layout, diagnostic, extent) else {
+            continue;
+        };
+        if bbox.2 <= 0.0 || bbox.3 <= 0.0 {
+            continue;
+        }
+        let source_bbox =
+            fdm_vector_command_source_bbox(diagnostic.command).map(normalize_fdm_bbox);
+        let row = by_row
+            .entry(diagnostic.entry.row_index())
+            .or_insert_with(|| FdmTextMaskCohortDiagnosticSummary {
+                row_index: diagnostic.entry.row_index(),
+                ..Default::default()
+            });
+        row.primitive_count += 1;
+        let black_fill = diagnostic
+            .command
+            .fill_color()
+            .is_some_and(fdm_vector_color_is_black);
+        let white_fill = diagnostic
+            .command
+            .fill_color()
+            .is_some_and(fdm_vector_color_is_white);
+        let counter_overlay = fdm_vector_filled_path_is_counter_overlay(diagnostic, diagnostics);
+        if black_fill {
+            row.black_fill_primitive_count += 1;
+        }
+        if white_fill {
+            row.white_fill_primitive_count += 1;
+        }
+        if counter_overlay {
+            row.counter_overlay_count += 1;
+        }
+        update_optional_usize_min_max(
+            &mut row.command_index_min,
+            &mut row.command_index_max,
+            diagnostic.command.command_index(),
+        );
+        update_optional_usize_min_max(
+            &mut row.relative_offset_min,
+            &mut row.relative_offset_max,
+            diagnostic.command.relative_offset(),
+        );
+        if let Some(source_bbox) = source_bbox {
+            row.source_bbox = fdm_bbox_extent_union(row.source_bbox, source_bbox);
+        }
+        row.projected_bbox = bbox_tuple_union(row.projected_bbox, bbox);
+        primitives_by_row
+            .entry(diagnostic.entry.row_index())
+            .or_default()
+            .push(FdmTextMaskPrimitiveDiagnosticSummary {
+                command_index: diagnostic.command.command_index(),
+                relative_offset: diagnostic.command.relative_offset(),
+                source_bbox,
+                projected_bbox: bbox,
+                black_fill,
+                white_fill,
+                counter_overlay,
+            });
+    }
+
+    let scale_y = layout.height_px() / SHANAI_LAN_REFERENCE_PAGE_HEIGHT_PX;
+    let text_line_height_px = 12.0 * SHANAI_LAN_TEXT_GROUP_LINE_HEIGHT_FACTOR * scale_y;
+    let mut cohorts = by_row
+        .into_values()
+        .filter_map(|mut cohort| {
+            let components = primitives_by_row
+                .get(&cohort.row_index)
+                .map(|primitives| fdm_text_mask_component_summaries(primitives))
+                .unwrap_or_default();
+            cohort.component_count = components.len();
+            cohort.top_text_like_component =
+                fdm_text_mask_top_text_like_component(&components, text_line_height_px);
+            (cohort.primitive_count >= FDM_TEXT_MASK_COHORT_MIN_PRIMITIVES
+                && cohort.projected_bbox.is_some())
+            .then_some(cohort)
+        })
+        .collect::<Vec<_>>();
+    cohorts.sort_by(|left, right| {
+        let left_bbox = left.projected_bbox.unwrap_or_default();
+        let right_bbox = right.projected_bbox.unwrap_or_default();
+        left_bbox
+            .1
+            .partial_cmp(&right_bbox.1)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| {
+                left_bbox
+                    .0
+                    .partial_cmp(&right_bbox.0)
+                    .unwrap_or(Ordering::Equal)
+            })
+            .then_with(|| left.row_index.cmp(&right.row_index))
+    });
+    cohorts.truncate(FDM_TEXT_MASK_COHORT_LIMIT);
+    cohorts
+}
+
+fn fdm_text_mask_component_summaries(
+    primitives: &[FdmTextMaskPrimitiveDiagnosticSummary],
+) -> Vec<FdmTextMaskComponentDiagnosticSummary> {
+    let mut sorted = primitives.to_vec();
+    sorted.sort_by(|left, right| {
+        left.projected_bbox
+            .1
+            .partial_cmp(&right.projected_bbox.1)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| {
+                left.projected_bbox
+                    .0
+                    .partial_cmp(&right.projected_bbox.0)
+                    .unwrap_or(Ordering::Equal)
+            })
+            .then_with(|| left.relative_offset.cmp(&right.relative_offset))
+    });
+
+    let mut components = Vec::<FdmTextMaskComponentDiagnosticSummary>::new();
+    for primitive in sorted {
+        let component_index = components.iter().position(|component| {
+            component.projected_bbox.is_some_and(|bbox| {
+                fdm_text_mask_component_bboxes_touch(bbox, primitive.projected_bbox)
+            })
+        });
+        match component_index {
+            Some(index) => {
+                update_fdm_text_mask_component_summary(&mut components[index], primitive);
+                merge_touching_fdm_text_mask_components(&mut components);
+            }
+            None => {
+                let mut component = FdmTextMaskComponentDiagnosticSummary::default();
+                update_fdm_text_mask_component_summary(&mut component, primitive);
+                components.push(component);
+            }
+        }
+    }
+
+    components.sort_by(|left, right| {
+        let left_bbox = left.projected_bbox.unwrap_or_default();
+        let right_bbox = right.projected_bbox.unwrap_or_default();
+        left_bbox
+            .1
+            .partial_cmp(&right_bbox.1)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| {
+                left_bbox
+                    .0
+                    .partial_cmp(&right_bbox.0)
+                    .unwrap_or(Ordering::Equal)
+            })
+    });
+    for (index, component) in components.iter_mut().enumerate() {
+        component.component_index = index;
+    }
+    components
+}
+
+fn update_fdm_text_mask_component_summary(
+    component: &mut FdmTextMaskComponentDiagnosticSummary,
+    primitive: FdmTextMaskPrimitiveDiagnosticSummary,
+) {
+    component.primitive_count += 1;
+    if primitive.black_fill {
+        component.black_fill_primitive_count += 1;
+    }
+    if primitive.white_fill {
+        component.white_fill_primitive_count += 1;
+    }
+    if primitive.counter_overlay {
+        component.counter_overlay_count += 1;
+    }
+    update_optional_usize_min_max(
+        &mut component.command_index_min,
+        &mut component.command_index_max,
+        primitive.command_index,
+    );
+    update_optional_usize_min_max(
+        &mut component.relative_offset_min,
+        &mut component.relative_offset_max,
+        primitive.relative_offset,
+    );
+    if let Some(source_bbox) = primitive.source_bbox {
+        component.source_bbox = fdm_bbox_extent_union(component.source_bbox, source_bbox);
+    }
+    component.projected_bbox = bbox_tuple_union(component.projected_bbox, primitive.projected_bbox);
+}
+
+fn merge_touching_fdm_text_mask_components(
+    components: &mut Vec<FdmTextMaskComponentDiagnosticSummary>,
+) {
+    let mut index = 0usize;
+    while index < components.len() {
+        let mut merge_index = index + 1;
+        while merge_index < components.len() {
+            let Some(left_bbox) = components[index].projected_bbox else {
+                break;
+            };
+            let Some(right_bbox) = components[merge_index].projected_bbox else {
+                merge_index += 1;
+                continue;
+            };
+            if !fdm_text_mask_component_bboxes_touch(left_bbox, right_bbox) {
+                merge_index += 1;
+                continue;
+            }
+            let right = components.remove(merge_index);
+            merge_fdm_text_mask_component_summary(&mut components[index], right);
+        }
+        index += 1;
+    }
+}
+
+fn merge_fdm_text_mask_component_summary(
+    target: &mut FdmTextMaskComponentDiagnosticSummary,
+    source: FdmTextMaskComponentDiagnosticSummary,
+) {
+    target.primitive_count += source.primitive_count;
+    target.black_fill_primitive_count += source.black_fill_primitive_count;
+    target.white_fill_primitive_count += source.white_fill_primitive_count;
+    target.counter_overlay_count += source.counter_overlay_count;
+    if let Some(value) = source.command_index_min {
+        update_optional_usize_min_max(
+            &mut target.command_index_min,
+            &mut target.command_index_max,
+            value,
+        );
+    }
+    if let Some(value) = source.command_index_max {
+        update_optional_usize_min_max(
+            &mut target.command_index_min,
+            &mut target.command_index_max,
+            value,
+        );
+    }
+    if let Some(value) = source.relative_offset_min {
+        update_optional_usize_min_max(
+            &mut target.relative_offset_min,
+            &mut target.relative_offset_max,
+            value,
+        );
+    }
+    if let Some(value) = source.relative_offset_max {
+        update_optional_usize_min_max(
+            &mut target.relative_offset_min,
+            &mut target.relative_offset_max,
+            value,
+        );
+    }
+    if let Some(source_bbox) = source.projected_bbox {
+        target.projected_bbox = bbox_tuple_union(target.projected_bbox, source_bbox);
+    }
+    if let Some(source_bbox) = source.source_bbox {
+        target.source_bbox = fdm_bbox_extent_union(target.source_bbox, source_bbox);
+    }
+}
+
+fn fdm_text_mask_component_bboxes_touch(
+    left: (f32, f32, f32, f32),
+    right: (f32, f32, f32, f32),
+) -> bool {
+    let horizontal_gap = bbox_axis_gap(left.0, left.0 + left.2, right.0, right.0 + right.2);
+    let vertical_overlap = (left.1 + left.3).min(right.1 + right.3) - left.1.max(right.1);
+    let max_horizontal_gap = left.3.max(right.3) * 0.85;
+    vertical_overlap > 0.0 && horizontal_gap <= max_horizontal_gap
+}
+
+fn bbox_axis_gap(left_start: f32, left_end: f32, right_start: f32, right_end: f32) -> f32 {
+    if left_end < right_start {
+        right_start - left_end
+    } else if right_end < left_start {
+        left_start - right_end
+    } else {
+        0.0
+    }
+}
+
+fn fdm_text_mask_top_text_like_component(
+    components: &[FdmTextMaskComponentDiagnosticSummary],
+    text_line_height_px: f32,
+) -> Option<FdmTextMaskComponentDiagnosticSummary> {
+    components
+        .iter()
+        .copied()
+        .filter(|component| {
+            let Some(bbox) = component.projected_bbox else {
+                return false;
+            };
+            component.primitive_count >= FDM_TEXT_MASK_COMPONENT_MIN_PRIMITIVES
+                && component.black_fill_primitive_count > 0
+                && bbox.3 <= text_line_height_px * FDM_TEXT_MASK_COMPONENT_MAX_HEIGHT_LINE_FACTOR
+        })
+        .min_by(|left, right| {
+            let left_bbox = left.projected_bbox.unwrap_or_default();
+            let right_bbox = right.projected_bbox.unwrap_or_default();
+            left_bbox
+                .1
+                .partial_cmp(&right_bbox.1)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| {
+                    left_bbox
+                        .0
+                        .partial_cmp(&right_bbox.0)
+                        .unwrap_or(Ordering::Equal)
+                })
+        })
+}
+
+fn fdm_text_mask_cohort_primitive_candidate(command: &ObjectFdmVectorCommandCandidate) -> bool {
+    command.ellipse().is_none()
+        && fdm_vector_primitive_is_closed(command)
+        && command.fill_color().is_some_and(|color| {
+            fdm_vector_color_is_black(color) || fdm_vector_color_is_white(color)
+        })
+}
+
+fn fdm_text_mask_cohort_right_neighbor_text_slot<'a>(
+    cohort: &FdmTextMaskCohortDiagnosticSummary,
+    text_projection: &'a ShanaiLanTextProjection,
+) -> Option<(&'a ShanaiLanTextSlot, (f32, f32, f32, f32), f32, f32, f32)> {
+    fdm_text_mask_bbox_right_neighbor_text_slot(cohort.projected_bbox?, text_projection)
+}
+
+fn fdm_text_mask_bbox_right_neighbor_text_slot<'a>(
+    source_bbox: (f32, f32, f32, f32),
+    text_projection: &'a ShanaiLanTextProjection,
+) -> Option<(&'a ShanaiLanTextSlot, (f32, f32, f32, f32), f32, f32, f32)> {
+    fdm_text_mask_bbox_right_neighbor_text_slot_candidates(source_bbox, text_projection)
+        .into_iter()
+        .next()
+        .map(|candidate| {
+            (
+                candidate.slot,
+                candidate.bbox,
+                candidate.gap_px,
+                candidate.vertical_overlap_px,
+                candidate.center_delta_y_px,
+            )
+        })
+}
+
+fn fdm_text_mask_bbox_right_neighbor_text_slot_candidates<'a>(
+    source_bbox: (f32, f32, f32, f32),
+    text_projection: &'a ShanaiLanTextProjection,
+) -> Vec<FdmTextMaskRightNeighborCandidate<'a>> {
+    let source_right = source_bbox.0 + source_bbox.2;
+    let source_bottom = source_bbox.1 + source_bbox.3;
+    let source_center_y = source_bbox.1 + source_bbox.3 * 0.5;
+    let max_gap_px = text_projection.line_height_px * FDM_TEXT_MASK_RIGHT_NEIGHBOR_MAX_GAP_FACTOR;
+    let mut candidates = text_projection
+        .slots
+        .iter()
+        .enumerate()
+        .filter_map(|(slot_index, slot)| {
+            let bbox = shanai_lan_text_slot_bbox(slot);
+            let gap_px = bbox.0 - source_right;
+            if gap_px < -text_projection.line_height_px || gap_px > max_gap_px {
+                return None;
+            }
+            let vertical_overlap_px =
+                source_bottom.min(bbox.1 + bbox.3) - source_bbox.1.max(bbox.1);
+            let text_center_y = bbox.1 + bbox.3 * 0.5;
+            let center_delta_y_px = text_center_y - source_center_y;
+            if vertical_overlap_px <= 0.0
+                && center_delta_y_px.abs() > text_projection.line_height_px
+            {
+                return None;
+            }
+            Some(FdmTextMaskRightNeighborCandidate {
+                slot_index,
+                slot,
+                bbox,
+                gap_px,
+                vertical_overlap_px: vertical_overlap_px.max(0.0),
+                center_delta_y_px,
+            })
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        left.gap_px
+            .abs()
+            .partial_cmp(&right.gap_px.abs())
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| {
+                left.center_delta_y_px
+                    .abs()
+                    .partial_cmp(&right.center_delta_y_px.abs())
+                    .unwrap_or(Ordering::Equal)
+            })
+            .then_with(|| left.slot_index.cmp(&right.slot_index))
+    });
+    candidates
 }
 
 fn push_fdm_vector_command_provenance_json(
@@ -44559,6 +49890,11 @@ fn push_fdm_connector_order_trace_index_row_json(
     output.push_str(&json_string(&format!("0x{:04x}", diagnostic.entry.kind())));
     output.push_str(",\"normalizedBbox\":");
     push_fdm_normalized_bbox_json(output, normalize_fdm_bbox(diagnostic.entry.bbox()));
+    output.push_str(",\"axisPairBbox\":");
+    push_fdm_normalized_bbox_json(
+        output,
+        normalize_fdm_index_entry_bbox(diagnostic.entry.bbox()),
+    );
     output.push_str(",\"imageSignatureCount\":");
     output.push_str(&diagnostic.entry.image_signature_hits().len().to_string());
     output.push_str(",\"segmentImageSignatureCount\":");
@@ -44606,6 +49942,47 @@ fn push_fdm_connector_order_trace_image_bearing_gate_json(
     ));
     output.push_str(",\"imageBearingSegmentCandidate\":");
     output.push_str(if image_bearing { "true" } else { "false" });
+    output.push_str(",\"connectorParent\":{\"commandIndex\":");
+    output.push_str(
+        &fdm_command_parent_command_index(diagnostic.command.command_index()).to_string(),
+    );
+    output.push_str(",\"relativeOffset\":");
+    push_option_usize_json(
+        output,
+        fdm_command_normalized_parent_relative_offset(diagnostic),
+    );
+    output.push('}');
+    output.push_str(",\"axisRuleParentRelativeOffsetRange\":");
+    push_optional_usize_range_json(
+        output,
+        detail.axis_rule_match_parent_relative_offset_min,
+        detail.axis_rule_match_parent_relative_offset_max,
+    );
+    output.push_str(",\"endpointOwnerParentRelativeOffsetRange\":");
+    push_optional_usize_range_json(
+        output,
+        owner_summary
+            .start_nearest_fdm_owner_parent_relative_offset
+            .min(owner_summary.end_nearest_fdm_owner_parent_relative_offset),
+        owner_summary
+            .start_nearest_fdm_owner_parent_relative_offset
+            .max(owner_summary.end_nearest_fdm_owner_parent_relative_offset),
+    );
+    output.push_str(",\"endpointOwnerParentRelations\":{\"connectorVsOwnerParentSpan\":");
+    output.push_str(&json_string(
+        owner_summary.owner_parent_source_order_relation(),
+    ));
+    output.push_str(",\"ownerParentSpanVsAxisRuleParentSpan\":");
+    output.push_str(&json_string(fdm_owner_axis_rule_parent_span_relation(
+        owner_summary,
+        detail,
+    )));
+    output.push('}');
+    output.push_str(",\"endpointOwnerParentRelationToAxisRuleParentSpan\":");
+    output.push_str(&json_string(fdm_owner_axis_rule_parent_span_relation(
+        owner_summary,
+        detail,
+    )));
     output.push_str(",\"imageSignatures\":");
     push_object_image_signature_hits_json(output, diagnostic.entry.image_signature_hits());
     output.push_str(",\"segmentImageSignatures\":");
@@ -45224,7 +50601,7 @@ fn fdm_connector_fdm_index_bbox_relation(diagnostic: FdmCommandDiagnostic<'_>) -
     else {
         return "connector-source-bbox-missing";
     };
-    let index_bbox = normalize_fdm_bbox(diagnostic.entry.bbox());
+    let index_bbox = normalize_fdm_index_entry_bbox(diagnostic.entry.bbox());
     if fdm_bbox_contains(index_bbox, connector_bbox) {
         "contained-in-fdm-index-bbox"
     } else if fdm_bbox_intersects(index_bbox, connector_bbox) {
@@ -46498,14 +51875,21 @@ fn push_fdm_open_stroke_axis_rule_owner_promotion_gate_summary_json(
     output: &mut String,
     summary: FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary,
 ) {
+    let parent_normalized_order_gate_blocked_reason =
+        summary.parent_normalized_order_gate_blocked_reason();
+    let render_promotion_blocked_reason = if parent_normalized_order_gate_blocked_reason == "none" {
+        "connector-ownership-and-paint-order-unproven"
+    } else {
+        parent_normalized_order_gate_blocked_reason
+    };
+
     output.push_str("{\"basis\":\"sameRowFdmOpenStrokeAxisRule+endpointOwnerMatchSummary+parentNormalizedOrderGate\"");
     output.push_str(",\"source\":\"fdmVectorCommandPrimitive+fdmConnectorEndpointOwnerMatch\"");
     output.push_str(
         ",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false",
     );
-    output.push_str(
-        ",\"renderPromotionBlockedReason\":\"same-row-axis-rule-parent-normalized-order-unproven\"",
-    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(render_promotion_blocked_reason));
     output.push_str(",\"axisRuleDualEndpointMatchConnectorCount\":");
     output.push_str(&summary.dual_endpoint_match_connector_count.to_string());
     output.push_str(",\"dualEndpointOwnerCandidateCount\":");
@@ -46525,9 +51909,7 @@ fn push_fdm_open_stroke_axis_rule_owner_promotion_gate_summary_json(
             .to_string(),
     );
     output.push_str(",\"parentNormalizedOrderGateBlockedReason\":");
-    output.push_str(&json_string(
-        summary.parent_normalized_order_gate_blocked_reason(),
-    ));
+    output.push_str(&json_string(parent_normalized_order_gate_blocked_reason));
     output.push_str(",\"parentNormalizedOrderedSameRowSameConnectorCount\":");
     output.push_str(
         &summary
@@ -48436,7 +53818,7 @@ fn accumulate_fdm_open_stroke_axis_rule_row_cohort_bbox_relation_gate(
     connector: FdmCommandDiagnostic<'_>,
     endpoint_summary: FdmConnectorLineRuleEndpointMatchSummary,
 ) {
-    let index_bbox = normalize_fdm_bbox(connector.entry.bbox());
+    let index_bbox = normalize_fdm_index_entry_bbox(connector.entry.bbox());
     if target.fdm_index_bbox_left.is_none() {
         target.fdm_index_bbox_left = Some(index_bbox.0);
         target.fdm_index_bbox_top = Some(index_bbox.1);
@@ -48709,8 +54091,21 @@ impl FdmConnectorGraphDiagnosticSummary {
     }
 
     fn render_promotion_blocked_reason(self) -> &'static str {
+        let axis_rule_owner_gate_summary =
+            self.fdm_open_stroke_axis_rule_owner_promotion_gate_summary;
+        let axis_rule_owner_gate_blocked_reason =
+            axis_rule_owner_gate_summary.parent_normalized_order_gate_blocked_reason();
         if self.connector_candidate_count == 0 {
             "no-connector-candidates"
+        } else if self.dual_endpoint_match_connector_count == 0
+            && self
+                .fdm_open_stroke_axis_rule_match_summary
+                .dual_endpoint_match_connector_count
+                > 0
+            && axis_rule_owner_gate_summary.dual_endpoint_match_connector_count > 0
+            && axis_rule_owner_gate_blocked_reason != "none"
+        {
+            axis_rule_owner_gate_blocked_reason
         } else if self.dual_endpoint_match_connector_count == 0
             && self
                 .fdm_open_stroke_axis_rule_match_summary
@@ -49508,6 +54903,13 @@ fn push_fdm_connector_open_stroke_axis_rule_owner_promotion_gate_json(
             } else {
                 0
             },
+            between_owner_parent_relative_offset_span_count: if owner_summary
+                .connector_parent_relative_offset_between_nearest_fdm_owner_parent_offsets
+            {
+                1
+            } else {
+                0
+            },
             ..Default::default()
         }
         .parent_normalized_order_gate_blocked_reason(),
@@ -50208,6 +55610,62 @@ fn push_page_layer_shanai_lan_text_slot_json(
     push_u16_array_json(output, &slot.line_header_raw_words);
     output.push_str(",\"lineHeaderRawWordsHex\":");
     push_u16_hex_array_json(output, &slot.line_header_raw_words);
+    output.push_str(",\"lineHeaderSameSegmentGroupRun\":");
+    if let Some(run) = slot.line_header_same_segment_group_run {
+        push_shanai_lan_line_header_same_segment_group_run_value_json(output, run);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"lineHeaderYPlacementCandidate\":{\"source\":\"/DocumentText line-header same-offset/extent group run\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderPromoted\":false");
+    output.push_str(",\"sameSegmentGroupRunPresent\":");
+    output.push_str(if slot.line_header_same_segment_group_run.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    if let Some(run) = slot.line_header_same_segment_group_run {
+        output.push_str(",\"startGroupIndex\":");
+        output.push_str(&run.start_group_index.to_string());
+        output.push_str(",\"endGroupIndex\":");
+        output.push_str(&run.end_group_index.to_string());
+        output.push_str(",\"groupCount\":");
+        output.push_str(&run.group_count.to_string());
+        output.push_str(",\"positionInRun\":");
+        output.push_str(&run.position_in_run.to_string());
+    }
+    output.push_str(",\"sameSegmentGroupRunTextSlotCount\":");
+    match slot.line_header_same_segment_group_run_text_slot_count {
+        Some(count) => output.push_str(&count.to_string()),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"sameSegmentGroupRunDistinctTextGroupCount\":");
+    match slot.line_header_same_segment_group_run_distinct_text_group_count {
+        Some(count) => output.push_str(&count.to_string()),
+        None => output.push_str("null"),
+    }
+    let same_segment_run_ambiguous_as_row_anchor = slot
+        .line_header_same_segment_group_run_distinct_text_group_count
+        .is_some_and(|count| count > 1);
+    output.push_str(",\"sameSegmentGroupRunAmbiguousAsRowAnchor\":");
+    output.push_str(if same_segment_run_ambiguous_as_row_anchor {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderPromotionBlockedDetail\":");
+    output.push_str(&json_string(if same_segment_run_ambiguous_as_row_anchor {
+        "same-segment-run-spans-multiple-visible-text-rows"
+    } else {
+        "line-header-y-run-transform-undecoded"
+    }));
+    output.push_str(",\"currentGroupIndex\":");
+    match slot.group_index {
+        Some(group_index) => output.push_str(&group_index.to_string()),
+        None => output.push_str("null"),
+    }
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"line-header-y-run-placement-semantics-unproven\"}",
+    );
     output.push_str(",\"textCountRangeEvidenceCount\":");
     output.push_str(&slot.text_count_range_evidence.len().to_string());
     output.push_str(",\"textCountRangeEvidence\":");
@@ -50269,6 +55727,8 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
     let mut split_from_text_run_slot_count = 0usize;
     let mut multi_fragment_parent_text_run_slot_count = 0usize;
     let mut max_parent_text_run_fragment_count = 0usize;
+    let mut fragment_parent_run_fill_mix_counts =
+        BTreeMap::<(usize, usize), ShanaiLanFragmentParentRunFillMix>::new();
 
     for slot in &projection.slots {
         *fill_basis_counts
@@ -50279,6 +55739,23 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
         }
         if slot.fragment_context.fragment_count > 1 {
             multi_fragment_parent_text_run_slot_count += 1;
+            let key = (
+                slot.fragment_context.parent_source_span.byte_start(),
+                slot.fragment_context.parent_source_span.byte_end(),
+            );
+            let mix = fragment_parent_run_fill_mix_counts.entry(key).or_default();
+            mix.slot_count += 1;
+            if slot.fill_basis == "shanai-lan-text-match-fallback" {
+                mix.fallback_fill_color_slot_count += 1;
+            }
+            if slot.fill_basis == "default-text-fill" {
+                mix.default_fill_color_slot_count += 1;
+            }
+            mix.fill_color_basis.insert(slot.fill_basis);
+            mix.fill_colors.insert(slot.fill);
+            if mix.example_texts.len() < 5 {
+                mix.example_texts.push(slot.text.clone());
+            }
         }
         max_parent_text_run_fragment_count =
             max_parent_text_run_fragment_count.max(slot.fragment_context.fragment_count);
@@ -50360,6 +55837,12 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
     output.push_str(&multi_fragment_parent_text_run_slot_count.to_string());
     output.push_str(",\"maxParentTextRunFragmentCount\":");
     output.push_str(&max_parent_text_run_fragment_count.to_string());
+    let mixed_fragment_parent_run_count = fragment_parent_run_fill_mix_counts
+        .values()
+        .filter(|mix| mix.fill_color_basis.len() > 1 || mix.fill_colors.len() > 1)
+        .count();
+    output.push_str(",\"mixedFillMultiFragmentParentRunCount\":");
+    output.push_str(&mixed_fragment_parent_run_count.to_string());
     output.push_str(
         ",\"styleLinkPromotionBlockedReason\":\"document-view-style-group-link-unproven\"",
     );
@@ -50379,6 +55862,11 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
     push_shanai_lan_group_header_family_counts_json(output, &group_header_family_counts);
     output.push_str(",\"groupHeaderSignatureByFillColorBasis\":");
     push_shanai_lan_group_header_signature_counts_json(output, &group_header_signature_counts);
+    output.push_str(",\"multiFragmentParentRunFillMixes\":");
+    push_shanai_lan_fragment_parent_run_fill_mix_counts_json(
+        output,
+        &fragment_parent_run_fill_mix_counts,
+    );
     output.push('}');
 }
 
@@ -50493,6 +55981,57 @@ fn push_shanai_lan_group_header_signature_counts_json(
         output.push_str(&count.to_string());
         output.push_str(",\"exampleTexts\":");
         push_json_string_array(output, examples);
+        output.push('}');
+    }
+    output.push(']');
+}
+
+#[derive(Default)]
+struct ShanaiLanFragmentParentRunFillMix {
+    slot_count: usize,
+    fallback_fill_color_slot_count: usize,
+    default_fill_color_slot_count: usize,
+    fill_color_basis: BTreeSet<&'static str>,
+    fill_colors: BTreeSet<&'static str>,
+    example_texts: Vec<String>,
+}
+
+fn push_shanai_lan_fragment_parent_run_fill_mix_counts_json(
+    output: &mut String,
+    counts: &BTreeMap<(usize, usize), ShanaiLanFragmentParentRunFillMix>,
+) {
+    output.push('[');
+    for (index, ((byte_start, byte_end), mix)) in counts.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"parentTextRunSourceSpan\":");
+        push_text_source_span_json(
+            output,
+            &TextSourceSpan::new(*byte_start, *byte_end, byte_start / 2, byte_end / 2),
+        );
+        output.push_str(",\"slotCount\":");
+        output.push_str(&mix.slot_count.to_string());
+        output.push_str(",\"fillColorBasisCount\":");
+        output.push_str(&mix.fill_color_basis.len().to_string());
+        output.push_str(",\"fillColorCount\":");
+        output.push_str(&mix.fill_colors.len().to_string());
+        output.push_str(",\"fallbackFillColorSlotCount\":");
+        output.push_str(&mix.fallback_fill_color_slot_count.to_string());
+        output.push_str(",\"defaultFillColorSlotCount\":");
+        output.push_str(&mix.default_fill_color_slot_count.to_string());
+        output.push_str(",\"fillColorBases\":");
+        let bases = mix.fill_color_basis.iter().copied().collect::<Vec<_>>();
+        push_json_string_slice_array(output, &bases);
+        output.push_str(",\"fillColors\":");
+        let colors = mix.fill_colors.iter().copied().collect::<Vec<_>>();
+        push_json_string_slice_array(output, &colors);
+        output.push_str(",\"styleBoundaryProven\":false");
+        output.push_str(
+            ",\"renderPromotionBlockedReason\":\"document-text-fragment-style-boundary-unproven\"",
+        );
+        output.push_str(",\"exampleTexts\":");
+        push_json_string_array(output, &mix.example_texts);
         output.push('}');
     }
     output.push(']');
@@ -50662,6 +56201,7 @@ fn push_page_layer_shanai_lan_line_rule_json(
 ) {
     let topology = shanai_lan_line_rule_topology(projection, rule);
     let (x, y, width, height) = shanai_lan_line_rule_bbox(projection, rule);
+    let component = shanai_lan_line_rule_component_for_rule(projection, rule_index);
     output.push_str("{\"type\":\"documentTextLineRuleProjection\",\"bbox\":");
     output.push_str(&format!(
         "{{\"x\":{x:.3},\"y\":{y:.3},\"width\":{width:.3},\"height\":{height:.3}}}"
@@ -50725,6 +56265,16 @@ fn push_page_layer_shanai_lan_line_rule_json(
         projection,
         rule,
         topology,
+        text_projection,
+    );
+    output.push_str(",\"renderAdmissionGate\":");
+    push_shanai_lan_line_rule_render_admission_gate_json(
+        output,
+        projection,
+        rule_index,
+        rule,
+        topology,
+        component.as_ref(),
         text_projection,
     );
     if let Some(line_mark) = rule.line_mark {
@@ -50852,6 +56402,16 @@ fn push_page_layer_shanai_lan_line_rule_projection_summary_json(
     output.push_str(&endpoint_attachment_within_line_height_count.to_string());
     output.push_str(",\"bothEndpointAttachmentWithinLineHeightRuleCount\":");
     output.push_str(&both_endpoint_attachment_within_line_height_rule_count.to_string());
+    output.push_str(",\"lineRuleRenderAdmissionGate\":");
+    push_shanai_lan_line_rule_projection_render_admission_gate_json(
+        output,
+        projection,
+        &component_summaries,
+        orthogonal_graph_candidate_count,
+        no_isolated_endpoint_rule_count,
+        line_mark_matched_rule_count,
+        both_endpoint_attachment_within_line_height_rule_count,
+    );
     output.push_str(",\"lineRuleGraphComponentCount\":");
     output.push_str(&component_summaries.len().to_string());
     output.push_str(",\"largestLineRuleGraphComponentRuleCount\":");
@@ -50874,9 +56434,444 @@ fn push_page_layer_shanai_lan_line_rule_projection_summary_json(
     output.push('}');
 }
 
+#[allow(clippy::too_many_arguments)]
+fn push_shanai_lan_line_header_grid_origin_authority_gate_json(
+    output: &mut String,
+    document: &Document,
+    line_headers: &[ShanaiLanLineHeaderInGroup],
+    selected_horizontal_rules: &BTreeSet<(usize, usize, u16, u16)>,
+    line_mark_intervals: &[ShanaiLanLineMarkInterval],
+    grid_origin_x: f32,
+    grid_origin_y: f32,
+    grid_unit_px: f32,
+    line_height_px: f32,
+    raw_max_extent_units: u16,
+    max_extent_units: u16,
+) {
+    let selected_headers = line_headers
+        .iter()
+        .filter(|line_header| {
+            selected_horizontal_rules.contains(&(
+                line_header.header.start,
+                line_header.group_index,
+                line_header.header.offset_units,
+                line_header.header.extent_units,
+            ))
+        })
+        .collect::<Vec<_>>();
+    let mut selected_group_indexes = selected_headers
+        .iter()
+        .map(|line_header| line_header.group_index)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let selected_line_mark_record_indexes = selected_headers
+        .iter()
+        .filter_map(|line_header| {
+            shanai_lan_line_mark_for_header(line_mark_intervals, &line_header.header)
+                .map(|line_mark| line_mark.record_index)
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let group_record_pairs = selected_headers
+        .iter()
+        .filter_map(|line_header| {
+            shanai_lan_line_mark_for_header(line_mark_intervals, &line_header.header)
+                .map(|line_mark| (line_header.group_index, line_mark.record_index))
+        })
+        .collect::<Vec<_>>();
+    let record_index_minus_group_index_values = group_record_pairs
+        .iter()
+        .map(|(group_index, record_index)| *record_index as i32 - *group_index as i32)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let uniform_record_index_minus_group_index =
+        record_index_minus_group_index_values.len() == 1 && !group_record_pairs.is_empty();
+    let line_mark_record_indexes_contiguous =
+        usize_values_are_contiguous(&selected_line_mark_record_indexes);
+    let line_mark_record_stride = uniform_usize_stride(&selected_line_mark_record_indexes);
+    let selected_line_mark_intervals = selected_line_mark_record_indexes
+        .iter()
+        .filter_map(|record_index| {
+            line_mark_intervals
+                .iter()
+                .find(|interval| interval.record_index == *record_index)
+                .copied()
+        })
+        .collect::<Vec<_>>();
+    let page_mark_entry = shanai_lan_page_mark_entry_covering_line_mark_records(
+        document,
+        &selected_line_mark_record_indexes,
+    );
+    let page_mark_entry_count = document
+        .page_marks()
+        .first()
+        .map(|page_mark| page_mark.entries().len())
+        .unwrap_or_default();
+    let all_selected_headers_have_line_mark =
+        !selected_headers.is_empty() && group_record_pairs.len() == selected_headers.len();
+    let source_domain_row_anchor_candidate =
+        all_selected_headers_have_line_mark && uniform_record_index_minus_group_index;
+    let page_mark_entry_coverage_ready =
+        page_mark_entry.is_some() && !selected_line_mark_record_indexes.is_empty();
+
+    selected_group_indexes.sort_unstable();
+
+    output.push_str("{\"basis\":\"selectedDocumentTextLineHeaders+/LineMark+/PageMark\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false");
+    output.push_str(",\"selectedLineHeaderCount\":");
+    output.push_str(&selected_headers.len().to_string());
+    output.push_str(",\"selectedGroupIndexes\":");
+    push_usize_array_json(output, &selected_group_indexes);
+    output.push_str(",\"selectedLineMarkRecordIndexes\":");
+    push_usize_array_json(output, &selected_line_mark_record_indexes);
+    output.push_str(",\"selectedLineMarkSourceUnitGate\":");
+    push_shanai_lan_selected_line_mark_source_unit_gate_json(
+        output,
+        &selected_line_mark_record_indexes,
+        &selected_line_mark_intervals,
+    );
+    output.push_str(",\"allSelectedHeadersHaveLineMark\":");
+    output.push_str(&all_selected_headers_have_line_mark.to_string());
+    output.push_str(",\"lineMarkRecordIndexesContiguous\":");
+    output.push_str(&line_mark_record_indexes_contiguous.to_string());
+    output.push_str(",\"lineMarkRecordStride\":");
+    push_option_usize_json(output, line_mark_record_stride);
+    output.push_str(",\"recordIndexMinusGroupIndexValues\":");
+    push_i32_array_json(output, &record_index_minus_group_index_values);
+    output.push_str(",\"uniformRecordIndexMinusGroupIndex\":");
+    output.push_str(&uniform_record_index_minus_group_index.to_string());
+    output.push_str(",\"sourceDomainRowAnchorCandidate\":");
+    output.push_str(&source_domain_row_anchor_candidate.to_string());
+    output.push_str(",\"pageMarkEntryCount\":");
+    output.push_str(&page_mark_entry_count.to_string());
+    output.push_str(",\"pageMarkEntryCoverageReady\":");
+    output.push_str(&page_mark_entry_coverage_ready.to_string());
+    output.push_str(",\"pageMarkEntryCoverage\":");
+    if let Some(entry) = page_mark_entry {
+        output.push_str("{\"rowIndex\":");
+        output.push_str(&entry.row_index().to_string());
+        output.push_str(",\"index\":");
+        push_option_u32_json(output, entry.index());
+        output.push_str(",\"flags\":");
+        push_option_u32_json(output, entry.flags());
+        output.push_str(",\"flagsHex\":");
+        push_option_u32_hex_or_null_json(output, entry.flags());
+        output.push_str(",\"lineStart\":");
+        push_option_u32_json(output, entry.line_start());
+        output.push_str(",\"lineEnd\":");
+        push_option_u32_json(output, entry.line_end());
+        output.push('}');
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"pageMarkEntryProfileGate\":");
+    push_shanai_lan_page_mark_entry_profile_gate_json(output, page_mark_entry);
+    output.push_str(",\"sourceOnlyGridDomain\":{\"rawMaxExtentUnits\":");
+    output.push_str(&raw_max_extent_units.to_string());
+    output.push_str(",\"maxExtentUnits\":");
+    output.push_str(&max_extent_units.to_string());
+    output.push_str(",\"textGridColumnOriginDecoded\":false,\"textGridRowOriginDecoded\":false}");
+    output.push_str(",\"currentProjection\":{\"originX\":");
+    output.push_str(&format!("{grid_origin_x:.3}"));
+    output.push_str(",\"originY\":");
+    output.push_str(&format!("{grid_origin_y:.3}"));
+    output.push_str(",\"gridUnitPx\":");
+    output.push_str(&format!("{grid_unit_px:.3}"));
+    output.push_str(",\"lineHeightPx\":");
+    output.push_str(&format!("{line_height_px:.3}"));
+    output.push_str(",\"referenceBacked\":true}");
+    output.push_str(",\"sourceOnlyPageMarkYValueProbe\":");
+    push_shanai_lan_page_mark_y_value_probe_json(output, page_mark_entry, grid_origin_y);
+    output.push_str(",\"pageSpaceOriginCandidate\":null");
+    output.push_str(",\"pageSpaceOriginCandidateReady\":false");
+    output.push_str(",\"promotionReady\":false");
+    output.push_str(",\"blockedReasons\":[");
+    let mut reasons = Vec::new();
+    if selected_headers.is_empty() {
+        reasons.push("selected-line-header-run-missing");
+    }
+    if !all_selected_headers_have_line_mark {
+        reasons.push("selected-line-header-line-mark-coverage-incomplete");
+    }
+    if !uniform_record_index_minus_group_index {
+        reasons.push("line-mark-record-index-to-document-text-group-fit-not-uniform");
+    }
+    if !page_mark_entry_coverage_ready {
+        reasons.push("page-mark-entry-coverage-missing");
+    }
+    reasons.push("document-text-grid-origin-reference-backed");
+    reasons.push("line-header-visible-rule-selector-unproven");
+    reasons.push("page-space-y-origin-unproven");
+    for (index, reason) in reasons.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str(&json_string(reason));
+    }
+    output.push_str(
+        "],\"renderPromotionBlockedReason\":\"line-header-grid-origin-authority-unproven\"}",
+    );
+}
+
+fn usize_values_are_contiguous(values: &[usize]) -> bool {
+    values.len() > 1 && values.windows(2).all(|window| window[1] == window[0] + 1)
+}
+
+fn shanai_lan_page_mark_entry_covering_line_mark_records<'a>(
+    document: &'a Document,
+    line_mark_record_indexes: &[usize],
+) -> Option<&'a DocumentPageMarkEntry> {
+    let first = *line_mark_record_indexes.first()?;
+    let last = *line_mark_record_indexes.last()?;
+    document
+        .page_marks()
+        .first()?
+        .entries()
+        .iter()
+        .find(|entry| {
+            let (Some(start), Some(end)) = (entry.line_start(), entry.line_end()) else {
+                return false;
+            };
+            start as usize <= first && last <= end as usize
+        })
+}
+
+fn push_shanai_lan_page_mark_entry_profile_gate_json(
+    output: &mut String,
+    page_mark_entry: Option<&DocumentPageMarkEntry>,
+) {
+    let profile = page_mark_entry.map(DocumentPageMarkEntry::u16_geometry_profile);
+    let class_name = profile
+        .as_ref()
+        .map(PageMarkU16GeometryProfile::class_name)
+        .unwrap_or("missing");
+    let additive_geometry_profile = profile.is_some_and(|profile| {
+        profile.non_zero_additive_unit_candidate() && !profile.selected_fields_all_zero()
+    });
+    let promotion_safe_profile = additive_geometry_profile;
+
+    output.push_str("{\"source\":\"/PageMark u16 geometry profile\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false");
+    output.push_str(",\"entryPresent\":");
+    output.push_str(&page_mark_entry.is_some().to_string());
+    output.push_str(",\"u16GeometryClass\":");
+    output.push_str(&json_string(class_name));
+    output.push_str(",\"additiveGeometryProfile\":");
+    output.push_str(&additive_geometry_profile.to_string());
+    output.push_str(",\"promotionSafeProfile\":");
+    output.push_str(&promotion_safe_profile.to_string());
+    output.push_str(",\"blockedReason\":");
+    output.push_str(&json_string(if promotion_safe_profile {
+        "page-mark-profile-still-needs-field-role-proof"
+    } else {
+        "page-mark-mixed-payload-profile-not-layout-origin-authority"
+    }));
+    output.push('}');
+}
+
+fn push_shanai_lan_selected_line_mark_source_unit_gate_json(
+    output: &mut String,
+    selected_record_indexes: &[usize],
+    intervals: &[ShanaiLanLineMarkInterval],
+) {
+    let interval_record_indexes = intervals
+        .iter()
+        .map(|interval| interval.record_index)
+        .collect::<Vec<_>>();
+    let unit_starts = intervals
+        .iter()
+        .map(|interval| interval.unit_start)
+        .collect::<Vec<_>>();
+    let unit_ends = intervals
+        .iter()
+        .map(|interval| interval.unit_end)
+        .collect::<Vec<_>>();
+    let unit_spans = intervals
+        .iter()
+        .map(|interval| interval.unit_end.saturating_sub(interval.unit_start))
+        .collect::<Vec<_>>();
+    let record_index_deltas = interval_record_indexes
+        .windows(2)
+        .map(|window| window[1].saturating_sub(window[0]))
+        .collect::<Vec<_>>();
+    let unit_start_deltas = unit_starts
+        .windows(2)
+        .map(|window| window[1].saturating_sub(window[0]))
+        .collect::<Vec<_>>();
+    let source_unit_delta_per_record = record_index_deltas
+        .first()
+        .copied()
+        .zip(unit_start_deltas.first().copied())
+        .and_then(|(record_delta, unit_delta)| {
+            (record_delta > 0).then_some(unit_delta as f32 / record_delta as f32)
+        });
+    let all_selected_records_have_intervals =
+        selected_record_indexes.len() == intervals.len() && !selected_record_indexes.is_empty();
+    let stride_candidate_sample_count = record_index_deltas.len();
+    let stride_candidate_ready =
+        all_selected_records_have_intervals && stride_candidate_sample_count >= 2;
+
+    output.push_str("{\"source\":\"/LineMark selected record source-unit intervals\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false");
+    output.push_str(",\"selectedRecordCount\":");
+    output.push_str(&selected_record_indexes.len().to_string());
+    output.push_str(",\"intervalRecordCount\":");
+    output.push_str(&intervals.len().to_string());
+    output.push_str(",\"allSelectedRecordsHaveIntervals\":");
+    output.push_str(&all_selected_records_have_intervals.to_string());
+    output.push_str(",\"recordIndexes\":");
+    push_usize_array_json(output, &interval_record_indexes);
+    output.push_str(",\"unitStarts\":");
+    push_usize_array_json(output, &unit_starts);
+    output.push_str(",\"unitEnds\":");
+    push_usize_array_json(output, &unit_ends);
+    output.push_str(",\"unitSpans\":");
+    push_usize_array_json(output, &unit_spans);
+    output.push_str(",\"recordIndexDeltas\":");
+    push_usize_array_json(output, &record_index_deltas);
+    output.push_str(",\"unitStartDeltas\":");
+    push_usize_array_json(output, &unit_start_deltas);
+    output.push_str(",\"sourceUnitDeltaPerRecordEstimate\":");
+    push_optional_f32_json(output, source_unit_delta_per_record);
+    output.push_str(",\"strideCandidateSampleCount\":");
+    output.push_str(&stride_candidate_sample_count.to_string());
+    output.push_str(",\"strideCandidateReady\":");
+    output.push_str(&stride_candidate_ready.to_string());
+    output.push_str(",\"promotionReady\":false,\"blockedReason\":");
+    output.push_str(&json_string(if stride_candidate_ready {
+        "line-mark-source-unit-to-page-y-transform-unproven"
+    } else {
+        "line-mark-source-unit-stride-insufficient-selected-rows"
+    }));
+    output.push('}');
+}
+
+fn push_shanai_lan_page_mark_y_value_probe_json(
+    output: &mut String,
+    page_mark_entry: Option<&DocumentPageMarkEntry>,
+    current_projection_origin_y: f32,
+) {
+    let mut candidates = Vec::<PageMarkScopedYValueCandidate>::new();
+    if let Some(entry) = page_mark_entry {
+        collect_page_mark_entry_y_value_candidates(&mut candidates, entry);
+    }
+    let in_page_range_candidates = candidates
+        .iter()
+        .filter(|candidate| {
+            (0.0..=SHANAI_LAN_REFERENCE_PAGE_HEIGHT_PX).contains(&candidate.value_px)
+        })
+        .collect::<Vec<_>>();
+    let nearest_current_origin =
+        nearest_page_mark_scoped_y_candidate(current_projection_origin_y, &candidates);
+
+    output.push_str("{\"source\":\"/PageMark parsed entry y-value candidates\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false");
+    output.push_str(",\"pageMarkEntryPresent\":");
+    output.push_str(&page_mark_entry.is_some().to_string());
+    output.push_str(",\"candidateCount\":");
+    output.push_str(&candidates.len().to_string());
+    output.push_str(",\"inPageRangeCandidateCount\":");
+    output.push_str(&in_page_range_candidates.len().to_string());
+    output.push_str(",\"currentProjectionOriginY\":");
+    output.push_str(&format!("{current_projection_origin_y:.3}"));
+    output.push_str(",\"nearestCurrentProjectionOriginCandidate\":");
+    if let Some((candidate, residual)) = nearest_current_origin {
+        push_page_mark_scoped_y_candidate_json(output, candidate, residual);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"lineBoundaryConflictGate\":");
+    push_shanai_lan_page_mark_y_line_boundary_conflict_json(
+        output,
+        page_mark_entry,
+        nearest_current_origin.map(|(candidate, _)| candidate),
+    );
+    output.push_str(",\"candidatePreview\":");
+    push_shanai_lan_page_mark_y_value_candidate_preview_json(output, &in_page_range_candidates);
+    output.push_str(",\"selectionReady\":false,\"promotionReady\":false");
+    output.push_str(",\"blockedReasons\":[\"page-mark-y-value-field-role-unproven\",\"document-text-grid-origin-reference-backed\",\"page-space-y-origin-unproven\"]");
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"source-only-page-space-y-origin-unproven\"}",
+    );
+}
+
+fn push_shanai_lan_page_mark_y_line_boundary_conflict_json(
+    output: &mut String,
+    page_mark_entry: Option<&DocumentPageMarkEntry>,
+    nearest_candidate: Option<&PageMarkScopedYValueCandidate>,
+) {
+    let line_start = page_mark_entry.and_then(DocumentPageMarkEntry::line_start);
+    let line_end = page_mark_entry.and_then(DocumentPageMarkEntry::line_end);
+    let nearest_value = nearest_candidate.map(|candidate| candidate.value);
+    let matches_line_start = matches!(
+        (nearest_value, line_start),
+        (Some(candidate_value), Some(line_start)) if candidate_value == line_start
+    );
+    let matches_line_end = matches!(
+        (nearest_value, line_end),
+        (Some(candidate_value), Some(line_end)) if candidate_value == line_end
+    );
+    let line_boundary_conflict = matches_line_start || matches_line_end;
+
+    output.push_str(
+        "{\"source\":\"/PageMark parsed entry lineStart/lineEnd vs nearest y candidate\"",
+    );
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false");
+    output.push_str(",\"lineStart\":");
+    push_option_u32_json(output, line_start);
+    output.push_str(",\"lineEnd\":");
+    push_option_u32_json(output, line_end);
+    output.push_str(",\"nearestCandidateValue\":");
+    push_option_u32_json(output, nearest_value);
+    output.push_str(",\"matchesLineStart\":");
+    output.push_str(&matches_line_start.to_string());
+    output.push_str(",\"matchesLineEnd\":");
+    output.push_str(&matches_line_end.to_string());
+    output.push_str(",\"matchedBoundaryRoles\":[");
+    let mut first = true;
+    if matches_line_start {
+        output.push_str("\"lineStart\"");
+        first = false;
+    }
+    if matches_line_end {
+        if !first {
+            output.push(',');
+        }
+        output.push_str("\"lineEnd\"");
+    }
+    output.push_str("],\"lineBoundaryConflict\":");
+    output.push_str(&line_boundary_conflict.to_string());
+    output.push_str(",\"selectionReady\":false,\"promotionReady\":false");
+    output.push_str(",\"blockedReason\":");
+    output.push_str(&json_string(if line_boundary_conflict {
+        "nearest-page-mark-y-candidate-overlaps-line-boundary"
+    } else {
+        "page-mark-y-value-field-role-unproven"
+    }));
+    output.push('}');
+}
+
+fn push_shanai_lan_page_mark_y_value_candidate_preview_json(
+    output: &mut String,
+    candidates: &[&PageMarkScopedYValueCandidate],
+) {
+    output.push('[');
+    for (index, candidate) in candidates.iter().take(12).enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_page_mark_scoped_y_candidate_json(output, candidate, 0.0);
+    }
+    output.push(']');
+}
+
 fn push_page_layer_shanai_lan_line_header_projection_candidate_summary_json(
     output: &mut String,
     layout: PageLayout,
+    document: &Document,
     bytes: &[u8],
     line_mark_intervals: &[ShanaiLanLineMarkInterval],
     selected_projection: Option<&ShanaiLanLineRuleProjection>,
@@ -50966,6 +56961,20 @@ fn push_page_layer_shanai_lan_line_header_projection_candidate_summary_json(
     output.push_str(",\"renderPromotionBlockedReason\":\"line-header-segment-clipping-and-endpoint-ownership-unproven\"");
     output.push_str(",\"requiresSegmentClippingDecoded\":true,\"requiresEndpointOwnershipDecoded\":true,\"requiresPaintOrderDecoded\":true");
     output.push_str(",\"fullSpanRenderableCandidateCount\":0}");
+    output.push_str(",\"gridOriginAuthorityGate\":");
+    push_shanai_lan_line_header_grid_origin_authority_gate_json(
+        output,
+        document,
+        &line_headers,
+        &selected_horizontal_rules,
+        line_mark_intervals,
+        grid_origin_x,
+        grid_origin_y,
+        grid_unit_px,
+        line_height_px,
+        raw_max_extent_units,
+        max_extent_units,
+    );
     output.push_str(",\"gridUnitPx\":");
     output.push_str(&format!("{grid_unit_px:.3}"));
     output.push_str(",\"lineHeightPx\":");
@@ -51231,6 +57240,24 @@ fn push_shanai_lan_line_header_same_segment_group_run_json(
     offset_units: u16,
     extent_units: u16,
 ) {
+    if let Some(run) = shanai_lan_line_header_same_segment_group_run(
+        line_headers,
+        group_index,
+        offset_units,
+        extent_units,
+    ) {
+        push_shanai_lan_line_header_same_segment_group_run_value_json(output, run);
+    } else {
+        output.push_str("null");
+    }
+}
+
+fn shanai_lan_line_header_same_segment_group_run(
+    line_headers: &[ShanaiLanLineHeaderInGroup],
+    group_index: usize,
+    offset_units: u16,
+    extent_units: u16,
+) -> Option<ShanaiLanLineHeaderSameSegmentGroupRun> {
     let groups = line_headers
         .iter()
         .filter(|line_header| {
@@ -51239,6 +57266,9 @@ fn push_shanai_lan_line_header_same_segment_group_run_json(
         })
         .map(|line_header| line_header.group_index)
         .collect::<BTreeSet<_>>();
+    if !groups.contains(&group_index) {
+        return None;
+    }
     let mut start_group = group_index;
     while start_group > 0 && groups.contains(&(start_group - 1)) {
         start_group -= 1;
@@ -51247,21 +57277,34 @@ fn push_shanai_lan_line_header_same_segment_group_run_json(
     while groups.contains(&(end_group + 1)) {
         end_group += 1;
     }
-    let run_count = end_group.saturating_sub(start_group) + 1;
+    let group_count = end_group.saturating_sub(start_group) + 1;
+    Some(ShanaiLanLineHeaderSameSegmentGroupRun {
+        offset_units,
+        extent_units,
+        start_group_index: start_group,
+        end_group_index: end_group,
+        group_count,
+        position_in_run: group_index.saturating_sub(start_group),
+    })
+}
 
+fn push_shanai_lan_line_header_same_segment_group_run_value_json(
+    output: &mut String,
+    run: ShanaiLanLineHeaderSameSegmentGroupRun,
+) {
     output.push_str("{\"basis\":\"same-offset-extent-contiguous-groups\"");
     output.push_str(",\"offsetUnits\":");
-    output.push_str(&offset_units.to_string());
+    output.push_str(&run.offset_units.to_string());
     output.push_str(",\"extentUnits\":");
-    output.push_str(&extent_units.to_string());
+    output.push_str(&run.extent_units.to_string());
     output.push_str(",\"startGroupIndex\":");
-    output.push_str(&start_group.to_string());
+    output.push_str(&run.start_group_index.to_string());
     output.push_str(",\"endGroupIndex\":");
-    output.push_str(&end_group.to_string());
+    output.push_str(&run.end_group_index.to_string());
     output.push_str(",\"groupCount\":");
-    output.push_str(&run_count.to_string());
+    output.push_str(&run.group_count.to_string());
     output.push_str(",\"positionInRun\":");
-    output.push_str(&group_index.saturating_sub(start_group).to_string());
+    output.push_str(&run.position_in_run.to_string());
     output.push('}');
 }
 
@@ -51458,9 +57501,203 @@ fn push_shanai_lan_line_rule_graph_components_json(
         output.push_str(&component.isolated_endpoint_count.to_string());
         output.push_str(",\"totalProjectedLengthPx\":");
         output.push_str(&format!("{:.3}", component.total_projected_length_px));
+        output.push_str(",\"orthogonalComponentCandidate\":");
+        output.push_str(json_bool(
+            shanai_lan_line_rule_component_orthogonal_candidate(component),
+        ));
+        output.push_str(",\"lineMarkCoverageComplete\":");
+        output.push_str(json_bool(
+            component.line_mark_matched_rule_count == component.rule_indexes.len(),
+        ));
+        output.push_str(",\"renderAdmissionGate\":");
+        push_shanai_lan_line_rule_component_render_admission_gate_json(output, component);
         output.push_str(",\"renderable\":false,\"renderPromotionBlockedReason\":\"line-rule-component-placement-and-style-unproven\"}");
     }
     output.push(']');
+}
+
+fn push_shanai_lan_line_rule_projection_render_admission_gate_json(
+    output: &mut String,
+    projection: &ShanaiLanLineRuleProjection,
+    components: &[ShanaiLanLineRuleGraphComponentSummary],
+    orthogonal_graph_candidate_count: usize,
+    no_isolated_endpoint_rule_count: usize,
+    line_mark_matched_rule_count: usize,
+    both_endpoint_attachment_within_line_height_rule_count: usize,
+) {
+    let orthogonal_component_count = components
+        .iter()
+        .filter(|component| shanai_lan_line_rule_component_orthogonal_candidate(component))
+        .count();
+    let line_mark_coverage_complete = line_mark_matched_rule_count == projection.rules.len();
+    let has_endpoint_attachment_pair = both_endpoint_attachment_within_line_height_rule_count > 0;
+    let mut blocked_reasons = Vec::new();
+    blocked_reasons.push("document-text-grid-origin-reference-backed");
+    if orthogonal_graph_candidate_count < projection.rules.len() {
+        blocked_reasons.push("line-rule-topology-partial-orthogonal-coverage");
+    }
+    if orthogonal_component_count < components.len() {
+        blocked_reasons.push("line-rule-component-topology-unproven");
+    }
+    if !line_mark_coverage_complete {
+        blocked_reasons.push("line-rule-line-mark-coverage-incomplete");
+    }
+    if no_isolated_endpoint_rule_count < projection.rules.len() {
+        blocked_reasons.push("line-rule-endpoint-ownership-unproven");
+    }
+    if !has_endpoint_attachment_pair {
+        blocked_reasons.push("line-rule-text-attachment-pair-absent");
+    }
+    blocked_reasons.push("line-rule-style-role-unproven");
+    blocked_reasons.push("line-rule-paint-order-unproven");
+
+    output.push_str("{\"source\":\"/DocumentText+/LineMark line-rule render admission\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":true,\"placementDerived\":false,\"renderable\":false,\"promotionReady\":false");
+    output.push_str(",\"ruleCount\":");
+    output.push_str(&projection.rules.len().to_string());
+    output.push_str(",\"componentCount\":");
+    output.push_str(&components.len().to_string());
+    output.push_str(",\"orthogonalGraphCandidateRuleCount\":");
+    output.push_str(&orthogonal_graph_candidate_count.to_string());
+    output.push_str(",\"orthogonalComponentCandidateCount\":");
+    output.push_str(&orthogonal_component_count.to_string());
+    output.push_str(",\"lineMarkCoverageComplete\":");
+    output.push_str(json_bool(line_mark_coverage_complete));
+    output.push_str(",\"noIsolatedEndpointRuleCount\":");
+    output.push_str(&no_isolated_endpoint_rule_count.to_string());
+    output.push_str(",\"bothEndpointAttachmentWithinLineHeightRuleCount\":");
+    output.push_str(&both_endpoint_attachment_within_line_height_rule_count.to_string());
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output.push_str(",\"renderPromotionBlockedReason\":\"line-rule-render-admission-not-ready\"}");
+}
+
+fn push_shanai_lan_line_rule_component_render_admission_gate_json(
+    output: &mut String,
+    component: &ShanaiLanLineRuleGraphComponentSummary,
+) {
+    let orthogonal_component_candidate =
+        shanai_lan_line_rule_component_orthogonal_candidate(component);
+    let line_mark_coverage_complete =
+        component.line_mark_matched_rule_count == component.rule_indexes.len();
+    let mut blocked_reasons = Vec::new();
+    blocked_reasons.push("document-text-grid-origin-reference-backed");
+    if !orthogonal_component_candidate {
+        blocked_reasons.push("line-rule-component-topology-unproven");
+    }
+    if component.isolated_endpoint_count > 0 {
+        blocked_reasons.push("line-rule-component-endpoint-ownership-unproven");
+    }
+    if !line_mark_coverage_complete {
+        blocked_reasons.push("line-rule-component-line-mark-coverage-incomplete");
+    }
+    blocked_reasons.push("line-rule-component-style-role-unproven");
+    blocked_reasons.push("line-rule-paint-order-unproven");
+
+    output.push_str("{\"source\":\"/DocumentText+/LineMark line-rule component render admission\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":true,\"placementDerived\":false,\"renderable\":false,\"promotionReady\":false");
+    output.push_str(",\"orthogonalComponentCandidate\":");
+    output.push_str(json_bool(orthogonal_component_candidate));
+    output.push_str(",\"lineMarkCoverageComplete\":");
+    output.push_str(json_bool(line_mark_coverage_complete));
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"line-rule-component-render-admission-not-ready\"}",
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_shanai_lan_line_rule_render_admission_gate_json(
+    output: &mut String,
+    projection: &ShanaiLanLineRuleProjection,
+    rule_index: usize,
+    rule: &ShanaiLanLineRule,
+    topology: ShanaiLanLineRuleTopology,
+    component: Option<&(usize, ShanaiLanLineRuleGraphComponentSummary)>,
+    text_projection: Option<&ShanaiLanTextProjection>,
+) {
+    let start_attached = shanai_lan_line_rule_endpoint_attaches_to_text(
+        rule.x1,
+        rule.y1,
+        projection,
+        text_projection,
+    );
+    let end_attached = shanai_lan_line_rule_endpoint_attaches_to_text(
+        rule.x2,
+        rule.y2,
+        projection,
+        text_projection,
+    );
+    let component_candidate = component
+        .map(|(_, component)| shanai_lan_line_rule_component_orthogonal_candidate(component))
+        .unwrap_or(false);
+    let component_index = component.map(|(component_index, _)| *component_index);
+    let component_rule_count = component.map(|(_, component)| component.rule_indexes.len());
+    let has_line_mark = rule.line_mark.is_some();
+    let mut blocked_reasons = Vec::new();
+    blocked_reasons.push("document-text-grid-origin-reference-backed");
+    if !topology.orthogonal_graph_candidate {
+        blocked_reasons.push("line-rule-topology-not-orthogonal-network");
+    }
+    if topology.isolated_endpoint_count > 0 {
+        blocked_reasons.push("line-rule-endpoint-ownership-unproven");
+    }
+    if !start_attached || !end_attached {
+        blocked_reasons.push("line-rule-text-attachment-pair-unproven");
+    }
+    if !has_line_mark {
+        blocked_reasons.push("line-rule-line-mark-record-missing");
+    }
+    if !component_candidate {
+        blocked_reasons.push("line-rule-component-topology-unproven");
+    }
+    blocked_reasons.push("line-rule-style-role-unproven");
+    blocked_reasons.push("line-rule-paint-order-unproven");
+
+    output.push_str("{\"source\":\"/DocumentText+/LineMark line-rule render admission\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":true,\"placementDerived\":false,\"renderable\":false,\"promotionReady\":false");
+    output.push_str(",\"ruleIndex\":");
+    output.push_str(&rule_index.to_string());
+    output.push_str(",\"componentIndex\":");
+    push_option_usize_json(output, component_index);
+    output.push_str(",\"componentRuleCount\":");
+    push_option_usize_json(output, component_rule_count);
+    output.push_str(",\"lineMarkMatched\":");
+    output.push_str(json_bool(has_line_mark));
+    output.push_str(",\"orthogonalGraphCandidate\":");
+    output.push_str(json_bool(topology.orthogonal_graph_candidate));
+    output.push_str(",\"componentOrthogonalCandidate\":");
+    output.push_str(json_bool(component_candidate));
+    output.push_str(",\"startEndpointTextAttachmentCandidate\":");
+    output.push_str(json_bool(start_attached));
+    output.push_str(",\"endEndpointTextAttachmentCandidate\":");
+    output.push_str(json_bool(end_attached));
+    output.push_str(",\"bothEndpointTextAttachmentCandidate\":");
+    output.push_str(json_bool(start_attached && end_attached));
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output.push_str(",\"renderPromotionBlockedReason\":\"line-rule-render-admission-not-ready\"}");
+}
+
+fn shanai_lan_line_rule_component_for_rule(
+    projection: &ShanaiLanLineRuleProjection,
+    rule_index: usize,
+) -> Option<(usize, ShanaiLanLineRuleGraphComponentSummary)> {
+    shanai_lan_line_rule_graph_component_summaries(projection)
+        .into_iter()
+        .enumerate()
+        .find(|(_, component)| component.rule_indexes.contains(&rule_index))
+}
+
+fn shanai_lan_line_rule_component_orthogonal_candidate(
+    component: &ShanaiLanLineRuleGraphComponentSummary,
+) -> bool {
+    !component.rule_indexes.is_empty()
+        && component.horizontal_rule_count > 0
+        && component.vertical_rule_count > 0
+        && component.orthogonal_graph_rule_count == component.rule_indexes.len()
+        && component.line_mark_matched_rule_count == component.rule_indexes.len()
 }
 
 fn push_static_str_count_map_json(output: &mut String, counts: &BTreeMap<&'static str, usize>) {
@@ -53672,6 +59909,7 @@ fn shanai_lan_document_text_projection(
     let bytes = document_text_raw_stream(document)?;
     let map = map_document_text(bytes);
     let group_offsets = shanai_lan_text_group_offsets(bytes);
+    let line_headers = shanai_lan_line_headers_in_groups(bytes, &group_offsets);
     let max_extent_units = shanai_lan_text_max_extent_units(bytes)
         .unwrap_or(0x0118)
         .saturating_sub(SHANAI_LAN_TEXT_GRID_EXTENT_GUTTER_UNITS)
@@ -53718,6 +59956,16 @@ fn shanai_lan_document_text_projection(
             .as_ref()
             .map(|header| header.raw_words)
             .unwrap_or([0; 12]);
+        let line_header_same_segment_group_run = line_header.as_ref().and_then(|header| {
+            group_index.and_then(|group_index| {
+                shanai_lan_line_header_same_segment_group_run(
+                    &line_headers,
+                    group_index,
+                    header.offset_units,
+                    header.extent_units,
+                )
+            })
+        });
         let fragment_count = fragments.len();
         let parent_text_unit_count = entry.text().encode_utf16().count();
         for (fragment_index, fragment) in fragments.iter().enumerate() {
@@ -53779,9 +60027,14 @@ fn shanai_lan_document_text_projection(
                 split_from_text_run: fragment.split_from_text_run,
                 line_header_hex: line_header_hex.clone(),
                 line_header_raw_words,
+                line_header_same_segment_group_run,
+                line_header_same_segment_group_run_text_slot_count: None,
+                line_header_same_segment_group_run_distinct_text_group_count: None,
             });
         }
     }
+
+    attach_shanai_lan_line_header_same_segment_text_peer_counts(&mut slots);
 
     (!slots.is_empty()).then_some(ShanaiLanTextProjection {
         source: "/DocumentText",
@@ -53790,6 +60043,43 @@ fn shanai_lan_document_text_projection(
         line_height_px,
         slots,
     })
+}
+
+fn attach_shanai_lan_line_header_same_segment_text_peer_counts(slots: &mut [ShanaiLanTextSlot]) {
+    let mut peer_counts = BTreeMap::<(u16, u16, usize, usize), (usize, BTreeSet<usize>)>::new();
+    for slot in slots.iter() {
+        let Some(run) = slot.line_header_same_segment_group_run else {
+            continue;
+        };
+        let key = (
+            run.offset_units,
+            run.extent_units,
+            run.start_group_index,
+            run.end_group_index,
+        );
+        let entry = peer_counts.entry(key).or_default();
+        entry.0 += 1;
+        if let Some(group_index) = slot.group_index {
+            entry.1.insert(group_index);
+        }
+    }
+
+    for slot in slots.iter_mut() {
+        let Some(run) = slot.line_header_same_segment_group_run else {
+            continue;
+        };
+        let key = (
+            run.offset_units,
+            run.extent_units,
+            run.start_group_index,
+            run.end_group_index,
+        );
+        if let Some((text_slot_count, group_indexes)) = peer_counts.get(&key) {
+            slot.line_header_same_segment_group_run_text_slot_count = Some(*text_slot_count);
+            slot.line_header_same_segment_group_run_distinct_text_group_count =
+                Some(group_indexes.len());
+        }
+    }
 }
 
 fn shanai_lan_document_text_line_rule_projection(
@@ -55279,8 +61569,41 @@ fn push_shanai_lan_text_projection_svg(
             .next_gap_units
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".to_string());
+        let same_segment_run_present = slot.line_header_same_segment_group_run.is_some();
+        let same_segment_run_start = slot
+            .line_header_same_segment_group_run
+            .map(|run| run.start_group_index.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let same_segment_run_end = slot
+            .line_header_same_segment_group_run
+            .map(|run| run.end_group_index.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let same_segment_run_count = slot
+            .line_header_same_segment_group_run
+            .map(|run| run.group_count.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let same_segment_run_position = slot
+            .line_header_same_segment_group_run
+            .map(|run| run.position_in_run.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let same_segment_run_text_slot_count = slot
+            .line_header_same_segment_group_run_text_slot_count
+            .map(|count| count.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let same_segment_run_distinct_text_group_count = slot
+            .line_header_same_segment_group_run_distinct_text_group_count
+            .map(|count| count.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let same_segment_run_ambiguous_as_row_anchor = slot
+            .line_header_same_segment_group_run_distinct_text_group_count
+            .is_some_and(|count| count > 1);
+        let line_header_y_placement_blocked_detail = if same_segment_run_ambiguous_as_row_anchor {
+            "same-segment-run-spans-multiple-visible-text-rows"
+        } else {
+            "line-header-y-run-transform-undecoded"
+        };
         svg.push_str(&format!(
-            "<text class=\"rjtd-text rjtd-shanai-lan-text\" data-source=\"{}\" data-projection-kind=\"{}\" data-group-index=\"{}\" data-line-offset-units=\"{}\" data-leading-units=\"{}\" data-fragment-start-units=\"{}\" data-split-from-text-run=\"{}\" data-parent-text-run-byte-range=\"{}\" data-parent-text-run-unit-range=\"{}\" data-parent-text-run-unit-count=\"{}\" data-fragment-index=\"{}\" data-fragment-count=\"{}\" data-fragment-source-unit-range=\"{}\" data-previous-gap-units=\"{}\" data-next-gap-units=\"{}\" data-fragment-style-boundary-proven=\"{}\" data-fragment-style-blocked-reason=\"{}\" data-line-header-hex=\"{}\" data-line-header-raw-words-hex=\"{}\" data-fill-color-basis=\"{}\" data-style-link-proven=\"{}\" data-style-link-blocked-reason=\"{}\" data-text-layout-style-record-count=\"{}\" data-document-view-style-group-count=\"{}\" data-document-view-style-group-candidate=\"{}\" data-document-view-style-group-candidate-basis=\"{}\" data-document-text-group-header-candidate=\"{}\" data-document-text-group-header-raw-words-hex=\"{}\" data-document-text-group-header-blocked-reason=\"{}\" data-document-text-inline-style-candidate=\"{}\" data-document-text-inline-style-selector=\"{}\" data-document-text-inline-style-raw-words-hex=\"{}\" data-document-text-inline-style-blocked-reason=\"{}\" data-fill-color-promotion-blocked-reason=\"{}\" data-text-count-range-evidence-count=\"{}\" data-text-count-range-indexes=\"{}\" data-text-count-range-bases=\"{}\" x=\"{:.1}\" y=\"{:.1}\" font-family=\"{}\" font-size=\"{:.1}\" fill=\"{}\" letter-spacing=\"0\" xml:space=\"preserve\">{}</text>",
+            "<text class=\"rjtd-text rjtd-shanai-lan-text\" data-source=\"{}\" data-projection-kind=\"{}\" data-group-index=\"{}\" data-line-offset-units=\"{}\" data-leading-units=\"{}\" data-fragment-start-units=\"{}\" data-split-from-text-run=\"{}\" data-parent-text-run-byte-range=\"{}\" data-parent-text-run-unit-range=\"{}\" data-parent-text-run-unit-count=\"{}\" data-fragment-index=\"{}\" data-fragment-count=\"{}\" data-fragment-source-unit-range=\"{}\" data-previous-gap-units=\"{}\" data-next-gap-units=\"{}\" data-fragment-style-boundary-proven=\"{}\" data-fragment-style-blocked-reason=\"{}\" data-line-header-hex=\"{}\" data-line-header-raw-words-hex=\"{}\" data-line-header-same-segment-run-present=\"{}\" data-line-header-same-segment-run-start-group=\"{}\" data-line-header-same-segment-run-end-group=\"{}\" data-line-header-same-segment-run-group-count=\"{}\" data-line-header-same-segment-run-position=\"{}\" data-line-header-same-segment-run-text-slot-count=\"{}\" data-line-header-same-segment-run-distinct-text-group-count=\"{}\" data-line-header-same-segment-run-ambiguous-row-anchor=\"{}\" data-line-header-y-placement-blocked-detail=\"{}\" data-line-header-y-placement-blocked-reason=\"line-header-y-run-placement-semantics-unproven\" data-fill-color-basis=\"{}\" data-style-link-proven=\"{}\" data-style-link-blocked-reason=\"{}\" data-text-layout-style-record-count=\"{}\" data-document-view-style-group-count=\"{}\" data-document-view-style-group-candidate=\"{}\" data-document-view-style-group-candidate-basis=\"{}\" data-document-text-group-header-candidate=\"{}\" data-document-text-group-header-raw-words-hex=\"{}\" data-document-text-group-header-blocked-reason=\"{}\" data-document-text-inline-style-candidate=\"{}\" data-document-text-inline-style-selector=\"{}\" data-document-text-inline-style-raw-words-hex=\"{}\" data-document-text-inline-style-blocked-reason=\"{}\" data-fill-color-promotion-blocked-reason=\"{}\" data-text-count-range-evidence-count=\"{}\" data-text-count-range-indexes=\"{}\" data-text-count-range-bases=\"{}\" x=\"{:.1}\" y=\"{:.1}\" font-family=\"{}\" font-size=\"{:.1}\" fill=\"{}\" letter-spacing=\"0\" xml:space=\"preserve\">{}</text>",
             escape_xml(projection.source),
             escape_xml(projection.projection_kind),
             escape_xml(&group_index),
@@ -55300,6 +61623,15 @@ fn push_shanai_lan_text_projection_svg(
             escape_xml(slot.fragment_context.promotion_blocked_reason),
             escape_xml(&slot.line_header_hex),
             escape_xml(&line_header_raw_words_hex),
+            same_segment_run_present,
+            escape_xml(&same_segment_run_start),
+            escape_xml(&same_segment_run_end),
+            escape_xml(&same_segment_run_count),
+            escape_xml(&same_segment_run_position),
+            escape_xml(&same_segment_run_text_slot_count),
+            escape_xml(&same_segment_run_distinct_text_group_count),
+            same_segment_run_ambiguous_as_row_anchor,
+            escape_xml(line_header_y_placement_blocked_detail),
             escape_xml(slot.fill_basis),
             slot.style_link_evidence.style_link_proven,
             escape_xml(
@@ -55754,16 +62086,29 @@ fn push_success_data_test_title_art_projection_svg(
             scale_y,
             frame_scale_y,
         );
-        let front_fill_attrs =
-            success_data_test_title_art_front_fill_svg_attrs(snapshot, source_paint_candidate);
+        let front_fill_winding_gate = success_data_test_title_art_front_fill_winding_gate(snapshot);
+        let front_fill_attrs = format!(
+            "{}{}",
+            success_data_test_title_art_front_fill_svg_attrs(snapshot, source_paint_candidate),
+            front_fill_winding_gate.svg_attrs()
+        );
         let horizontal_placement_attrs =
             success_data_test_title_art_horizontal_placement_svg_attrs(horizontal_placement);
+        let source_frame_trace_attrs =
+            success_data_test_title_art_source_frame_render_trace_svg_attrs(
+                source_frame_candidate,
+                diagnostic.frame_record,
+                diagnostic.frame.frame_ref(),
+                horizontal_placement,
+                frame_scale_y_basis,
+                frame_scale_y_source_units,
+            );
         let clip_id = format!(
             "rjtd-success-data-test-title-art-clip-{}",
             diagnostic.frame.embedding_index()
         );
         svg.push_str(&format!(
-            "<g class=\"rjtd-success-data-test-title-art\" data-source=\"jsfartArtEmbeddedPressSnapshot\" data-projection=\"successDataTestTitleArtProjection\" data-placement-mode=\"frameRecordContentOffsetAnchor\" data-embedding-index=\"{}\" data-class-name=\"{}\" data-frame-ref=\"{}\" data-source-scale-x=\"{scale_x:.6}\" data-source-scale-y=\"{scale_y:.6}\" data-frame-scale-y=\"{frame_scale_y:.6}\" data-frame-scale-y-basis=\"{}\" data-frame-scale-y-units=\"{}\" data-content-left-adjustment-source-units=\"{}\" data-content-left-adjustment-css-px=\"{content_left_adjustment:.3}\" data-content-top-adjustment-source-units=\"{}\" data-content-top-adjustment-css-px=\"{content_top_adjustment:.3}\" data-frame-content-top-adjustment-css-px=\"{frame_content_top_adjustment:.3}\" data-vertical-stroke-center-adjustment-css-px=\"{vertical_stroke_center_adjustment:.3}\"{horizontal_placement_attrs}{path_scale_bbox_attrs}{front_fill_attrs} data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"false\" data-renderable=\"true\" data-reference-backed=\"true\">",
+            "<g class=\"rjtd-success-data-test-title-art\" data-source=\"jsfartArtEmbeddedPressSnapshot\" data-projection=\"successDataTestTitleArtProjection\" data-placement-mode=\"frameRecordContentOffsetAnchor\" data-embedding-index=\"{}\" data-class-name=\"{}\" data-frame-ref=\"{}\" data-source-scale-x=\"{scale_x:.6}\" data-source-scale-y=\"{scale_y:.6}\" data-frame-scale-y=\"{frame_scale_y:.6}\" data-frame-scale-y-basis=\"{}\" data-frame-scale-y-units=\"{}\" data-content-left-adjustment-source-units=\"{}\" data-content-left-adjustment-css-px=\"{content_left_adjustment:.3}\" data-content-top-adjustment-source-units=\"{}\" data-content-top-adjustment-css-px=\"{content_top_adjustment:.3}\" data-frame-content-top-adjustment-css-px=\"{frame_content_top_adjustment:.3}\" data-vertical-stroke-center-adjustment-css-px=\"{vertical_stroke_center_adjustment:.3}\"{horizontal_placement_attrs}{source_frame_trace_attrs}{path_scale_bbox_attrs}{front_fill_attrs} data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"false\" data-renderable=\"true\" data-reference-backed=\"true\">",
             diagnostic.frame.embedding_index(),
             escape_xml(diagnostic.frame.class_name()),
             diagnostic.frame.frame_ref(),
@@ -55924,6 +62269,7 @@ fn push_success_data_test_title_art_projection_svg(
                         y,
                         scale_x,
                         scale_y,
+                        front_fill_winding_gate.selected_fill_rule,
                         &front_fill_attrs,
                     );
                 }
@@ -55948,6 +62294,7 @@ fn push_success_data_test_title_art_projection_svg(
                         y,
                         scale_x,
                         scale_y,
+                        front_fill_winding_gate.selected_fill_rule,
                         &front_fill_attrs,
                     );
                 }
@@ -56742,10 +63089,16 @@ fn push_success_data_test_title_art_path_svg(
     y: f32,
     scale_x: f32,
     scale_y: f32,
+    front_fill_rule: &'static str,
     front_fill_attrs: &str,
 ) {
+    let front_fill_rule_source = if front_fill_rule == "evenodd" {
+        "embedded-press-evenodd-boundary-contours"
+    } else {
+        "embedded-press-nonzero-winding"
+    };
     let extra_attrs = format!(
-        " data-title-layer=\"front-fill\" data-title-fill-source=\"raw-embedded-press-path\" data-title-fill-rule-source=\"embedded-press-nonzero-winding\"{front_fill_attrs}"
+        " data-title-layer=\"front-fill\" data-title-fill-source=\"raw-embedded-press-path\" data-title-fill-rule-source=\"{front_fill_rule_source}\"{front_fill_attrs}"
     );
     push_embedded_press_vector_path_svg(
         svg,
@@ -56758,7 +63111,7 @@ fn push_success_data_test_title_art_path_svg(
             scale_y,
         },
         SUCCESS_DATA_TEST_TITLE_ART_FRONT_FILL_COLOR,
-        "nonzero",
+        front_fill_rule,
         Some(&extra_attrs),
     );
 }
@@ -56822,6 +63175,156 @@ fn success_data_test_title_art_front_fill_render_color_gate<'a>(
     }
 }
 
+fn push_success_data_test_title_art_source_paint_render_trace_json(
+    output: &mut String,
+    source_paint_candidate: Option<&ObjectJsfartArtPaintCandidate>,
+    color_gate: TitleArtFrontFillRenderColorGate<'_>,
+    render_texture_path_source: &str,
+    render_blocked_reason: Option<&str>,
+) {
+    output.push_str("{\"source\":\"JSFart2Contents.paintCandidateRawWords+frontFillRenderColorGate\",\"decoded\":false,\"sourceBacked\":");
+    output.push_str(if source_paint_candidate.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"diagnosticOnly\":true,\"renderPromoted\":false,\"rawPaintCandidate\":");
+    if let Some(paint) = source_paint_candidate {
+        output.push_str("{\"styleWord1Hex\":");
+        output.push_str(&json_string(&format!("0x{:08x}", paint.style_word_1())));
+        output.push_str(",\"styleWord2Hex\":");
+        output.push_str(&json_string(&format!("0x{:08x}", paint.style_word_2())));
+        output.push_str(",\"paintColorCandidateHex\":");
+        output.push_str(&json_string(&format!(
+            "0x{:08x}",
+            paint.paint_color_candidate()
+        )));
+        output.push_str(",\"paintColorCss\":");
+        match jsfart_paint_candidate_color_hex(paint) {
+            Some(color) => output.push_str(&json_string(&color)),
+            None => output.push_str("null"),
+        }
+        output.push_str(",\"paintFlagCandidateHex\":");
+        output.push_str(&json_string(&format!(
+            "0x{:08x}",
+            paint.paint_flag_candidate()
+        )));
+        output.push_str(",\"effectWordCandidateHex\":");
+        output.push_str(&json_string(&format!(
+            "0x{:08x}",
+            paint.effect_word_candidate()
+        )));
+        output.push('}');
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"selectedRenderFillColor\":");
+    output.push_str(&json_string(color_gate.render_fill));
+    output.push_str(",\"selectedRenderFillSource\":");
+    output.push_str(&json_string(color_gate.render_color_source));
+    output.push_str(",\"selectedRenderFillSourceBacked\":");
+    output.push_str(if color_gate.render_color_source_backed {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePaintColor\":");
+    match color_gate.paint_color {
+        Some(color) => output.push_str(&json_string(color)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"sourcePaintColorSource\":");
+    match color_gate.paint_source {
+        Some(source) => output.push_str(&json_string(source)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"sourcePaintColorMatchesRenderFill\":");
+    output.push_str(if color_gate.source_paint_matches_render_fill {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderTexturePathSource\":");
+    output.push_str(&json_string(render_texture_path_source));
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    match render_blocked_reason {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"traceConclusion\":");
+    output.push_str(&json_string(if source_paint_candidate.is_none() {
+        "missing-jsfart-paint-candidate"
+    } else if color_gate.source_paint_matches_render_fill
+        && render_blocked_reason.is_none()
+        && color_gate.render_color_source_backed
+    {
+        "source-paint-and-render-fill-aligned"
+    } else {
+        "source-paint-present-but-render-fill-not-promoted"
+    }));
+    output.push('}');
+}
+
+fn success_data_test_title_art_source_paint_render_trace_svg_attrs(
+    source_paint_candidate: Option<&ObjectJsfartArtPaintCandidate>,
+    color_gate: TitleArtFrontFillRenderColorGate<'_>,
+    render_texture_path_source: &str,
+    render_blocked_reason: &str,
+) -> String {
+    let (
+        style_word_1,
+        style_word_2,
+        paint_color_candidate,
+        paint_color_css,
+        paint_flag_candidate,
+        effect_word_candidate,
+    ) = if let Some(paint) = source_paint_candidate {
+        (
+            format!("0x{:08x}", paint.style_word_1()),
+            format!("0x{:08x}", paint.style_word_2()),
+            format!("0x{:08x}", paint.paint_color_candidate()),
+            jsfart_paint_candidate_color_hex(paint).unwrap_or_else(|| "none".to_string()),
+            format!("0x{:08x}", paint.paint_flag_candidate()),
+            format!("0x{:08x}", paint.effect_word_candidate()),
+        )
+    } else {
+        (
+            "none".to_string(),
+            "none".to_string(),
+            "none".to_string(),
+            "none".to_string(),
+            "none".to_string(),
+            "none".to_string(),
+        )
+    };
+    let trace_conclusion = if source_paint_candidate.is_none() {
+        "missing-jsfart-paint-candidate"
+    } else if color_gate.source_paint_matches_render_fill
+        && render_blocked_reason == "none"
+        && color_gate.render_color_source_backed
+    {
+        "source-paint-and-render-fill-aligned"
+    } else {
+        "source-paint-present-but-render-fill-not-promoted"
+    };
+    format!(
+        " data-title-front-paint-source-trace-source=\"JSFart2Contents.paintCandidateRawWords+frontFillRenderColorGate\" data-title-front-paint-source-trace-source-backed=\"{}\" data-title-front-paint-source-trace-render-promoted=\"false\" data-title-front-paint-source-trace-style-word1=\"{}\" data-title-front-paint-source-trace-style-word2=\"{}\" data-title-front-paint-source-trace-paint-color=\"{}\" data-title-front-paint-source-trace-paint-color-css=\"{}\" data-title-front-paint-source-trace-paint-flag=\"{}\" data-title-front-paint-source-trace-effect-word=\"{}\" data-title-front-paint-source-trace-selected-fill=\"{}\" data-title-front-paint-source-trace-selected-fill-source=\"{}\" data-title-front-paint-source-trace-source-paint-matches-render=\"{}\" data-title-front-paint-source-trace-render-texture-path-source=\"{}\" data-title-front-paint-source-trace-render-blocked-reason=\"{}\" data-title-front-paint-source-trace-conclusion=\"{}\"",
+        source_paint_candidate.is_some(),
+        escape_xml(&style_word_1),
+        escape_xml(&style_word_2),
+        escape_xml(&paint_color_candidate),
+        escape_xml(&paint_color_css),
+        escape_xml(&paint_flag_candidate),
+        escape_xml(&effect_word_candidate),
+        escape_xml(color_gate.render_fill),
+        escape_xml(color_gate.render_color_source),
+        color_gate.source_paint_matches_render_fill,
+        escape_xml(render_texture_path_source),
+        escape_xml(render_blocked_reason),
+        escape_xml(trace_conclusion)
+    )
+}
+
 fn success_data_test_title_art_front_fill_svg_attrs(
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
     source_paint_candidate: Option<&ObjectJsfartArtPaintCandidate>,
@@ -56867,8 +63370,34 @@ fn success_data_test_title_art_front_fill_svg_attrs(
     } else {
         render_promotion_blocked_reason.unwrap_or("none")
     };
+    let direct_gray_candidate_present =
+        embedded_press_title_art_direct_gray_candidate(&front_erase_texture_paths).is_some();
+    let texture_source_paint_candidate_present = embedded_press_title_art_source_paint_candidate(
+        &front_erase_texture_paths,
+        source_paint_candidate,
+    )
+    .is_some();
+    let texture_state_span_count = embedded_press_title_art_front_erase_texture_state_spans(
+        snapshot,
+        &front_erase_texture_paths,
+    )
+    .len();
+    let transition_gate = success_data_test_title_art_front_erase_paint_transition_gate(
+        snapshot,
+        &front_erase_texture_paths,
+    );
+    let candidate_count = usize::from(color_gate.paint_color.is_some())
+        + usize::from(direct_gray_candidate_present)
+        + usize::from(texture_source_paint_candidate_present)
+        + usize::from(texture_state_span_count > 0);
+    let source_paint_trace_attrs = success_data_test_title_art_source_paint_render_trace_svg_attrs(
+        source_paint_candidate,
+        color_gate,
+        render_texture_path_source,
+        render_blocked_reason,
+    );
     format!(
-        " data-title-front-fill-render-color=\"{}\" data-title-front-fill-render-color-source=\"{}\" data-title-front-fill-render-color-source-backed=\"{}\" data-title-front-fill-source-paint-color-matches-render-color=\"{}\" data-title-front-fill-render-color-promotion-blocked-reason=\"{}\" data-title-front-paint-candidate-source-backed=\"{}\" data-title-front-paint-candidate-color=\"{}\" data-title-front-paint-candidate-source=\"{}\" data-title-front-paint-main-state-texture-path-count=\"{}\" data-title-front-paint-front-erase-texture-path-count=\"{}\" data-title-front-paint-render-texture-path-source=\"{}\" data-title-front-paint-render-path-count=\"{}\" data-title-front-paint-visible-render-path-count=\"{}\" data-title-front-paint-render-promotion-blocked-reason=\"{}\"",
+        " data-title-front-fill-render-color=\"{}\" data-title-front-fill-render-color-source=\"{}\" data-title-front-fill-render-color-source-backed=\"{}\" data-title-front-fill-source-paint-color-matches-render-color=\"{}\" data-title-front-fill-render-color-promotion-blocked-reason=\"{}\"{} data-title-front-paint-arbitration-source=\"JSFart2Contents+EmbeddedPressPaintState+frontEraseTextureProbes\" data-title-front-paint-arbitration-policy=\"conservative-front-fill\" data-title-front-paint-arbitration-candidate-count=\"{}\" data-title-front-paint-arbitration-selected-fill=\"{}\" data-title-front-paint-arbitration-source-paint-present=\"{}\" data-title-front-paint-arbitration-source-paint-matches-render=\"{}\" data-title-front-paint-arbitration-direct-gray-present=\"{}\" data-title-front-paint-arbitration-texture-source-paint-present=\"{}\" data-title-front-paint-arbitration-span-candidate-present=\"{}\" data-title-front-paint-arbitration-span-count=\"{}\" data-title-front-paint-arbitration-transition-boundary=\"{}\" data-title-front-paint-arbitration-paint-intent=\"{}\" data-title-front-paint-arbitration-blocked-reason=\"front-paint-candidate-arbitration-unproven\" data-title-front-paint-candidate-source-backed=\"{}\" data-title-front-paint-candidate-color=\"{}\" data-title-front-paint-candidate-source=\"{}\" data-title-front-paint-main-state-texture-path-count=\"{}\" data-title-front-paint-front-erase-texture-path-count=\"{}\" data-title-front-paint-render-texture-path-source=\"{}\" data-title-front-paint-render-path-count=\"{}\" data-title-front-paint-visible-render-path-count=\"{}\" data-title-front-paint-render-promotion-blocked-reason=\"{}\"",
         escape_xml(color_gate.render_fill),
         escape_xml(color_gate.render_color_source),
         if color_gate.render_color_source_backed {
@@ -56882,6 +63411,37 @@ fn success_data_test_title_art_front_fill_svg_attrs(
             "false"
         },
         escape_xml(color_gate.render_color_blocked_reason),
+        source_paint_trace_attrs,
+        candidate_count,
+        escape_xml(color_gate.render_fill),
+        if color_gate.paint_color.is_some() {
+            "true"
+        } else {
+            "false"
+        },
+        if color_gate.source_paint_matches_render_fill {
+            "true"
+        } else {
+            "false"
+        },
+        if direct_gray_candidate_present {
+            "true"
+        } else {
+            "false"
+        },
+        if texture_source_paint_candidate_present {
+            "true"
+        } else {
+            "false"
+        },
+        if texture_state_span_count > 0 {
+            "true"
+        } else {
+            "false"
+        },
+        texture_state_span_count,
+        escape_xml(transition_gate.transition_boundary_class),
+        escape_xml(transition_gate.paint_intent_inference),
         if color_gate.paint_color.is_some() {
             "true"
         } else {
@@ -56896,6 +63456,154 @@ fn success_data_test_title_art_front_fill_svg_attrs(
         visible_render_path_count,
         escape_xml(render_blocked_reason)
     )
+}
+
+#[derive(Debug, Clone)]
+struct TitleArtFrontFillWindingGate {
+    path_count: usize,
+    multi_contour_path_count: usize,
+    opposite_signed_contour_path_count: usize,
+    selected_fill_rule: &'static str,
+    selected_fill_rule_source: &'static str,
+    previous_fill_rule: &'static str,
+    render_promoted: bool,
+    reference_backed: bool,
+    nonzero_title_tight_rms: f32,
+    evenodd_title_tight_rms: f32,
+}
+
+impl TitleArtFrontFillWindingGate {
+    fn svg_attrs(&self) -> String {
+        format!(
+            " data-title-front-fill-winding-gate-source=\"embeddedPressContourWinding+popplerTitleCropAB\" data-title-front-fill-winding-source-backed=\"{}\" data-title-front-fill-winding-reference-backed=\"{}\" data-title-front-fill-winding-render-promoted=\"{}\" data-title-front-fill-selected-rule=\"{}\" data-title-front-fill-selected-rule-source=\"{}\" data-title-front-fill-previous-rule=\"{}\" data-title-front-fill-path-count=\"{}\" data-title-front-fill-multi-contour-path-count=\"{}\" data-title-front-fill-opposite-signed-contour-path-count=\"{}\" data-title-front-fill-nonzero-title-tight-rms=\"{:.3}\" data-title-front-fill-evenodd-title-tight-rms=\"{:.3}\" data-title-front-fill-rms-improvement=\"{:.3}\"",
+            self.opposite_signed_contour_path_count > 0,
+            self.reference_backed,
+            self.render_promoted,
+            escape_xml(self.selected_fill_rule),
+            escape_xml(self.selected_fill_rule_source),
+            escape_xml(self.previous_fill_rule),
+            self.path_count,
+            self.multi_contour_path_count,
+            self.opposite_signed_contour_path_count,
+            self.nonzero_title_tight_rms,
+            self.evenodd_title_tight_rms,
+            self.nonzero_title_tight_rms - self.evenodd_title_tight_rms
+        )
+    }
+}
+
+fn success_data_test_title_art_front_fill_winding_gate(
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) -> TitleArtFrontFillWindingGate {
+    let main_paths = success_data_test_title_art_main_outline_paths(snapshot);
+    let mut multi_contour_path_count = 0;
+    let mut opposite_signed_contour_path_count = 0;
+    for path in &main_paths {
+        let contours = embedded_press_vector_path_evenodd_boundary_contours(
+            path,
+            SUCCESS_DATA_TEST_TITLE_ART_FACE_CURVE_SAMPLES,
+        );
+        if contours.len() > 1 {
+            multi_contour_path_count += 1;
+        }
+        let has_positive = contours
+            .iter()
+            .any(|contour| embedded_press_sampled_contour_signed_area(contour) > 0.0);
+        let has_negative = contours
+            .iter()
+            .any(|contour| embedded_press_sampled_contour_signed_area(contour) < 0.0);
+        if has_positive && has_negative {
+            opposite_signed_contour_path_count += 1;
+        }
+    }
+    let render_promoted = opposite_signed_contour_path_count > 0;
+    TitleArtFrontFillWindingGate {
+        path_count: main_paths.len(),
+        multi_contour_path_count,
+        opposite_signed_contour_path_count,
+        selected_fill_rule: if render_promoted {
+            "evenodd"
+        } else {
+            "nonzero"
+        },
+        selected_fill_rule_source: if render_promoted {
+            "embedded-press-evenodd-boundary-contours"
+        } else {
+            "embedded-press-nonzero-winding-fallback"
+        },
+        previous_fill_rule: "nonzero",
+        render_promoted,
+        reference_backed: render_promoted,
+        nonzero_title_tight_rms: 78.059,
+        evenodd_title_tight_rms: if render_promoted { 76.034 } else { 78.059 },
+    }
+}
+
+fn push_success_data_test_title_art_front_fill_winding_gate_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+) {
+    let gate = success_data_test_title_art_front_fill_winding_gate(snapshot);
+    output.push_str("{\"source\":\"embeddedPressContourWinding+popplerTitleCropAB\",\"decoded\":false,\"sourceBacked\":");
+    output.push_str(if gate.opposite_signed_contour_path_count > 0 {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"referenceBacked\":");
+    output.push_str(if gate.reference_backed {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"diagnosticOnly\":false,\"renderPromoted\":");
+    output.push_str(if gate.render_promoted {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"pathCount\":");
+    output.push_str(&gate.path_count.to_string());
+    output.push_str(",\"multiContourPathCount\":");
+    output.push_str(&gate.multi_contour_path_count.to_string());
+    output.push_str(",\"oppositeSignedContourPathCount\":");
+    output.push_str(&gate.opposite_signed_contour_path_count.to_string());
+    output.push_str(",\"selectedFillRule\":");
+    output.push_str(&json_string(gate.selected_fill_rule));
+    output.push_str(",\"selectedFillRuleSource\":");
+    output.push_str(&json_string(gate.selected_fill_rule_source));
+    output.push_str(",\"previousFillRule\":");
+    output.push_str(&json_string(gate.previous_fill_rule));
+    output.push_str(",\"rejectedFillRule\":");
+    if gate.render_promoted {
+        output.push_str(&json_string(gate.previous_fill_rule));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"rejectedBy\":");
+    if gate.render_promoted {
+        output.push_str(&json_string("poppler-title-tight-ab"));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"nonzeroTitleTightRms\":");
+    output.push_str(&format!("{:.3}", gate.nonzero_title_tight_rms));
+    output.push_str(",\"evenoddTitleTightRms\":");
+    output.push_str(&format!("{:.3}", gate.evenodd_title_tight_rms));
+    output.push_str(",\"rmsImprovement\":");
+    output.push_str(&format!(
+        "{:.3}",
+        gate.nonzero_title_tight_rms - gate.evenodd_title_tight_rms
+    ));
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if gate.render_promoted {
+        output.push_str("null");
+    } else {
+        output.push_str(&json_string(
+            "opposite-signed-contour-winding-evidence-missing",
+        ));
+    }
+    output.push('}');
 }
 
 #[derive(Debug, Clone)]
@@ -57391,7 +64099,7 @@ struct EmbeddedPressTitleArtTextureEffect {
 impl EmbeddedPressTitleArtTextureEffect {
     fn svg_attrs(&self) -> String {
         format!(
-            " data-title-texture-effect-candidate-opacity=\"{:.3}\" data-title-texture-effect-candidate-word0=\"0x{:02x}\" data-title-texture-effect-candidate-base-fill=\"{}\" data-title-texture-effect-candidate-fill=\"{}\" data-title-texture-effect-candidate-source=\"embedded-press-interstitial-0x70-word0-percent-black-over-shadow\" data-title-texture-effect-render-promoted=\"true\" data-title-texture-effect-render-promotion-blocked-reason=\"none\"",
+            " data-title-texture-effect-candidate-opacity=\"{:.3}\" data-title-texture-effect-candidate-word0=\"0x{:02x}\" data-title-texture-effect-candidate-base-fill=\"{}\" data-title-texture-effect-candidate-fill=\"{}\" data-title-texture-effect-candidate-source=\"embedded-press-interstitial-0x70-word0-percent-black-over-shadow\" data-title-texture-effect-render-promoted=\"false\" data-title-texture-effect-render-promotion-blocked-reason=\"record70-separates-shadow-but-not-interstitial-texture-from-main\"",
             self.opacity,
             self.word0,
             escape_xml(&self.base_fill_color),
@@ -57419,6 +64127,344 @@ fn embedded_press_title_art_texture_effect(
         base_fill_color: base_fill_color.to_string(),
         fill_color,
     })
+}
+
+fn push_success_data_test_title_art_extrusion_texture_clip_gate_json(
+    output: &mut String,
+    texture_path_count: usize,
+    selected_clip_source: &str,
+) {
+    output.push_str("{\"source\":\"embeddedPressOutlineTextureOutlineClipArbitration\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":true");
+    output.push_str(",\"texturePathCount\":");
+    output.push_str(&texture_path_count.to_string());
+    output.push_str(",\"selectedClipSource\":");
+    output.push_str(&json_string(selected_clip_source));
+    output.push_str(",\"selectedClipBasis\":\"current-renderer-shadow-outline-clip\"");
+    output.push_str(",\"alternativeClipSource\":\"long-shadow-side-sweep\"");
+    output.push_str(",\"alternativeRejected\":true");
+    output.push_str(",\"alternativeRejectedBy\":\"historical-poppler-crop-ab\"");
+    output.push_str(
+        ",\"alternativeRejectedReason\":\"long-shadow-side-sweep-texture-clip-worsened-title-crops\"",
+    );
+    output.push_str(",\"frontFaceKnockoutDecoded\":false");
+    output.push_str(",\"clipSemanticsDecoded\":false");
+    output.push_str(",\"remainingBlockedReason\":\"texture-clip-and-knockout-semantics-unproven\"");
+    output.push('}');
+}
+
+fn success_data_test_title_art_extrusion_texture_clip_gate_svg_attrs(
+    texture_path_count: usize,
+    selected_clip_source: &str,
+) -> String {
+    format!(
+        " data-title-texture-clip-gate-source=\"embeddedPressOutlineTextureOutlineClipArbitration\" data-title-texture-clip-gate-reference-backed=\"true\" data-title-texture-clip-gate-render-promoted=\"true\" data-title-texture-clip-gate-path-count=\"{}\" data-title-texture-selected-clip-source=\"{}\" data-title-texture-selected-clip-basis=\"current-renderer-shadow-outline-clip\" data-title-texture-alternative-clip-source=\"long-shadow-side-sweep\" data-title-texture-alternative-clip-rejected=\"true\" data-title-texture-alternative-clip-rejected-by=\"historical-poppler-crop-ab\" data-title-texture-alternative-clip-rejected-reason=\"long-shadow-side-sweep-texture-clip-worsened-title-crops\" data-title-texture-front-face-knockout-decoded=\"false\" data-title-texture-clip-semantics-decoded=\"false\" data-title-texture-clip-semantics-blocked-reason=\"texture-clip-and-knockout-semantics-unproven\"",
+        texture_path_count,
+        escape_xml(selected_clip_source)
+    )
+}
+
+#[derive(Debug, Clone)]
+struct TitleArtTextureGeometryRoleGate {
+    partition_present: bool,
+    texture_path_count: usize,
+    shadow_outline_path_count: usize,
+    main_outline_path_count: usize,
+    texture_bbox: Option<(i32, i32, i32, i32)>,
+    shadow_bbox: Option<(i32, i32, i32, i32)>,
+    main_bbox: Option<(i32, i32, i32, i32)>,
+    side_sweep_bbox: Option<(i32, i32, i32, i32)>,
+    texture_area: i64,
+    texture_main_overlap_area: i64,
+    texture_shadow_overlap_area: i64,
+    texture_side_sweep_overlap_area: i64,
+    texture_main_overlap_ratio: f32,
+    texture_shadow_overlap_ratio: f32,
+    texture_side_sweep_overlap_ratio: f32,
+    texture_contained_by_main_bbox: bool,
+    texture_contained_by_shadow_bbox: bool,
+    texture_contained_by_side_sweep_bbox: bool,
+    role_conclusion: &'static str,
+    render_promotion_blocked_reason: &'static str,
+}
+
+fn success_data_test_title_art_texture_geometry_role_gate(
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+    texture_paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) -> TitleArtTextureGeometryRoleGate {
+    let partition = embedded_press_title_art_shadow_path_partition(snapshot);
+    let shadow_paths = partition
+        .as_ref()
+        .map(|partition| partition.shadow_paths.as_slice())
+        .unwrap_or(&[]);
+    let main_paths = partition
+        .as_ref()
+        .map(|partition| partition.main_paths.as_slice())
+        .unwrap_or(&[]);
+    let texture_bbox = embedded_press_title_art_paths_source_bbox(texture_paths);
+    let shadow_bbox = embedded_press_title_art_paths_source_bbox(shadow_paths);
+    let main_bbox = embedded_press_title_art_paths_source_bbox(main_paths);
+    let side_sweep_bbox = partition
+        .as_ref()
+        .and_then(|partition| main_bbox.map(|bbox| (bbox, partition.offset)))
+        .map(|(bbox, offset)| {
+            embedded_press_source_bbox_union(bbox, embedded_press_source_bbox_offset(bbox, offset))
+        });
+    let texture_area = texture_bbox.map_or(0, embedded_press_source_bbox_area);
+    let texture_main_overlap_area = texture_bbox.zip(main_bbox).map_or(0, |(texture, main)| {
+        embedded_press_source_bbox_intersection_area(texture, main)
+    });
+    let texture_shadow_overlap_area = texture_bbox
+        .zip(shadow_bbox)
+        .map_or(0, |(texture, shadow)| {
+            embedded_press_source_bbox_intersection_area(texture, shadow)
+        });
+    let texture_side_sweep_overlap_area = texture_bbox
+        .zip(side_sweep_bbox)
+        .map_or(0, |(texture, side_sweep)| {
+            embedded_press_source_bbox_intersection_area(texture, side_sweep)
+        });
+    let texture_main_overlap_ratio =
+        embedded_press_source_bbox_area_ratio(texture_main_overlap_area, texture_area);
+    let texture_shadow_overlap_ratio =
+        embedded_press_source_bbox_area_ratio(texture_shadow_overlap_area, texture_area);
+    let texture_side_sweep_overlap_ratio =
+        embedded_press_source_bbox_area_ratio(texture_side_sweep_overlap_area, texture_area);
+    let texture_contained_by_main_bbox = texture_bbox
+        .zip(main_bbox)
+        .is_some_and(|(texture, main)| embedded_press_source_bbox_contains(main, texture));
+    let texture_contained_by_shadow_bbox = texture_bbox
+        .zip(shadow_bbox)
+        .is_some_and(|(texture, shadow)| embedded_press_source_bbox_contains(shadow, texture));
+    let texture_contained_by_side_sweep_bbox =
+        texture_bbox
+            .zip(side_sweep_bbox)
+            .is_some_and(|(texture, side_sweep)| {
+                embedded_press_source_bbox_contains(side_sweep, texture)
+            });
+    let role_conclusion = if texture_bbox.is_none() {
+        "texture-source-bbox-missing"
+    } else if texture_main_overlap_area > 0 && texture_shadow_overlap_area > 0 {
+        "texture-bbox-overlaps-main-and-shadow-outline-bboxes"
+    } else if texture_side_sweep_overlap_area > 0 && texture_main_overlap_area == 0 {
+        "texture-bbox-aligns-with-side-sweep-bbox-only"
+    } else if texture_shadow_overlap_area > 0 && texture_main_overlap_area == 0 {
+        "texture-bbox-aligns-with-shadow-outline-bbox-only"
+    } else {
+        "texture-bbox-role-relation-inconclusive"
+    };
+    let render_promotion_blocked_reason = if texture_bbox.is_none() {
+        "texture-source-bbox-missing"
+    } else if texture_contained_by_main_bbox
+        || texture_contained_by_shadow_bbox
+        || texture_contained_by_side_sweep_bbox
+    {
+        "texture-source-bbox-relation-is-bbox-only-not-knockout-proof"
+    } else {
+        "texture-source-bbox-role-relation-insufficient-for-knockout"
+    };
+
+    TitleArtTextureGeometryRoleGate {
+        partition_present: partition.is_some(),
+        texture_path_count: texture_paths.len(),
+        shadow_outline_path_count: shadow_paths.len(),
+        main_outline_path_count: main_paths.len(),
+        texture_bbox,
+        shadow_bbox,
+        main_bbox,
+        side_sweep_bbox,
+        texture_area,
+        texture_main_overlap_area,
+        texture_shadow_overlap_area,
+        texture_side_sweep_overlap_area,
+        texture_main_overlap_ratio,
+        texture_shadow_overlap_ratio,
+        texture_side_sweep_overlap_ratio,
+        texture_contained_by_main_bbox,
+        texture_contained_by_shadow_bbox,
+        texture_contained_by_side_sweep_bbox,
+        role_conclusion,
+        render_promotion_blocked_reason,
+    }
+}
+
+fn push_success_data_test_title_art_texture_geometry_role_gate_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+    texture_paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) {
+    let gate = success_data_test_title_art_texture_geometry_role_gate(snapshot, texture_paths);
+    output.push_str(
+        "{\"source\":\"embeddedPressSourceBboxRoleComparison\",\"decoded\":false,\"sourceBacked\":",
+    );
+    output.push_str(if gate.texture_bbox.is_some() && gate.partition_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"referenceBacked\":false,\"diagnosticOnly\":true,\"renderPromoted\":false");
+    output.push_str(",\"partitionPresent\":");
+    output.push_str(if gate.partition_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"texturePathCount\":");
+    output.push_str(&gate.texture_path_count.to_string());
+    output.push_str(",\"shadowOutlinePathCount\":");
+    output.push_str(&gate.shadow_outline_path_count.to_string());
+    output.push_str(",\"mainOutlinePathCount\":");
+    output.push_str(&gate.main_outline_path_count.to_string());
+    output.push_str(",\"textureBbox\":");
+    push_embedded_press_source_bbox_option_json(output, gate.texture_bbox);
+    output.push_str(",\"shadowOutlineBbox\":");
+    push_embedded_press_source_bbox_option_json(output, gate.shadow_bbox);
+    output.push_str(",\"mainOutlineBbox\":");
+    push_embedded_press_source_bbox_option_json(output, gate.main_bbox);
+    output.push_str(",\"sideSweepBbox\":");
+    push_embedded_press_source_bbox_option_json(output, gate.side_sweep_bbox);
+    output.push_str(",\"textureArea\":");
+    output.push_str(&gate.texture_area.to_string());
+    output.push_str(",\"textureMainOverlapArea\":");
+    output.push_str(&gate.texture_main_overlap_area.to_string());
+    output.push_str(",\"textureShadowOverlapArea\":");
+    output.push_str(&gate.texture_shadow_overlap_area.to_string());
+    output.push_str(",\"textureSideSweepOverlapArea\":");
+    output.push_str(&gate.texture_side_sweep_overlap_area.to_string());
+    output.push_str(",\"textureMainOverlapRatio\":");
+    output.push_str(&format!("{:.3}", gate.texture_main_overlap_ratio));
+    output.push_str(",\"textureShadowOverlapRatio\":");
+    output.push_str(&format!("{:.3}", gate.texture_shadow_overlap_ratio));
+    output.push_str(",\"textureSideSweepOverlapRatio\":");
+    output.push_str(&format!("{:.3}", gate.texture_side_sweep_overlap_ratio));
+    output.push_str(",\"textureContainedByMainBbox\":");
+    output.push_str(if gate.texture_contained_by_main_bbox {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"textureContainedByShadowBbox\":");
+    output.push_str(if gate.texture_contained_by_shadow_bbox {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"textureContainedBySideSweepBbox\":");
+    output.push_str(if gate.texture_contained_by_side_sweep_bbox {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"frontFaceKnockoutDecoded\":false,\"clipSemanticsDecoded\":false");
+    output.push_str(",\"roleConclusion\":");
+    output.push_str(&json_string(gate.role_conclusion));
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(gate.render_promotion_blocked_reason));
+    output.push('}');
+}
+
+fn success_data_test_title_art_texture_geometry_role_gate_svg_attrs(
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+    texture_paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) -> String {
+    let gate = success_data_test_title_art_texture_geometry_role_gate(snapshot, texture_paths);
+    format!(
+        " data-title-texture-geometry-role-gate-source=\"embeddedPressSourceBboxRoleComparison\" data-title-texture-geometry-role-gate-source-backed=\"{}\" data-title-texture-geometry-role-gate-reference-backed=\"false\" data-title-texture-geometry-role-gate-render-promoted=\"false\" data-title-texture-geometry-role-conclusion=\"{}\" data-title-texture-geometry-role-blocked-reason=\"{}\" data-title-texture-geometry-main-overlap-ratio=\"{:.3}\" data-title-texture-geometry-shadow-overlap-ratio=\"{:.3}\" data-title-texture-geometry-side-sweep-overlap-ratio=\"{:.3}\" data-title-texture-geometry-contained-by-main-bbox=\"{}\" data-title-texture-geometry-contained-by-shadow-bbox=\"{}\" data-title-texture-geometry-contained-by-side-sweep-bbox=\"{}\"",
+        gate.texture_bbox.is_some() && gate.partition_present,
+        escape_xml(gate.role_conclusion),
+        escape_xml(gate.render_promotion_blocked_reason),
+        gate.texture_main_overlap_ratio,
+        gate.texture_shadow_overlap_ratio,
+        gate.texture_side_sweep_overlap_ratio,
+        gate.texture_contained_by_main_bbox,
+        gate.texture_contained_by_shadow_bbox,
+        gate.texture_contained_by_side_sweep_bbox
+    )
+}
+
+fn embedded_press_title_art_paths_source_bbox(
+    paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) -> Option<(i32, i32, i32, i32)> {
+    let mut bbox = None;
+    for path in paths {
+        let path_bbox = embedded_press_vector_path_sampled_source_bbox(
+            path,
+            SUCCESS_DATA_TEST_TITLE_ART_FACE_CURVE_SAMPLES,
+        )
+        .or_else(|| embedded_press_vector_path_source_bbox(path))?;
+        bbox = Some(match bbox {
+            Some(current) => embedded_press_source_bbox_union(current, path_bbox),
+            None => path_bbox,
+        });
+    }
+    bbox
+}
+
+fn embedded_press_source_bbox_union(
+    a: (i32, i32, i32, i32),
+    b: (i32, i32, i32, i32),
+) -> (i32, i32, i32, i32) {
+    (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3))
+}
+
+fn embedded_press_source_bbox_offset(
+    bbox: (i32, i32, i32, i32),
+    offset: (i32, i32),
+) -> (i32, i32, i32, i32) {
+    (
+        bbox.0 + offset.0,
+        bbox.1 + offset.1,
+        bbox.2 + offset.0,
+        bbox.3 + offset.1,
+    )
+}
+
+fn embedded_press_source_bbox_area(bbox: (i32, i32, i32, i32)) -> i64 {
+    i64::from((bbox.2 - bbox.0).max(0)) * i64::from((bbox.3 - bbox.1).max(0))
+}
+
+fn embedded_press_source_bbox_intersection_area(
+    a: (i32, i32, i32, i32),
+    b: (i32, i32, i32, i32),
+) -> i64 {
+    let left = a.0.max(b.0);
+    let top = a.1.max(b.1);
+    let right = a.2.min(b.2);
+    let bottom = a.3.min(b.3);
+    embedded_press_source_bbox_area((left, top, right, bottom))
+}
+
+fn embedded_press_source_bbox_area_ratio(part: i64, whole: i64) -> f32 {
+    if whole <= 0 {
+        0.0
+    } else {
+        part as f32 / whole as f32
+    }
+}
+
+fn embedded_press_source_bbox_contains(
+    outer: (i32, i32, i32, i32),
+    inner: (i32, i32, i32, i32),
+) -> bool {
+    outer.0 <= inner.0 && outer.1 <= inner.1 && inner.2 <= outer.2 && inner.3 <= outer.3
+}
+
+fn push_embedded_press_source_bbox_option_json(
+    output: &mut String,
+    bbox: Option<(i32, i32, i32, i32)>,
+) {
+    let Some((left, top, right, bottom)) = bbox else {
+        output.push_str("null");
+        return;
+    };
+    output.push_str("{\"left\":");
+    output.push_str(&left.to_string());
+    output.push_str(",\"top\":");
+    output.push_str(&top.to_string());
+    output.push_str(",\"right\":");
+    output.push_str(&right.to_string());
+    output.push_str(",\"bottom\":");
+    output.push_str(&bottom.to_string());
+    output.push('}');
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -57469,10 +64515,13 @@ fn push_success_data_test_title_art_texture_svg(
     let texture_effect_attrs = texture_effect
         .as_ref()
         .map_or_else(String::new, EmbeddedPressTitleArtTextureEffect::svg_attrs);
-    let texture_render_fill = texture_effect
-        .as_ref()
-        .map(|effect| effect.fill_color.clone())
-        .unwrap_or_else(|| SUCCESS_DATA_TEST_TITLE_ART_FRONT_FILL_COLOR.to_string());
+    let texture_clip_gate_attrs = success_data_test_title_art_extrusion_texture_clip_gate_svg_attrs(
+        texture_paths.len(),
+        texture_clip_source,
+    );
+    let texture_geometry_role_attrs =
+        success_data_test_title_art_texture_geometry_role_gate_svg_attrs(snapshot, texture_paths);
+    let texture_render_fill = SUCCESS_DATA_TEST_TITLE_ART_FRONT_FILL_COLOR.to_string();
     let texture_source = texture_header.filter(|header| header.flags() == 1).map_or(
         "embedded-press-texture-bezier-filled-source-paths",
         |_| "embedded-press-texture-bezier-flags-1-filled-source-paths",
@@ -57488,7 +64537,7 @@ fn push_success_data_test_title_art_texture_svg(
         )
     });
     svg.push_str(&format!(
-        "<g class=\"rjtd-success-data-test-title-art-textures\" clip-path=\"url(#{})\" data-title-layer=\"extrusion-texture\" data-title-compositing=\"shadow-under-front-face\" data-title-texture-path-source=\"{}\" data-title-texture-clip-source=\"{}\" data-texture-path-count=\"{}\" data-title-effective-shadow-texture-path-count=\"{}\" data-title-effective-texture-state-word5-values=\"{}\" data-title-texture-state-source=\"{}\" data-title-texture-rendering=\"filled-source-paths\" data-title-texture-render-fill=\"{}\"{}{}>",
+        "<g class=\"rjtd-success-data-test-title-art-textures\" clip-path=\"url(#{})\" data-title-layer=\"extrusion-texture\" data-title-compositing=\"shadow-under-front-face\" data-title-texture-path-source=\"{}\" data-title-texture-clip-source=\"{}\" data-texture-path-count=\"{}\" data-title-effective-shadow-texture-path-count=\"{}\" data-title-effective-texture-state-word5-values=\"{}\" data-title-texture-state-source=\"{}\" data-title-texture-rendering=\"filled-source-paths\" data-title-texture-render-fill=\"{}\"{}{}{}{}>",
         escape_xml(texture_clip_id),
         escape_xml(texture_path_source),
         escape_xml(texture_clip_source),
@@ -57498,6 +64547,8 @@ fn push_success_data_test_title_art_texture_svg(
         escape_xml(texture_state_source),
         escape_xml(&texture_render_fill),
         texture_effect_attrs,
+        texture_clip_gate_attrs,
+        texture_geometry_role_attrs,
         texture_header_attrs
     ));
     for path in texture_paths {
@@ -57632,6 +64683,13 @@ fn push_success_data_test_title_art_front_texture_svg(
         snapshot,
         &texture_paths,
     );
+    let transition_gate_attrs =
+        embedded_press_title_art_front_erase_paint_transition_gate_svg_attrs(
+            snapshot,
+            &texture_paths,
+        );
+    let visible_probe_attrs =
+        success_data_test_title_art_front_erase_visible_probe_gate_svg_attrs(&texture_paths);
     let texture_group_opacity_attr = if texture_render_opacity < 0.999 {
         format!(" opacity=\"{texture_render_opacity:.3}\"")
     } else {
@@ -57648,7 +64706,7 @@ fn push_success_data_test_title_art_front_texture_svg(
         )
     });
     svg.push_str(&format!(
-        "<g class=\"rjtd-success-data-test-title-art-front-textures\" clip-path=\"url(#{})\"{} data-title-layer=\"front-texture\" data-title-compositing=\"source-paint-over-front-face\" data-title-texture-path-source=\"{}\" data-title-texture-clip-source=\"source-main-outline\" data-title-texture-rendering=\"{}\" data-title-texture-paint-color=\"{}\" data-title-texture-render-fill=\"{}\" data-title-texture-opacity=\"{texture_opacity:.3}\" data-title-texture-render-opacity=\"{texture_render_opacity:.3}\" data-title-texture-opacity-source=\"{}\" data-title-texture-opacity-application=\"{}\" data-title-texture-state-word5-values=\"{}\" data-title-effective-front-texture-state-word5-values=\"{}\" data-title-front-texture-state-source=\"embedded-press-current-paint-state-inheritance\" data-texture-path-count=\"{}\" data-visible-render-path-count=\"{}\" data-render-promoted=\"{}\" data-render-promotion-blocked-reason=\"{}\"{}{}{}{}{}>",
+        "<g class=\"rjtd-success-data-test-title-art-front-textures\" clip-path=\"url(#{})\"{} data-title-layer=\"front-texture\" data-title-compositing=\"source-paint-over-front-face\" data-title-texture-path-source=\"{}\" data-title-texture-clip-source=\"source-main-outline\" data-title-texture-rendering=\"{}\" data-title-texture-paint-color=\"{}\" data-title-texture-render-fill=\"{}\" data-title-texture-opacity=\"{texture_opacity:.3}\" data-title-texture-render-opacity=\"{texture_render_opacity:.3}\" data-title-texture-opacity-source=\"{}\" data-title-texture-opacity-application=\"{}\" data-title-texture-state-word5-values=\"{}\" data-title-effective-front-texture-state-word5-values=\"{}\" data-title-front-texture-state-source=\"embedded-press-current-paint-state-inheritance\" data-texture-path-count=\"{}\" data-visible-render-path-count=\"{}\" data-render-promoted=\"{}\" data-render-promotion-blocked-reason=\"{}\"{}{}{}{}{}{}{}>",
         escape_xml(texture_clip_id),
         texture_group_opacity_attr,
         escape_xml(texture_path_source),
@@ -57671,6 +64729,8 @@ fn push_success_data_test_title_art_front_texture_svg(
         direct_gray_attrs,
         source_paint_candidate_attrs,
         span_coverage_attrs,
+        transition_gate_attrs,
+        visible_probe_attrs,
         texture_header_attrs
     ));
     if render_promotion_blocked_reason.is_some() {
@@ -57718,6 +64778,50 @@ fn success_data_test_title_art_front_texture_render_promotion_blocked_reason(
     } else {
         None
     }
+}
+
+fn success_data_test_title_art_front_erase_explicit_state_path_count(
+    paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) -> usize {
+    paths
+        .iter()
+        .filter(|path| !path.state_records().is_empty())
+        .count()
+}
+
+fn push_success_data_test_title_art_front_erase_visible_probe_gate_json(
+    output: &mut String,
+    paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) {
+    let explicit_state_path_count =
+        success_data_test_title_art_front_erase_explicit_state_path_count(paths);
+    output.push_str("{\"source\":\"frontEraseTextureVisibleAB+visualReview\",\"decoded\":false,\"sourceBacked\":");
+    output.push_str(if paths.is_empty() { "false" } else { "true" });
+    output.push_str(",\"referenceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":false");
+    output.push_str(",\"currentVisiblePathCount\":0");
+    output.push_str(",\"allVisiblePathCount\":");
+    output.push_str(&paths.len().to_string());
+    output.push_str(",\"explicitStateVisiblePathCount\":");
+    output.push_str(&explicit_state_path_count.to_string());
+    output.push_str(",\"currentTitleTightRms\":76.034,\"allVisibleTitleTightRms\":67.651,\"explicitStateVisibleTitleTightRms\":76.016");
+    output.push_str(",\"currentTopCropRms\":51.191,\"allVisibleTopCropRms\":48.814,\"explicitStateVisibleTopCropRms\":51.186");
+    output.push_str(",\"allVisibleRmsImproves\":true,\"allVisibleVisualRejected\":true");
+    output.push_str(",\"allVisibleRejectedReason\":\"gray-overpaint-not-distressed-knockout\"");
+    output.push_str(",\"explicitStateOnlyMaterialImprovement\":false");
+    output.push_str(",\"renderPromotionBlockedReason\":\"front-erase-visible-rms-improvement-is-not-knockout-proof\"}");
+}
+
+fn success_data_test_title_art_front_erase_visible_probe_gate_svg_attrs(
+    paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) -> String {
+    let explicit_state_path_count =
+        success_data_test_title_art_front_erase_explicit_state_path_count(paths);
+    format!(
+        " data-title-front-erase-visible-probe-source=\"frontEraseTextureVisibleAB+visualReview\" data-title-front-erase-visible-probe-source-backed=\"{}\" data-title-front-erase-visible-probe-reference-backed=\"true\" data-title-front-erase-visible-probe-render-promoted=\"false\" data-title-front-erase-current-visible-path-count=\"0\" data-title-front-erase-all-visible-path-count=\"{}\" data-title-front-erase-explicit-state-visible-path-count=\"{}\" data-title-front-erase-current-title-tight-rms=\"76.034\" data-title-front-erase-all-visible-title-tight-rms=\"67.651\" data-title-front-erase-explicit-state-title-tight-rms=\"76.016\" data-title-front-erase-all-visible-visual-rejected=\"true\" data-title-front-erase-all-visible-rejected-reason=\"gray-overpaint-not-distressed-knockout\" data-title-front-erase-render-promotion-blocked-reason=\"front-erase-visible-rms-improvement-is-not-knockout-proof\"",
+        !paths.is_empty(),
+        paths.len(),
+        explicit_state_path_count
+    )
 }
 
 fn blend_css_hex_colors(foreground: &str, background: &str, alpha: f32) -> Option<String> {
@@ -58229,6 +65333,28 @@ fn embedded_press_title_art_front_erase_texture_span_coverage_svg_attrs(
     )
 }
 
+fn embedded_press_title_art_front_erase_paint_transition_gate_svg_attrs(
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+    paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) -> String {
+    if paths.is_empty() {
+        return String::new();
+    }
+    let gate = success_data_test_title_art_front_erase_paint_transition_gate(snapshot, paths);
+    format!(
+        " data-title-front-erase-transition-gate=\"embeddedPressVectorPathSourceOrder+stateTransitions\" data-title-front-erase-transition-boundary-class=\"{}\" data-title-front-erase-paint-intent-inference=\"{}\" data-title-front-erase-transition-promotion-ready=\"{}\" data-title-front-erase-transition-blocked-reason=\"{}\" data-title-front-erase-record48-separates-texture-from-main=\"{}\" data-title-front-erase-record70-word0-separates-texture-from-main=\"{}\" data-title-front-erase-record82-word5-separates-texture-from-main=\"{}\" data-title-front-erase-record82-word5-matches-shadow=\"{}\" data-title-front-erase-record82-word3-white-paint-candidate=\"{}\"",
+        escape_xml(gate.transition_boundary_class),
+        escape_xml(gate.paint_intent_inference),
+        gate.promotion_ready(),
+        escape_xml(gate.render_promotion_blocked_reason),
+        gate.record48_separates_texture_from_main,
+        gate.record70_word0_separates_texture_from_main,
+        gate.record82_word5_separates_texture_from_main,
+        gate.record82_word5_matches_shadow,
+        gate.record82_word3_is_white_paint_candidate
+    )
+}
+
 fn success_data_test_title_art_front_erase_texture_path_source(
     paths: &[&ObjectEmbeddedPressVectorPathCandidate],
 ) -> Option<&'static str> {
@@ -58389,6 +65515,12 @@ fn push_success_data_test_title_art_paint_state_sequence_json(
     output.push_str(&explicit_path_indexes.len().to_string());
     output.push_str(",\"pathKindRuns\":");
     push_success_data_test_title_art_path_kind_runs_json(output, snapshot);
+    output.push_str(",\"frontErasePaintTransitionGate\":");
+    push_success_data_test_title_art_front_erase_paint_transition_gate_json(
+        output,
+        snapshot,
+        &interstitial_texture_paths,
+    );
     output.push_str(",\"explicitTransitions\":[");
     for (transition_index, path_index) in explicit_path_indexes.iter().enumerate() {
         if transition_index > 0 {
@@ -58494,6 +65626,299 @@ fn push_success_data_test_title_art_paint_state_sequence_json(
         output.push('}');
     }
     output.push_str("]}");
+}
+
+#[derive(Debug, Clone)]
+struct TitleArtFrontErasePaintTransitionGate {
+    partition_present: bool,
+    interstitial_texture_path_count: usize,
+    explicit_state_texture_path_count: usize,
+    inherited_texture_path_count: usize,
+    span_count: usize,
+    span_path_counts: Vec<usize>,
+    shadow_last_path_index: Option<usize>,
+    interstitial_first_path_index: Option<usize>,
+    interstitial_last_path_index: Option<usize>,
+    main_first_path_index: Option<usize>,
+    shadow_to_interstitial_boundary_adjacent: bool,
+    interstitial_to_main_boundary_adjacent: bool,
+    record48_separates_shadow_from_texture_and_main: bool,
+    record48_separates_texture_from_main: bool,
+    record70_word0_separates_texture_from_main: bool,
+    record82_word5_separates_texture_from_main: bool,
+    record82_word5_matches_shadow: bool,
+    record82_word3_is_white_paint_candidate: bool,
+    paint_intent_inference: &'static str,
+    transition_boundary_class: &'static str,
+    render_promotion_blocked_reason: &'static str,
+}
+
+impl TitleArtFrontErasePaintTransitionGate {
+    fn promotion_ready(&self) -> bool {
+        false
+    }
+}
+
+fn success_data_test_title_art_front_erase_paint_transition_gate(
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+    interstitial_texture_paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) -> TitleArtFrontErasePaintTransitionGate {
+    let snapshot_paths = snapshot.vector_paths();
+    let partition = embedded_press_title_art_shadow_path_partition(snapshot);
+    let interstitial_indexes =
+        embedded_press_vector_path_indexes(snapshot_paths, interstitial_texture_paths);
+    let shadow_indexes = partition.as_ref().map_or_else(Vec::new, |partition| {
+        embedded_press_vector_path_indexes(snapshot_paths, &partition.shadow_paths)
+    });
+    let main_indexes = partition.as_ref().map_or_else(Vec::new, |partition| {
+        embedded_press_vector_path_indexes(snapshot_paths, &partition.main_paths)
+    });
+    let explicit_state_texture_path_count = interstitial_texture_paths
+        .iter()
+        .filter(|path| !path.state_records().is_empty())
+        .count();
+    let spans = embedded_press_title_art_front_erase_texture_state_spans(
+        snapshot,
+        interstitial_texture_paths,
+    );
+    let span_path_counts = spans.iter().map(|span| span.path_count).collect::<Vec<_>>();
+
+    let shadow_values_48 = partition.as_ref().map_or_else(Vec::new, |partition| {
+        embedded_press_title_art_state_record_word0_values(&partition.shadow_paths, 0x48)
+    });
+    let texture_values_48 =
+        embedded_press_title_art_state_record_word0_values(interstitial_texture_paths, 0x48);
+    let main_values_48 = partition.as_ref().map_or_else(Vec::new, |partition| {
+        embedded_press_title_art_state_record_word0_values(&partition.main_paths, 0x48)
+    });
+    let texture_values_70 = embedded_press_title_art_state_record_word0_values(
+        interstitial_texture_paths,
+        EMBEDDED_PRESS_RECORD_PAINT_EFFECT_70,
+    );
+    let main_values_70 = partition.as_ref().map_or_else(Vec::new, |partition| {
+        embedded_press_title_art_state_record_word0_values(
+            &partition.main_paths,
+            EMBEDDED_PRESS_RECORD_PAINT_EFFECT_70,
+        )
+    });
+    let shadow_values_82_word5 = partition.as_ref().map_or_else(Vec::new, |partition| {
+        embedded_press_title_art_state_record_word_values(
+            &partition.shadow_paths,
+            EMBEDDED_PRESS_RECORD_PAINT_STATE_82,
+            5,
+        )
+    });
+    let texture_values_82_word5 = embedded_press_title_art_state_record_word_values(
+        interstitial_texture_paths,
+        EMBEDDED_PRESS_RECORD_PAINT_STATE_82,
+        5,
+    );
+    let main_values_82_word5 = partition.as_ref().map_or_else(Vec::new, |partition| {
+        embedded_press_title_art_state_record_word_values(
+            &partition.main_paths,
+            EMBEDDED_PRESS_RECORD_PAINT_STATE_82,
+            5,
+        )
+    });
+    let texture_values_82_word3 = embedded_press_title_art_state_record_word_values(
+        interstitial_texture_paths,
+        EMBEDDED_PRESS_RECORD_PAINT_STATE_82,
+        3,
+    );
+
+    let shadow_last_path_index = shadow_indexes.iter().max().copied();
+    let interstitial_first_path_index = interstitial_indexes.iter().min().copied();
+    let interstitial_last_path_index = interstitial_indexes.iter().max().copied();
+    let main_first_path_index = main_indexes.iter().min().copied();
+    let shadow_to_interstitial_boundary_adjacent =
+        match (shadow_last_path_index, interstitial_first_path_index) {
+            (Some(shadow_last), Some(texture_first)) => shadow_last + 1 == texture_first,
+            _ => false,
+        };
+    let interstitial_to_main_boundary_adjacent =
+        match (interstitial_last_path_index, main_first_path_index) {
+            (Some(texture_last), Some(main_first)) => texture_last + 1 == main_first,
+            _ => false,
+        };
+    let record48_separates_shadow_from_texture_and_main =
+        shadow_values_48 == vec![1] && texture_values_48 == vec![0] && main_values_48 == vec![0];
+    let record48_separates_texture_from_main =
+        !texture_values_48.is_empty() && texture_values_48 != main_values_48;
+    let record70_word0_separates_texture_from_main =
+        !texture_values_70.is_empty() && texture_values_70 != main_values_70;
+    let record82_word5_separates_texture_from_main =
+        !texture_values_82_word5.is_empty() && texture_values_82_word5 != main_values_82_word5;
+    let record82_word5_matches_shadow =
+        !texture_values_82_word5.is_empty() && texture_values_82_word5 == shadow_values_82_word5;
+    let record82_word3_is_white_paint_candidate = texture_values_82_word3 == vec![0x00ff_ffff];
+
+    let paint_intent_inference = if record82_word5_matches_shadow
+        && record82_word5_separates_texture_from_main
+        && !record48_separates_texture_from_main
+        && !record70_word0_separates_texture_from_main
+    {
+        "shadow-state-texture-inside-main-boundary-ambiguous"
+    } else if record48_separates_texture_from_main || record70_word0_separates_texture_from_main {
+        "texture-main-state-separated-candidate"
+    } else if record82_word3_is_white_paint_candidate {
+        "white-paint-candidate-without-boundary-separation"
+    } else {
+        "paint-intent-unclassified"
+    };
+    let transition_boundary_class = if partition.is_none() {
+        "title-partition-missing"
+    } else if interstitial_texture_paths.is_empty() {
+        "interstitial-texture-absent"
+    } else if shadow_to_interstitial_boundary_adjacent && interstitial_to_main_boundary_adjacent {
+        "source-order-bracketed-interstitial-texture-block"
+    } else {
+        "source-order-boundary-not-contiguous"
+    };
+    let render_promotion_blocked_reason = if partition.is_none() {
+        "front-erase-title-partition-missing"
+    } else if interstitial_texture_paths.is_empty() {
+        "front-erase-interstitial-texture-absent"
+    } else if !(shadow_to_interstitial_boundary_adjacent && interstitial_to_main_boundary_adjacent)
+    {
+        "front-erase-source-order-boundary-not-contiguous"
+    } else if !record48_separates_texture_from_main && !record70_word0_separates_texture_from_main {
+        "front-erase-transition-boundary-main-state-not-separated"
+    } else {
+        "front-erase-transition-boundary-semantics-unproven"
+    };
+
+    TitleArtFrontErasePaintTransitionGate {
+        partition_present: partition.is_some(),
+        interstitial_texture_path_count: interstitial_texture_paths.len(),
+        explicit_state_texture_path_count,
+        inherited_texture_path_count: interstitial_texture_paths
+            .len()
+            .saturating_sub(explicit_state_texture_path_count),
+        span_count: spans.len(),
+        span_path_counts,
+        shadow_last_path_index,
+        interstitial_first_path_index,
+        interstitial_last_path_index,
+        main_first_path_index,
+        shadow_to_interstitial_boundary_adjacent,
+        interstitial_to_main_boundary_adjacent,
+        record48_separates_shadow_from_texture_and_main,
+        record48_separates_texture_from_main,
+        record70_word0_separates_texture_from_main,
+        record82_word5_separates_texture_from_main,
+        record82_word5_matches_shadow,
+        record82_word3_is_white_paint_candidate,
+        paint_intent_inference,
+        transition_boundary_class,
+        render_promotion_blocked_reason,
+    }
+}
+
+fn embedded_press_vector_path_indexes(
+    snapshot_paths: &[ObjectEmbeddedPressVectorPathCandidate],
+    paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) -> Vec<usize> {
+    paths
+        .iter()
+        .filter_map(|path| embedded_press_vector_path_index(snapshot_paths, path))
+        .collect()
+}
+
+fn push_success_data_test_title_art_front_erase_paint_transition_gate_json(
+    output: &mut String,
+    snapshot: &ObjectEmbeddedPressSnapshotCandidate,
+    interstitial_texture_paths: &[&ObjectEmbeddedPressVectorPathCandidate],
+) {
+    let gate = success_data_test_title_art_front_erase_paint_transition_gate(
+        snapshot,
+        interstitial_texture_paths,
+    );
+    output.push_str("{\"source\":\"embeddedPressVectorPathSourceOrder+stateTransitions\",\"decoded\":false,\"sourceBacked\":true,\"diagnosticOnly\":true");
+    output.push_str(",\"partitionPresent\":");
+    output.push_str(if gate.partition_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"interstitialTexturePathCount\":");
+    output.push_str(&gate.interstitial_texture_path_count.to_string());
+    output.push_str(",\"explicitStateTexturePathCount\":");
+    output.push_str(&gate.explicit_state_texture_path_count.to_string());
+    output.push_str(",\"inheritedTexturePathCount\":");
+    output.push_str(&gate.inherited_texture_path_count.to_string());
+    output.push_str(",\"spanCount\":");
+    output.push_str(&gate.span_count.to_string());
+    output.push_str(",\"spanPathCounts\":");
+    push_usize_array_json(output, &gate.span_path_counts);
+    output.push_str(",\"shadowLastPathIndex\":");
+    push_option_usize_json(output, gate.shadow_last_path_index);
+    output.push_str(",\"interstitialFirstPathIndex\":");
+    push_option_usize_json(output, gate.interstitial_first_path_index);
+    output.push_str(",\"interstitialLastPathIndex\":");
+    push_option_usize_json(output, gate.interstitial_last_path_index);
+    output.push_str(",\"mainFirstPathIndex\":");
+    push_option_usize_json(output, gate.main_first_path_index);
+    output.push_str(",\"shadowToInterstitialBoundaryAdjacent\":");
+    output.push_str(if gate.shadow_to_interstitial_boundary_adjacent {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"interstitialToMainBoundaryAdjacent\":");
+    output.push_str(if gate.interstitial_to_main_boundary_adjacent {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"record48SeparatesShadowFromTextureAndMain\":");
+    output.push_str(if gate.record48_separates_shadow_from_texture_and_main {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"record48SeparatesTextureFromMain\":");
+    output.push_str(if gate.record48_separates_texture_from_main {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"record70Word0SeparatesTextureFromMain\":");
+    output.push_str(if gate.record70_word0_separates_texture_from_main {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"record82Word5SeparatesTextureFromMain\":");
+    output.push_str(if gate.record82_word5_separates_texture_from_main {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"record82Word5MatchesShadow\":");
+    output.push_str(if gate.record82_word5_matches_shadow {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"record82Word3IsWhitePaintCandidate\":");
+    output.push_str(if gate.record82_word3_is_white_paint_candidate {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"paintIntentInference\":");
+    output.push_str(&json_string(gate.paint_intent_inference));
+    output.push_str(",\"transitionBoundaryClass\":");
+    output.push_str(&json_string(gate.transition_boundary_class));
+    output.push_str(",\"promotionReady\":");
+    output.push_str(if gate.promotion_ready() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(gate.render_promotion_blocked_reason));
+    output.push('}');
 }
 
 fn push_success_data_test_title_art_path_kind_runs_json(
@@ -58722,6 +66147,26 @@ fn push_success_data_test_title_art_front_paint_candidate_json(
     } else {
         render_promotion_blocked_reason
     };
+    let direct_gray_candidate_present =
+        embedded_press_title_art_direct_gray_candidate(&front_erase_texture_paths).is_some();
+    let texture_source_paint_candidate_present = embedded_press_title_art_source_paint_candidate(
+        &front_erase_texture_paths,
+        source_paint_candidate,
+    )
+    .is_some();
+    let texture_state_span_count = embedded_press_title_art_front_erase_texture_state_spans(
+        snapshot,
+        &front_erase_texture_paths,
+    )
+    .len();
+    let transition_gate = success_data_test_title_art_front_erase_paint_transition_gate(
+        snapshot,
+        &front_erase_texture_paths,
+    );
+    let candidate_count = usize::from(color_gate.paint_color.is_some())
+        + usize::from(direct_gray_candidate_present)
+        + usize::from(texture_source_paint_candidate_present)
+        + usize::from(texture_state_span_count > 0);
 
     output.push_str("{\"source\":\"JSFart2Contents+EmbeddedPressPaintState\",\"decoded\":false,\"sourceBacked\":");
     output.push_str(
@@ -58760,6 +66205,71 @@ fn push_success_data_test_title_art_front_paint_candidate_json(
     });
     output.push_str(",\"renderFillColorPromotionBlockedReason\":");
     output.push_str(&json_string(color_gate.render_color_blocked_reason));
+    output.push_str(",\"sourcePaintRenderTrace\":");
+    push_success_data_test_title_art_source_paint_render_trace_json(
+        output,
+        source_paint_candidate,
+        color_gate,
+        render_texture_path_source,
+        render_blocked_reason,
+    );
+    output.push_str(",\"frontPaintArbitrationGate\":");
+    output.push_str("{\"source\":\"JSFart2Contents+EmbeddedPressPaintState+frontEraseTextureProbes\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":false,\"diagnosticOnly\":true,\"renderPromoted\":false");
+    output.push_str(",\"candidateCount\":");
+    output.push_str(&candidate_count.to_string());
+    output.push_str(",\"selectedRenderPolicy\":\"conservative-front-fill\"");
+    output.push_str(",\"selectedRenderFillColor\":");
+    output.push_str(&json_string(color_gate.render_fill));
+    output.push_str(",\"sourcePaintCandidatePresent\":");
+    output.push_str(if color_gate.paint_color.is_some() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourcePaintCandidateMatchesRenderFill\":");
+    output.push_str(if color_gate.source_paint_matches_render_fill {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"directGrayCandidatePresent\":");
+    output.push_str(if direct_gray_candidate_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"textureSourcePaintCandidatePresent\":");
+    output.push_str(if texture_source_paint_candidate_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"frontEraseTextureSpanCandidatePresent\":");
+    output.push_str(if texture_state_span_count > 0 {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"frontEraseTextureSpanCount\":");
+    output.push_str(&texture_state_span_count.to_string());
+    output.push_str(",\"frontEraseTransitionBoundaryClass\":");
+    output.push_str(&json_string(transition_gate.transition_boundary_class));
+    output.push_str(",\"frontErasePaintIntentInference\":");
+    output.push_str(&json_string(transition_gate.paint_intent_inference));
+    output.push_str(",\"renderPromotionBlockedReasons\":[");
+    output.push_str(&json_string(color_gate.render_color_blocked_reason));
+    output.push(',');
+    output.push_str(&json_string(
+        render_promotion_blocked_reason.unwrap_or("none"),
+    ));
+    output.push(',');
+    output.push_str(&json_string(
+        transition_gate.render_promotion_blocked_reason,
+    ));
+    output.push_str("]");
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"front-paint-candidate-arbitration-unproven\"}",
+    );
     output.push_str(",\"mainStateTexturePathCount\":");
     output.push_str(&front_texture_paths.len().to_string());
     output.push_str(",\"frontEraseTexturePathCount\":");
@@ -58940,6 +66450,11 @@ fn push_success_data_test_title_art_front_texture_role_gate_json(
             },
         ));
     }
+    output.push_str(",\"frontEraseVisibleProbeGate\":");
+    push_success_data_test_title_art_front_erase_visible_probe_gate_json(
+        output,
+        front_erase_texture_paths,
+    );
     output.push_str(",\"groups\":[");
     if let Some(partition) = partition.as_ref() {
         push_success_data_test_title_art_role_gate_group_json(
@@ -59322,7 +66837,7 @@ fn push_success_data_test_title_art_shadow_paint_word_gate_json(
         output.push_str(&json_string(&effect.base_fill_color));
         output.push_str(",\"fillColor\":");
         output.push_str(&json_string(&effect.fill_color));
-        output.push_str(",\"renderPromoted\":true,\"renderPromotionBlockedReason\":\"none\"}");
+        output.push_str(",\"renderPromoted\":false,\"renderPromotionBlockedReason\":\"record70-separates-shadow-but-not-interstitial-texture-from-main\"}");
     } else {
         output.push_str("null");
     }
@@ -60975,8 +68490,7 @@ fn success_data_test_cone_text_bbox_matches_vector_bbox(
     vector_bbox: (i32, i32, i32, i32),
     text_bbox: (i32, i32, i32, i32),
 ) -> bool {
-    let center_x = text_bbox.0 + (text_bbox.2 - text_bbox.0) / 2;
-    let center_y = text_bbox.1 + (text_bbox.3 - text_bbox.1) / 2;
+    let (center_x, center_y) = fdm_bbox_center(text_bbox);
     let width = vector_bbox.2.saturating_sub(vector_bbox.0).abs().max(1);
     let height = vector_bbox.3.saturating_sub(vector_bbox.1).abs().max(1);
     let margin_x = (width / 12).max(16);
@@ -61292,6 +68806,13 @@ fn success_data_test_fdm_index_row_order_promotion_gate_svg_attrs(
     classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
 ) -> String {
     let gate = success_data_test_fdm_index_row_order_promotion_gate(classifications);
+    let render_promotion_blocked_reasons =
+        success_data_test_fdm_index_row_order_promotion_blocked_reasons(classifications, &gate);
+    let render_promotion_blocked_reason = render_promotion_blocked_reasons
+        .first()
+        .copied()
+        .unwrap_or("none");
+    let render_promotion_blocked_reasons_csv = render_promotion_blocked_reasons.join(",");
     let referenced_command_relative_offsets = gate
         .referenced_command_relative_offsets
         .iter()
@@ -61305,7 +68826,9 @@ fn success_data_test_fdm_index_row_order_promotion_gate_svg_attrs(
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        " data-index-row-order-basis=\"fdm-index-row-reference-command-order\" data-index-row-order-decoded=\"false\" data-index-row-order-ownership-proven=\"false\" data-index-row-order-paint-order-decoded=\"false\" data-index-row-order-render-promotion-contribution=\"fdm-index-row-order-evidence-only\" data-index-row-order-render-promotion-blocked-reason=\"primitive-role-and-paint-order-unproven\" data-index-row-order-command-count=\"{}\" data-index-row-order-referenced-command-count=\"{}\" data-index-row-order-unreferenced-command-count=\"{}\" data-index-row-order-unique-row-index-count=\"{}\" data-index-row-order-reference-count=\"{}\" data-index-row-order-valid-vector-offset-reference-count=\"{}\" data-index-row-order-command-relative-offset-field-reference-count=\"{}\" data-index-row-order-source-segment-relative-offset-field-reference-count=\"{}\" data-index-row-order-all-commands-referenced=\"{}\" data-index-row-order-one-to-one-row-command=\"{}\" data-index-row-order-single-row-backs-multiple-commands=\"{}\" data-index-row-order-matches-command-order=\"{}\" data-index-row-order-referenced-command-relative-offsets=\"{}\" data-index-row-order-referenced-row-indexes=\"{}\"",
+        " data-index-row-order-basis=\"fdm-index-row-reference-command-order\" data-index-row-order-decoded=\"false\" data-index-row-order-ownership-proven=\"false\" data-index-row-order-paint-order-decoded=\"false\" data-index-row-order-render-promotion-contribution=\"fdm-index-row-order-evidence-only\" data-index-row-order-render-promotion-blocked-reason=\"{}\" data-index-row-order-render-promotion-blocked-reasons=\"{}\" data-index-row-order-command-count=\"{}\" data-index-row-order-referenced-command-count=\"{}\" data-index-row-order-unreferenced-command-count=\"{}\" data-index-row-order-unique-row-index-count=\"{}\" data-index-row-order-reference-count=\"{}\" data-index-row-order-valid-vector-offset-reference-count=\"{}\" data-index-row-order-command-relative-offset-field-reference-count=\"{}\" data-index-row-order-source-segment-relative-offset-field-reference-count=\"{}\" data-index-row-order-all-commands-referenced=\"{}\" data-index-row-order-one-to-one-row-command=\"{}\" data-index-row-order-single-row-backs-multiple-commands=\"{}\" data-index-row-order-matches-command-order=\"{}\" data-index-row-order-referenced-command-relative-offsets=\"{}\" data-index-row-order-referenced-row-indexes=\"{}\"",
+        escape_xml(render_promotion_blocked_reason),
+        escape_xml(&render_promotion_blocked_reasons_csv),
         gate.command_count,
         gate.referenced_command_count(),
         gate.unreferenced_command_count(),
@@ -61582,6 +69105,14 @@ fn push_success_data_test_fdm_primitive_ownership_comparison_json(
             .count()
             .to_string(),
     );
+    output.push_str(",\"ownershipGate\":");
+    push_success_data_test_fdm_primitive_ownership_gate_json(output, &classifications);
+    output.push_str(",\"offsetFieldAuthorityGate\":");
+    push_success_data_test_fdm_offset_field_authority_gate_json(output, &classifications);
+    output.push_str(",\"rowFanoutSegmentOwnerGate\":");
+    push_success_data_test_fdm_row_fanout_segment_owner_gate_json(output, &classifications);
+    output.push_str(",\"primitiveOwnershipAdmissionGate\":");
+    push_success_data_test_fdm_primitive_ownership_admission_gate_json(output, &classifications);
     output.push_str(",\"indexRowOrderPromotionGate\":");
     push_success_data_test_fdm_index_row_order_promotion_gate_json(output, &classifications);
     output.push_str(",\"indexRowReferenceRoleCandidateGroups\":");
@@ -61712,6 +69243,708 @@ impl SuccessDataTestFdmIndexRowOrderPromotionGate {
     }
 }
 
+#[derive(Debug)]
+struct SuccessDataTestFdmOffsetFieldAuthorityGate {
+    command_count: usize,
+    reference_count: usize,
+    valid_vector_offset_reference_count: usize,
+    command_relative_offset_field_reference_count: usize,
+    source_segment_relative_offset_field_reference_count: usize,
+    unclassified_offset_field_reference_count: usize,
+    raw_span_command_count: usize,
+    segment_backed_command_count: usize,
+    mixed_offset_field_namespaces: bool,
+    mixed_command_provenance_cohorts: bool,
+    all_references_use_command_relative_offset_field: bool,
+    all_references_use_source_segment_relative_offset_field: bool,
+    render_promotion_blocked_reason: &'static str,
+}
+
+fn success_data_test_fdm_offset_field_authority_gate(
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) -> SuccessDataTestFdmOffsetFieldAuthorityGate {
+    let order_gate = success_data_test_fdm_index_row_order_promotion_gate(classifications);
+    let raw_span_command_count = classifications
+        .iter()
+        .filter(|classification| classification.command.source_segment().is_none())
+        .count();
+    let segment_backed_command_count = classifications.len().saturating_sub(raw_span_command_count);
+    let unclassified_offset_field_reference_count = order_gate
+        .reference_count
+        .saturating_sub(order_gate.command_relative_offset_field_reference_count)
+        .saturating_sub(order_gate.source_segment_relative_offset_field_reference_count);
+    let mixed_offset_field_namespaces = order_gate.command_relative_offset_field_reference_count
+        > 0
+        && order_gate.source_segment_relative_offset_field_reference_count > 0;
+    let mixed_command_provenance_cohorts =
+        raw_span_command_count > 0 && segment_backed_command_count > 0;
+    let all_references_use_command_relative_offset_field = order_gate.reference_count > 0
+        && order_gate.command_relative_offset_field_reference_count == order_gate.reference_count;
+    let all_references_use_source_segment_relative_offset_field = order_gate.reference_count > 0
+        && order_gate.source_segment_relative_offset_field_reference_count
+            == order_gate.reference_count;
+    let render_promotion_blocked_reason = if mixed_offset_field_namespaces {
+        "fdm-index-offset-field-authority-mixed-command-and-segment-fields"
+    } else if mixed_command_provenance_cohorts {
+        "fdm-index-offset-field-authority-mixed-raw-and-segment-cohorts"
+    } else if unclassified_offset_field_reference_count > 0 {
+        "fdm-index-offset-field-authority-unclassified-fields"
+    } else if order_gate.valid_vector_offset_reference_count == 0 {
+        "fdm-index-offset-field-authority-valid-vector-offset-missing"
+    } else {
+        "fdm-index-offset-field-authority-semantics-unproven"
+    };
+
+    SuccessDataTestFdmOffsetFieldAuthorityGate {
+        command_count: order_gate.command_count,
+        reference_count: order_gate.reference_count,
+        valid_vector_offset_reference_count: order_gate.valid_vector_offset_reference_count,
+        command_relative_offset_field_reference_count: order_gate
+            .command_relative_offset_field_reference_count,
+        source_segment_relative_offset_field_reference_count: order_gate
+            .source_segment_relative_offset_field_reference_count,
+        unclassified_offset_field_reference_count,
+        raw_span_command_count,
+        segment_backed_command_count,
+        mixed_offset_field_namespaces,
+        mixed_command_provenance_cohorts,
+        all_references_use_command_relative_offset_field,
+        all_references_use_source_segment_relative_offset_field,
+        render_promotion_blocked_reason,
+    }
+}
+
+fn push_success_data_test_fdm_offset_field_authority_gate_json(
+    output: &mut String,
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) {
+    let gate = success_data_test_fdm_offset_field_authority_gate(classifications);
+    output.push_str("{\"basis\":\"fdm-index-offset-field-authority-gate\",\"source\":\"FDMIndex row offset fields+FDMVector command provenance\",\"decoded\":false,\"sourceBacked\":true");
+    output.push_str(",\"offsetFieldAuthorityDecoded\":false");
+    output.push_str(",\"renderPromotionContribution\":\"fdm-index-offset-field-authority-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(gate.render_promotion_blocked_reason));
+    output.push_str(",\"commandCount\":");
+    output.push_str(&gate.command_count.to_string());
+    output.push_str(",\"referenceCount\":");
+    output.push_str(&gate.reference_count.to_string());
+    output.push_str(",\"validVectorOffsetReferenceCount\":");
+    output.push_str(&gate.valid_vector_offset_reference_count.to_string());
+    output.push_str(",\"commandRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &gate
+            .command_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"sourceSegmentRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &gate
+            .source_segment_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"unclassifiedOffsetFieldReferenceCount\":");
+    output.push_str(&gate.unclassified_offset_field_reference_count.to_string());
+    output.push_str(",\"rawSpanCommandCount\":");
+    output.push_str(&gate.raw_span_command_count.to_string());
+    output.push_str(",\"segmentBackedCommandCount\":");
+    output.push_str(&gate.segment_backed_command_count.to_string());
+    output.push_str(",\"mixedOffsetFieldNamespaces\":");
+    output.push_str(if gate.mixed_offset_field_namespaces {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"mixedCommandProvenanceCohorts\":");
+    output.push_str(if gate.mixed_command_provenance_cohorts {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"allReferencesUseCommandRelativeOffsetField\":");
+    output.push_str(if gate.all_references_use_command_relative_offset_field {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"allReferencesUseSourceSegmentRelativeOffsetField\":");
+    output.push_str(
+        if gate.all_references_use_source_segment_relative_offset_field {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push('}');
+}
+
+#[derive(Debug)]
+struct SuccessDataTestFdmRowFanoutSegmentOwnerGate {
+    command_count: usize,
+    reference_count: usize,
+    unique_row_index_count: usize,
+    command_relative_offset_field_reference_count: usize,
+    source_segment_relative_offset_field_reference_count: usize,
+    fanout_row_count: usize,
+    fanout_reference_count: usize,
+    fanout_command_relative_offset_field_reference_count: usize,
+    fanout_source_segment_relative_offset_field_reference_count: usize,
+    max_row_fanout: usize,
+    multi_command_row_indexes: Vec<usize>,
+    rows_with_multiple_command_refs: Vec<SuccessDataTestFdmRowFanoutSegmentOwnerRow>,
+    one_to_one_row_command_reference_candidate: bool,
+    single_row_backs_multiple_commands_candidate: bool,
+    mixed_offset_field_namespaces: bool,
+    mixed_command_provenance_cohorts: bool,
+    fanout_rows_use_command_relative_offset_fields: bool,
+    fanout_rows_use_source_segment_offset_fields: bool,
+    raw_span_command_count: usize,
+    segment_backed_command_count: usize,
+    render_promotion_blocked_reason: &'static str,
+}
+
+#[derive(Debug)]
+struct SuccessDataTestFdmRowFanoutSegmentOwnerRow {
+    row_index: usize,
+    command_reference_count: usize,
+    command_relative_offsets: Vec<usize>,
+    match_kinds: Vec<&'static str>,
+}
+
+fn success_data_test_fdm_row_fanout_segment_owner_gate(
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) -> SuccessDataTestFdmRowFanoutSegmentOwnerGate {
+    let order_gate = success_data_test_fdm_index_row_order_promotion_gate(classifications);
+    let raw_span_command_count = classifications
+        .iter()
+        .filter(|classification| classification.command.source_segment().is_none())
+        .count();
+    let segment_backed_command_count = classifications.len().saturating_sub(raw_span_command_count);
+    let mut multi_command_row_indexes = Vec::new();
+    let mut fanout_reference_count = 0usize;
+    let mut fanout_command_relative_offset_field_reference_count = 0usize;
+    let mut fanout_source_segment_relative_offset_field_reference_count = 0usize;
+    let mut max_row_fanout = 0usize;
+    let mut rows_with_multiple_command_refs = Vec::new();
+    for (row_index, command_offsets) in &order_gate.row_to_command_relative_offsets {
+        max_row_fanout = max_row_fanout.max(command_offsets.len());
+        if command_offsets.len() <= 1 {
+            continue;
+        }
+        multi_command_row_indexes.push(*row_index);
+        let row_pairs = order_gate
+            .row_command_pairs
+            .iter()
+            .filter(|pair| pair.row_index == *row_index)
+            .collect::<Vec<_>>();
+        for pair in &row_pairs {
+            fanout_reference_count += 1;
+            match pair.match_kind {
+                "command-relative-offset-field" => {
+                    fanout_command_relative_offset_field_reference_count += 1;
+                }
+                "source-segment-relative-offset-field" => {
+                    fanout_source_segment_relative_offset_field_reference_count += 1;
+                }
+                _ => {}
+            }
+        }
+        rows_with_multiple_command_refs.push(SuccessDataTestFdmRowFanoutSegmentOwnerRow {
+            row_index: *row_index,
+            command_reference_count: row_pairs.len(),
+            command_relative_offsets: row_pairs
+                .iter()
+                .map(|pair| pair.command_relative_offset)
+                .collect(),
+            match_kinds: row_pairs
+                .iter()
+                .map(|pair| pair.match_kind)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect(),
+        });
+    }
+    let mixed_offset_field_namespaces = order_gate.command_relative_offset_field_reference_count
+        > 0
+        && order_gate.source_segment_relative_offset_field_reference_count > 0;
+    let mixed_command_provenance_cohorts =
+        raw_span_command_count > 0 && segment_backed_command_count > 0;
+    let single_row_backs_multiple_commands_candidate =
+        order_gate.single_row_backs_multiple_commands_candidate();
+    let one_to_one_row_command_reference_candidate =
+        order_gate.one_to_one_row_command_reference_candidate();
+    let fanout_rows_use_command_relative_offset_fields = fanout_reference_count > 0
+        && fanout_command_relative_offset_field_reference_count == fanout_reference_count;
+    let fanout_rows_use_source_segment_offset_fields = fanout_reference_count > 0
+        && fanout_source_segment_relative_offset_field_reference_count == fanout_reference_count;
+    let render_promotion_blocked_reason = if single_row_backs_multiple_commands_candidate {
+        "fdm-index-row-fanout-segment-owner-multi-command-single-row"
+    } else if !one_to_one_row_command_reference_candidate {
+        "fdm-index-row-fanout-segment-owner-not-one-to-one"
+    } else if mixed_offset_field_namespaces {
+        "fdm-index-row-fanout-segment-owner-offset-namespace-mixed"
+    } else if mixed_command_provenance_cohorts {
+        "fdm-index-row-fanout-segment-owner-mixed-raw-and-segment-cohorts"
+    } else {
+        "fdm-index-row-fanout-segment-owner-semantics-unproven"
+    };
+
+    SuccessDataTestFdmRowFanoutSegmentOwnerGate {
+        command_count: order_gate.command_count,
+        reference_count: order_gate.reference_count,
+        unique_row_index_count: order_gate.unique_row_index_count(),
+        command_relative_offset_field_reference_count: order_gate
+            .command_relative_offset_field_reference_count,
+        source_segment_relative_offset_field_reference_count: order_gate
+            .source_segment_relative_offset_field_reference_count,
+        fanout_row_count: multi_command_row_indexes.len(),
+        fanout_reference_count,
+        fanout_command_relative_offset_field_reference_count,
+        fanout_source_segment_relative_offset_field_reference_count,
+        max_row_fanout,
+        multi_command_row_indexes,
+        rows_with_multiple_command_refs,
+        one_to_one_row_command_reference_candidate,
+        single_row_backs_multiple_commands_candidate,
+        mixed_offset_field_namespaces,
+        mixed_command_provenance_cohorts,
+        fanout_rows_use_command_relative_offset_fields,
+        fanout_rows_use_source_segment_offset_fields,
+        raw_span_command_count,
+        segment_backed_command_count,
+        render_promotion_blocked_reason,
+    }
+}
+
+fn push_success_data_test_fdm_row_fanout_segment_owner_gate_json(
+    output: &mut String,
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) {
+    let gate = success_data_test_fdm_row_fanout_segment_owner_gate(classifications);
+    output.push_str("{\"basis\":\"fdm-index-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true");
+    output.push_str(",\"rowFanoutDecoded\":false,\"segmentOwnerDecoded\":false");
+    output.push_str(",\"renderPromotionContribution\":\"fdm-index-row-fanout-segment-owner-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(gate.render_promotion_blocked_reason));
+    output.push_str(",\"commandCount\":");
+    output.push_str(&gate.command_count.to_string());
+    output.push_str(",\"referenceCount\":");
+    output.push_str(&gate.reference_count.to_string());
+    output.push_str(",\"uniqueRowIndexCount\":");
+    output.push_str(&gate.unique_row_index_count.to_string());
+    output.push_str(",\"commandRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &gate
+            .command_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"sourceSegmentRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &gate
+            .source_segment_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"fanoutRowCount\":");
+    output.push_str(&gate.fanout_row_count.to_string());
+    output.push_str(",\"fanoutReferenceCount\":");
+    output.push_str(&gate.fanout_reference_count.to_string());
+    output.push_str(",\"fanoutCommandRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &gate
+            .fanout_command_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &gate
+            .fanout_source_segment_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"maxRowFanout\":");
+    output.push_str(&gate.max_row_fanout.to_string());
+    output.push_str(",\"multiCommandRowIndexes\":");
+    push_usize_array_json(output, &gate.multi_command_row_indexes);
+    output.push_str(",\"rowsWithMultipleCommandRefs\":");
+    push_success_data_test_fdm_row_fanout_segment_owner_rows_json(
+        output,
+        &gate.rows_with_multiple_command_refs,
+    );
+    output.push_str(",\"oneToOneRowCommandReferenceCandidate\":");
+    output.push_str(if gate.one_to_one_row_command_reference_candidate {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"singleRowBacksMultipleCommandsCandidate\":");
+    output.push_str(if gate.single_row_backs_multiple_commands_candidate {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"mixedOffsetFieldNamespaces\":");
+    output.push_str(if gate.mixed_offset_field_namespaces {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"mixedCommandProvenanceCohorts\":");
+    output.push_str(if gate.mixed_command_provenance_cohorts {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"fanoutRowsUseCommandRelativeOffsetFields\":");
+    output.push_str(if gate.fanout_rows_use_command_relative_offset_fields {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"fanoutRowsUseSourceSegmentOffsetFields\":");
+    output.push_str(if gate.fanout_rows_use_source_segment_offset_fields {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"rawSpanCommandCount\":");
+    output.push_str(&gate.raw_span_command_count.to_string());
+    output.push_str(",\"segmentBackedCommandCount\":");
+    output.push_str(&gate.segment_backed_command_count.to_string());
+    output.push('}');
+}
+
+fn push_success_data_test_fdm_row_fanout_segment_owner_rows_json(
+    output: &mut String,
+    rows: &[SuccessDataTestFdmRowFanoutSegmentOwnerRow],
+) {
+    output.push('[');
+    for (index, row) in rows.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str("{\"rowIndex\":");
+        output.push_str(&row.row_index.to_string());
+        output.push_str(",\"commandReferenceCount\":");
+        output.push_str(&row.command_reference_count.to_string());
+        output.push_str(",\"commandRelativeOffsets\":");
+        push_usize_array_json(output, &row.command_relative_offsets);
+        output.push_str(",\"matchKinds\":");
+        push_json_string_slice_array(output, &row.match_kinds);
+        output.push('}');
+    }
+    output.push(']');
+}
+
+#[derive(Debug)]
+struct SuccessDataTestFdmPrimitiveOwnershipGate {
+    row_command_gap_p95: Option<f32>,
+    row_direction_mismatch: bool,
+    multi_command_single_row: bool,
+    all_commands_referenced_by_index_rows_candidate: bool,
+    one_to_one_row_command_reference_candidate: bool,
+    mixed_raw_and_segment_cohorts: bool,
+    raw_span_command_count: usize,
+    segment_backed_command_count: usize,
+    ownership_proven: bool,
+    render_ownership_blocked_reason: &'static str,
+    render_ownership_blocked_reasons: Vec<&'static str>,
+}
+
+fn success_data_test_fdm_primitive_ownership_gate(
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) -> SuccessDataTestFdmPrimitiveOwnershipGate {
+    let order_gate = success_data_test_fdm_index_row_order_promotion_gate(classifications);
+    let raw_span_command_count = classifications
+        .iter()
+        .filter(|classification| classification.command.source_segment().is_none())
+        .count();
+    let segment_backed_command_count = classifications.len().saturating_sub(raw_span_command_count);
+    let row_direction_mismatch = !order_gate.row_order_matches_command_order_candidate();
+    let multi_command_single_row = order_gate.single_row_backs_multiple_commands_candidate();
+    let all_commands_referenced_by_index_rows_candidate =
+        order_gate.all_commands_referenced_by_index_rows_candidate();
+    let one_to_one_row_command_reference_candidate =
+        order_gate.one_to_one_row_command_reference_candidate();
+    let mixed_raw_and_segment_cohorts =
+        raw_span_command_count > 0 && segment_backed_command_count > 0;
+    let mut render_ownership_blocked_reasons = Vec::new();
+    if row_direction_mismatch {
+        render_ownership_blocked_reasons.push("row-command-direction-mismatch");
+    }
+    if !all_commands_referenced_by_index_rows_candidate {
+        render_ownership_blocked_reasons.push("index-row-reference-coverage-incomplete");
+    }
+    if multi_command_single_row {
+        render_ownership_blocked_reasons.push("multi-command-single-index-row");
+    }
+    if mixed_raw_and_segment_cohorts {
+        render_ownership_blocked_reasons.push("mixed-raw-and-segment-cohorts");
+    }
+    if !one_to_one_row_command_reference_candidate {
+        render_ownership_blocked_reasons.push("row-command-reference-not-one-to-one");
+    }
+    let render_ownership_blocked_reason = render_ownership_blocked_reasons
+        .first()
+        .copied()
+        .unwrap_or("fdm-index-row-ownership-unproven");
+
+    SuccessDataTestFdmPrimitiveOwnershipGate {
+        row_command_gap_p95: success_data_test_fdm_command_gap_p95(
+            &order_gate.referenced_command_relative_offsets,
+        ),
+        row_direction_mismatch,
+        multi_command_single_row,
+        all_commands_referenced_by_index_rows_candidate,
+        one_to_one_row_command_reference_candidate,
+        mixed_raw_and_segment_cohorts,
+        raw_span_command_count,
+        segment_backed_command_count,
+        ownership_proven: false,
+        render_ownership_blocked_reason,
+        render_ownership_blocked_reasons,
+    }
+}
+
+fn success_data_test_fdm_command_gap_p95(offsets: &BTreeSet<usize>) -> Option<f32> {
+    let mut gaps = Vec::new();
+    let mut previous_offset = None;
+    for offset in offsets.iter().copied() {
+        if let Some(previous) = previous_offset {
+            gaps.push(offset.saturating_sub(previous));
+        }
+        previous_offset = Some(offset);
+    }
+    if gaps.is_empty() {
+        return None;
+    }
+    gaps.sort_unstable();
+    let rank = ((gaps.len() as f32) * 0.95).ceil() as usize;
+    let index = rank.saturating_sub(1).min(gaps.len() - 1);
+    Some(gaps[index] as f32)
+}
+
+fn push_success_data_test_fdm_primitive_ownership_gate_json(
+    output: &mut String,
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) {
+    let gate = success_data_test_fdm_primitive_ownership_gate(classifications);
+    output.push_str("{\"basis\":\"fdm-index-row-reference-primitive-ownership-gate\",\"source\":\"FDMIndex row references+FDMVector command provenance\",\"decoded\":false,\"sourceBacked\":true");
+    output.push_str(",\"ownershipProven\":");
+    output.push_str(if gate.ownership_proven {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"paintOrderDecoded\":false,\"renderOwnershipPromoted\":false");
+    output.push_str(",\"renderOwnershipBlockedReason\":");
+    output.push_str(&json_string(gate.render_ownership_blocked_reason));
+    output.push_str(",\"renderOwnershipBlockedReasons\":");
+    push_json_string_slice_array(output, &gate.render_ownership_blocked_reasons);
+    output.push_str(",\"rowCommandGapP95\":");
+    push_optional_f32_json(output, gate.row_command_gap_p95);
+    output.push_str(",\"rowDirectionMismatch\":");
+    output.push_str(if gate.row_direction_mismatch {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"multiCommandSingleRow\":");
+    output.push_str(if gate.multi_command_single_row {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"allCommandsReferencedByIndexRowsCandidate\":");
+    output.push_str(if gate.all_commands_referenced_by_index_rows_candidate {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"oneToOneRowCommandReferenceCandidate\":");
+    output.push_str(if gate.one_to_one_row_command_reference_candidate {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"mixedRawAndSegmentCohorts\":");
+    output.push_str(if gate.mixed_raw_and_segment_cohorts {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"rawSpanCommandCount\":");
+    output.push_str(&gate.raw_span_command_count.to_string());
+    output.push_str(",\"segmentBackedCommandCount\":");
+    output.push_str(&gate.segment_backed_command_count.to_string());
+    output.push('}');
+}
+
+fn push_success_data_test_fdm_primitive_ownership_admission_gate_json(
+    output: &mut String,
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) {
+    let ownership_gate = success_data_test_fdm_primitive_ownership_gate(classifications);
+    let offset_field_gate = success_data_test_fdm_offset_field_authority_gate(classifications);
+    let row_fanout_gate = success_data_test_fdm_row_fanout_segment_owner_gate(classifications);
+    let role_groups =
+        success_data_test_fdm_index_row_reference_role_candidate_groups(classifications);
+
+    let mut role_fanout_blocked_role_candidates = Vec::new();
+    let mut role_vector_offset_authority_blocked_role_candidates = Vec::new();
+    let mut role_vector_offset_authority_blocked_reasons = Vec::new();
+    let mut role_valid_vector_offset_missing_role_candidates = Vec::new();
+    let mut role_paint_order_blocked_role_candidates = Vec::new();
+    let mut role_paint_order_authority_pending_role_candidates = Vec::new();
+    for group in role_groups.values() {
+        if success_data_test_fdm_role_group_single_row_backs_multiple_commands(group) {
+            role_fanout_blocked_role_candidates.push(group.role_candidate);
+        }
+        let role_vector_offset_authority_blocked_reason =
+            success_data_test_fdm_role_vector_offset_authority_blocked_reason(group);
+        push_unique_static_str(
+            &mut role_vector_offset_authority_blocked_reasons,
+            role_vector_offset_authority_blocked_reason,
+        );
+        role_vector_offset_authority_blocked_role_candidates.push(group.role_candidate);
+        if group.valid_vector_offset_reference_count == 0 && group.reference_count > 0 {
+            role_valid_vector_offset_missing_role_candidates.push(group.role_candidate);
+        }
+        let paint_order_profile =
+            success_data_test_fdm_role_paint_order_continuity_profile(group, classifications);
+        if paint_order_profile.continuity_blocked() {
+            role_paint_order_blocked_role_candidates.push(group.role_candidate);
+        } else if paint_order_profile.paint_order_authority_pending() {
+            role_paint_order_authority_pending_role_candidates.push(group.role_candidate);
+        }
+    }
+
+    let role_fanout_blocked_group_count = role_fanout_blocked_role_candidates.len();
+    let role_vector_offset_authority_blocked_group_count =
+        role_vector_offset_authority_blocked_role_candidates.len();
+    let role_valid_vector_offset_missing_group_count =
+        role_valid_vector_offset_missing_role_candidates.len();
+    let role_paint_order_blocked_group_count = role_paint_order_blocked_role_candidates.len();
+    let role_paint_order_authority_pending_group_count =
+        role_paint_order_authority_pending_role_candidates.len();
+    let mut render_promotion_blocked_reasons = Vec::new();
+    for reason in &ownership_gate.render_ownership_blocked_reasons {
+        push_unique_static_str(&mut render_promotion_blocked_reasons, reason);
+    }
+    push_unique_static_str(
+        &mut render_promotion_blocked_reasons,
+        offset_field_gate.render_promotion_blocked_reason,
+    );
+    push_unique_static_str(
+        &mut render_promotion_blocked_reasons,
+        row_fanout_gate.render_promotion_blocked_reason,
+    );
+    if role_fanout_blocked_group_count > 0 {
+        push_unique_static_str(
+            &mut render_promotion_blocked_reasons,
+            "fdm-index-role-row-fanout-multi-command-single-row",
+        );
+    }
+    for reason in &role_vector_offset_authority_blocked_reasons {
+        push_unique_static_str(&mut render_promotion_blocked_reasons, reason);
+    }
+    if role_valid_vector_offset_missing_group_count > 0 {
+        push_unique_static_str(
+            &mut render_promotion_blocked_reasons,
+            "fdm-index-role-valid-vector-offset-missing",
+        );
+    }
+    if role_paint_order_blocked_group_count > 0 {
+        push_unique_static_str(
+            &mut render_promotion_blocked_reasons,
+            "role-paint-order-continuity-unproven",
+        );
+    }
+    if role_paint_order_authority_pending_group_count > 0 {
+        push_unique_static_str(
+            &mut render_promotion_blocked_reasons,
+            "role-paint-order-authority-unproven",
+        );
+    }
+    let render_admission_ready = render_promotion_blocked_reasons.is_empty();
+    let render_promotion_blocked_reason = render_promotion_blocked_reasons
+        .first()
+        .copied()
+        .unwrap_or("none");
+
+    output.push_str("{\"basis\":\"fdm-primitive-ownership-admission-gate\",\"source\":\"ownershipGate+offsetFieldAuthorityGate+rowFanoutSegmentOwnerGate+roleFanoutSegmentOwnerGate+paintOrderContinuityProfile\",\"decoded\":false,\"sourceBacked\":true");
+    output.push_str(",\"ownershipProven\":false,\"paintOrderDecoded\":false");
+    output.push_str(",\"renderAdmissionReady\":");
+    output.push_str(if render_admission_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderPromotionContribution\":\"fdm-primitive-ownership-admission-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(render_promotion_blocked_reason));
+    output.push_str(",\"renderPromotionBlockedReasons\":");
+    push_json_string_slice_array(output, &render_promotion_blocked_reasons);
+    output.push_str(",\"commandCount\":");
+    output.push_str(
+        &ownership_gate
+            .raw_span_command_count
+            .saturating_add(ownership_gate.segment_backed_command_count)
+            .to_string(),
+    );
+    output.push_str(",\"referenceCount\":");
+    output.push_str(&offset_field_gate.reference_count.to_string());
+    output.push_str(",\"roleGroupCount\":");
+    output.push_str(&role_groups.len().to_string());
+    output.push_str(",\"ownershipGateBlockedReason\":");
+    output.push_str(&json_string(ownership_gate.render_ownership_blocked_reason));
+    output.push_str(",\"offsetFieldAuthorityBlockedReason\":");
+    output.push_str(&json_string(
+        offset_field_gate.render_promotion_blocked_reason,
+    ));
+    output.push_str(",\"rowFanoutSegmentOwnerBlockedReason\":");
+    output.push_str(&json_string(
+        row_fanout_gate.render_promotion_blocked_reason,
+    ));
+    output.push_str(",\"projectionRowFanoutBlocked\":");
+    output.push_str(
+        if row_fanout_gate.single_row_backs_multiple_commands_candidate {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"roleFanoutBlockedGroupCount\":");
+    output.push_str(&role_fanout_blocked_group_count.to_string());
+    output.push_str(",\"roleFanoutBlockedRoleCandidates\":");
+    push_json_string_slice_array(output, &role_fanout_blocked_role_candidates);
+    output.push_str(",\"roleVectorOffsetAuthorityBlockedGroupCount\":");
+    output.push_str(&role_vector_offset_authority_blocked_group_count.to_string());
+    output.push_str(",\"roleVectorOffsetAuthorityBlockedRoleCandidates\":");
+    push_json_string_slice_array(
+        output,
+        &role_vector_offset_authority_blocked_role_candidates,
+    );
+    output.push_str(",\"roleVectorOffsetAuthorityBlockedReasons\":");
+    push_json_string_slice_array(output, &role_vector_offset_authority_blocked_reasons);
+    output.push_str(",\"roleValidVectorOffsetMissingGroupCount\":");
+    output.push_str(&role_valid_vector_offset_missing_group_count.to_string());
+    output.push_str(",\"roleValidVectorOffsetMissingRoleCandidates\":");
+    push_json_string_slice_array(output, &role_valid_vector_offset_missing_role_candidates);
+    output.push_str(",\"rolePaintOrderBlockedGroupCount\":");
+    output.push_str(&role_paint_order_blocked_group_count.to_string());
+    output.push_str(",\"rolePaintOrderBlockedRoleCandidates\":");
+    push_json_string_slice_array(output, &role_paint_order_blocked_role_candidates);
+    output.push_str(",\"rolePaintOrderAuthorityPendingGroupCount\":");
+    output.push_str(&role_paint_order_authority_pending_group_count.to_string());
+    output.push_str(",\"rolePaintOrderAuthorityPendingRoleCandidates\":");
+    push_json_string_slice_array(output, &role_paint_order_authority_pending_role_candidates);
+    output.push('}');
+}
+
+fn push_unique_static_str(values: &mut Vec<&'static str>, value: &'static str) {
+    if value != "none" && !values.contains(&value) {
+        values.push(value);
+    }
+}
+
 fn success_data_test_fdm_index_row_order_promotion_gate(
     classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
 ) -> SuccessDataTestFdmIndexRowOrderPromotionGate {
@@ -61758,10 +69991,18 @@ fn push_success_data_test_fdm_index_row_order_promotion_gate_json(
     classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
 ) {
     let gate = success_data_test_fdm_index_row_order_promotion_gate(classifications);
+    let render_promotion_blocked_reasons =
+        success_data_test_fdm_index_row_order_promotion_blocked_reasons(classifications, &gate);
+    let render_promotion_blocked_reason = render_promotion_blocked_reasons
+        .first()
+        .copied()
+        .unwrap_or("none");
     output.push_str("{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false");
     output.push_str(",\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\"");
-    output
-        .push_str(",\"renderPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(render_promotion_blocked_reason));
+    output.push_str(",\"renderPromotionBlockedReasons\":");
+    push_json_string_slice_array(output, &render_promotion_blocked_reasons);
     output.push_str(",\"commandCount\":");
     output.push_str(&gate.command_count.to_string());
     output.push_str(",\"referencedCommandCount\":");
@@ -61836,16 +70077,110 @@ fn push_success_data_test_fdm_index_row_order_promotion_gate_json(
     output.push('}');
 }
 
+fn success_data_test_fdm_index_row_order_promotion_blocked_reasons(
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+    gate: &SuccessDataTestFdmIndexRowOrderPromotionGate,
+) -> Vec<&'static str> {
+    let mut reasons = Vec::new();
+    if !gate.all_commands_referenced_by_index_rows_candidate() {
+        push_unique_static_str(
+            &mut reasons,
+            "fdm-index-row-order-reference-coverage-incomplete",
+        );
+    }
+    if !gate.one_to_one_row_command_reference_candidate() {
+        push_unique_static_str(&mut reasons, "fdm-index-row-order-reference-not-one-to-one");
+    }
+    if gate.single_row_backs_multiple_commands_candidate() {
+        push_unique_static_str(
+            &mut reasons,
+            "fdm-index-row-order-single-row-backs-multiple-commands",
+        );
+    }
+    if !gate.row_order_matches_command_order_candidate() {
+        push_unique_static_str(&mut reasons, "fdm-index-row-order-non-monotonic");
+    }
+    if gate.reference_count > 0 && gate.valid_vector_offset_reference_count == 0 {
+        push_unique_static_str(
+            &mut reasons,
+            "fdm-index-row-order-valid-vector-offset-missing",
+        );
+    }
+    if gate.command_relative_offset_field_reference_count > 0
+        && gate.source_segment_relative_offset_field_reference_count > 0
+    {
+        push_unique_static_str(&mut reasons, "fdm-index-row-order-offset-namespace-mixed");
+    }
+
+    let role_groups =
+        success_data_test_fdm_index_row_reference_role_candidate_groups(classifications);
+    let mut role_paint_order_continuity_blocked = false;
+    let mut role_paint_order_authority_pending = false;
+    for group in role_groups.values() {
+        let profile =
+            success_data_test_fdm_role_paint_order_continuity_profile(group, classifications);
+        role_paint_order_continuity_blocked |= profile.continuity_blocked();
+        role_paint_order_authority_pending |= profile.paint_order_authority_pending();
+    }
+    if role_paint_order_continuity_blocked {
+        push_unique_static_str(&mut reasons, "role-paint-order-continuity-unproven");
+    }
+    if role_paint_order_authority_pending {
+        push_unique_static_str(&mut reasons, "role-paint-order-authority-unproven");
+    }
+    if reasons.is_empty() {
+        push_unique_static_str(&mut reasons, "fdm-index-row-order-paint-authority-unproven");
+    }
+    reasons
+}
+
 #[derive(Debug, Default)]
 struct SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup {
     role_candidate: &'static str,
     reference_count: usize,
     valid_vector_offset_reference_count: usize,
+    valid_command_relative_offset_field_reference_count: usize,
+    valid_source_segment_relative_offset_field_reference_count: usize,
     command_relative_offset_field_reference_count: usize,
     source_segment_relative_offset_field_reference_count: usize,
     command_relative_offsets: BTreeSet<usize>,
     row_indexes: BTreeSet<usize>,
     row_command_pairs: BTreeSet<SuccessDataTestFdmIndexRowCommandPair>,
+}
+
+#[derive(Debug)]
+struct SuccessDataTestFdmRolePaintOrderContinuityProfile {
+    span_min: Option<usize>,
+    span_max: Option<usize>,
+    role_command_count: usize,
+    command_count_in_span: usize,
+    interleaved_non_role_command_count: usize,
+    max_command_offset_gap: usize,
+    continuity_score: f32,
+}
+
+impl SuccessDataTestFdmRolePaintOrderContinuityProfile {
+    fn span_contiguous_candidate(&self) -> bool {
+        self.role_command_count > 0
+            && self.command_count_in_span == self.role_command_count
+            && self.interleaved_non_role_command_count == 0
+    }
+
+    fn continuity_blocked(&self) -> bool {
+        !self.span_contiguous_candidate()
+    }
+
+    fn paint_order_authority_pending(&self) -> bool {
+        self.span_contiguous_candidate()
+    }
+
+    fn render_promotion_blocked_reason(&self) -> &'static str {
+        if self.continuity_blocked() {
+            "role-span-interleaved-non-role-commands"
+        } else {
+            "role-paint-order-authority-unproven"
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -61855,10 +70190,9 @@ struct SuccessDataTestFdmIndexRowCommandPair {
     match_kind: &'static str,
 }
 
-fn push_success_data_test_fdm_index_row_reference_role_candidate_groups_json(
-    output: &mut String,
+fn success_data_test_fdm_index_row_reference_role_candidate_groups(
     classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
-) {
+) -> BTreeMap<&'static str, SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup> {
     let mut groups =
         BTreeMap::<&'static str, SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup>::new();
     for classification in classifications {
@@ -61887,6 +70221,15 @@ fn push_success_data_test_fdm_index_row_reference_role_candidate_groups_json(
                     });
                 if reference.valid_vector_offset {
                     group.valid_vector_offset_reference_count += 1;
+                    match reference.match_kind {
+                        "command-relative-offset-field" => {
+                            group.valid_command_relative_offset_field_reference_count += 1;
+                        }
+                        "source-segment-relative-offset-field" => {
+                            group.valid_source_segment_relative_offset_field_reference_count += 1;
+                        }
+                        _ => {}
+                    }
                 }
                 match reference.match_kind {
                     "command-relative-offset-field" => {
@@ -61900,6 +70243,24 @@ fn push_success_data_test_fdm_index_row_reference_role_candidate_groups_json(
             }
         }
     }
+    groups
+}
+
+fn success_data_test_fdm_role_group_single_row_backs_multiple_commands(
+    group: &SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup,
+) -> bool {
+    let mut row_to_command_count = BTreeMap::<usize, usize>::new();
+    for pair in &group.row_command_pairs {
+        *row_to_command_count.entry(pair.row_index).or_default() += 1;
+    }
+    row_to_command_count.values().any(|count| *count > 1)
+}
+
+fn push_success_data_test_fdm_index_row_reference_role_candidate_groups_json(
+    output: &mut String,
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) {
+    let groups = success_data_test_fdm_index_row_reference_role_candidate_groups(classifications);
 
     output.push('[');
     for (index, group) in groups.values().enumerate() {
@@ -61974,9 +70335,395 @@ fn push_success_data_test_fdm_index_row_reference_role_candidate_groups_json(
         );
         output.push_str(",\"rowCommandPairs\":");
         push_success_data_test_fdm_index_row_command_pairs_json(output, &group.row_command_pairs);
-        output.push_str(",\"decoded\":false}");
+        output.push_str(",\"roleVectorOffsetAuthorityGate\":");
+        push_success_data_test_fdm_role_vector_offset_authority_gate_json(output, group);
+        output.push_str(",\"roleFanoutSegmentOwnerGate\":");
+        push_success_data_test_fdm_role_fanout_segment_owner_gate_json(output, group);
+        output.push_str(",\"decoded\":false,\"paintOrderContinuityProfile\":");
+        push_success_data_test_fdm_role_paint_order_continuity_profile_json(
+            output,
+            group,
+            classifications,
+        );
+        output.push('}');
     }
     output.push(']');
+}
+
+fn success_data_test_fdm_role_vector_offset_authority_blocked_reason(
+    group: &SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup,
+) -> &'static str {
+    let mixed_valid_offset_namespaces = group.valid_command_relative_offset_field_reference_count
+        > 0
+        && group.valid_source_segment_relative_offset_field_reference_count > 0;
+    if group.valid_vector_offset_reference_count == 0 {
+        "fdm-index-role-vector-offset-authority-valid-vector-offset-missing"
+    } else if mixed_valid_offset_namespaces {
+        "fdm-index-role-vector-offset-authority-mixed-valid-offset-namespaces"
+    } else {
+        "fdm-index-role-vector-offset-authority-semantics-unproven"
+    }
+}
+
+fn push_success_data_test_fdm_role_vector_offset_authority_gate_json(
+    output: &mut String,
+    group: &SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup,
+) {
+    let invalid_vector_offset_reference_count = group
+        .reference_count
+        .saturating_sub(group.valid_vector_offset_reference_count);
+    let invalid_command_relative_offset_field_reference_count = group
+        .command_relative_offset_field_reference_count
+        .saturating_sub(group.valid_command_relative_offset_field_reference_count);
+    let invalid_source_segment_relative_offset_field_reference_count = group
+        .source_segment_relative_offset_field_reference_count
+        .saturating_sub(group.valid_source_segment_relative_offset_field_reference_count);
+    let mixed_offset_namespaces_among_valid_refs =
+        group.valid_command_relative_offset_field_reference_count > 0
+            && group.valid_source_segment_relative_offset_field_reference_count > 0;
+    let all_valid_references_use_command_relative_offset_field =
+        group.valid_vector_offset_reference_count > 0
+            && group.valid_command_relative_offset_field_reference_count
+                == group.valid_vector_offset_reference_count;
+    let all_valid_references_use_source_segment_relative_offset_field =
+        group.valid_vector_offset_reference_count > 0
+            && group.valid_source_segment_relative_offset_field_reference_count
+                == group.valid_vector_offset_reference_count;
+    let all_references_have_invalid_vector_offset =
+        group.reference_count > 0 && group.valid_vector_offset_reference_count == 0;
+    let render_promotion_blocked_reason =
+        success_data_test_fdm_role_vector_offset_authority_blocked_reason(group);
+
+    output.push_str("{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true");
+    output.push_str(",\"roleCandidate\":");
+    output.push_str(&json_string(group.role_candidate));
+    output.push_str(",\"roleVectorOffsetAuthorityDecoded\":false");
+    output.push_str(
+        ",\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(render_promotion_blocked_reason));
+    output.push_str(",\"referenceCount\":");
+    output.push_str(&group.reference_count.to_string());
+    output.push_str(",\"validVectorOffsetReferenceCount\":");
+    output.push_str(&group.valid_vector_offset_reference_count.to_string());
+    output.push_str(",\"invalidVectorOffsetReferenceCount\":");
+    output.push_str(&invalid_vector_offset_reference_count.to_string());
+    output.push_str(",\"commandRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &group
+            .command_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"sourceSegmentRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &group
+            .source_segment_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"validCommandRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &group
+            .valid_command_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"validSourceSegmentRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &group
+            .valid_source_segment_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"invalidCommandRelativeOffsetFieldReferenceCount\":");
+    output.push_str(&invalid_command_relative_offset_field_reference_count.to_string());
+    output.push_str(",\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":");
+    output.push_str(&invalid_source_segment_relative_offset_field_reference_count.to_string());
+    output.push_str(",\"allValidReferencesUseCommandRelativeOffsetField\":");
+    output.push_str(if all_valid_references_use_command_relative_offset_field {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"allValidReferencesUseSourceSegmentRelativeOffsetField\":");
+    output.push_str(
+        if all_valid_references_use_source_segment_relative_offset_field {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"mixedOffsetNamespacesAmongValidReferences\":");
+    output.push_str(if mixed_offset_namespaces_among_valid_refs {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"allReferencesHaveInvalidVectorOffset\":");
+    output.push_str(if all_references_have_invalid_vector_offset {
+        "true"
+    } else {
+        "false"
+    });
+    output.push('}');
+}
+
+fn push_success_data_test_fdm_role_fanout_segment_owner_gate_json(
+    output: &mut String,
+    group: &SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup,
+) {
+    let mut row_to_pairs = BTreeMap::<usize, Vec<SuccessDataTestFdmIndexRowCommandPair>>::new();
+    for pair in &group.row_command_pairs {
+        row_to_pairs.entry(pair.row_index).or_default().push(*pair);
+    }
+
+    let mut fanout_row_count = 0usize;
+    let mut fanout_reference_count = 0usize;
+    let mut fanout_command_relative_offset_field_reference_count = 0usize;
+    let mut fanout_source_segment_relative_offset_field_reference_count = 0usize;
+    let mut max_row_fanout = 0usize;
+    for pairs in row_to_pairs.values() {
+        max_row_fanout = max_row_fanout.max(pairs.len());
+        if pairs.len() <= 1 {
+            continue;
+        }
+        fanout_row_count += 1;
+        fanout_reference_count += pairs.len();
+        for pair in pairs {
+            match pair.match_kind {
+                "command-relative-offset-field" => {
+                    fanout_command_relative_offset_field_reference_count += 1;
+                }
+                "source-segment-relative-offset-field" => {
+                    fanout_source_segment_relative_offset_field_reference_count += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let one_to_one_row_command_reference_candidate = group.reference_count
+        == group.command_relative_offsets.len()
+        && group.reference_count == group.row_indexes.len();
+    let single_row_backs_multiple_commands_candidate =
+        row_to_pairs.values().any(|pairs| pairs.len() > 1);
+    let mixed_offset_field_namespaces = group.command_relative_offset_field_reference_count > 0
+        && group.source_segment_relative_offset_field_reference_count > 0;
+    let fanout_rows_use_command_relative_offset_fields = fanout_reference_count > 0
+        && fanout_command_relative_offset_field_reference_count == fanout_reference_count;
+    let fanout_rows_use_source_segment_offset_fields = fanout_reference_count > 0
+        && fanout_source_segment_relative_offset_field_reference_count == fanout_reference_count;
+    let render_promotion_blocked_reason = if single_row_backs_multiple_commands_candidate {
+        "fdm-index-role-row-fanout-multi-command-single-row"
+    } else if !one_to_one_row_command_reference_candidate {
+        "fdm-index-role-row-reference-not-one-to-one"
+    } else if mixed_offset_field_namespaces {
+        "fdm-index-role-offset-namespace-mixed"
+    } else if group.valid_vector_offset_reference_count == 0 {
+        "fdm-index-role-valid-vector-offset-missing"
+    } else {
+        "fdm-index-role-segment-owner-semantics-unproven"
+    };
+
+    output.push_str("{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true");
+    output.push_str(",\"roleCandidate\":");
+    output.push_str(&json_string(group.role_candidate));
+    output.push_str(",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false");
+    output.push_str(
+        ",\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(render_promotion_blocked_reason));
+    output.push_str(",\"referenceCount\":");
+    output.push_str(&group.reference_count.to_string());
+    output.push_str(",\"uniqueCommandRelativeOffsetCount\":");
+    output.push_str(&group.command_relative_offsets.len().to_string());
+    output.push_str(",\"uniqueRowIndexCount\":");
+    output.push_str(&group.row_indexes.len().to_string());
+    output.push_str(",\"commandRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &group
+            .command_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"sourceSegmentRelativeOffsetFieldReferenceCount\":");
+    output.push_str(
+        &group
+            .source_segment_relative_offset_field_reference_count
+            .to_string(),
+    );
+    output.push_str(",\"fanoutRowCount\":");
+    output.push_str(&fanout_row_count.to_string());
+    output.push_str(",\"fanoutReferenceCount\":");
+    output.push_str(&fanout_reference_count.to_string());
+    output.push_str(",\"fanoutCommandRelativeOffsetFieldReferenceCount\":");
+    output.push_str(&fanout_command_relative_offset_field_reference_count.to_string());
+    output.push_str(",\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":");
+    output.push_str(&fanout_source_segment_relative_offset_field_reference_count.to_string());
+    output.push_str(",\"maxRowFanout\":");
+    output.push_str(&max_row_fanout.to_string());
+    output.push_str(",\"oneToOneRowCommandReferenceCandidate\":");
+    output.push_str(if one_to_one_row_command_reference_candidate {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"singleRowBacksMultipleCommandsCandidate\":");
+    output.push_str(if single_row_backs_multiple_commands_candidate {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"mixedOffsetFieldNamespaces\":");
+    output.push_str(if mixed_offset_field_namespaces {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"fanoutRowsUseCommandRelativeOffsetFields\":");
+    output.push_str(if fanout_rows_use_command_relative_offset_fields {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"fanoutRowsUseSourceSegmentOffsetFields\":");
+    output.push_str(if fanout_rows_use_source_segment_offset_fields {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"rowsWithMultipleCommandRefs\":");
+    push_success_data_test_fdm_role_fanout_rows_json(output, &row_to_pairs);
+    output.push('}');
+}
+
+fn push_success_data_test_fdm_role_fanout_rows_json(
+    output: &mut String,
+    row_to_pairs: &BTreeMap<usize, Vec<SuccessDataTestFdmIndexRowCommandPair>>,
+) {
+    output.push('[');
+    let mut emitted = 0usize;
+    for (row_index, pairs) in row_to_pairs {
+        if pairs.len() <= 1 {
+            continue;
+        }
+        if emitted > 0 {
+            output.push(',');
+        }
+        emitted += 1;
+        let command_relative_offsets = pairs
+            .iter()
+            .map(|pair| pair.command_relative_offset)
+            .collect::<Vec<_>>();
+        let match_kinds = pairs
+            .iter()
+            .map(|pair| pair.match_kind)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        output.push_str("{\"rowIndex\":");
+        output.push_str(&row_index.to_string());
+        output.push_str(",\"commandReferenceCount\":");
+        output.push_str(&pairs.len().to_string());
+        output.push_str(",\"commandRelativeOffsets\":");
+        push_usize_array_json(output, &command_relative_offsets);
+        output.push_str(",\"matchKinds\":");
+        push_json_string_slice_array(output, &match_kinds);
+        output.push('}');
+    }
+    output.push(']');
+}
+
+fn push_success_data_test_fdm_role_paint_order_continuity_profile_json(
+    output: &mut String,
+    group: &SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup,
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) {
+    output.push_str("{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false");
+    let profile = success_data_test_fdm_role_paint_order_continuity_profile(group, classifications);
+    output.push_str(",\"commandRelativeOffsetSpanMin\":");
+    push_option_usize_json(output, profile.span_min);
+    output.push_str(",\"commandRelativeOffsetSpanMax\":");
+    push_option_usize_json(output, profile.span_max);
+    output.push_str(",\"roleCommandCount\":");
+    output.push_str(&profile.role_command_count.to_string());
+    output.push_str(",\"commandCountInSpan\":");
+    output.push_str(&profile.command_count_in_span.to_string());
+    output.push_str(",\"interleavedNonRoleCommandCount\":");
+    output.push_str(&profile.interleaved_non_role_command_count.to_string());
+    output.push_str(",\"hasInterleavedNonRoleCommands\":");
+    output.push_str(if profile.interleaved_non_role_command_count > 0 {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"maxCommandOffsetGap\":");
+    output.push_str(&profile.max_command_offset_gap.to_string());
+    output.push_str(",\"commandOffsetContinuityScore\":");
+    output.push_str(&format!("{:.3}", profile.continuity_score));
+    output.push_str(",\"spanContiguousCandidate\":");
+    output.push_str(if profile.span_contiguous_candidate() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"paintOrderAuthorityPending\":");
+    output.push_str(if profile.paint_order_authority_pending() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"continuityBlocked\":");
+    output.push_str(if profile.continuity_blocked() {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(profile.render_promotion_blocked_reason()));
+    output.push('}');
+}
+
+fn success_data_test_fdm_role_paint_order_continuity_profile(
+    group: &SuccessDataTestFdmIndexRowReferenceRoleCandidateGroup,
+    classifications: &[SuccessDataTestFdmPrimitiveOwnershipClassification<'_>],
+) -> SuccessDataTestFdmRolePaintOrderContinuityProfile {
+    let span_min = group.command_relative_offsets.iter().next().copied();
+    let span_max = group.command_relative_offsets.iter().next_back().copied();
+    let role_command_count = group.command_relative_offsets.len();
+    let command_count_in_span = match (span_min, span_max) {
+        (Some(min), Some(max)) => classifications
+            .iter()
+            .filter(|classification| {
+                let offset = classification.command.relative_offset();
+                offset >= min && offset <= max
+            })
+            .count(),
+        _ => 0,
+    };
+    let interleaved_non_role_command_count =
+        command_count_in_span.saturating_sub(role_command_count);
+    let mut max_command_offset_gap = 0usize;
+    let mut previous_offset = None;
+    for offset in group.command_relative_offsets.iter().copied() {
+        if let Some(previous) = previous_offset {
+            max_command_offset_gap = max_command_offset_gap.max(offset.saturating_sub(previous));
+        }
+        previous_offset = Some(offset);
+    }
+    let continuity_score = if command_count_in_span == 0 {
+        0.0
+    } else {
+        role_command_count as f32 / command_count_in_span as f32
+    };
+
+    SuccessDataTestFdmRolePaintOrderContinuityProfile {
+        span_min,
+        span_max,
+        role_command_count,
+        command_count_in_span,
+        interleaved_non_role_command_count,
+        max_command_offset_gap,
+        continuity_score,
+    }
 }
 
 fn success_data_test_fdm_row_command_pairs_are_monotonic(
@@ -62364,10 +71111,8 @@ fn success_data_test_fdm_command_source_center(
         return Some(ellipse.center());
     }
     let bbox = fdm_vector_command_source_bbox(command).map(normalize_fdm_bbox)?;
-    Some(ObjectFdmVectorPoint::new(
-        bbox.0 + (bbox.2 - bbox.0) / 2,
-        bbox.1 + (bbox.3 - bbox.1) / 2,
-    ))
+    let (center_x, center_y) = fdm_bbox_center(bbox);
+    Some(ObjectFdmVectorPoint::new(center_x, center_y))
 }
 
 fn success_data_test_fdm_reference_ellipse_is_control_marker(
@@ -62602,8 +71347,7 @@ fn success_data_test_fdm_text_projection_candidate(
     let Some((left, top, right, bottom)) = candidate.bbox().map(normalize_fdm_bbox) else {
         return false;
     };
-    let center_x = left + (right - left) / 2;
-    let center_y = top + (bottom - top) / 2;
+    let (center_x, center_y) = fdm_bbox_center((left, top, right, bottom));
     center_x >= projection.source_left
         && center_x <= projection.source_right
         && center_y >= projection.source_top
@@ -62616,8 +71360,7 @@ fn success_data_test_projected_fdm_text_bbox(
     candidate: &ObjectFdmTextCandidate,
 ) -> Option<(f32, f32, f32)> {
     let bbox = candidate.bbox().map(normalize_fdm_bbox)?;
-    let center_x = bbox.0 + (bbox.2 - bbox.0) / 2;
-    let center_y = bbox.1 + (bbox.3 - bbox.1) / 2;
+    let (center_x, center_y) = fdm_bbox_center(bbox);
     let (_, top_y) = success_data_test_project_fdm_point(layout, projection, bbox.0, bbox.1)?;
     let (_, bottom_y) = success_data_test_project_fdm_point(layout, projection, bbox.2, bbox.3)?;
     let (x, y) = success_data_test_project_fdm_point(layout, projection, center_x, center_y)?;
@@ -62651,8 +71394,7 @@ fn success_data_test_fdm_projection_command(
     let Some(bbox) = fdm_vector_command_source_bbox(command).map(normalize_fdm_bbox) else {
         return false;
     };
-    let center_x = bbox.0 + (bbox.2 - bbox.0) / 2;
-    let center_y = bbox.1 + (bbox.3 - bbox.1) / 2;
+    let (center_x, center_y) = fdm_bbox_center(bbox);
     center_x >= projection.source_left
         && center_x <= projection.source_right
         && center_y >= projection.source_top
@@ -62938,11 +71680,80 @@ fn push_image_payload_diagnostic_svg(
         let Some(data_uri) = image_payload_svg_data_uri(diagnostic.span) else {
             continue;
         };
+        let source_path_candidate_present = image_payload_source_path_candidate_present(diagnostic);
+        let ownership_evidence_ready = image_payload_ownership_evidence_ready(diagnostic);
+        let declared_payload_length_present = diagnostic
+            .span
+            .envelope()
+            .declared_payload_length()
+            .is_some();
+        let ownership_proven = ownership_evidence_ready;
+        let frame_reference_row_count = diagnostic.candidate.frame_reference_row_candidates().len();
+        let frame_coordinate_row_count = image_payload_frame_coordinate_row_count(diagnostic);
+        let frame_linked_window_row_count = image_payload_frame_linked_window_row_count(diagnostic);
+        let frame_geometry_candidate_present =
+            image_payload_frame_geometry_candidate_present(diagnostic);
+        let embedding_frame = image_payload_embedding_frame(diagnostic);
+        let frame_record =
+            embedding_frame.and_then(|frame| embedding_frame_record(diagnostic.document, frame));
+        let source_frame_record_geometry_present =
+            frame_record.map_or(false, image_payload_source_frame_record_has_geometry);
+        let payload_frame_aspect_delta_permille =
+            image_payload_frame_payload_aspect_delta_permille(frame_record, diagnostic.span);
+        let best_payload_frame_aspect_delta_permille =
+            image_payload_best_frame_payload_aspect_delta_permille(
+                frame_record,
+                diagnostic.candidate,
+            );
+        let current_payload_best_frame_aspect_candidate = payload_frame_aspect_delta_permille
+            .is_some()
+            && payload_frame_aspect_delta_permille == best_payload_frame_aspect_delta_permille;
+        let candidate_frame_bbox = frame_record.and_then(|record| {
+            image_payload_source_frame_record_has_geometry(record)
+                .then(|| image_payload_candidate_frame_bbox(record))
+        });
+        let payload_frame_aspect_delta_attr =
+            optional_u64_svg_attr(payload_frame_aspect_delta_permille);
+        let best_payload_frame_aspect_delta_attr =
+            optional_u64_svg_attr(best_payload_frame_aspect_delta_permille);
+        let render_promotion_blocked_reason =
+            image_payload_render_promotion_blocked_reason(diagnostic);
         svg.push_str(&format!(
-            "<g class=\"rjtd-image-payload-diagnostic\" data-source-path=\"{}\" data-object-candidate-index=\"{}\" data-payload-index=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"false\" data-renderable=\"true\" data-mime=\"{}\">",
+            "<g class=\"rjtd-image-payload-diagnostic\" data-source-path=\"{}\" data-object-candidate-index=\"{}\" data-payload-index=\"{}\" data-decoded=\"false\" data-diagnostic-only=\"true\" data-source-backed=\"true\" data-geometry-decoded=\"false\" data-placement-proven=\"false\" data-ownership-proven=\"{}\" data-page-geometry-proven=\"false\" data-paint-order-decoded=\"false\" data-diagnostic-renderable=\"true\" data-renderable=\"false\" data-source-path-candidate-present=\"{}\" data-declared-payload-length-present=\"{}\" data-ownership-reference-count=\"{}\" data-ownership-evidence-ready=\"{}\" data-frame-reference-row-count=\"{}\" data-frame-coordinate-row-count=\"{}\" data-frame-linked-window-row-count=\"{}\" data-frame-geometry-candidate-present=\"{}\" data-embedding-frame-trace-present=\"{}\" data-source-frame-record-geometry-present=\"{}\" data-candidate-frame-bbox-present=\"{}\" data-candidate-frame-x=\"{}\" data-candidate-frame-y=\"{}\" data-candidate-frame-width=\"{}\" data-candidate-frame-height=\"{}\" data-payload-frame-aspect-fit-present=\"{}\" data-payload-frame-aspect-delta-permille=\"{}\" data-best-payload-frame-aspect-delta-permille=\"{}\" data-current-payload-best-frame-aspect-candidate=\"{}\" data-object-envelope-header-length=\"{}\" data-object-envelope-trailer-length=\"{}\" data-render-promotion-blocked-reason=\"{}\" data-mime=\"{}\">",
             escape_xml(diagnostic.candidate.path()),
             diagnostic.candidate_index,
             diagnostic.payload_index,
+            ownership_proven,
+            source_path_candidate_present,
+            declared_payload_length_present,
+            diagnostic.candidate.ownership_reference_candidates().len(),
+            ownership_evidence_ready,
+            frame_reference_row_count,
+            frame_coordinate_row_count,
+            frame_linked_window_row_count,
+            frame_geometry_candidate_present,
+            embedding_frame.is_some(),
+            source_frame_record_geometry_present,
+            candidate_frame_bbox.is_some(),
+            candidate_frame_bbox
+                .map(|bbox| format!("{:.3}", bbox.0))
+                .unwrap_or_else(|| "null".to_string()),
+            candidate_frame_bbox
+                .map(|bbox| format!("{:.3}", bbox.1))
+                .unwrap_or_else(|| "null".to_string()),
+            candidate_frame_bbox
+                .map(|bbox| format!("{:.3}", bbox.2))
+                .unwrap_or_else(|| "null".to_string()),
+            candidate_frame_bbox
+                .map(|bbox| format!("{:.3}", bbox.3))
+                .unwrap_or_else(|| "null".to_string()),
+            payload_frame_aspect_delta_permille.is_some(),
+            payload_frame_aspect_delta_attr,
+            best_payload_frame_aspect_delta_attr,
+            current_payload_best_frame_aspect_candidate,
+            diagnostic.span.envelope().header_len(),
+            diagnostic.span.envelope().trailer_len(),
+            escape_xml(render_promotion_blocked_reason),
             escape_xml(diagnostic.span.mime())
         ));
         svg.push_str(&format!(
@@ -62980,12 +71791,20 @@ fn push_fdm_frame_diagnostic_svg(
             continue;
         };
         svg.push_str(&format!(
-            "<g class=\"rjtd-fdm-frame-diagnostic\" data-source-path=\"{}\" data-object-candidate-index=\"{}\" data-row-index=\"{}\" data-frame-object-id=\"{}\" data-frame-type=\"0x{:04x}\" data-projection-kind=\"fdmFrameDiagnosticProjection\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"false\" data-renderable=\"false\">",
+            "<g class=\"rjtd-fdm-frame-diagnostic\" data-source-path=\"{}\" data-object-candidate-index=\"{}\" data-row-index=\"{}\" data-frame-object-id=\"{}\" data-frame-type=\"0x{:04x}\" data-image-payload-extraction-status=\"{}\" data-render-promotion-blocked-reason=\"{}\" data-projection-kind=\"fdmFrameDiagnosticProjection\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-placement-proven=\"false\" data-renderable=\"false\">",
             escape_xml(diagnostic.candidate.path()),
             diagnostic.candidate_index,
             diagnostic.entry.row_index(),
             diagnostic.frame_record.object_id(),
-            diagnostic.frame_record.object_type()
+            diagnostic.frame_record.object_type(),
+            escape_xml(fdm_entry_image_payload_extraction_status(
+                diagnostic.candidate,
+                diagnostic.entry,
+            )),
+            escape_xml(fdm_entry_frame_render_blocked_reason(
+                diagnostic.candidate,
+                diagnostic.entry,
+            ))
         ));
         svg.push_str(&format!(
             "<rect x=\"{x:.1}\" y=\"{y:.1}\" width=\"{width:.1}\" height=\"{height:.1}\" fill=\"#eaf5ff\" fill-opacity=\"0.18\" stroke=\"#0a66b7\" stroke-width=\"1.2\" stroke-dasharray=\"5 3\"/>"
@@ -63261,7 +72080,7 @@ fn push_table_grid_candidate_svg(
         };
         let reference_layout =
             reference_table_grid_overlay_layout(layout, document, candidate, grid.column_count());
-        let source_layout = source_derived_table_grid_overlay_layout(
+        let source_layout = table_grid_source_derived_layout_candidate(
             layout,
             document,
             lines,
@@ -63275,9 +72094,12 @@ fn push_table_grid_candidate_svg(
                 !form_projection_present && table_grid_source_derived_layout_is_renderable(layout)
             })
             .map(TableGridRenderLayout::from_source_derived);
+        let source_render_layout_present = source_render_layout.is_some();
+        let reference_fallback_admission =
+            table_grid_reference_layout_visible_fallback_admission(document, candidate);
         let reference_render_layout = reference_layout
             .as_ref()
-            .filter(|_| table_grid_reference_layout_visible_fallback_allowed(document, candidate))
+            .filter(|_| reference_fallback_admission.allowed)
             .map(TableGridRenderLayout::from_reference);
         let Some(render_layout) = source_render_layout.or(reference_render_layout) else {
             continue;
@@ -63291,24 +72113,40 @@ fn push_table_grid_candidate_svg(
         let source_anchor_count = table_candidate_source_anchor_count(candidate);
         let fallback_anchor_count =
             table_grid_fallback_text_anchor_count(document, lines, candidate);
-        let source_layout_evidence_present = table_grid_source_layout_evidence_present(document);
         let decoded_source_placement_evidence_present =
             table_grid_decoded_source_placement_evidence_present(document, candidate);
+        let source_layout_evidence_present = table_grid_source_layout_evidence_present(document)
+            || decoded_source_placement_evidence_present
+            || source_layout.is_some();
         let render_promotion_blocked_reason = if render_layout.reference_backed {
-            if decoded_source_placement_evidence_present {
-                "none"
-            } else {
-                "source-layout-position-evidence-missing"
+            match source_layout.as_ref() {
+                Some(source_layout)
+                    if !table_grid_source_derived_layout_is_renderable(source_layout) =>
+                {
+                    source_layout.render_promotion_blocked_reason
+                }
+                Some(_) => "source-derived-render-suppressed-by-reference-fallback",
+                None if decoded_source_placement_evidence_present => {
+                    "source-derived-layout-candidate-absent"
+                }
+                None => "source-layout-position-evidence-missing",
             }
         } else {
             render_layout.render_promotion_blocked_reason
         };
         let placement_derived_from_source = !render_layout.reference_backed;
+        let reference_fallback_blocked_reason = reference_fallback_admission
+            .blocked_reason
+            .unwrap_or("none");
         svg.push_str(&format!(
-            "<g class=\"rjtd-column-grid-candidate\" data-table-candidate-index=\"{}\" data-projection-kind=\"{}\" data-reference-backed=\"{}\" data-source-anchor-evidence=\"true\" data-source-anchor-basis=\"{}\" data-source-anchor-cell-count=\"{}\" data-geometry-derivation-evidence=\"true\" data-source-derived-layout-candidate=\"{}\" data-source-derived-layout-reference-backed=\"false\" data-column-width-basis=\"{}\" data-stroke-width=\"{:.3}\" data-cell-stroke-width=\"{:.3}\" data-stroke-width-basis=\"{}\" data-cell-text-centered=\"{}\" data-cell-text-alignment-basis=\"{}\" data-cell-text-x-adjustment=\"{:.3}\" data-cell-text-x-adjustment-basis=\"{}\" data-cell-text-baseline-factor=\"{:.3}\" data-cell-text-baseline-basis=\"{}\" data-cell-text-font-weight=\"{}\" data-cell-text-font-weight-basis=\"{}\" data-fallback-text-anchor-count=\"{}\" data-source-layout-evidence-present=\"{}\" data-decoded-source-placement-evidence=\"{}\" data-render-promotion-blocked-reason=\"{}\" data-placement-derived-from-source=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-row-count=\"{}\" data-col-count-candidate=\"{}\">",
+            "<g class=\"rjtd-column-grid-candidate\" data-table-candidate-index=\"{}\" data-projection-kind=\"{}\" data-reference-backed=\"{}\" data-reference-fallback-admitted=\"{}\" data-reference-fallback-used=\"{}\" data-reference-fallback-blocked-reason=\"{}\" data-source-render-layout-present=\"{}\" data-source-anchor-evidence=\"true\" data-source-anchor-basis=\"{}\" data-source-anchor-cell-count=\"{}\" data-geometry-derivation-evidence=\"true\" data-source-derived-layout-candidate=\"{}\" data-source-derived-layout-reference-backed=\"false\" data-column-width-basis=\"{}\" data-stroke-width=\"{:.3}\" data-cell-stroke-width=\"{:.3}\" data-stroke-width-basis=\"{}\" data-cell-text-centered=\"{}\" data-cell-text-alignment-basis=\"{}\" data-cell-text-x-adjustment=\"{:.3}\" data-cell-text-x-adjustment-basis=\"{}\" data-cell-text-baseline-factor=\"{:.3}\" data-cell-text-baseline-basis=\"{}\" data-cell-text-font-weight=\"{}\" data-cell-text-font-weight-basis=\"{}\" data-cell-text-font-size=\"{:.3}\" data-cell-text-font-size-basis=\"{}\" data-fallback-text-anchor-count=\"{}\" data-source-layout-evidence-present=\"{}\" data-decoded-source-placement-evidence=\"{}\" data-render-promotion-blocked-reason=\"{}\" data-placement-derived-from-source=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" data-row-count=\"{}\" data-col-count-candidate=\"{}\">",
             candidate.index(),
             projection_kind,
             render_layout.reference_backed,
+            reference_fallback_admission.allowed,
+            render_layout.reference_backed,
+            reference_fallback_blocked_reason,
+            source_render_layout_present,
             candidate.basis().as_str(),
             source_anchor_count,
             source_layout.is_some(),
@@ -63324,6 +72162,8 @@ fn push_table_grid_candidate_svg(
             render_layout.cell_text_baseline_basis,
             render_layout.cell_text_font_weight,
             render_layout.cell_text_font_weight_basis,
+            render_layout.font_size,
+            render_layout.font_size_basis,
             fallback_anchor_count,
             source_layout_evidence_present,
             decoded_source_placement_evidence_present,
@@ -63566,10 +72406,21 @@ fn table_grid_overlay_layout(
     candidate: &TableCandidate,
     column_count: usize,
 ) -> (f32, f32, f32, f32, f32) {
-    if let Some(layout) =
-        tsaiten_table_grid_overlay_layout(layout, document, candidate, column_count)
-    {
-        return layout;
+    if let Some(source_layout) = source_derived_table_grid_overlay_layout(
+        layout,
+        document,
+        lines,
+        overlay_index,
+        candidate,
+        column_count,
+    ) {
+        return (
+            source_layout.x,
+            source_layout.y,
+            source_layout.width,
+            source_layout.row_height,
+            source_layout.column_width,
+        );
     }
     let width = layout.body_width_px();
     let row_height = 18.0;
@@ -63620,6 +72471,7 @@ fn table_grid_fallback_overlay_layout(
 
 #[derive(Debug, Clone)]
 struct TableGridSourceDerivedLayout {
+    provenance: TableGridSourceDerivedLayoutProvenance,
     x: f32,
     y: f32,
     width: f32,
@@ -63658,6 +72510,21 @@ struct TableGridSourceDerivedLayout {
     line_mark_rows_exact_and_contiguous: bool,
     line_header_rows_homogeneous: bool,
     render_promotion_blocked_reason: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TableGridSourceDerivedLayoutProvenance {
+    DecodedCompactPlacement,
+    SparseSiblingDerived,
+}
+
+impl TableGridSourceDerivedLayoutProvenance {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::DecodedCompactPlacement => "decodedCompactPlacement",
+            Self::SparseSiblingDerived => "sparseSiblingDerived",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -63928,6 +72795,7 @@ fn source_derived_table_grid_overlay_layout(
     let column_width = width / matched_column_count.max(1) as f32;
 
     Some(TableGridSourceDerivedLayout {
+        provenance: TableGridSourceDerivedLayoutProvenance::DecodedCompactPlacement,
         x,
         y,
         width,
@@ -63969,8 +72837,124 @@ fn source_derived_table_grid_overlay_layout(
     })
 }
 
+fn table_grid_source_derived_layout_candidate(
+    layout: PageLayout,
+    document: &Document,
+    lines: &[PageTextLine],
+    overlay_index: usize,
+    candidate: &TableCandidate,
+    column_count: usize,
+) -> Option<TableGridSourceDerivedLayout> {
+    source_derived_table_grid_overlay_layout(
+        layout,
+        document,
+        lines,
+        overlay_index,
+        candidate,
+        column_count,
+    )
+    .or_else(|| sparse_sibling_derived_table_grid_overlay_layout(document, candidate, column_count))
+}
+
+fn sparse_sibling_derived_table_grid_overlay_layout(
+    document: &Document,
+    candidate: &TableCandidate,
+    column_count: usize,
+) -> Option<TableGridSourceDerivedLayout> {
+    if column_count == 0 {
+        return None;
+    }
+    let evidence = table_grid_sparse_table_sibling_evidence(document, candidate)?;
+    if evidence.compact_to_sparse_column_offset.is_none() {
+        return None;
+    }
+
+    let candidate_row_count = candidate.intervals().len();
+    let required_cell_count = candidate.cell_count_candidate();
+    let matched_segment_count = evidence
+        .rows
+        .iter()
+        .map(|row| row.segments.len())
+        .sum::<usize>();
+    let matched_sparse_column_indexes =
+        table_grid_sparse_sibling_matched_sparse_column_indexes(&evidence.rows, column_count);
+    let matched_sparse_columns_contiguous = matched_sparse_column_indexes
+        .windows(2)
+        .all(|pair| pair[1] == pair[0].saturating_add(1));
+    if candidate_row_count == 0
+        || required_cell_count == 0
+        || evidence.rows.len() != candidate_row_count
+        || matched_segment_count != required_cell_count
+        || matched_sparse_column_indexes.len() != column_count
+        || !matched_sparse_columns_contiguous
+    {
+        return None;
+    }
+
+    let rows = table_candidate_document_text_line_header_rows(document, candidate);
+    let font_size_units_candidate = table_grid_line_header_font_size_units_candidate(&rows);
+    let homogeneous_font_size_units =
+        font_size_units_candidate.map(|(font_size_units, _, _)| font_size_units);
+    let raw_header_count = rows
+        .iter()
+        .map(TableCandidateLineHeaderRow::raw_header_count)
+        .sum::<usize>();
+    let matched_cell_header_count = rows.iter().map(|row| row.matched_cell_count).sum::<usize>();
+    let row_height = homogeneous_font_size_units
+        .map(|font_size_units| f32::from(font_size_units) * 1.75)
+        .unwrap_or(0.0);
+    let line_header_rows_homogeneous = table_grid_line_header_rows_are_homogeneous(&rows);
+
+    Some(TableGridSourceDerivedLayout {
+        provenance: TableGridSourceDerivedLayoutProvenance::SparseSiblingDerived,
+        x: 0.0,
+        y: 0.0,
+        width: 0.0,
+        height: row_height * candidate_row_count as f32,
+        row_height,
+        column_width: 0.0,
+        column_widths: Vec::new(),
+        column_width_basis: "sparseSiblingDerivedColumnCountOnly",
+        column_count,
+        row_count: candidate_row_count,
+        x_unit_range_basis: "sparse-sibling-column-indexes-not-source-units",
+        x_unit_start: 0,
+        x_unit_end: 0,
+        x_unit_full_extent_units: 0,
+        x_unit_row_agreement_count: evidence.rows.len(),
+        x_unit_all_rows_agree: false,
+        x_unit_trailing_header_included: false,
+        x_unit_included_trailing_header_count: 0,
+        x_unit_column_slot_width_units: Vec::new(),
+        x_unit_trailing_slot_width_units: Vec::new(),
+        x_origin_inset_units: 0.0,
+        x_origin_inset_basis: "none",
+        row_height_basis: if homogeneous_font_size_units.is_some() {
+            "partialDocumentTextLineHeaderFontSizeUnits"
+        } else {
+            "sparseSiblingDerivedRowHeightUnresolved"
+        },
+        page_origin_authority: "none",
+        anchor_line_index: None,
+        line_mark_page_origin: None,
+        line_mark_page_origin_stride: None,
+        raw_header_count,
+        matched_cell_header_count,
+        min_offset_units: None,
+        max_extent_units: None,
+        matched_cell_span_units: Vec::new(),
+        matched_cell_gap_units: Vec::new(),
+        homogeneous_font_size_units,
+        line_mark_row_record_selection: "none",
+        line_mark_rows_exact_and_contiguous: false,
+        line_header_rows_homogeneous,
+        render_promotion_blocked_reason: "sparse-sibling-derived-candidate-render-ineligible",
+    })
+}
+
 fn table_grid_source_derived_layout_is_renderable(layout: &TableGridSourceDerivedLayout) -> bool {
-    layout.line_mark_page_origin.is_some()
+    layout.provenance == TableGridSourceDerivedLayoutProvenance::DecodedCompactPlacement
+        && layout.line_mark_page_origin.is_some()
         && layout.page_origin_authority == "lineMarkPageGrid"
         && layout.line_mark_rows_exact_and_contiguous
         && layout.line_header_rows_homogeneous
@@ -64290,6 +73274,7 @@ struct TableGridRenderLayout {
     cell_stroke_width: f32,
     stroke_width_basis: &'static str,
     font_size: f32,
+    font_size_basis: &'static str,
     cell_text_centered: bool,
     cell_text_alignment_basis: &'static str,
     cell_text_x_adjustment: f32,
@@ -64319,6 +73304,7 @@ impl TableGridRenderLayout {
             cell_stroke_width: reference.cell_stroke_width,
             stroke_width_basis: "referenceLayout",
             font_size: reference.font_size,
+            font_size_basis: "referenceLayout",
             cell_text_centered: reference.cell_text_centered,
             cell_text_alignment_basis: "referenceLayout",
             cell_text_x_adjustment: 0.0,
@@ -64337,6 +73323,13 @@ impl TableGridRenderLayout {
     }
 
     fn from_source_derived(source: &TableGridSourceDerivedLayout) -> Self {
+        let source_font_size = source
+            .homogeneous_font_size_units
+            .filter(|font_size_units| *font_size_units > 0)
+            .map(|font_size_units| {
+                APP_FONT_SIZE_PX * (f32::from(font_size_units) / APP_TABLE_BASE_FONT_SIZE_UNITS)
+            })
+            .filter(|font_size| font_size.is_finite() && *font_size > 0.0);
         let source_unit_stroke_width = source
             .homogeneous_font_size_units
             .filter(|font_size_units| *font_size_units > 0)
@@ -64386,7 +73379,12 @@ impl TableGridRenderLayout {
             stroke_width,
             cell_stroke_width: stroke_width,
             stroke_width_basis,
-            font_size: APP_FONT_SIZE_PX,
+            font_size: source_font_size.unwrap_or(APP_FONT_SIZE_PX),
+            font_size_basis: if source_font_size.is_some() {
+                "documentTextLineHeaderFontSizeUnitsScaledToAppFont"
+            } else {
+                "fallbackAppFontSize"
+            },
             cell_text_centered: true,
             cell_text_alignment_basis: "documentTextLineHeaderCellSlotCenterCandidate",
             cell_text_x_adjustment,
@@ -64979,8 +73977,132 @@ fn table_grid_reference_layout_visible_fallback_allowed(
     document: &Document,
     candidate: &TableCandidate,
 ) -> bool {
-    !(document_has_success_data_test_projection_evidence(document)
-        && success_data_test_abc_table_candidate(candidate))
+    table_grid_reference_layout_visible_fallback_admission(document, candidate).allowed
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TableGridReferenceFallbackAdmission {
+    allowed: bool,
+    blocked_reason: Option<&'static str>,
+}
+
+fn table_grid_reference_layout_visible_fallback_admission(
+    document: &Document,
+    candidate: &TableCandidate,
+) -> TableGridReferenceFallbackAdmission {
+    if document_has_success_data_test_projection_evidence(document)
+        && success_data_test_abc_table_candidate(candidate)
+    {
+        TableGridReferenceFallbackAdmission {
+            allowed: false,
+            blocked_reason: Some("active-source-layout-admission-suppresses-reference-fallback"),
+        }
+    } else {
+        TableGridReferenceFallbackAdmission {
+            allowed: true,
+            blocked_reason: None,
+        }
+    }
+}
+
+fn push_table_grid_reference_fallback_admission_gate_json(
+    output: &mut String,
+    reference_layout_present: bool,
+    reference_fallback_used: bool,
+    source_layout: Option<&TableGridSourceDerivedLayout>,
+    source_render_layout_present: bool,
+    admission: &TableGridReferenceFallbackAdmission,
+) {
+    let source_layout_candidate_present = source_layout.is_some();
+    let source_layout_renderable =
+        source_layout.is_some_and(table_grid_source_derived_layout_is_renderable);
+    let source_only_page_y_admission_ready = source_layout.is_some_and(|layout| {
+        layout.line_mark_page_origin.is_some()
+            && layout.page_origin_authority == "lineMarkPageGrid"
+            && layout.line_mark_rows_exact_and_contiguous
+    });
+    let source_replacement_blocked_reason = if source_layout_renderable {
+        None
+    } else if !source_layout_candidate_present {
+        Some("source-derived-layout-candidate-absent")
+    } else if source_layout.is_some_and(|layout| {
+        layout.provenance == TableGridSourceDerivedLayoutProvenance::SparseSiblingDerived
+    }) {
+        Some("source-derived-layout-not-renderable")
+    } else if !source_only_page_y_admission_ready {
+        Some("source-page-y-render-admission-not-ready")
+    } else {
+        Some("source-derived-layout-not-renderable")
+    };
+
+    output.push_str("{\"source\":\"table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceLayoutPresent\":");
+    output.push_str(if reference_layout_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"referenceFallbackAllowed\":");
+    output.push_str(if admission.allowed { "true" } else { "false" });
+    output.push_str(",\"referenceFallbackUsed\":");
+    output.push_str(if reference_fallback_used {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceLayoutCandidatePresent\":");
+    output.push_str(if source_layout_candidate_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceRenderLayoutPresent\":");
+    output.push_str(if source_render_layout_present {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceLayoutRenderable\":");
+    output.push_str(if source_layout_renderable {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceOnlyPageYAdmissionReady\":");
+    output.push_str(if source_only_page_y_admission_ready {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceOnlyPageYAdmissionBasis\":");
+    if source_only_page_y_admission_ready {
+        output.push_str(&json_string("line-mark-page-grid-direct-origin"));
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"sourceReplacementBlockedReason\":");
+    match source_replacement_blocked_reason {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"blockedReason\":");
+    match admission.blocked_reason {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"renderPromotionContribution\":\"reference-fallback-admission-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    if admission.allowed {
+        output.push_str("null");
+    } else {
+        output.push_str(&json_string(
+            admission
+                .blocked_reason
+                .unwrap_or("reference-fallback-not-admitted"),
+        ));
+    }
+    output.push('}');
 }
 
 fn table_candidate_overlaps_source_span(candidate: &TableCandidate, span: &TextSourceSpan) -> bool {
@@ -67456,6 +76578,188 @@ fn success_data_test_title_art_horizontal_placement_svg_attrs(
     )
 }
 
+fn success_data_test_title_art_source_frame_trace_conclusion(
+    source_frame_candidate: Option<&ObjectJsfartArtFrameCandidate>,
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+    frame_ref: u32,
+) -> &'static str {
+    let Some(frame) = source_frame_candidate else {
+        return "missing-jsfart-frame-candidate";
+    };
+    let Some(record) = frame_record else {
+        return "missing-frame-record";
+    };
+    let outer_width = frame.right().saturating_sub(frame.left());
+    let outer_height = frame.bottom().saturating_sub(frame.top());
+    if u32::from(record.object_id()) == frame_ref
+        && u32::from(record.width()) == outer_width
+        && u32::from(record.height()) == outer_height
+    {
+        "frame-record-and-jsfart-outer-size-agree"
+    } else {
+        "frame-record-jsfart-outer-size-or-ref-mismatch"
+    }
+}
+
+fn push_success_data_test_title_art_source_frame_render_trace_json(
+    output: &mut String,
+    source_frame_candidate: Option<&ObjectJsfartArtFrameCandidate>,
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+    frame_ref: u32,
+    horizontal_placement: SuccessDataTestTitleArtHorizontalPlacement,
+    frame_scale_y_basis: &str,
+    frame_scale_y_source_units: u32,
+) {
+    let source_outer_width =
+        source_frame_candidate.map(|frame| frame.right().saturating_sub(frame.left()));
+    let source_outer_height =
+        source_frame_candidate.map(|frame| frame.bottom().saturating_sub(frame.top()));
+    let source_content_width = source_frame_candidate
+        .map(|frame| frame.content_right().saturating_sub(frame.content_left()));
+    let source_content_height = source_frame_candidate
+        .map(|frame| frame.content_bottom().saturating_sub(frame.content_top()));
+    let frame_record_width = frame_record.map(|record| u32::from(record.width()));
+    let frame_record_height = frame_record.map(|record| u32::from(record.height()));
+    let frame_ref_matches_object_id =
+        frame_record.is_some_and(|record| u32::from(record.object_id()) == frame_ref);
+    let outer_width_matches = source_outer_width
+        .zip(frame_record_width)
+        .is_some_and(|(source, record)| source == record);
+    let outer_height_matches = source_outer_height
+        .zip(frame_record_height)
+        .is_some_and(|(source, record)| source == record);
+    output.push_str(
+        "{\"source\":\"JSFart2Contents.frameCandidate+/Frame\",\"decoded\":false,\"sourceBacked\":",
+    );
+    output.push_str(
+        if source_frame_candidate.is_some() && frame_record.is_some() {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    output.push_str(",\"diagnosticOnly\":true,\"renderPromoted\":false");
+    output.push_str(",\"frameRef\":");
+    output.push_str(&frame_ref.to_string());
+    output.push_str(",\"frameRecordObjectId\":");
+    match frame_record {
+        Some(record) => output.push_str(&record.object_id().to_string()),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"frameRefMatchesObjectId\":");
+    output.push_str(if frame_ref_matches_object_id {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceOuterWidthUnits\":");
+    push_option_u32_json(output, source_outer_width);
+    output.push_str(",\"frameRecordWidthUnits\":");
+    push_option_u32_json(output, frame_record_width);
+    output.push_str(",\"outerWidthMatchesFrameRecord\":");
+    output.push_str(if outer_width_matches { "true" } else { "false" });
+    output.push_str(",\"sourceOuterHeightUnits\":");
+    push_option_u32_json(output, source_outer_height);
+    output.push_str(",\"frameRecordHeightUnits\":");
+    push_option_u32_json(output, frame_record_height);
+    output.push_str(",\"outerHeightMatchesFrameRecord\":");
+    output.push_str(if outer_height_matches {
+        "true"
+    } else {
+        "false"
+    });
+    output.push_str(",\"sourceContentWidthUnits\":");
+    push_option_u32_json(output, source_content_width);
+    output.push_str(",\"sourceContentHeightUnits\":");
+    push_option_u32_json(output, source_content_height);
+    output.push_str(",\"horizontalPlacementBasis\":");
+    output.push_str(&json_string(horizontal_placement.basis));
+    output.push_str(",\"selectedFrameX\":");
+    output.push_str(&format!("{:.3}", horizontal_placement.frame_x));
+    output.push_str(",\"candidateFrameX\":");
+    output.push_str(&format!("{:.3}", horizontal_placement.candidate_frame_x));
+    output.push_str(",\"frameScaleYBasis\":");
+    output.push_str(&json_string(frame_scale_y_basis));
+    output.push_str(",\"frameScaleYSourceUnits\":");
+    if frame_scale_y_source_units == 0 {
+        output.push_str("null");
+    } else {
+        output.push_str(&frame_scale_y_source_units.to_string());
+    }
+    output.push_str(",\"traceConclusion\":");
+    output.push_str(&json_string(
+        success_data_test_title_art_source_frame_trace_conclusion(
+            source_frame_candidate,
+            frame_record,
+            frame_ref,
+        ),
+    ));
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"frame-content-split-horizontal-semantics-unproven\"}",
+    );
+}
+
+fn success_data_test_title_art_source_frame_render_trace_svg_attrs(
+    source_frame_candidate: Option<&ObjectJsfartArtFrameCandidate>,
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+    frame_ref: u32,
+    horizontal_placement: SuccessDataTestTitleArtHorizontalPlacement,
+    frame_scale_y_basis: &str,
+    frame_scale_y_source_units: u32,
+) -> String {
+    let source_outer_width =
+        source_frame_candidate.map(|frame| frame.right().saturating_sub(frame.left()));
+    let source_outer_height =
+        source_frame_candidate.map(|frame| frame.bottom().saturating_sub(frame.top()));
+    let frame_record_width = frame_record.map(|record| u32::from(record.width()));
+    let frame_record_height = frame_record.map(|record| u32::from(record.height()));
+    let frame_ref_matches_object_id =
+        frame_record.is_some_and(|record| u32::from(record.object_id()) == frame_ref);
+    let outer_width_matches = source_outer_width
+        .zip(frame_record_width)
+        .is_some_and(|(source, record)| source == record);
+    let outer_height_matches = source_outer_height
+        .zip(frame_record_height)
+        .is_some_and(|(source, record)| source == record);
+    format!(
+        " data-title-source-frame-trace-source=\"JSFart2Contents.frameCandidate+/Frame\" data-title-source-frame-trace-source-backed=\"{}\" data-title-source-frame-trace-render-promoted=\"false\" data-title-source-frame-trace-frame-ref=\"{}\" data-title-source-frame-trace-frame-record-object-id=\"{}\" data-title-source-frame-trace-frame-ref-matches-object-id=\"{}\" data-title-source-frame-trace-source-outer-width-units=\"{}\" data-title-source-frame-trace-frame-record-width-units=\"{}\" data-title-source-frame-trace-outer-width-matches-frame-record=\"{}\" data-title-source-frame-trace-source-outer-height-units=\"{}\" data-title-source-frame-trace-frame-record-height-units=\"{}\" data-title-source-frame-trace-outer-height-matches-frame-record=\"{}\" data-title-source-frame-trace-horizontal-placement-basis=\"{}\" data-title-source-frame-trace-selected-frame-x=\"{:.3}\" data-title-source-frame-trace-candidate-frame-x=\"{:.3}\" data-title-source-frame-trace-frame-scale-y-basis=\"{}\" data-title-source-frame-trace-frame-scale-y-units=\"{}\" data-title-source-frame-trace-conclusion=\"{}\" data-title-source-frame-trace-render-blocked-reason=\"frame-content-split-horizontal-semantics-unproven\"",
+        source_frame_candidate.is_some() && frame_record.is_some(),
+        frame_ref,
+        frame_record
+            .map(|record| record.object_id().to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        frame_ref_matches_object_id,
+        source_outer_width
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        frame_record_width
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        outer_width_matches,
+        source_outer_height
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        frame_record_height
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        outer_height_matches,
+        escape_xml(horizontal_placement.basis),
+        horizontal_placement.frame_x,
+        horizontal_placement.candidate_frame_x,
+        escape_xml(frame_scale_y_basis),
+        if frame_scale_y_source_units == 0 {
+            "none".to_string()
+        } else {
+            frame_scale_y_source_units.to_string()
+        },
+        escape_xml(success_data_test_title_art_source_frame_trace_conclusion(
+            source_frame_candidate,
+            frame_record,
+            frame_ref,
+        ))
+    )
+}
+
 fn success_data_test_title_art_main_outline_paths(
     snapshot: &ObjectEmbeddedPressSnapshotCandidate,
 ) -> Vec<&ObjectEmbeddedPressVectorPathCandidate> {
@@ -68058,7 +77362,7 @@ mod tests {
         collections::HashSet,
         fs,
         io::{Cursor, Write},
-        path::PathBuf,
+        path::{Path, PathBuf},
     };
 
     fn running_header_svg_element(svg: &str) -> &str {
@@ -68098,6 +77402,137 @@ mod tests {
 
         assert!(!in_string, "unterminated JSON string");
         assert!(stack.is_empty(), "unclosed JSON delimiters: {stack:?}");
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum LocalSampleCapability {
+        UsesReferenceBackedColumnGridProjection,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct LocalSampleFixture {
+        file_name: &'static str,
+        capabilities: &'static [LocalSampleCapability],
+    }
+
+    const SHANAI_LAN_LOCAL_SAMPLE_CAPABILITIES: &[LocalSampleCapability] =
+        &[LocalSampleCapability::UsesReferenceBackedColumnGridProjection];
+
+    const LOCAL_SAMPLE_FIXTURES: &[LocalSampleFixture] = &[LocalSampleFixture {
+        file_name: "ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd",
+        capabilities: SHANAI_LAN_LOCAL_SAMPLE_CAPABILITIES,
+    }];
+
+    impl LocalSampleFixture {
+        fn has_capability(self, capability: LocalSampleCapability) -> bool {
+            self.capabilities.contains(&capability)
+        }
+    }
+
+    fn local_samples_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("rjtd-testdata/local-samples")
+    }
+
+    fn local_sample_fixture_for_path(path: &Path) -> Option<LocalSampleFixture> {
+        let file_name = path.file_name().and_then(|name| name.to_str())?;
+        LOCAL_SAMPLE_FIXTURES
+            .iter()
+            .copied()
+            .find(|fixture| fixture.file_name == file_name)
+    }
+
+    fn local_sample_has_capability(path: &Path, capability: LocalSampleCapability) -> bool {
+        local_sample_fixture_for_path(path)
+            .map(|fixture| fixture.has_capability(capability))
+            .unwrap_or(false)
+    }
+
+    fn test_json_string_array(values: &[&str]) -> String {
+        let mut output = String::new();
+        push_json_string_slice_array(&mut output, values);
+        output
+    }
+
+    fn tail_after_occurrence<'a>(haystack: &'a str, marker: &str, occurrence: usize) -> &'a str {
+        let mut tail = haystack;
+        for index in 0..=occurrence {
+            let Some((_, next_tail)) = tail.split_once(marker) else {
+                panic!("missing JSON marker occurrence {index} for {marker}");
+            };
+            tail = next_tail;
+        }
+        tail
+    }
+
+    fn assert_json_string_field_after(
+        haystack: &str,
+        marker: &str,
+        occurrence: usize,
+        field: &str,
+        expected: &str,
+    ) {
+        let fragment = format!("\"{field}\":{}", json_string(expected));
+        let tail = tail_after_occurrence(haystack, marker, occurrence);
+        assert!(
+            tail.contains(&fragment),
+            "missing JSON field {field}={expected:?} after marker {marker}"
+        );
+    }
+
+    fn assert_json_number_field_after(
+        haystack: &str,
+        marker: &str,
+        occurrence: usize,
+        field: &str,
+        expected: &str,
+    ) {
+        let fragment = format!("\"{field}\":{expected}");
+        let tail = tail_after_occurrence(haystack, marker, occurrence);
+        assert!(
+            tail.contains(&fragment),
+            "missing JSON field {field}={expected} after marker {marker}"
+        );
+    }
+
+    fn assert_json_bool_field_after(
+        haystack: &str,
+        marker: &str,
+        occurrence: usize,
+        field: &str,
+        expected: bool,
+    ) {
+        let fragment = format!("\"{field}\":{}", if expected { "true" } else { "false" });
+        let tail = tail_after_occurrence(haystack, marker, occurrence);
+        assert!(
+            tail.contains(&fragment),
+            "missing JSON field {field}={expected} after marker {marker}"
+        );
+    }
+
+    fn assert_json_string_array_field_after(
+        haystack: &str,
+        marker: &str,
+        occurrence: usize,
+        field: &str,
+        expected: &[&str],
+    ) {
+        let fragment = format!("\"{field}\":{}", test_json_string_array(expected));
+        let tail = tail_after_occurrence(haystack, marker, occurrence);
+        assert!(
+            tail.contains(&fragment),
+            "missing JSON string array field {field}={expected:?} after marker {marker}"
+        );
+    }
+
+    #[test]
+    fn fdm_bbox_center_handles_extreme_bounds_without_overflow() {
+        assert_eq!(
+            fdm_bbox_center((i32::MIN, i32::MIN, i32::MAX, i32::MAX)),
+            (-1, -1)
+        );
+        assert_eq!(fdm_bbox_center((-3, -3, -2, -2)), (-3, -3));
     }
 
     fn embedded_press_state_record_payload_first_words(
@@ -68872,9 +78307,7 @@ mod tests {
         sample_name: &str,
         expected_page_count: Option<u32>,
     ) {
-        let samples_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples");
+        let samples_dir = local_samples_dir();
         let sample_path = samples_dir.join(format!("{sample_name}.jtd"));
         let reference_pdf_path = samples_dir.join(format!("{sample_name}.pdf"));
         if !sample_path.exists() || !reference_pdf_path.exists() {
@@ -68986,9 +78419,7 @@ mod tests {
 
     #[test]
     fn local_a5_sample_renders_facing_page_decorations_when_reference_pdf_is_available() {
-        let samples_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples");
+        let samples_dir = local_samples_dir();
         let sample_path = samples_dir.join("a5.jtd");
         let reference_pdf_path = samples_dir.join("a5.pdf");
         if !sample_path.exists() || !reference_pdf_path.exists() {
@@ -69371,14 +78802,65 @@ mod tests {
         assert!(svg.contains("data-decoded=\"false\""));
         assert!(svg.contains("data-geometry-decoded=\"false\""));
         assert!(svg.contains("data-placement-proven=\"false\""));
-        assert!(svg.contains("data-renderable=\"true\""));
+        assert!(svg.contains("data-diagnostic-only=\"true\""));
+        assert!(svg.contains("data-diagnostic-renderable=\"true\""));
+        assert!(svg.contains("data-renderable=\"false\""));
+        assert!(svg.contains("data-source-path-candidate-present=\"true\""));
+        assert!(svg.contains("data-declared-payload-length-present=\"true\""));
+        assert!(svg.contains("data-ownership-reference-count=\"0\""));
+        assert!(svg.contains("data-ownership-evidence-ready=\"false\""));
+        assert!(svg.contains("data-frame-reference-row-count=\"0\""));
+        assert!(svg.contains("data-frame-coordinate-row-count=\"0\""));
+        assert!(svg.contains("data-frame-linked-window-row-count=\"0\""));
+        assert!(svg.contains("data-frame-geometry-candidate-present=\"false\""));
+        assert!(svg.contains("data-embedding-frame-trace-present=\"false\""));
+        assert!(svg.contains("data-source-frame-record-geometry-present=\"false\""));
+        assert!(svg.contains("data-candidate-frame-bbox-present=\"false\""));
+        assert!(svg.contains("data-candidate-frame-x=\"null\""));
+        assert!(svg.contains("data-candidate-frame-y=\"null\""));
+        assert!(svg.contains("data-candidate-frame-width=\"null\""));
+        assert!(svg.contains("data-candidate-frame-height=\"null\""));
+        assert!(svg.contains("data-payload-frame-aspect-fit-present=\"false\""));
+        assert!(svg.contains("data-payload-frame-aspect-delta-permille=\"null\""));
+        assert!(svg.contains("data-best-payload-frame-aspect-delta-permille=\"null\""));
+        assert!(svg.contains("data-current-payload-best-frame-aspect-candidate=\"false\""));
+        assert!(svg.contains(
+            "data-render-promotion-blocked-reason=\"image-payload-cross-stream-ownership-reference-missing\""
+        ));
 
         let layer_tree = core.get_page_layer_tree(0).unwrap();
         assert!(layer_tree.contains("\"type\":\"imagePayloadDiagnostic\""));
         assert!(layer_tree.contains("\"sourcePath\":\"/EmbedItems/Embedding 1/Contents\""));
         assert!(layer_tree.contains("\"projectionKind\":\"diagnosticProjection\""));
         assert!(layer_tree.contains("\"placementProven\":false"));
-        assert!(layer_tree.contains("\"renderable\":true"));
+        assert!(layer_tree.contains("\"diagnosticOnly\":true"));
+        assert!(layer_tree.contains("\"diagnosticRenderable\":true"));
+        assert!(layer_tree.contains("\"renderable\":false"));
+        assert!(layer_tree.contains("\"sourcePathCandidatePresent\":true"));
+        assert!(layer_tree.contains("\"declaredPayloadLengthPresent\":true"));
+        assert!(layer_tree.contains("\"ownershipReferenceCount\":0"));
+        assert!(layer_tree.contains("\"ownershipEvidenceReady\":false"));
+        assert!(layer_tree.contains("\"frameReferenceRowCount\":0"));
+        assert!(layer_tree.contains("\"frameCoordinateRowCount\":0"));
+        assert!(layer_tree.contains("\"frameLinkedWindowRowCount\":0"));
+        assert!(layer_tree.contains("\"frameGeometryCandidatePresent\":false"));
+        assert!(layer_tree.contains("\"embeddingFrameTracePresent\":false"));
+        assert!(layer_tree.contains("\"sourceFrameRecordGeometryPresent\":false"));
+        assert!(layer_tree.contains("\"sourceFrameTrace\":"));
+        assert!(layer_tree.contains("\"embeddingFramePresent\":false"));
+        assert!(layer_tree.contains("\"frameRecordPresent\":false"));
+        assert!(layer_tree.contains("\"frameRecordGeometry\":null"));
+        assert!(layer_tree.contains("\"candidateFrameBBox\":null"));
+        assert!(layer_tree.contains("\"payloadFrameAspectFit\":null"));
+        assert!(layer_tree.contains("\"ownershipProven\":false"));
+        assert!(layer_tree.contains("\"pageGeometryProven\":false"));
+        assert!(layer_tree.contains("\"paintOrderDecoded\":false"));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"image-payload-cross-stream-ownership-reference-missing\""
+        ));
+        assert!(layer_tree.contains("\"objectEnvelope\":{\"headerStart\":0"));
+        assert!(layer_tree.contains("\"headerFields\""));
+        assert!(layer_tree.contains("\"sourcePathCandidate\""));
         assert!(layer_tree.contains("\"decoded\":false"));
 
         let overlay_images = core.get_page_overlay_images(0).unwrap();
@@ -69386,8 +78868,132 @@ mod tests {
         assert!(overlay_images.contains("\"sourcePath\":\"/EmbedItems/Embedding 1/Contents\""));
         assert!(overlay_images.contains("\"placementProven\":false"));
         assert!(overlay_images.contains("\"geometryDecoded\":false"));
-        assert!(overlay_images.contains("\"renderable\":true"));
+        assert!(overlay_images.contains("\"diagnosticOnly\":true"));
+        assert!(overlay_images.contains("\"diagnosticRenderable\":true"));
+        assert!(overlay_images.contains("\"renderable\":false"));
+        assert!(overlay_images.contains("\"sourcePathCandidatePresent\":true"));
+        assert!(overlay_images.contains("\"declaredPayloadLengthPresent\":true"));
+        assert!(overlay_images.contains("\"ownershipReferenceCount\":0"));
+        assert!(overlay_images.contains("\"ownershipEvidenceReady\":false"));
+        assert!(overlay_images.contains("\"frameReferenceRowCount\":0"));
+        assert!(overlay_images.contains("\"frameCoordinateRowCount\":0"));
+        assert!(overlay_images.contains("\"frameLinkedWindowRowCount\":0"));
+        assert!(overlay_images.contains("\"frameGeometryCandidatePresent\":false"));
+        assert!(overlay_images.contains("\"embeddingFrameTracePresent\":false"));
+        assert!(overlay_images.contains("\"sourceFrameRecordGeometryPresent\":false"));
+        assert!(overlay_images.contains("\"sourceFrameTrace\":"));
+        assert!(overlay_images.contains("\"embeddingFramePresent\":false"));
+        assert!(overlay_images.contains("\"frameRecordPresent\":false"));
+        assert!(overlay_images.contains("\"frameRecordGeometry\":null"));
+        assert!(overlay_images.contains("\"candidateFrameBBox\":null"));
+        assert!(overlay_images.contains("\"payloadFrameAspectFit\":null"));
+        assert!(overlay_images.contains("\"ownershipProven\":false"));
+        assert!(overlay_images.contains("\"pageGeometryProven\":false"));
+        assert!(overlay_images.contains("\"paintOrderDecoded\":false"));
+        assert!(overlay_images.contains(
+            "\"renderPromotionBlockedReason\":\"image-payload-cross-stream-ownership-reference-missing\""
+        ));
+        assert!(overlay_images.contains("\"objectEnvelope\":{\"headerStart\":0"));
         assert!(overlay_images.contains("\"decoded\":false"));
+    }
+
+    #[test]
+    #[cfg(feature = "bitmap-images")]
+    fn image_payload_render_gate_preserves_source_frame_trace_without_promotion() {
+        let image_stream_path = "/EmbedItems/Embedding 24/Contents";
+        let png_payload = minimal_png_payload();
+        let (mut image_payload, _, _) = image_payload_with_header_fixture(png_payload.len());
+        image_payload.extend_from_slice(png_payload);
+
+        let mut frame = frame_stream_fixture();
+        frame[7..9].copy_from_slice(&24u16.to_be_bytes());
+        let embedding_info = embedding_info_fixture();
+        let bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (image_stream_path, &image_payload),
+            (EMBEDDING_INFO_PATH, &embedding_info),
+            ("/Frame", &frame),
+        ]);
+        let core = DocumentCore::from_bytes(&bytes).unwrap();
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+        assert!(layer_tree.contains("\"type\":\"imagePayloadDiagnostic\""));
+        assert!(layer_tree.contains("\"ownershipReferenceCount\":"));
+        assert!(layer_tree.contains("\"ownershipEvidenceReady\":true"));
+        assert!(layer_tree.contains("\"ownershipProven\":true"));
+        assert!(layer_tree.contains("\"frameReferenceRowCount\":"));
+        assert!(layer_tree.contains("\"frameCoordinateRowCount\":"));
+        assert!(layer_tree.contains("\"frameGeometryCandidatePresent\":true"));
+        assert!(layer_tree.contains("\"embeddingFrameTracePresent\":true"));
+        assert!(layer_tree.contains("\"sourceFrameRecordGeometryPresent\":true"));
+        assert!(layer_tree.contains("\"sourceFrameTrace\":"));
+        assert!(layer_tree.contains("\"ownershipEmbeddingIndex\":24"));
+        assert!(layer_tree.contains("\"embeddingFrameRef\":1"));
+        assert!(layer_tree.contains("\"frameRecordPresent\":true"));
+        assert!(layer_tree.contains("\"frameRecordGeometry\":{\"sourcePath\":\"/Frame\""));
+        assert!(layer_tree.contains("\"width\":13260"));
+        assert!(layer_tree.contains("\"height\":1327"));
+        assert!(
+            layer_tree
+                .contains("\"candidateFrameBBox\":{\"source\":\"EmbeddingInfo+/FrameRecord\"")
+        );
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"page-assignment-and-paint-order-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"payloadFrameAspectFit\":{\"source\":\"imagePayloadDimensions+/FrameRecord\""
+        ));
+        assert!(layer_tree.contains("\"payloadWidth\":1"));
+        assert!(layer_tree.contains("\"payloadHeight\":1"));
+        assert!(layer_tree.contains("\"aspectDeltaPermille\":899"));
+        assert!(layer_tree.contains("\"bestPayloadAspectDeltaPermille\":899"));
+        assert!(layer_tree.contains("\"currentPayloadBestFrameAspectCandidate\":true"));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"payload-selection-page-assignment-and-paint-order-unproven\""
+        ));
+        assert!(layer_tree.contains("\"pageGeometryProven\":false"));
+        assert!(layer_tree.contains("\"paintOrderDecoded\":false"));
+        assert!(layer_tree.contains("\"renderable\":false"));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"image-payload-frame-geometry-present-but-page-assignment-and-paint-order-unproven\""
+        ));
+
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("data-ownership-proven=\"true\""));
+        assert!(svg.contains("data-frame-reference-row-count=\""));
+        assert!(svg.contains("data-frame-coordinate-row-count=\""));
+        assert!(svg.contains("data-frame-geometry-candidate-present=\"true\""));
+        assert!(svg.contains("data-embedding-frame-trace-present=\"true\""));
+        assert!(svg.contains("data-source-frame-record-geometry-present=\"true\""));
+        assert!(svg.contains("data-candidate-frame-bbox-present=\"true\""));
+        assert!(!svg.contains("data-candidate-frame-x=\"null\""));
+        assert!(!svg.contains("data-candidate-frame-y=\"null\""));
+        assert!(!svg.contains("data-candidate-frame-width=\"null\""));
+        assert!(!svg.contains("data-candidate-frame-height=\"null\""));
+        assert!(svg.contains("data-payload-frame-aspect-fit-present=\"true\""));
+        assert!(svg.contains("data-payload-frame-aspect-delta-permille=\"899\""));
+        assert!(svg.contains("data-best-payload-frame-aspect-delta-permille=\"899\""));
+        assert!(svg.contains("data-current-payload-best-frame-aspect-candidate=\"true\""));
+        assert!(svg.contains("data-renderable=\"false\""));
+        assert!(svg.contains(
+            "data-render-promotion-blocked-reason=\"image-payload-frame-geometry-present-but-page-assignment-and-paint-order-unproven\""
+        ));
+
+        let overlay_images = core.get_page_overlay_images(0).unwrap();
+        assert!(overlay_images.contains("\"ownershipProven\":true"));
+        assert!(overlay_images.contains("\"frameGeometryCandidatePresent\":true"));
+        assert!(overlay_images.contains("\"embeddingFrameTracePresent\":true"));
+        assert!(overlay_images.contains("\"sourceFrameRecordGeometryPresent\":true"));
+        assert!(overlay_images.contains("\"frameRecordGeometry\":{\"sourcePath\":\"/Frame\""));
+        assert!(
+            overlay_images
+                .contains("\"candidateFrameBBox\":{\"source\":\"EmbeddingInfo+/FrameRecord\"")
+        );
+        assert!(overlay_images.contains(
+            "\"payloadFrameAspectFit\":{\"source\":\"imagePayloadDimensions+/FrameRecord\""
+        ));
+        assert!(overlay_images.contains("\"currentPayloadBestFrameAspectCandidate\":true"));
+        assert!(overlay_images.contains("\"renderable\":false"));
     }
 
     #[test]
@@ -69402,6 +79008,11 @@ mod tests {
         image_payload.extend_from_slice(b"SO\0\0");
         let svg_payload = b"<svg viewBox=\"0 0 10 10\"></svg>".to_vec();
         let figure_reference_payload = b"\x03\0\0\0ref\0\x03".to_vec();
+        let mut jsfart_payload = Vec::new();
+        for code_unit in "JSFART.OBJECT".encode_utf16() {
+            jsfart_payload.extend_from_slice(&code_unit.to_le_bytes());
+        }
+        jsfart_payload.extend_from_slice(&[0x11, 0x22, 0x33, 0x44]);
         let frame_suffix_row = [
             0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
         ];
@@ -69425,11 +79036,12 @@ mod tests {
             ("/Frame", &frame_payload),
             ("/Vector.svg", &svg_payload),
             ("/VisualList", b"BMDV visual payload"),
+            ("/EmbedItems/Embedding 1/JSFart2Contents", &jsfart_payload),
         ]);
 
         let document = parse_document(&bytes).unwrap();
 
-        assert_eq!(document.object_stream_candidates().len(), 6);
+        assert_eq!(document.object_stream_candidates().len(), 7);
         let image_candidate = document
             .object_stream_candidates()
             .iter()
@@ -69565,6 +79177,44 @@ mod tests {
                 .contains(&ObjectStreamCandidateReason::VisualListPath)
         );
         assert_eq!(visual_list_candidate.payload_prefix(), b"BMDV visual payl");
+
+        let jsfart_candidate = document
+            .object_stream_candidates()
+            .iter()
+            .find(|candidate| candidate.path() == "/EmbedItems/Embedding 1/JSFart2Contents")
+            .unwrap();
+        assert!(
+            jsfart_candidate
+                .reasons()
+                .contains(&ObjectStreamCandidateReason::ObjectPath)
+        );
+        assert!(jsfart_candidate.jsfart_art_candidate().is_none());
+        let jsfart_profile = jsfart_candidate
+            .jsfart_stream_profile_candidate()
+            .expect("non-MSTUDIO JSFart2Contents should still preserve a source profile");
+        assert_eq!(jsfart_profile.magic_family(), "jsfart-object-utf16le");
+        assert_eq!(jsfart_profile.magic_family_hex(), "4a00");
+        assert_eq!(jsfart_profile.magic_offset(), 0);
+        assert_eq!(jsfart_profile.magic_ascii_or_utf16_preview(), "JSFART.O");
+        assert_eq!(
+            jsfart_profile.header_prefix(),
+            &jsfart_payload[..jsfart_payload.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)]
+        );
+        assert!(!jsfart_profile.structured_art_candidate_present());
+        assert_eq!(
+            jsfart_profile.render_promotion_blocked_reason(),
+            "jsfart-variant-layout-undecoded"
+        );
+        let object_json = object_stream_candidates_json(document.object_stream_candidates());
+        assert!(object_json.contains("\"jsfartStreamProfile\":{\"format\":\"JSFart2Contents\""));
+        assert!(object_json.contains("\"magicFamily\":\"jsfart-object-utf16le\""));
+        assert!(object_json.contains("\"magicFamilyHex\":\"4a00\""));
+        assert!(object_json.contains("\"magicAsciiOrUtf16Preview\":\"JSFART.O\""));
+        assert!(object_json.contains("\"structuredArtCandidatePresent\":false"));
+        assert!(
+            object_json
+                .contains("\"renderPromotionBlockedReason\":\"jsfart-variant-layout-undecoded\"")
+        );
 
         let link_candidate = document
             .object_stream_candidates()
@@ -69735,9 +79385,7 @@ mod tests {
 
     #[test]
     fn local_tmogi3_2_projects_layout_box_text_when_reference_pdf_is_available() {
-        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples");
+        let sample_dir = local_samples_dir();
         let sample_path = sample_dir.join("ichitaro-20030120133129-0007-sp-dat-tmogi3_2.jtd");
         let reference_pdf_path =
             sample_dir.join("ichitaro-20030120133129-0007-sp-dat-tmogi3_2.pdf");
@@ -69825,9 +79473,7 @@ mod tests {
 
     #[test]
     fn local_fax02_preserves_visual_list_when_reference_pdf_is_available() {
-        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples");
+        let sample_dir = local_samples_dir();
         let sample_path = sample_dir.join("fax02.jtt");
         let reference_pdf_path = sample_dir.join("fax02.pdf");
         if !sample_path.exists() || !reference_pdf_path.exists() {
@@ -69908,9 +79554,7 @@ mod tests {
     #[test]
     fn local_success_data_test_preserves_embedding_frame_candidates_when_reference_pdf_is_available()
      {
-        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples");
+        let sample_dir = local_samples_dir();
         let sample_path =
             sample_dir.join("ichitaro-20030228030923-success-002-success_data-test.jtd");
         let reference_pdf_path =
@@ -70305,11 +79949,27 @@ mod tests {
         assert_eq!(emb4_formula.text_runs()[1].text(), "÷");
         assert_eq!(emb4_formula.text_runs()[2].text(), "３");
 
-        let title_jsfart_art = document
+        let title_jsfart_candidate = document
             .object_stream_candidates()
             .iter()
             .find(|candidate| candidate.path() == "/EmbedItems/Embedding 24/JSFart2Contents")
-            .and_then(ObjectStreamCandidate::jsfart_art_candidate)
+            .expect("Embedding 24 JSFart2Contents should be preserved as object evidence");
+        let title_jsfart_profile = title_jsfart_candidate
+            .jsfart_stream_profile_candidate()
+            .expect("Embedding 24 JSFart2Contents should expose a source stream profile");
+        assert_eq!(title_jsfart_profile.magic_family(), "mstudio-ocx-utf16le");
+        assert_eq!(title_jsfart_profile.magic_family_hex(), "4d00");
+        assert_eq!(
+            title_jsfart_profile.magic_ascii_or_utf16_preview(),
+            "MSTUDIO."
+        );
+        assert!(title_jsfart_profile.structured_art_candidate_present());
+        assert_eq!(
+            title_jsfart_profile.render_promotion_blocked_reason(),
+            "structured-jsfart-art-still-paint-authority-unproven"
+        );
+        let title_jsfart_art = title_jsfart_candidate
+            .jsfart_art_candidate()
             .expect("Embedding 24 JSFart2Contents should expose title art metadata");
         assert_eq!(title_jsfart_art.magic(), "MSTUDIO.OCX");
         assert_eq!(title_jsfart_art.width(), 13260);
@@ -70628,6 +80288,13 @@ mod tests {
         assert!(info.contains("\"embeddingIndex\":24"));
         assert!(info.contains("\"className\":\"JSFart.Art.2\""));
         assert!(info.contains("\"className\":\"JSEQ.Document.3\""));
+        assert!(info.contains("\"jsfartStreamProfile\":{\"format\":\"JSFart2Contents\""));
+        assert!(info.contains("\"magicFamily\":\"mstudio-ocx-utf16le\""));
+        assert!(info.contains("\"magicFamilyHex\":\"4d00\""));
+        assert!(info.contains("\"structuredArtCandidatePresent\":true"));
+        assert!(info.contains(
+            "\"renderPromotionBlockedReason\":\"structured-jsfart-art-still-paint-authority-unproven\""
+        ));
         assert!(info.contains("\"jsfartArt\":{\"format\":\"JSFart2Contents\""));
         assert!(info.contains("\"frameCandidate\":{\"left\":0,\"top\":0"));
         assert!(info.contains(
@@ -70673,10 +80340,141 @@ mod tests {
         assert!(info.contains(
             "\"indexRowReferenceCandidateCount\":20,\"validVectorOffsetIndexRowReferenceCount\":0"
         ));
-        assert!(info.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":20,\"referencedCommandCount\":20,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":20,\"referenceCount\":20,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":18,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allCommandsReferencedByIndexRowsCandidate\":true,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true"));
+        assert_json_string_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            0,
+            "renderOwnershipBlockedReason",
+            "mixed-raw-and-segment-cohorts",
+        );
+        assert_json_string_array_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            0,
+            "renderOwnershipBlockedReasons",
+            &["mixed-raw-and-segment-cohorts"],
+        );
+        assert_json_number_field_after(&info, "\"ownershipGate\":{", 0, "commandCount", "20");
+        assert_json_number_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            0,
+            "rawSpanCommandCount",
+            "18",
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            0,
+            "segmentBackedCommandCount",
+            "2",
+        );
+        assert_json_bool_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            0,
+            "oneToOneRowCommandReferenceCandidate",
+            true,
+        );
+        assert_json_string_field_after(
+            &info,
+            "\"offsetFieldAuthorityGate\":{",
+            0,
+            "renderPromotionBlockedReason",
+            "fdm-index-offset-field-authority-mixed-command-and-segment-fields",
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"offsetFieldAuthorityGate\":{",
+            0,
+            "commandRelativeOffsetFieldReferenceCount",
+            "18",
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"offsetFieldAuthorityGate\":{",
+            0,
+            "sourceSegmentRelativeOffsetFieldReferenceCount",
+            "2",
+        );
+        assert_json_string_field_after(
+            &info,
+            "\"rowFanoutSegmentOwnerGate\":{",
+            0,
+            "renderPromotionBlockedReason",
+            "fdm-index-row-fanout-segment-owner-offset-namespace-mixed",
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"rowFanoutSegmentOwnerGate\":{",
+            0,
+            "maxRowFanout",
+            "1",
+        );
+        assert_json_bool_field_after(
+            &info,
+            "\"rowFanoutSegmentOwnerGate\":{",
+            0,
+            "singleRowBacksMultipleCommandsCandidate",
+            false,
+        );
+        assert_json_string_field_after(
+            &info,
+            "\"primitiveOwnershipAdmissionGate\":{",
+            0,
+            "renderPromotionBlockedReason",
+            "mixed-raw-and-segment-cohorts",
+        );
+        assert_json_string_array_field_after(
+            &info,
+            "\"primitiveOwnershipAdmissionGate\":{",
+            0,
+            "renderPromotionBlockedReasons",
+            &[
+                "mixed-raw-and-segment-cohorts",
+                "fdm-index-offset-field-authority-mixed-command-and-segment-fields",
+                "fdm-index-row-fanout-segment-owner-offset-namespace-mixed",
+                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+                "fdm-index-role-valid-vector-offset-missing",
+                "role-paint-order-continuity-unproven",
+            ],
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"primitiveOwnershipAdmissionGate\":{",
+            0,
+            "rolePaintOrderBlockedGroupCount",
+            "6",
+        );
+        assert_json_string_field_after(
+            &info,
+            "\"indexRowOrderPromotionGate\":{",
+            0,
+            "renderPromotionBlockedReason",
+            "fdm-index-row-order-valid-vector-offset-missing",
+        );
+        assert_json_string_array_field_after(
+            &info,
+            "\"indexRowOrderPromotionGate\":{",
+            0,
+            "renderPromotionBlockedReasons",
+            &[
+                "fdm-index-row-order-valid-vector-offset-missing",
+                "fdm-index-row-order-offset-namespace-mixed",
+                "role-paint-order-continuity-unproven",
+            ],
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"indexRowOrderPromotionGate\":{",
+            0,
+            "uniqueRowIndexCount",
+            "20",
+        );
         assert!(info.contains("\"renderPaintOrderBasisCandidate\":\"fdm-index-row-command-pairs\",\"renderPaintOrderBasisDecoded\":false"));
         assert!(info.contains("\"roleCandidate\":\"main-circle-anchor\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":3,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":3,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[308,470,504],\"rowIndexes\":[7,12,13],\"uniqueCommandRelativeOffsetCount\":3,\"uniqueRowIndexCount\":3,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":7,\"commandRelativeOffset\":308,\"matchKind\":\"command-relative-offset-field\"}"));
-        assert!(info.contains("\"roleCandidate\":\"radial-line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":2,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[342,406],\"rowIndexes\":[8,10],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":2,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":8,\"commandRelativeOffset\":342,\"matchKind\":\"command-relative-offset-field\"},{\"rowIndex\":10,\"commandRelativeOffset\":406,\"matchKind\":\"command-relative-offset-field\"}],\"decoded\":false"));
+        assert!(info.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":308,\"commandRelativeOffsetSpanMax\":504,\"roleCommandCount\":3,\"commandCountInSpan\":7,\"interleavedNonRoleCommandCount\":4,\"hasInterleavedNonRoleCommands\":true,\"maxCommandOffsetGap\":162,\"commandOffsetContinuityScore\":0.429,\"spanContiguousCandidate\":false,\"paintOrderAuthorityPending\":false,\"continuityBlocked\":true,\"renderPromotionBlockedReason\":\"role-span-interleaved-non-role-commands\"}"));
+        assert!(info.contains("\"roleCandidate\":\"radial-line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":2,\"sourceSegmentRelativeOffsetFieldReferenceCount\":0,\"commandRelativeOffsets\":[342,406],\"rowIndexes\":[8,10],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":2,\"oneToOneRowCommandReferenceCandidate\":true,\"singleRowBacksMultipleCommandsCandidate\":false,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":8,\"commandRelativeOffset\":342,\"matchKind\":\"command-relative-offset-field\"},{\"rowIndex\":10,\"commandRelativeOffset\":406,\"matchKind\":\"command-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":"));
         assert!(info.contains("\"primitiveOwnershipComparison\":{\"basis\":\"fdmVectorCommandProvenance+sourceGeometryLocalSubdiagram\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":7,\"mainCircleAnchorCount\":1,\"lineCandidateCount\":4,\"radialLineCandidateCount\":2,\"chordCandidateCount\":2,\"arcCandidateCount\":2,\"connectorCandidateCount\":2,\"surfaceBoundaryCandidateCount\":2"));
         assert!(info.contains("\"relativeOffset\":374,\"primitiveKind\":\"polyline\",\"markerHex\":\"01000160\",\"sourceSegmentBacked\":false,\"sourceSegmentRelativeOffset\":null,\"roleCandidates\":[\"line-candidate\",\"chord-candidate\",\"connector-candidate\"]"));
         assert!(info.contains("\"indexRowReferenceCandidates\":[{\"rowIndex\":9,\"indexOffset\":218,\"vectorOffset\":3663724543,\"validVectorOffset\":false,\"offsetField\":\"bbox.left\",\"offsetValue\":374,\"matchKind\":\"command-relative-offset-field\",\"decoded\":false}]"));
@@ -70694,8 +80492,151 @@ mod tests {
         assert!(info.contains(
             "\"indexRowReferenceCandidateCount\":7,\"validVectorOffsetIndexRowReferenceCount\":0"
         ));
-        assert!(info.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":7,\"referencedCommandCount\":7,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":3,\"referenceCount\":7,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":1,\"sourceSegmentRelativeOffsetFieldReferenceCount\":6,\"allCommandsReferencedByIndexRowsCandidate\":true,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true"));
-        assert!(info.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"decoded\":false"));
+        assert_json_string_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            1,
+            "renderOwnershipBlockedReason",
+            "multi-command-single-index-row",
+        );
+        assert_json_string_array_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            1,
+            "renderOwnershipBlockedReasons",
+            &[
+                "multi-command-single-index-row",
+                "mixed-raw-and-segment-cohorts",
+                "row-command-reference-not-one-to-one",
+            ],
+        );
+        assert_json_number_field_after(&info, "\"ownershipGate\":{", 1, "commandCount", "7");
+        assert_json_number_field_after(&info, "\"ownershipGate\":{", 1, "rawSpanCommandCount", "1");
+        assert_json_number_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            1,
+            "segmentBackedCommandCount",
+            "6",
+        );
+        assert_json_bool_field_after(
+            &info,
+            "\"ownershipGate\":{",
+            1,
+            "oneToOneRowCommandReferenceCandidate",
+            false,
+        );
+        assert_json_string_field_after(
+            &info,
+            "\"offsetFieldAuthorityGate\":{",
+            1,
+            "renderPromotionBlockedReason",
+            "fdm-index-offset-field-authority-mixed-command-and-segment-fields",
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"offsetFieldAuthorityGate\":{",
+            1,
+            "commandRelativeOffsetFieldReferenceCount",
+            "1",
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"offsetFieldAuthorityGate\":{",
+            1,
+            "sourceSegmentRelativeOffsetFieldReferenceCount",
+            "6",
+        );
+        assert_json_string_field_after(
+            &info,
+            "\"rowFanoutSegmentOwnerGate\":{",
+            1,
+            "renderPromotionBlockedReason",
+            "fdm-index-row-fanout-segment-owner-multi-command-single-row",
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"rowFanoutSegmentOwnerGate\":{",
+            1,
+            "maxRowFanout",
+            "4",
+        );
+        assert_json_bool_field_after(
+            &info,
+            "\"rowFanoutSegmentOwnerGate\":{",
+            1,
+            "singleRowBacksMultipleCommandsCandidate",
+            true,
+        );
+        assert_json_string_field_after(
+            &info,
+            "\"primitiveOwnershipAdmissionGate\":{",
+            1,
+            "renderPromotionBlockedReason",
+            "multi-command-single-index-row",
+        );
+        assert_json_string_array_field_after(
+            &info,
+            "\"primitiveOwnershipAdmissionGate\":{",
+            1,
+            "renderPromotionBlockedReasons",
+            &[
+                "multi-command-single-index-row",
+                "mixed-raw-and-segment-cohorts",
+                "row-command-reference-not-one-to-one",
+                "fdm-index-offset-field-authority-mixed-command-and-segment-fields",
+                "fdm-index-row-fanout-segment-owner-multi-command-single-row",
+                "fdm-index-role-row-fanout-multi-command-single-row",
+                "fdm-index-role-vector-offset-authority-valid-vector-offset-missing",
+                "fdm-index-role-valid-vector-offset-missing",
+                "role-paint-order-continuity-unproven",
+                "role-paint-order-authority-unproven",
+            ],
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"primitiveOwnershipAdmissionGate\":{",
+            1,
+            "rolePaintOrderBlockedGroupCount",
+            "2",
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"primitiveOwnershipAdmissionGate\":{",
+            1,
+            "rolePaintOrderAuthorityPendingGroupCount",
+            "2",
+        );
+        assert_json_string_field_after(
+            &info,
+            "\"indexRowOrderPromotionGate\":{",
+            1,
+            "renderPromotionBlockedReason",
+            "fdm-index-row-order-reference-not-one-to-one",
+        );
+        assert_json_string_array_field_after(
+            &info,
+            "\"indexRowOrderPromotionGate\":{",
+            1,
+            "renderPromotionBlockedReasons",
+            &[
+                "fdm-index-row-order-reference-not-one-to-one",
+                "fdm-index-row-order-single-row-backs-multiple-commands",
+                "fdm-index-row-order-valid-vector-offset-missing",
+                "fdm-index-row-order-offset-namespace-mixed",
+                "role-paint-order-continuity-unproven",
+                "role-paint-order-authority-unproven",
+            ],
+        );
+        assert_json_number_field_after(
+            &info,
+            "\"indexRowOrderPromotionGate\":{",
+            1,
+            "uniqueRowIndexCount",
+            "3",
+        );
+        assert!(info.contains("\"roleCandidate\":\"line-candidate\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"role-candidate-and-paint-order-unproven\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"rowIndexes\":[40],\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"rowOrderMatchesCommandOrderCandidate\":true,\"rowCommandPairs\":[{\"rowIndex\":40,\"commandRelativeOffset\":1992,\"matchKind\":\"source-segment-relative-offset-field\"},{\"rowIndex\":40,\"commandRelativeOffset\":2024,\"matchKind\":\"source-segment-relative-offset-field\"}],\"roleVectorOffsetAuthorityGate\":{\"basis\":\"fdm-index-role-vector-offset-authority-gate\",\"source\":\"FDMIndex.vectorOffset+FDMIndex role offset fields\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleVectorOffsetAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-vector-offset-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-vector-offset-authority-valid-vector-offset-missing\",\"referenceCount\":2,\"validVectorOffsetReferenceCount\":0,\"invalidVectorOffsetReferenceCount\":2,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"validCommandRelativeOffsetFieldReferenceCount\":0,\"validSourceSegmentRelativeOffsetFieldReferenceCount\":0,\"invalidCommandRelativeOffsetFieldReferenceCount\":0,\"invalidSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"allValidReferencesUseCommandRelativeOffsetField\":false,\"allValidReferencesUseSourceSegmentRelativeOffsetField\":false,\"mixedOffsetNamespacesAmongValidReferences\":false,\"allReferencesHaveInvalidVectorOffset\":true},\"roleFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex role row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"roleCandidate\":\"line-candidate\",\"roleOwnershipDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-role-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-role-row-fanout-multi-command-single-row\",\"referenceCount\":2,\"uniqueCommandRelativeOffsetCount\":2,\"uniqueRowIndexCount\":1,\"commandRelativeOffsetFieldReferenceCount\":0,\"sourceSegmentRelativeOffsetFieldReferenceCount\":2,\"fanoutRowCount\":1,\"fanoutReferenceCount\":2,\"fanoutCommandRelativeOffsetFieldReferenceCount\":0,\"fanoutSourceSegmentRelativeOffsetFieldReferenceCount\":2,\"maxRowFanout\":2,\"oneToOneRowCommandReferenceCandidate\":false,\"singleRowBacksMultipleCommandsCandidate\":true,\"mixedOffsetFieldNamespaces\":false,\"fanoutRowsUseCommandRelativeOffsetFields\":false,\"fanoutRowsUseSourceSegmentOffsetFields\":true,\"rowsWithMultipleCommandRefs\":[{\"rowIndex\":40,\"commandReferenceCount\":2,\"commandRelativeOffsets\":[1992,2024],\"matchKinds\":[\"source-segment-relative-offset-field\"]}]}"));
+        assert!(info.contains("\"paintOrderContinuityProfile\":{\"basis\":\"fdm-index-row-reference-role-command-span\",\"decoded\":false,\"sourceBacked\":true,\"paintOrderDecoded\":false,\"commandRelativeOffsetSpanMin\":1992,\"commandRelativeOffsetSpanMax\":2024,\"roleCommandCount\":2,\"commandCountInSpan\":2,\"interleavedNonRoleCommandCount\":0,\"hasInterleavedNonRoleCommands\":false,\"maxCommandOffsetGap\":32,\"commandOffsetContinuityScore\":1.000,\"spanContiguousCandidate\":true,\"paintOrderAuthorityPending\":true,\"continuityBlocked\":false,\"renderPromotionBlockedReason\":\"role-paint-order-authority-unproven\"}"));
         assert!(info.contains("\"relativeOffset\":1992,\"primitiveKind\":\"polyline\",\"markerHex\":\"ff000160\",\"sourceSegmentBacked\":true,\"sourceSegmentRelativeOffset\":1864,\"roleCandidates\":[\"line-candidate\",\"connector-candidate\"]"));
         assert!(info.contains("\"indexRowReferenceCandidates\":[{\"rowIndex\":40,\"indexOffset\":900,\"vectorOffset\":3729719295,\"validVectorOffset\":false,\"offsetField\":\"bbox.left\",\"offsetValue\":1864,\"matchKind\":\"source-segment-relative-offset-field\",\"decoded\":false}]"));
         assert!(info.contains("\"primitiveKind\":\"cubicBezier\""));
@@ -70737,7 +80678,9 @@ mod tests {
         assert!(layer_tree.contains(
             "\"indexRowReferenceCandidateCount\":20,\"validVectorOffsetIndexRowReferenceCount\":0"
         ));
-        assert!(layer_tree.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":20,\"referencedCommandCount\":20,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":20,\"referenceCount\":20"));
+        assert!(layer_tree.contains("\"offsetFieldAuthorityGate\":{\"basis\":\"fdm-index-offset-field-authority-gate\",\"source\":\"FDMIndex row offset fields+FDMVector command provenance\",\"decoded\":false,\"sourceBacked\":true,\"offsetFieldAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-offset-field-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-offset-field-authority-mixed-command-and-segment-fields\",\"commandCount\":20,\"referenceCount\":20"));
+        assert!(layer_tree.contains("\"rowFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"rowFanoutDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-row-fanout-segment-owner-offset-namespace-mixed\",\"commandCount\":20,\"referenceCount\":20"));
+        assert!(layer_tree.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"fdm-index-row-order-valid-vector-offset-missing\",\"renderPromotionBlockedReasons\":[\"fdm-index-row-order-valid-vector-offset-missing\",\"fdm-index-row-order-offset-namespace-mixed\",\"role-paint-order-continuity-unproven\"],\"commandCount\":20,\"referencedCommandCount\":20,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":20,\"referenceCount\":20"));
         assert!(layer_tree.contains("\"subdiagrams\":[{\"index\":0,\"role\":\"q4-angle-diagrams\",\"groupingSource\":\"nearest-main-circle-source-center\",\"groupingDecoded\":false,\"paintOrderDecoded\":false,\"anchorRelativeOffset\":308,\"anchorSourcePoint\":{\"x\":-15184,\"y\":-9613},\"commandCount\":7,\"sourceCohort\":{\"provenance\":\"fdm-vector-command\",\"ownershipBasis\":\"fdmVectorCommandProvenance\",\"ownershipProven\":false,\"ownershipPromotionBlockedReason\":\"source-owner-candidate-unproven\""));
         assert!(layer_tree.contains("\"lineCandidateCount\":4,\"radialLineCandidateCount\":2,\"chordCandidateCount\":2,\"arcCandidateCount\":2,\"connectorCandidateCount\":2,\"surfaceBoundaryCandidateCount\":2"));
         assert!(layer_tree.contains("\"sourceVectorOffsetStart\":1830,\"sourceVectorOffsetEnd\":2190,\"commandRelativeOffsets\":[1830,1924,1958,1992,2024,2156,2190],\"sourceVectorOffsetCommandCount\":7,\"segmentBackedCommandCount\":6,\"rawSpanCommandCount\":1,\"sourceSegmentCohortCount\":2,\"sourceSegmentRelativeOffsets\":[1864,2100]"));
@@ -70745,7 +80688,9 @@ mod tests {
         assert!(layer_tree.contains(
             "\"indexRowReferenceCandidateCount\":7,\"validVectorOffsetIndexRowReferenceCount\":0"
         ));
-        assert!(layer_tree.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"primitive-role-and-paint-order-unproven\",\"commandCount\":7,\"referencedCommandCount\":7,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":3,\"referenceCount\":7"));
+        assert!(layer_tree.contains("\"offsetFieldAuthorityGate\":{\"basis\":\"fdm-index-offset-field-authority-gate\",\"source\":\"FDMIndex row offset fields+FDMVector command provenance\",\"decoded\":false,\"sourceBacked\":true,\"offsetFieldAuthorityDecoded\":false,\"renderPromotionContribution\":\"fdm-index-offset-field-authority-gate\",\"renderPromotionBlockedReason\":\"fdm-index-offset-field-authority-mixed-command-and-segment-fields\",\"commandCount\":7,\"referenceCount\":7"));
+        assert!(layer_tree.contains("\"rowFanoutSegmentOwnerGate\":{\"basis\":\"fdm-index-row-fanout-segment-owner-gate\",\"source\":\"FDMIndex row references+FDMVector source segments\",\"decoded\":false,\"sourceBacked\":true,\"rowFanoutDecoded\":false,\"segmentOwnerDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-fanout-segment-owner-gate\",\"renderPromotionBlockedReason\":\"fdm-index-row-fanout-segment-owner-multi-command-single-row\",\"commandCount\":7,\"referenceCount\":7"));
+        assert!(layer_tree.contains("\"indexRowOrderPromotionGate\":{\"basis\":\"fdm-index-row-reference-command-order\",\"decoded\":false,\"ownershipProven\":false,\"paintOrderDecoded\":false,\"renderPromotionContribution\":\"fdm-index-row-order-evidence-only\",\"renderPromotionBlockedReason\":\"fdm-index-row-order-reference-not-one-to-one\",\"renderPromotionBlockedReasons\":[\"fdm-index-row-order-reference-not-one-to-one\",\"fdm-index-row-order-single-row-backs-multiple-commands\",\"fdm-index-row-order-valid-vector-offset-missing\",\"fdm-index-row-order-offset-namespace-mixed\",\"role-paint-order-continuity-unproven\",\"role-paint-order-authority-unproven\"],\"commandCount\":7,\"referencedCommandCount\":7,\"unreferencedCommandCount\":0,\"uniqueRowIndexCount\":3,\"referenceCount\":7"));
         assert!(!layer_tree.contains("\"type\":\"pageFrameShape\""));
         assert!(!layer_tree.contains("\"role\":\"titleRoundedFrame\""));
         assert!(layer_tree.contains("\"placementMode\":\"frameRecordContentOffsetAnchor\""));
@@ -70754,6 +80699,12 @@ mod tests {
         );
         assert!(layer_tree.contains(
             "\"horizontalPlacementGate\":{\"source\":\"JSFart2Contents.frameCandidate\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":false,\"basis\":\"jsfartContentLeft\",\"frameRecordX\":80.995,\"contentLeftOnlyX\":76.687,\"frameX\":76.687,\"pathX\":76.687,\"candidateFrameX\":72.907,\"candidatePathX\":80.995,\"candidateBasis\":\"jsfartFrameOuterEdgePlusFrameRecordContentOrigin\",\"contentLeftAdjustmentCssPx\":4.309,\"strokeWidthCandidateSourceUnits\":100,\"strokeOuterAdjustmentCssPx\":3.780,\"renderPromoted\":false,\"renderPromotionBlockedReason\":\"frame-content-split-horizontal-semantics-unproven\"}"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceFrameRenderTrace\":{\"source\":\"JSFart2Contents.frameCandidate+/Frame\",\"decoded\":false,\"sourceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":false,\"frameRef\":1,\"frameRecordObjectId\":1,\"frameRefMatchesObjectId\":true,\"sourceOuterWidthUnits\":13260,\"frameRecordWidthUnits\":13260,\"outerWidthMatchesFrameRecord\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOuterHeightUnits\":1327,\"frameRecordHeightUnits\":1327,\"outerHeightMatchesFrameRecord\":true,\"sourceContentWidthUnits\":13031,\"sourceContentHeightUnits\":1054,\"horizontalPlacementBasis\":\"jsfartContentLeft\",\"selectedFrameX\":76.687,\"candidateFrameX\":72.907,\"frameScaleYBasis\":\"jsfartContentHeight\",\"frameScaleYSourceUnits\":1054,\"traceConclusion\":\"frame-record-and-jsfart-outer-size-agree\",\"renderPromotionBlockedReason\":\"frame-content-split-horizontal-semantics-unproven\""
         ));
         assert!(
             layer_tree.contains("\"contentTopAdjustment\":{\"sourceUnits\":105,\"cssPx\":4.996}")
@@ -70802,6 +80753,18 @@ mod tests {
         ));
         assert!(layer_tree.contains(
             "\"pathKindRuns\":[{\"pathKind\":\"outline\",\"startPathIndex\":0,\"endPathIndex\":10,\"pathCount\":11},{\"pathKind\":\"texture\",\"startPathIndex\":11,\"endPathIndex\":540,\"pathCount\":530},{\"pathKind\":\"outline\",\"startPathIndex\":541,\"endPathIndex\":551,\"pathCount\":11}]"
+        ));
+        assert!(layer_tree.contains(
+            "\"frontErasePaintTransitionGate\":{\"source\":\"embeddedPressVectorPathSourceOrder+stateTransitions\",\"decoded\":false,\"sourceBacked\":true,\"diagnosticOnly\":true,\"partitionPresent\":true,\"interstitialTexturePathCount\":530,\"explicitStateTexturePathCount\":11,\"inheritedTexturePathCount\":519"
+        ));
+        assert!(layer_tree.contains(
+            "\"shadowLastPathIndex\":10,\"interstitialFirstPathIndex\":11,\"interstitialLastPathIndex\":540,\"mainFirstPathIndex\":541,\"shadowToInterstitialBoundaryAdjacent\":true,\"interstitialToMainBoundaryAdjacent\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"record48SeparatesShadowFromTextureAndMain\":true,\"record48SeparatesTextureFromMain\":false,\"record70Word0SeparatesTextureFromMain\":false,\"record82Word5SeparatesTextureFromMain\":true,\"record82Word5MatchesShadow\":true,\"record82Word3IsWhitePaintCandidate\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"paintIntentInference\":\"shadow-state-texture-inside-main-boundary-ambiguous\",\"transitionBoundaryClass\":\"source-order-bracketed-interstitial-texture-block\",\"promotionReady\":false,\"renderPromotionBlockedReason\":\"front-erase-transition-boundary-main-state-not-separated\""
         ));
         assert!(layer_tree.contains(
             "\"pathIndex\":11,\"pathKind\":\"texture\",\"sourceOrderRole\":\"interstitialTextureBlock\",\"stateSourcePathIndex\":11,\"nextExplicitPathIndex\":27,\"inheritedSpanEndPathIndex\":26,\"inheritedPathCount\":16,\"inheritedTexturePathCount\":16"
@@ -70878,7 +80841,51 @@ mod tests {
             "\"frontTexturePromotionBasis\":\"source-order-interstitial-front-erase-texture\",\"frontTexturePromotionRisk\":\"source-order-texture-shares-record48-with-main-outline\""
         ));
         assert!(layer_tree.contains(
-            "\"renderPromotionBlockedReason\":\"front-erase-texture-over-main-face-semantics-unproven\",\"groups\""
+            "\"renderPromotionBlockedReason\":\"front-erase-texture-over-main-face-semantics-unproven\",\"frontEraseVisibleProbeGate\":{\"source\":\"frontEraseTextureVisibleAB+visualReview\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":false,\"currentVisiblePathCount\":0,\"allVisiblePathCount\":530,\"explicitStateVisiblePathCount\":11"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourcePaintRenderTrace\":{\"source\":\"JSFart2Contents.paintCandidateRawWords+frontFillRenderColorGate\",\"decoded\":false,\"sourceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":false,\"rawPaintCandidate\":{\"styleWord1Hex\":\"0x02141030\",\"styleWord2Hex\":\"0x02141018\",\"paintColorCandidateHex\":\"0x00ffffff\",\"paintColorCss\":\"#ffffff\",\"paintFlagCandidateHex\":\"0x00000001\",\"effectWordCandidateHex\":\"0x0000000a\"}"
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedRenderFillColor\":\"#111111\",\"selectedRenderFillSource\":\"conservative-front-fill-fallback-source-paint-mismatch\",\"selectedRenderFillSourceBacked\":false,\"sourcePaintColor\":\"#ffffff\",\"sourcePaintColorSource\":\"JSFart2Contents.paintColorCandidate\",\"sourcePaintColorMatchesRenderFill\":false,\"renderTexturePathSource\":\"source-order-interstitial-front-erase-texture\",\"renderPromotionBlockedReason\":\"front-erase-texture-over-main-face-semantics-unproven\",\"traceConclusion\":\"source-paint-present-but-render-fill-not-promoted\""
+        ));
+        let title_texture_do_not_render_chain = [
+            (
+                "source paint is present but must not promote the black front fill",
+                "\"sourcePaintRenderTrace\":{\"source\":\"JSFart2Contents.paintCandidateRawWords+frontFillRenderColorGate\",\"decoded\":false,\"sourceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":false",
+            ),
+            (
+                "source paint remains separate from the selected conservative render fill",
+                "\"selectedRenderFillColor\":\"#111111\",\"selectedRenderFillSource\":\"conservative-front-fill-fallback-source-paint-mismatch\",\"selectedRenderFillSourceBacked\":false,\"sourcePaintColor\":\"#ffffff\"",
+            ),
+            (
+                "source-order front erase remains blocked despite having texture paths",
+                "\"renderTexturePathSource\":\"source-order-interstitial-front-erase-texture\",\"renderPromotionBlockedReason\":\"front-erase-texture-over-main-face-semantics-unproven\",\"traceConclusion\":\"source-paint-present-but-render-fill-not-promoted\"",
+            ),
+            (
+                "visible front erase probe stays non-rendering even when all texture paths improve RMS",
+                "\"frontEraseVisibleProbeGate\":{\"source\":\"frontEraseTextureVisibleAB+visualReview\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":false,\"currentVisiblePathCount\":0,\"allVisiblePathCount\":530,\"explicitStateVisiblePathCount\":11",
+            ),
+            (
+                "all-visible probe is rejected as gray overpaint rather than knockout proof",
+                "\"allVisibleRmsImproves\":true,\"allVisibleVisualRejected\":true,\"allVisibleRejectedReason\":\"gray-overpaint-not-distressed-knockout\",\"explicitStateOnlyMaterialImprovement\":false,\"renderPromotionBlockedReason\":\"front-erase-visible-rms-improvement-is-not-knockout-proof\"",
+            ),
+            (
+                "texture bbox relation is evidence only, not knockout authority",
+                "\"textureContainedByMainBbox\":false,\"textureContainedByShadowBbox\":false,\"textureContainedBySideSweepBbox\":true,\"frontFaceKnockoutDecoded\":false,\"clipSemanticsDecoded\":false,\"roleConclusion\":\"texture-bbox-overlaps-main-and-shadow-outline-bboxes\",\"renderPromotionBlockedReason\":\"texture-source-bbox-relation-is-bbox-only-not-knockout-proof\"",
+            ),
+        ];
+        for (label, needle) in title_texture_do_not_render_chain {
+            assert!(
+                layer_tree.contains(needle),
+                "missing title texture do-not-render chain evidence: {label}"
+            );
+        }
+        assert!(layer_tree.contains(
+            "\"currentTitleTightRms\":76.034,\"allVisibleTitleTightRms\":67.651,\"explicitStateVisibleTitleTightRms\":76.016,\"currentTopCropRms\":51.191,\"allVisibleTopCropRms\":48.814,\"explicitStateVisibleTopCropRms\":51.186"
+        ));
+        assert!(layer_tree.contains(
+            "\"allVisibleRmsImproves\":true,\"allVisibleVisualRejected\":true,\"allVisibleRejectedReason\":\"gray-overpaint-not-distressed-knockout\",\"explicitStateOnlyMaterialImprovement\":false,\"renderPromotionBlockedReason\":\"front-erase-visible-rms-improvement-is-not-knockout-proof\""
         ));
         assert!(layer_tree.contains(
             "\"titleTexturePaintPhaseGate\":{\"source\":\"embeddedPressPathStateRecordComparison\",\"basis\":\"record46-word0-paint-phase-candidate\",\"decoded\":false,\"sourceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":false,\"visibleRenderPathCount\":0"
@@ -70931,7 +80938,7 @@ mod tests {
             "\"shadowEffectCandidate\":{\"basis\":\"record70.word0-percent-black-on-white\",\"word0\":44,\"opacity\":0.440,\"fillColor\":\"#8f8f8f\"}"
         ));
         assert!(layer_tree.contains(
-            "\"interstitialTextureEffectCandidate\":{\"basis\":\"record70.word0-percent-black-over-shadow\",\"word0\":28,\"opacity\":0.280,\"baseFillColor\":\"#8f8f8f\",\"fillColor\":\"#676767\",\"renderPromoted\":true,\"renderPromotionBlockedReason\":\"none\"}"
+            "\"interstitialTextureEffectCandidate\":{\"basis\":\"record70.word0-percent-black-over-shadow\",\"word0\":28,\"opacity\":0.280,\"baseFillColor\":\"#8f8f8f\",\"fillColor\":\"#676767\",\"renderPromoted\":false,\"renderPromotionBlockedReason\":\"record70-separates-shadow-but-not-interstitial-texture-from-main\"}"
         ));
         assert!(layer_tree.contains("\"renderPromotionBlockedReason\":\"none\""));
         assert!(layer_tree.contains(
@@ -70974,6 +80981,24 @@ mod tests {
             "{\"role\":\"mainOutlines\",\"pathKind\":\"outline\",\"pathCount\":11,\"explicitStatePathCount\":11,\"inheritedStatePathCount\":0,\"record46Word0Values\":[\"0x00\",\"0x01\"],\"record48Word0Values\":[\"0x00\"]"
         ));
         assert!(layer_tree.contains("\"extrusionTexturePathCount\":530"));
+        assert!(layer_tree.contains(
+            "\"extrusionTextureClipGate\":{\"source\":\"embeddedPressOutlineTextureOutlineClipArbitration\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":true,\"diagnosticOnly\":true,\"renderPromoted\":true,\"texturePathCount\":530,\"selectedClipSource\":\"source-shadow-outline\",\"selectedClipBasis\":\"current-renderer-shadow-outline-clip\""
+        ));
+        assert!(layer_tree.contains(
+            "\"alternativeClipSource\":\"long-shadow-side-sweep\",\"alternativeRejected\":true,\"alternativeRejectedBy\":\"historical-poppler-crop-ab\",\"alternativeRejectedReason\":\"long-shadow-side-sweep-texture-clip-worsened-title-crops\",\"frontFaceKnockoutDecoded\":false,\"clipSemanticsDecoded\":false,\"remainingBlockedReason\":\"texture-clip-and-knockout-semantics-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"titleTextureGeometryRoleGate\":{\"source\":\"embeddedPressSourceBboxRoleComparison\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":false,\"diagnosticOnly\":true,\"renderPromoted\":false,\"partitionPresent\":true,\"texturePathCount\":530,\"shadowOutlinePathCount\":11,\"mainOutlinePathCount\":11"
+        ));
+        assert!(layer_tree.contains(
+            "\"textureBbox\":{\"left\":272,\"top\":202,\"right\":13032,\"bottom\":1311},\"shadowOutlineBbox\":{\"left\":372,\"top\":302,\"right\":13032,\"bottom\":1311},\"mainOutlineBbox\":{\"left\":272,\"top\":202,\"right\":12932,\"bottom\":1211},\"sideSweepBbox\":{\"left\":272,\"top\":202,\"right\":13032,\"bottom\":1311}"
+        ));
+        assert!(layer_tree.contains(
+            "\"textureArea\":14150840,\"textureMainOverlapArea\":12773940,\"textureShadowOverlapArea\":12773940,\"textureSideSweepOverlapArea\":14150840,\"textureMainOverlapRatio\":0.903,\"textureShadowOverlapRatio\":0.903,\"textureSideSweepOverlapRatio\":1.000"
+        ));
+        assert!(layer_tree.contains(
+            "\"textureContainedByMainBbox\":false,\"textureContainedByShadowBbox\":false,\"textureContainedBySideSweepBbox\":true,\"frontFaceKnockoutDecoded\":false,\"clipSemanticsDecoded\":false,\"roleConclusion\":\"texture-bbox-overlaps-main-and-shadow-outline-bboxes\",\"renderPromotionBlockedReason\":\"texture-source-bbox-relation-is-bbox-only-not-knockout-proof\""
+        ));
         assert!(layer_tree.contains("\"extrusionTextureRecord70Word0Values\":[\"0x1c\"]"));
         assert!(layer_tree.contains("\"extrusionTextureEffectCandidateFillColor\":\"#676767\""));
         assert!(layer_tree.contains("\"extrusionTextureEffectCandidateOpacity\":0.280"));
@@ -70982,7 +81007,7 @@ mod tests {
             "\"extrusionTextureEffectCandidateSource\":\"embedded-press-interstitial-0x70-word0-percent-black-over-shadow\""
         ));
         assert!(layer_tree.contains(
-            "\"extrusionTextureEffectRenderPromoted\":true,\"extrusionTextureEffectRenderPromotionBlockedReason\":\"none\""
+            "\"extrusionTextureEffectRenderPromoted\":false,\"extrusionTextureEffectRenderPromotionBlockedReason\":\"record70-separates-shadow-but-not-interstitial-texture-from-main\""
         ));
         assert!(layer_tree.contains("\"shadowTexturePathCount\":11"));
         assert!(layer_tree.contains("\"shadowTextureWord5Values\":[\"0x2f\"]"));
@@ -71027,7 +81052,31 @@ mod tests {
         assert!(layer_tree.contains("\"words\":[\"0x1c\",\"0x10\",\"0x00\",\"0xffffff\""));
         assert!(layer_tree.contains("\"paintStateColor\":\"#ffffff\""));
         assert!(layer_tree.contains(
-            "\"frontPaintCandidate\":{\"source\":\"JSFart2Contents+EmbeddedPressPaintState\",\"decoded\":false,\"sourceBacked\":true,\"paintColor\":\"#ffffff\",\"paintColorSource\":\"JSFart2Contents.paintColorCandidate\",\"renderFillColor\":\"#111111\",\"renderFillColorSource\":\"conservative-front-fill-fallback-source-paint-mismatch\",\"renderFillColorSourceBacked\":false,\"sourcePaintColorMatchesRenderFill\":false,\"renderFillColorPromotionBlockedReason\":\"source-paint-color-does-not-match-render-fill\",\"mainStateTexturePathCount\":0,\"frontEraseTexturePathCount\":530,\"renderTexturePathSource\":\"source-order-interstitial-front-erase-texture\",\"renderPathCount\":530,\"visibleRenderPathCount\":0,\"renderClipRule\":\"nonzero\",\"renderClipRuleSource\":\"embedded-press-nonzero-winding\",\"renderClipRulePixelChange\":true,\"renderPromotionBlockedReason\":\"front-erase-texture-over-main-face-semantics-unproven\"}"
+            "\"frontPaintCandidate\":{\"source\":\"JSFart2Contents+EmbeddedPressPaintState\",\"decoded\":false,\"sourceBacked\":true,\"paintColor\":\"#ffffff\",\"paintColorSource\":\"JSFart2Contents.paintColorCandidate\",\"renderFillColor\":\"#111111\",\"renderFillColorSource\":\"conservative-front-fill-fallback-source-paint-mismatch\",\"renderFillColorSourceBacked\":false,\"sourcePaintColorMatchesRenderFill\":false,\"renderFillColorPromotionBlockedReason\":\"source-paint-color-does-not-match-render-fill\""
+        ));
+        assert!(layer_tree.contains(
+            "\"frontPaintArbitrationGate\":{\"source\":\"JSFart2Contents+EmbeddedPressPaintState+frontEraseTextureProbes\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":false,\"diagnosticOnly\":true,\"renderPromoted\":false,\"candidateCount\":4,\"selectedRenderPolicy\":\"conservative-front-fill\",\"selectedRenderFillColor\":\"#111111\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourcePaintCandidatePresent\":true,\"sourcePaintCandidateMatchesRenderFill\":false,\"directGrayCandidatePresent\":true,\"textureSourcePaintCandidatePresent\":true,\"frontEraseTextureSpanCandidatePresent\":true,\"frontEraseTextureSpanCount\":11"
+        ));
+        assert!(layer_tree.contains(
+            "\"frontEraseTransitionBoundaryClass\":\"source-order-bracketed-interstitial-texture-block\",\"frontErasePaintIntentInference\":\"shadow-state-texture-inside-main-boundary-ambiguous\""
+        ));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReasons\":[\"source-paint-color-does-not-match-render-fill\",\"front-erase-texture-over-main-face-semantics-unproven\",\"front-erase-transition-boundary-main-state-not-separated\"],\"renderPromotionBlockedReason\":\"front-paint-candidate-arbitration-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"frontFillWindingGate\":{\"source\":\"embeddedPressContourWinding+popplerTitleCropAB\",\"decoded\":false,\"sourceBacked\":true,\"referenceBacked\":true,\"diagnosticOnly\":false,\"renderPromoted\":true,\"pathCount\":11,\"multiContourPathCount\":11,\"oppositeSignedContourPathCount\":4"
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedFillRule\":\"evenodd\",\"selectedFillRuleSource\":\"embedded-press-evenodd-boundary-contours\",\"previousFillRule\":\"nonzero\",\"rejectedFillRule\":\"nonzero\",\"rejectedBy\":\"poppler-title-tight-ab\""
+        ));
+        assert!(layer_tree.contains(
+            "\"nonzeroTitleTightRms\":78.059,\"evenoddTitleTightRms\":76.034,\"rmsImprovement\":2.025,\"renderPromotionBlockedReason\":null"
+        ));
+        assert!(layer_tree.contains(
+            "\"mainStateTexturePathCount\":0,\"frontEraseTexturePathCount\":530,\"renderTexturePathSource\":\"source-order-interstitial-front-erase-texture\",\"renderPathCount\":530,\"visibleRenderPathCount\":0,\"renderClipRule\":\"nonzero\",\"renderClipRuleSource\":\"embedded-press-nonzero-winding\",\"renderClipRulePixelChange\":true,\"renderPromotionBlockedReason\":\"front-erase-texture-over-main-face-semantics-unproven\""
         ));
         assert!(layer_tree.contains("\"sourceFrameCandidate\":{\"source\":\"JSFart2Contents\""));
         assert!(layer_tree.contains("\"contentLeft\":114,\"contentTop\":105"));
@@ -71060,7 +81109,7 @@ mod tests {
         assert!(layer_tree.contains("\"fallbackTextRunAnchorCount\":11"));
         assert!(layer_tree.contains("\"textCountRangeCount\":0"));
         assert!(layer_tree.contains("\"layoutBoxPresent\":false"));
-        assert!(layer_tree.contains("\"sourceLayoutEvidencePresent\":false"));
+        assert!(layer_tree.contains("\"sourceLayoutEvidencePresent\":true"));
         assert!(layer_tree.contains("\"placementAuthority\":\"documentTextLineHeaders\""));
         assert!(layer_tree.contains("\"decodedSourcePlacementEvidence\":true"));
         assert!(layer_tree.contains("\"decodedSourcePlacementMatchCount\":15"));
@@ -71165,15 +81214,15 @@ mod tests {
             "\"columnSpanUnits\":[10,10,12,12,12],\"columnSlotWidthUnits\":[14,14,16,16,16],\"trailingSlotWidthUnits\":[12],\"xOriginInsetUnits\":2.000,\"xOriginInsetBasis\":\"uniform-intercell-gap-half\""
         ));
         assert!(layer_tree.contains(
-            "\"totalWidthSemanticsGate\":{\"source\":\"documentTextLineHeaders total-width semantics gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectedWidthUnits\":88,\"fullExtentUnits\":174,\"fullExtentTrailingUnits\":86,\"selectedEqualsFullExtent\":false,\"selectedIsSubsetOfFullExtent\":true,\"trailingHeaderIncluded\":true,\"includedTrailingHeaderCount\":1,\"trailingSlotEvidencePresent\":true,\"trailingSlotWidthUnits\":[12],\"renderWidthBasisCandidate\":\"selected-visible-range-with-trailing-header-evidence\",\"renderPromotionContribution\":\"source-total-width-semantics-gate\",\"renderPromotionBlockedReason\":\"source-total-width-semantics-unproven\"}"
+            "\"totalWidthSemanticsGate\":{\"source\":\"documentTextLineHeaders total-width semantics gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectedWidthUnits\":88,\"fullExtentUnits\":174,\"fullExtentTrailingUnits\":86,\"selectedEqualsFullExtent\":false,\"selectedIsSubsetOfFullExtent\":true,\"trailingHeaderIncluded\":true,\"includedTrailingHeaderCount\":1,\"trailingSlotEvidencePresent\":true,\"trailingSlotWidthUnits\":[12],\"selectedVisibleRangeSourceEvidenceReady\":true,\"sourcePlacementCoherenceGateRequired\":false,\"sourcePlacementCoherenceGateEvidencePresent\":true,\"sourcePlacementCoherenceGateResolved\":true,\"sourcePlacementCoherenceGateBlockedReasons\":[],\"renderPromotionNextGate\":null,\"renderWidthBasisCandidate\":\"selected-visible-range-with-trailing-header-evidence\",\"renderPromotionContribution\":\"source-total-width-semantics-gate\",\"renderPromotionBlockedReason\":null}"
         ));
         assert!(
             layer_tree.contains(
-                "\"sourceOnlyUnitTransformReady\":true,\"pageSpaceUnitScaleDecoded\":false"
+                "\"sourceOnlyUnitTransformReady\":true,\"pageSpaceUnitScaleDecoded\":true"
             )
         );
         assert!(layer_tree.contains(
-            "\"renderPromotionContribution\":\"selected-table-horizontal-unit-transform-readiness\",\"renderPromotionBlockedReason\":\"page-space-unit-scale-unproven\""
+            "\"renderPromotionContribution\":\"selected-table-horizontal-unit-transform-readiness\",\"renderPromotionBlockedReason\":null"
         ));
         assert!(layer_tree.contains(
             "\"rowHeight\":21.000,\"rowHeightBasis\":\"documentTextLineHeaderFontSizeUnits\",\"pageOriginAuthority\":\"lineMarkPageGrid\",\"anchorLineIndex\":15"
@@ -71191,7 +81240,46 @@ mod tests {
             "\"sourceDerivedLayoutCandidatePresent\":true,\"sourceDerivedLayoutRenderable\":true,\"pageOriginAuthority\":\"lineMarkPageGrid\",\"lineMarkPageOriginPresent\":true,\"lineMarkPageOriginStridePresent\":false"
         ));
         assert!(layer_tree.contains(
+            "\"sourceOnlyAxisAdmissionGate\":{\"source\":\"pageSpaceHorizontalTransformGate+sourcePageYTransformGate source-only selector coupling\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"admissionReady\":true,\"activeSourceLayoutAdmissionReady\":true,\"activeSourceLayoutAdmissionBasis\":\"source-derived-page-space-solver\",\"sourceOnlySelectorFallbackIgnoredByActiveSourceLayout\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"horizontalSelectorCandidatePresent\":false,\"horizontalSelectorInBestAgreementGroup\":false,\"horizontalCandidateCount\":5,\"horizontalAgreementGroupCount\":4,\"horizontalBestSupportCount\":2,\"horizontalUniqueBestSupported\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"ySelectorSingleSupportFallback\":true,\"ySelectorSupportFragmentedByTable\":false,\"ySelectorSupportCount\":1,\"ySelectorCrossTableSupportPresent\":false,\"ySelectorAgreementAdmissible\":false,\"ySelectorAdmissionBlockedReason\":\"none\""
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[],\"renderPromotionContribution\":\"source-only-axis-selector-admission-gate\",\"renderPromotionBlockedReason\":null"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceFrameAdmissionGate\":{\"source\":\"sourceDerivedLayoutCandidate+sourceFrameAdmission\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"promotionReady\":true,\"sourceFrameDecoded\":true,\"renderFrameBasis\":\"page-body-frame+documentTextLineHeaderUnitTransform\",\"selectedX\":78.251,\"selectedWidth\":275.063"
+        ));
+        assert!(layer_tree.contains(
+            "\"pageBodyFrameX\":72.000,\"pageBodyFrameWidth\":543.874,\"pageBodyUnitPx\":3.126,\"selectedXWithoutInset\":72.000,\"selectedXWithInset\":78.251"
+        ));
+        assert!(layer_tree.contains(
+            "\"pageMarkRawAgreementPresent\":true,\"pageMarkRawAgreementSelectedX\":171.000,\"pageMarkRawAgreementSelectedWidth\":548.000,\"pageMarkRawAgreementSupportCount\":2,\"pageMarkRawAgreementFrameBases\":[\"page-mark-word14-word21-first-slot-adjusted\",\"page-mark-word14-first-slot-word21-half-slot\"]"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceFrameVsPageMarkAgreementXResidualPx\":-92.749,\"sourceFrameVsPageMarkAgreementWidthResidualPx\":-272.937,\"pageMarkRawAgreementConflictsWithRenderFrame\":true,\"pageMarkRawAgreementRenderPromotionBlockedReason\":\"page-mark-horizontal-field-semantics-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceTopTextPlacementCoherenceMirror\":{\"source\":\"topTextTableSourceGapEvidence.sourceTablePlacementCoherenceGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"sourceTopTextPlacementEvidencePresent\":true,\"sourceTopTextPlacementReady\":true,\"readinessBlockedReasons\":[],\"renderPromotionContribution\":\"source-horizontal-frame-top-text-placement-coherence\",\"renderPromotionBlockedReason\":null}"
+        ));
+        assert!(layer_tree.contains(
             "\"sourcePageYTransformGate\":{\"source\":\"documentTextLineHeaders+/LineMark+/PageMark y-origin promotion gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"promotionReady\":true,\"lineMarkRowsExactAndContiguous\":true,\"pageOriginAuthority\":\"lineMarkPageGrid\",\"lineMarkPageOriginPresent\":true,\"lineMarkPageOriginStridePresent\":false,\"subrecordLineSpanReadinessPresent\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyPageYRenderAdmissionGate\":{\"source\":\"sourcePageYTransformGate source-only page-y render admission gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"admissionReady\":true,\"directLineMarkOriginAdmissible\":true,\"sourceLayoutCandidatePresent\":true,\"pageOriginAuthority\":\"lineMarkPageGrid\",\"lineMarkRowsExactAndContiguous\":true,\"lineMarkPageOriginPresent\":true,\"lineMarkPageOriginStridePresent\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"pageMarkAbsoluteYSlotBlockedReason\":\"page-mark-absolute-y-slot-absent\",\"pageMarkAbsoluteYSlotResidualPx\":null,\"blockedReasons\":[],\"renderPromotionContribution\":\"source-only-page-y-render-admission-gate\",\"renderPromotionBlockedReason\":null"
+        ));
+        assert!(layer_tree.contains(
+            "\"referenceFallbackAdmissionGate\":{\"source\":\"table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate\",\"diagnosticOnly\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"referenceLayoutPresent\":false,\"referenceFallbackAllowed\":false,\"referenceFallbackUsed\":false,\"sourceLayoutCandidatePresent\":true,\"sourceRenderLayoutPresent\":true,\"sourceLayoutRenderable\":true,\"sourceOnlyPageYAdmissionReady\":true,\"sourceOnlyPageYAdmissionBasis\":\"line-mark-page-grid-direct-origin\",\"sourceReplacementBlockedReason\":null,\"blockedReason\":\"active-source-layout-admission-suppresses-reference-fallback\""
         ));
         assert!(layer_tree.contains(
             "\"blockedReasons\":[],\"renderPromotionContribution\":\"source-page-y-transform-gate\",\"renderPromotionBlockedReason\":null"
@@ -71353,13 +81441,70 @@ mod tests {
             "\"anchorSourceUnitRange\":{\"start\":501,\"end\":517},\"anchorLineHeaderUnitRange\":{\"start\":487,\"end\":499},\"anchorOffsetUnits\":0,\"anchorExtentUnits\":174,\"anchorFontSizeUnits\":12"
         ));
         assert!(layer_tree.contains(
-            "\"sharedFullExtentWithTable\":true,\"sharedFontSizeWithTable\":true,\"tableCandidateUnitRange\":{\"start\":519,\"end\":924},\"firstRowUnitRange\":{\"start\":519,\"end\":655}"
+            "\"sharedFullExtentWithTable\":true,\"sharedFontSizeWithTable\":true,\"sourceTablePlacementCoherenceGate\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceTablePlacementCoherenceGate\":{\"source\":\"topTextLineHeaders+documentTextTableLineHeaders\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"candidateSourceUnitRange\":{\"start\":519,\"end\":924},\"sourceGapAfterAnchorTextUnits\":2,\"coherentWithTopTextAnchor\":true,\"sharedFullExtentWithTable\":true,\"sharedFontSizeWithTable\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"candidateWidthBasis\":\"matched-cells-plus-first-trailing-header\",\"selectedXUnitRange\":{\"start\":0,\"end\":88},\"selectedWidthUnits\":88,\"fullExtentUnits\":174,\"fullExtentTrailingAfterSelectedUnits\":86"
+        ));
+        assert!(layer_tree.contains(
+            "\"firstTrailingHeaderUnitRange\":{\"start\":76,\"end\":88},\"secondTrailingHeaderUnitRange\":{\"start\":92,\"end\":174},\"firstTrailingGapAfterMatchedCellsUnits\":4,\"secondTrailingGapAfterFirstTrailingUnits\":4"
+        ));
+        assert!(layer_tree.contains(
+            "\"visibleRangeUsesFirstTrailingHeader\":true,\"fullExtentIncludesSecondTrailingHeader\":true,\"trailingHeadersCoherent\":true,\"sourcePlacementCoherenceReady\":true,\"blockedReasons\":[],\"sourceTopTextPlacementReadinessGate\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceTopTextPlacementReadinessGate\":{\"source\":\"topTextLineHeaders+documentTextTableLineHeaders+/LineMark\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"candidateSourceUnitRange\":{\"start\":519,\"end\":924},\"anchorSelection\":\"nearest-preceding-full-width-line-header\",\"sourceGapAfterAnchorTextUnits\":2,\"coherentWithTopTextAnchor\":true,\"sharedFullExtentWithTable\":true,\"sharedFontSizeWithTable\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"candidateWidthBasis\":\"matched-cells-plus-first-trailing-header\",\"selectedXUnitRange\":{\"start\":0,\"end\":88},\"selectedWidthUnits\":88,\"fullExtentUnits\":174,\"trailingHeadersCoherent\":true,\"allRowsAgree\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"lineHeaderRowsHomogeneous\":true,\"lineMarkRowsExactAndContiguous\":true,\"sourcePlacementCoherenceReady\":true,\"sourceVisibleWidthVsFullExtentGate\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceVisibleWidthVsFullExtentGate\":{\"source\":\"documentTextLineHeaders visible-width vs full-extent gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedXUnitRange\":{\"start\":0,\"end\":88},\"selectedWidthUnits\":88,\"fullExtentUnits\":174,\"fullExtentTrailingAfterSelectedUnits\":86,\"firstTrailingHeaderUnitRange\":{\"start\":76,\"end\":88},\"secondTrailingHeaderUnitRange\":{\"start\":92,\"end\":174}"
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedClosesAtFirstTrailingHeader\":true,\"secondTrailingIsFullLineRemainder\":true,\"allRowsAgree\":true,\"lineHeaderRowsHomogeneous\":true,\"lineMarkRowsExactAndContiguous\":true,\"visibleWidthSemanticsReady\":true,\"renderPromotionContribution\":\"source-visible-width-vs-full-extent-gate\",\"renderPromotionBlockedReason\":null"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceTopTextPageGridCouplingGate\":{\"source\":\"topTextAnchor+/LineMark+/PageMark+tableLineMarkPageOrigin\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"anchorSourceGridPresent\":true,\"tableLineMarkPageOriginPresent\":true,\"anchorLineMarkRecordIndex\":15,\"firstTableLineMarkRecordIndex\":16,\"lineMarkRecordGapAfterAnchor\":1"
+        ));
+        assert!(layer_tree.contains(
+            "\"anchorPageMarkEntryIndex\":0,\"tablePageMarkEntryIndex\":0,\"samePageMarkEntry\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"expectedAdjacentRows\":true,\"sourcePageGridCouplingReady\":true,\"renderPromotionContribution\":\"source-top-text-page-grid-coupling\",\"renderPromotionBlockedReason\":null"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceTopTextPlacementReady\":true,\"readinessBlockedReasons\":[],\"renderPromotionContribution\":\"source-top-text-placement-readiness-gate\",\"renderPromotionBlockedReason\":null"
+        ));
+        assert!(layer_tree.contains(
+            "\"renderPromotionContribution\":\"source-top-text-trailing-header-placement-coherence\",\"renderPromotionBlockedReason\":null"
+        ));
+        assert!(layer_tree.contains(
+            "\"tableCandidateUnitRange\":{\"start\":519,\"end\":924},\"firstRowUnitRange\":{\"start\":519,\"end\":655}"
         ));
         assert!(layer_tree.contains(
             "\"firstRowLineHeaderUnitRange\":{\"start\":558,\"end\":570},\"firstRowLineMarkRecordIndex\":16,\"sourceGapAfterAnchorTextUnits\":2,\"sourceGapAfterAnchorLineHeaderUnits\":20"
         ));
         assert!(layer_tree.contains(
-            "\"firstRowHeaderGapAfterAnchorTextUnits\":41,\"firstRowHeaderGapAfterTableStartUnits\":39,\"renderPromotionContribution\":\"prompt-to-table-source-adjacency-evidence-only\",\"renderPromotionBlockedReason\":\"page-space-y-origin-unproven\""
+            "\"firstRowHeaderGapAfterAnchorTextUnits\":41,\"firstRowHeaderGapAfterTableStartUnits\":39,\"sourceTopTextPlacementReady\":true,\"readinessBlockedReasons\":[],\"renderPromotionContribution\":\"source-top-text-placement-readiness\",\"renderPromotionBlockedReason\":null"
         ));
         assert!(layer_tree.contains(
             "\"topTextAnchorResidualEvidence\":{\"source\":\"successDataTestTopTextProjection+documentTextLineHeaders+referenceTableBBox\",\"diagnosticOnly\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false"
@@ -71551,6 +81696,38 @@ mod tests {
             &document_with_unproven_layout,
             abc_table_with_unproven_layout
         ));
+        let unproven_core = DocumentCore::from_document(document_with_unproven_layout.clone());
+        let unproven_lines = unproven_core.page_lines(0).unwrap();
+        let unproven_page_layout = PageLayout::new(
+            SUCCESS_DATA_TEST_REFERENCE_PAGE_WIDTH_PX,
+            SUCCESS_DATA_TEST_REFERENCE_PAGE_HEIGHT_PX,
+        );
+        let abc_unproven_column_count = abc_table_with_unproven_layout
+            .column_segment_grid_candidate()
+            .unwrap()
+            .column_count();
+        let source_unproven_layout = source_derived_table_grid_overlay_layout(
+            unproven_page_layout,
+            &document_with_unproven_layout,
+            unproven_lines,
+            0,
+            abc_table_with_unproven_layout,
+            abc_unproven_column_count,
+        )
+        .unwrap();
+        let fallback_unproven_layout = table_grid_overlay_layout(
+            unproven_page_layout,
+            &document_with_unproven_layout,
+            unproven_lines,
+            0,
+            abc_table_with_unproven_layout,
+            abc_unproven_column_count,
+        );
+        assert!((fallback_unproven_layout.0 - source_unproven_layout.x).abs() < 0.001);
+        assert!((fallback_unproven_layout.1 - source_unproven_layout.y).abs() < 0.001);
+        assert!((fallback_unproven_layout.2 - source_unproven_layout.width).abs() < 0.001);
+        assert!((fallback_unproven_layout.3 - source_unproven_layout.row_height).abs() < 0.001);
+        assert!((fallback_unproven_layout.4 - source_unproven_layout.column_width).abs() < 0.001);
         assert!(layer_tree.contains("\"projectionKind\":\"successDataTestTopTextProjection\""));
         assert!(layer_tree.contains("\"role\":\"question-heading\""));
         assert!(layer_tree.contains("\"text\":\"２，下の表は、ｃが斜辺の直角三角形で３辺ａ、ｂ、ｃの長さの関係を表したものである。\""));
@@ -71666,6 +81843,9 @@ mod tests {
         assert!(layer_tree.contains(
             "\"cellTextFontWeight\":\"400\",\"cellTextFontWeightBasis\":\"regularTableCellFallbackNoBoldEvidence\""
         ));
+        assert!(layer_tree.contains(
+            "\"cellTextFontSize\":13.300,\"cellTextFontSizeBasis\":\"documentTextLineHeaderFontSizeUnitsScaledToAppFont\""
+        ));
         assert!(
             layer_tree.contains(
                 "\"lineHeaderEvidence\":{\"source\":\"/DocumentText\",\"present\":false}"
@@ -71693,6 +81873,11 @@ mod tests {
         assert!(svg.contains("表したものである。</text>"));
         assert!(svg.contains("class=\"rjtd-column-grid-candidate\""));
         assert!(svg.contains("data-projection-kind=\"tableProjection\""));
+        assert!(svg.contains("data-reference-fallback-admitted=\"false\""));
+        assert!(svg.contains("data-reference-fallback-used=\"false\""));
+        assert!(svg.contains(
+            "data-reference-fallback-blocked-reason=\"active-source-layout-admission-suppresses-reference-fallback\""
+        ));
         assert!(svg.contains("data-source-derived-layout-candidate=\"true\""));
         assert!(svg.contains("data-source-derived-layout-reference-backed=\"false\""));
         assert!(svg.contains("data-column-width-basis=\"documentTextLineHeaderCellSlotUnits\""));
@@ -71714,6 +81899,10 @@ mod tests {
         assert!(svg.contains("data-cell-text-font-weight=\"400\""));
         assert!(svg.contains(
             "data-cell-text-font-weight-basis=\"regularTableCellFallbackNoBoldEvidence\""
+        ));
+        assert!(svg.contains("data-cell-text-font-size=\"13.300\""));
+        assert!(svg.contains(
+            "data-cell-text-font-size-basis=\"documentTextLineHeaderFontSizeUnitsScaledToAppFont\""
         ));
         assert!(svg.contains("data-decoded-source-placement-evidence=\"true\""));
         assert!(svg.contains("data-col-count-candidate=\"5\""));
@@ -71745,6 +81934,43 @@ mod tests {
         ));
         assert!(svg.contains("data-horizontal-stroke-width-source-units=\"100\""));
         assert!(svg.contains("data-horizontal-stroke-outer-adjustment-css-px=\"3.780\""));
+        assert!(svg.contains(
+            "data-title-source-frame-trace-source=\"JSFart2Contents.frameCandidate+/Frame\""
+        ));
+        assert!(svg.contains("data-title-source-frame-trace-source-backed=\"true\""));
+        assert!(svg.contains("data-title-source-frame-trace-render-promoted=\"false\""));
+        assert!(svg.contains("data-title-source-frame-trace-frame-ref=\"1\""));
+        assert!(svg.contains("data-title-source-frame-trace-frame-record-object-id=\"1\""));
+        assert!(svg.contains("data-title-source-frame-trace-frame-ref-matches-object-id=\"true\""));
+        assert!(svg.contains("data-title-source-frame-trace-source-outer-width-units=\"13260\""));
+        assert!(svg.contains("data-title-source-frame-trace-frame-record-width-units=\"13260\""));
+        assert!(
+            svg.contains("data-title-source-frame-trace-outer-width-matches-frame-record=\"true\"")
+        );
+        assert!(svg.contains("data-title-source-frame-trace-source-outer-height-units=\"1327\""));
+        assert!(svg.contains("data-title-source-frame-trace-frame-record-height-units=\"1327\""));
+        assert!(
+            svg.contains(
+                "data-title-source-frame-trace-outer-height-matches-frame-record=\"true\""
+            )
+        );
+        assert!(svg.contains(
+            "data-title-source-frame-trace-horizontal-placement-basis=\"jsfartContentLeft\""
+        ));
+        assert!(svg.contains("data-title-source-frame-trace-selected-frame-x=\"76.687\""));
+        assert!(svg.contains("data-title-source-frame-trace-candidate-frame-x=\"72.907\""));
+        assert!(
+            svg.contains(
+                "data-title-source-frame-trace-frame-scale-y-basis=\"jsfartContentHeight\""
+            )
+        );
+        assert!(svg.contains("data-title-source-frame-trace-frame-scale-y-units=\"1054\""));
+        assert!(svg.contains(
+            "data-title-source-frame-trace-conclusion=\"frame-record-and-jsfart-outer-size-agree\""
+        ));
+        assert!(svg.contains(
+            "data-title-source-frame-trace-render-blocked-reason=\"frame-content-split-horizontal-semantics-unproven\""
+        ));
         assert!(svg.contains("data-embedding-index=\"24\""));
         assert!(svg.contains("data-class-name=\"JSFart.Art.2\""));
         assert!(svg.contains("data-frame-ref=\"1\""));
@@ -72082,9 +82308,46 @@ mod tests {
             "data-title-texture-path-source=\"interstitial-between-shadow-and-main-outlines\""
         ));
         assert!(svg.contains("data-title-texture-clip-source=\"source-shadow-outline\""));
+        assert!(svg.contains(
+            "data-title-texture-clip-gate-source=\"embeddedPressOutlineTextureOutlineClipArbitration\""
+        ));
+        assert!(svg.contains("data-title-texture-clip-gate-reference-backed=\"true\""));
+        assert!(svg.contains("data-title-texture-clip-gate-render-promoted=\"true\""));
+        assert!(svg.contains("data-title-texture-clip-gate-path-count=\"530\""));
+        assert!(svg.contains("data-title-texture-selected-clip-source=\"source-shadow-outline\""));
+        assert!(
+            svg.contains("data-title-texture-alternative-clip-source=\"long-shadow-side-sweep\"")
+        );
+        assert!(svg.contains("data-title-texture-alternative-clip-rejected=\"true\""));
+        assert!(svg.contains(
+            "data-title-texture-alternative-clip-rejected-reason=\"long-shadow-side-sweep-texture-clip-worsened-title-crops\""
+        ));
+        assert!(svg.contains("data-title-texture-front-face-knockout-decoded=\"false\""));
+        assert!(svg.contains("data-title-texture-clip-semantics-decoded=\"false\""));
+        assert!(svg.contains(
+            "data-title-texture-clip-semantics-blocked-reason=\"texture-clip-and-knockout-semantics-unproven\""
+        ));
+        assert!(svg.contains(
+            "data-title-texture-geometry-role-gate-source=\"embeddedPressSourceBboxRoleComparison\""
+        ));
+        assert!(svg.contains("data-title-texture-geometry-role-gate-source-backed=\"true\""));
+        assert!(svg.contains("data-title-texture-geometry-role-gate-reference-backed=\"false\""));
+        assert!(svg.contains("data-title-texture-geometry-role-gate-render-promoted=\"false\""));
+        assert!(svg.contains(
+            "data-title-texture-geometry-role-conclusion=\"texture-bbox-overlaps-main-and-shadow-outline-bboxes\""
+        ));
+        assert!(svg.contains(
+            "data-title-texture-geometry-role-blocked-reason=\"texture-source-bbox-relation-is-bbox-only-not-knockout-proof\""
+        ));
+        assert!(svg.contains("data-title-texture-geometry-main-overlap-ratio=\"0.903\""));
+        assert!(svg.contains("data-title-texture-geometry-shadow-overlap-ratio=\"0.903\""));
+        assert!(svg.contains("data-title-texture-geometry-side-sweep-overlap-ratio=\"1.000\""));
+        assert!(svg.contains("data-title-texture-geometry-contained-by-main-bbox=\"false\""));
+        assert!(svg.contains("data-title-texture-geometry-contained-by-shadow-bbox=\"false\""));
+        assert!(svg.contains("data-title-texture-geometry-contained-by-side-sweep-bbox=\"true\""));
         assert!(svg.contains("data-title-texture-source=\"embedded-press-texture-bezier-flags-1-filled-source-paths\""));
         assert!(svg.contains("data-title-texture-rendering=\"filled-source-paths\""));
-        assert!(svg.contains("data-title-texture-render-fill=\"#676767\""));
+        assert!(svg.contains("data-title-texture-render-fill=\"#111111\""));
         assert!(svg.contains("data-title-texture-effect-candidate-opacity=\"0.280\""));
         assert!(svg.contains("data-title-texture-effect-candidate-word0=\"0x1c\""));
         assert!(svg.contains("data-title-texture-effect-candidate-base-fill=\"#8f8f8f\""));
@@ -72093,7 +82356,7 @@ mod tests {
             "data-title-texture-effect-candidate-source=\"embedded-press-interstitial-0x70-word0-percent-black-over-shadow\""
         ));
         assert!(svg.contains(
-            "data-title-texture-effect-render-promoted=\"true\" data-title-texture-effect-render-promotion-blocked-reason=\"none\""
+            "data-title-texture-effect-render-promoted=\"false\" data-title-texture-effect-render-promotion-blocked-reason=\"record70-separates-shadow-but-not-interstitial-texture-from-main\""
         ));
         assert!(svg.contains("data-texture-path-count=\"530\""));
         assert!(svg.contains("data-title-effective-shadow-texture-path-count=\"530\""));
@@ -72114,7 +82377,28 @@ mod tests {
         assert!(svg.contains("class=\"rjtd-success-data-test-title-art-path\""));
         assert!(svg.contains("data-title-layer=\"front-fill\""));
         assert!(svg.contains("data-title-fill-source=\"raw-embedded-press-path\""));
-        assert!(svg.contains("data-title-fill-rule-source=\"embedded-press-nonzero-winding\""));
+        assert!(
+            svg.contains(
+                "data-title-fill-rule-source=\"embedded-press-evenodd-boundary-contours\""
+            )
+        );
+        assert!(svg.contains(
+            "data-title-front-fill-winding-gate-source=\"embeddedPressContourWinding+popplerTitleCropAB\""
+        ));
+        assert!(svg.contains("data-title-front-fill-winding-source-backed=\"true\""));
+        assert!(svg.contains("data-title-front-fill-winding-reference-backed=\"true\""));
+        assert!(svg.contains("data-title-front-fill-winding-render-promoted=\"true\""));
+        assert!(svg.contains("data-title-front-fill-selected-rule=\"evenodd\""));
+        assert!(svg.contains(
+            "data-title-front-fill-selected-rule-source=\"embedded-press-evenodd-boundary-contours\""
+        ));
+        assert!(svg.contains("data-title-front-fill-previous-rule=\"nonzero\""));
+        assert!(svg.contains("data-title-front-fill-path-count=\"11\""));
+        assert!(svg.contains("data-title-front-fill-multi-contour-path-count=\"11\""));
+        assert!(svg.contains("data-title-front-fill-opposite-signed-contour-path-count=\"4\""));
+        assert!(svg.contains("data-title-front-fill-nonzero-title-tight-rms=\"78.059\""));
+        assert!(svg.contains("data-title-front-fill-evenodd-title-tight-rms=\"76.034\""));
+        assert!(svg.contains("data-title-front-fill-rms-improvement=\"2.025\""));
         assert!(svg.contains("data-title-front-fill-render-color=\"#111111\""));
         assert!(svg.contains(
             "data-title-front-fill-render-color-source=\"conservative-front-fill-fallback-source-paint-mismatch\""
@@ -72125,6 +82409,63 @@ mod tests {
         );
         assert!(svg.contains(
             "data-title-front-fill-render-color-promotion-blocked-reason=\"source-paint-color-does-not-match-render-fill\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-paint-source-trace-source=\"JSFart2Contents.paintCandidateRawWords+frontFillRenderColorGate\""
+        ));
+        assert!(svg.contains("data-title-front-paint-source-trace-source-backed=\"true\""));
+        assert!(svg.contains("data-title-front-paint-source-trace-render-promoted=\"false\""));
+        assert!(svg.contains("data-title-front-paint-source-trace-style-word1=\"0x02141030\""));
+        assert!(svg.contains("data-title-front-paint-source-trace-style-word2=\"0x02141018\""));
+        assert!(svg.contains("data-title-front-paint-source-trace-paint-color=\"0x00ffffff\""));
+        assert!(svg.contains("data-title-front-paint-source-trace-paint-color-css=\"#ffffff\""));
+        assert!(svg.contains("data-title-front-paint-source-trace-paint-flag=\"0x00000001\""));
+        assert!(svg.contains("data-title-front-paint-source-trace-effect-word=\"0x0000000a\""));
+        assert!(svg.contains("data-title-front-paint-source-trace-selected-fill=\"#111111\""));
+        assert!(
+            svg.contains(
+                "data-title-front-paint-source-trace-source-paint-matches-render=\"false\""
+            )
+        );
+        assert!(svg.contains(
+            "data-title-front-paint-source-trace-render-texture-path-source=\"source-order-interstitial-front-erase-texture\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-paint-source-trace-render-blocked-reason=\"front-erase-texture-over-main-face-semantics-unproven\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-paint-source-trace-conclusion=\"source-paint-present-but-render-fill-not-promoted\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-paint-arbitration-source=\"JSFart2Contents+EmbeddedPressPaintState+frontEraseTextureProbes\""
+        ));
+        assert!(
+            svg.contains("data-title-front-paint-arbitration-policy=\"conservative-front-fill\"")
+        );
+        assert!(svg.contains("data-title-front-paint-arbitration-candidate-count=\"4\""));
+        assert!(svg.contains("data-title-front-paint-arbitration-selected-fill=\"#111111\""));
+        assert!(svg.contains("data-title-front-paint-arbitration-source-paint-present=\"true\""));
+        assert!(
+            svg.contains(
+                "data-title-front-paint-arbitration-source-paint-matches-render=\"false\""
+            )
+        );
+        assert!(svg.contains("data-title-front-paint-arbitration-direct-gray-present=\"true\""));
+        assert!(
+            svg.contains(
+                "data-title-front-paint-arbitration-texture-source-paint-present=\"true\""
+            )
+        );
+        assert!(svg.contains("data-title-front-paint-arbitration-span-candidate-present=\"true\""));
+        assert!(svg.contains("data-title-front-paint-arbitration-span-count=\"11\""));
+        assert!(svg.contains(
+            "data-title-front-paint-arbitration-transition-boundary=\"source-order-bracketed-interstitial-texture-block\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-paint-arbitration-paint-intent=\"shadow-state-texture-inside-main-boundary-ambiguous\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-paint-arbitration-blocked-reason=\"front-paint-candidate-arbitration-unproven\""
         ));
         assert!(!svg.contains("temporary-front-fill-pending-source-paint-role"));
         assert!(svg.contains("data-title-front-paint-candidate-source-backed=\"true\""));
@@ -72142,9 +82483,29 @@ mod tests {
         assert!(svg.contains(
             "data-title-front-paint-render-promotion-blocked-reason=\"front-erase-texture-over-main-face-semantics-unproven\""
         ));
+        assert!(svg.contains(
+            "data-title-front-erase-visible-probe-source=\"frontEraseTextureVisibleAB+visualReview\""
+        ));
+        assert!(svg.contains("data-title-front-erase-visible-probe-source-backed=\"true\""));
+        assert!(svg.contains("data-title-front-erase-visible-probe-reference-backed=\"true\""));
+        assert!(svg.contains("data-title-front-erase-visible-probe-render-promoted=\"false\""));
+        assert!(svg.contains("data-title-front-erase-current-visible-path-count=\"0\""));
+        assert!(svg.contains("data-title-front-erase-all-visible-path-count=\"530\""));
+        assert!(svg.contains("data-title-front-erase-explicit-state-visible-path-count=\"11\""));
+        assert!(svg.contains("data-title-front-erase-current-title-tight-rms=\"76.034\""));
+        assert!(svg.contains("data-title-front-erase-all-visible-title-tight-rms=\"67.651\""));
+        assert!(svg.contains("data-title-front-erase-explicit-state-title-tight-rms=\"76.016\""));
+        assert!(svg.contains("data-title-front-erase-all-visible-visual-rejected=\"true\""));
+        assert!(svg.contains(
+            "data-title-front-erase-all-visible-rejected-reason=\"gray-overpaint-not-distressed-knockout\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-erase-render-promotion-blocked-reason=\"front-erase-visible-rms-improvement-is-not-knockout-proof\""
+        ));
         assert!(svg.contains("fill-rule=\"nonzero\""));
         assert!(svg.contains("clip-rule=\"nonzero\""));
         assert!(svg.contains("data-title-clip-rule-source=\"embedded-press-nonzero-winding\""));
+        assert!(svg.contains("fill-rule=\"evenodd\""));
         assert!(!svg.contains("clip-rule=\"evenodd\""));
         assert!(!svg.contains("data-title-layer=\"hatch-texture\""));
         assert!(svg.contains("stroke=\"#111111\""));
@@ -72211,6 +82572,32 @@ mod tests {
             "data-title-texture-span-render-promotion-blocked-reason=\"span-density-and-clip-semantics-unproven\""
         ));
         assert!(svg.contains(
+            "data-title-front-erase-transition-gate=\"embeddedPressVectorPathSourceOrder+stateTransitions\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-erase-transition-boundary-class=\"source-order-bracketed-interstitial-texture-block\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-erase-paint-intent-inference=\"shadow-state-texture-inside-main-boundary-ambiguous\""
+        ));
+        assert!(svg.contains("data-title-front-erase-transition-promotion-ready=\"false\""));
+        assert!(svg.contains(
+            "data-title-front-erase-transition-blocked-reason=\"front-erase-transition-boundary-main-state-not-separated\""
+        ));
+        assert!(
+            svg.contains("data-title-front-erase-record48-separates-texture-from-main=\"false\"")
+        );
+        assert!(svg.contains(
+            "data-title-front-erase-record70-word0-separates-texture-from-main=\"false\""
+        ));
+        assert!(svg.contains(
+            "data-title-front-erase-record82-word5-separates-texture-from-main=\"true\""
+        ));
+        assert!(svg.contains("data-title-front-erase-record82-word5-matches-shadow=\"true\""));
+        assert!(
+            svg.contains("data-title-front-erase-record82-word3-white-paint-candidate=\"true\"")
+        );
+        assert!(svg.contains(
             "data-title-texture-direct-gray-candidate-source=\"embeddedPressRecord82Word5DirectGrayProbe\""
         ));
         assert!(svg.contains("data-title-texture-direct-gray-candidate-word5=\"0x2f\""));
@@ -72261,6 +82648,7 @@ mod tests {
         assert!(svg.contains(
             "data-index-row-order-basis=\"fdm-index-row-reference-command-order\" data-index-row-order-decoded=\"false\" data-index-row-order-ownership-proven=\"false\" data-index-row-order-paint-order-decoded=\"false\""
         ));
+        assert!(svg.contains("data-index-row-order-render-promotion-blocked-reason=\"fdm-index-row-order-valid-vector-offset-missing\" data-index-row-order-render-promotion-blocked-reasons=\"fdm-index-row-order-valid-vector-offset-missing,fdm-index-row-order-offset-namespace-mixed,role-paint-order-continuity-unproven\""));
         assert!(svg.contains(
             "data-index-row-order-command-count=\"20\" data-index-row-order-referenced-command-count=\"20\" data-index-row-order-unreferenced-command-count=\"0\" data-index-row-order-unique-row-index-count=\"20\" data-index-row-order-reference-count=\"20\""
         ));
@@ -72553,6 +82941,12 @@ mod tests {
         assert!(layer_tree.contains("\"referenceBacked\":true"));
         assert!(layer_tree.contains("\"placementProven\":false"));
         assert!(layer_tree.contains("\"renderable\":false"));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"fdm-frame-linked-image-payload-placement-and-paint-order-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"imagePayloadExtractionStatus\":\"complete-payload-in-fdm-index-segment\""
+        ));
         assert!(layer_tree.contains("\"rowIndex\":23"));
         assert!(layer_tree.contains("\"objectTypeHex\":\"0x0003\""));
         assert!(layer_tree.contains("\"bbox\":{\"x\":601.469,\"y\":402.000,\"width\":93.252"));
@@ -72563,6 +82957,12 @@ mod tests {
         let svg = core.render_page_svg(0).unwrap();
         assert!(svg.contains("class=\"rjtd-fdm-frame-diagnostics\""));
         assert!(svg.contains("data-projection=\"fdmFrameDiagnosticProjection\""));
+        assert!(svg.contains(
+            "data-image-payload-extraction-status=\"complete-payload-in-fdm-index-segment\""
+        ));
+        assert!(
+            svg.contains("data-render-promotion-blocked-reason=\"fdm-frame-linked-image-payload-placement-and-paint-order-unproven\"")
+        );
         assert!(svg.contains("data-row-index=\"23\""));
         assert!(svg.contains("data-row-index=\"33\""));
         assert!(svg.contains("FDM row 23"));
@@ -72571,9 +82971,8 @@ mod tests {
 
     #[test]
     fn local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available() {
-        let sample_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples/ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd");
+        let sample_path = local_samples_dir()
+            .join("ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd");
         let reference_pdf_path = sample_path.with_extension("pdf");
         if !sample_path.exists() || !reference_pdf_path.exists() {
             return;
@@ -72620,6 +83019,14 @@ mod tests {
         assert!(layer_tree.contains("\"referenceBacked\":true"));
         assert!(layer_tree.contains("\"placementProven\":false"));
         assert!(layer_tree.contains("\"renderable\":false"));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"image-signature-without-complete-payload-role-unproven\""
+        ));
+        assert!(
+            layer_tree.contains(
+                "\"imagePayloadExtractionStatus\":\"signature-without-complete-payload\""
+            )
+        );
         assert!(layer_tree.contains("\"rowIndex\":23"));
         assert!(layer_tree.contains("\"rowIndex\":33"));
         assert!(layer_tree.contains("\"objectTypeHex\":\"0x0003\""));
@@ -72638,6 +83045,35 @@ mod tests {
                 .count(),
             1889
         );
+        assert_eq!(
+            layer_tree
+                .matches("\"type\":\"fdmProjectionExtentSummary\"")
+                .count(),
+            1
+        );
+        assert!(layer_tree.contains("\"projectionKind\":\"fdmProjectionExtentSummary\""));
+        assert!(layer_tree.contains("\"activeRenderExtentBasis\":\"fdmVectorCommandBboxExtent\""));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"fdm-vector-page-placement-transform-source-fields-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"commandDiagnosticCount\":334,\"renderedPrimitiveDiagnosticCount\":1889,\"fdmIndexEntryCount\":39"
+        ));
+        assert!(layer_tree.contains(
+            "\"activeCommandExtent\":{\"left\":-16154,\"top\":-16224,\"right\":-5612,\"bottom\":-9344,\"spanX\":10542,\"spanY\":6880}"
+        ));
+        assert!(layer_tree.contains(
+            "\"renderedPrimitiveExtent\":{\"left\":-16154,\"top\":-16224,\"right\":-5453,\"bottom\":-9344,\"spanX\":10701,\"spanY\":6880}"
+        ));
+        assert!(layer_tree.contains(
+            "\"fdmIndexEntryExtent\":{\"left\":-16154,\"top\":-16224,\"right\":-5576,\"bottom\":-9336,\"spanX\":10578,\"spanY\":6888}"
+        ));
+        assert!(layer_tree.contains(
+            "\"extentAgreement\":{\"commandMatchesRenderedPrimitives\":false,\"commandMatchesFdmIndexEntries\":false,\"renderedPrimitivesMatchFdmIndexEntries\":false}"
+        ));
+        assert!(layer_tree.contains(
+            "\"extentResiduals\":{\"commandVsRenderedPrimitives\":{\"leftDelta\":0,\"topDelta\":0,\"rightDelta\":159,\"bottomDelta\":0,\"maxAbsDelta\":159},\"commandVsFdmIndexEntries\":{\"leftDelta\":0,\"topDelta\":0,\"rightDelta\":36,\"bottomDelta\":8,\"maxAbsDelta\":36},\"renderedPrimitivesVsFdmIndexEntries\":{\"leftDelta\":0,\"topDelta\":0,\"rightDelta\":-123,\"bottomDelta\":8,\"maxAbsDelta\":123}}"
+        ));
         assert!(
             layer_tree
                 .matches("\"type\":\"fdmConnectorCandidateDiagnostic\"")
@@ -72860,9 +83296,11 @@ mod tests {
         assert!(layer_tree.contains("\"imageBearingCompletePayloadSegmentCount\":0"));
         assert!(layer_tree.contains("\"imageBearingSignatureWithoutPayloadSegmentCount\":5"));
         assert!(layer_tree.contains("\"parentNormalizedOrderedSameRowSameConnectorCount\":0"));
-        assert!(layer_tree.contains("\"bboxRelationCounts\":{"));
         assert!(layer_tree.contains(
-            "\"imageBearingBboxRelationCounts\":{\"contained\":0,\"overlaps\":0,\"disjoint\":5,\"missing\":0}"
+            "\"bboxRelationCounts\":{\"contained\":16,\"overlaps\":0,\"disjoint\":0,\"missing\":0}"
+        ));
+        assert!(layer_tree.contains(
+            "\"imageBearingBboxRelationCounts\":{\"contained\":5,\"overlaps\":0,\"disjoint\":0,\"missing\":0}"
         ));
         assert!(layer_tree.contains(
             "\"sameRowFdmOpenStrokeAxisRuleConnectorOrderTraceSummary\":{\"basis\":\"sameRowFdmOpenStrokeAxisRuleConnectorOrderTrace+relationCounts\""
@@ -72894,6 +83332,16 @@ mod tests {
         assert!(layer_tree.contains(
             "\"imageBearingSegmentGate\":{\"basis\":\"FDMIndex.imageSignature+FDMVector.connectorBbox+sameRowAxisRuleParentSpan\""
         ));
+        assert!(layer_tree.contains(
+            "\"imageBearingSegmentGate\":{\"basis\":\"FDMIndex.imageSignature+FDMVector.connectorBbox+sameRowAxisRuleParentSpan\",\"source\":\"FDMIndex.segmentImageSignatures+FDMVector.commandSourceBbox\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"image-signature-without-complete-payload-role-unproven\",\"imageBearingSegmentCandidate\":true,\"connectorParent\":{\"commandIndex\":"
+        ));
+        assert!(layer_tree.contains("\"axisRuleParentRelativeOffsetRange\":"));
+        assert!(layer_tree.contains("\"endpointOwnerParentRelativeOffsetRange\":"));
+        assert!(
+            layer_tree
+                .contains("\"endpointOwnerParentRelations\":{\"connectorVsOwnerParentSpan\":")
+        );
+        assert!(layer_tree.contains("\"endpointOwnerParentRelationToAxisRuleParentSpan\":"));
         assert!(layer_tree.contains("\"segmentImageSignatureCommandContexts\":["));
         assert!(layer_tree.contains(
             "{\"kind\":\"jpeg\",\"offset\":2453,\"relationToTraceConnectorCommand\":\"before-command-record\",\"containingCommandCount\":2"
@@ -72969,7 +83417,7 @@ mod tests {
         ));
         assert!(
             layer_tree
-                .contains("\"renderPromotionBlockedReason\":\"same-row-axis-rule-parent-normalized-order-unproven\"")
+                .contains("\"renderPromotionBlockedReason\":\"connector-parent-command-outside-nearest-owner-parent-command-span\"")
         );
         assert!(layer_tree.contains("\"connectorCandidateCount\":67"));
         assert!(layer_tree.contains("\"lineRuleProjectionCount\":16"));
@@ -73065,7 +83513,7 @@ mod tests {
             "\"fdmIndexConnectorCompositionGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexConnectorComposition\",\"source\":\"FDMIndex.vectorCommands+FDMIndex.connectorCandidates\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-image-bearing-segment-role-unproven\",\"rowIndex\":33,\"vectorCommandCount\":85,\"connectorCandidateCount\":14,\"nonConnectorCommandCount\":71,\"rowCohortConnectorCandidateCount\":14,\"connectorOnlySegmentCandidate\":false,\"connectorDominantSegmentCandidate\":false,\"connectorCandidateDensityPermille\":164,\"matchedConnectorCoveragePermille\":1000,\"dualEndpointMatchedConnectorCoveragePermille\":500}"
         ));
         assert!(layer_tree.contains(
-            "\"fdmIndexBboxRelationGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexBboxRelation\",\"source\":\"FDMIndex.bbox+FDMVector.commandSourceBbox\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-image-bearing-segment-role-unproven\",\"rowIndex\":33,\"indexBbox\":{\"left\":-10344,\"top\":-9336,\"right\":-9590,\"bottom\":-8517},\"containsConnectorCount\":0,\"overlapsConnectorCount\":0,\"disjointConnectorCount\":14,\"sourceBboxMissingConnectorCount\":0,\"dualEndpointContainsConnectorCount\":0,\"dualEndpointOverlapsConnectorCount\":0,\"dualEndpointDisjointConnectorCount\":7,\"dualEndpointSourceBboxMissingConnectorCount\":0}"
+            "\"fdmIndexBboxRelationGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexBboxRelation\",\"source\":\"FDMIndex.bbox+FDMVector.commandSourceBbox\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-image-bearing-segment-role-unproven\",\"rowIndex\":33,\"indexBbox\":{\"left\":-9590,\"top\":-10344,\"right\":-8517,\"bottom\":-9336},\"containsConnectorCount\":14,\"overlapsConnectorCount\":0,\"disjointConnectorCount\":0,\"sourceBboxMissingConnectorCount\":0,\"dualEndpointContainsConnectorCount\":7,\"dualEndpointOverlapsConnectorCount\":0,\"dualEndpointDisjointConnectorCount\":0,\"dualEndpointSourceBboxMissingConnectorCount\":0}"
         ));
         assert!(layer_tree.contains(
             "\"axisRuleSourceOrderGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+parentRelativeSourceOrder\",\"source\":\"FDMVector.commandRelativeOffset+compoundParentRelativeOffset\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"mixed-connector-axis-rule-parent-span-paint-order-unproven\",\"rowIndex\":33,\"dualEndpointConnectorCount\":7,\"sourceOrderBackedDualEndpointConnectorCount\":7,\"connectorParentRelativeOffsetRange\":{\"start\":2638,\"end\":6056},\"axisRuleParentRelativeOffsetRange\":{\"start\":3894,\"end\":5886},\"connectorBeforeAxisRuleParentSpanCount\":5,\"connectorBetweenAxisRuleParentSpanCount\":1,\"connectorAfterAxisRuleParentSpanCount\":1,\"connectorAxisRuleParentSpanUnclassifiedCount\":0}"
@@ -73074,19 +83522,19 @@ mod tests {
             "\"fdmIndexSegmentGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexSegmentMembership\",\"source\":\"FDMIndex.vectorOffset+FDMVector.sourceSegment\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-segment-ownership-and-paint-order-unproven\",\"rowIndex\":3,\"vectorOffset\":26954"
         ));
         assert!(layer_tree.contains(
-            "\"fdmIndexConnectorCompositionGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexConnectorComposition\",\"source\":\"FDMIndex.vectorCommands+FDMIndex.connectorCandidates\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-disjoint-connector-composition-ownership-and-paint-order-unproven\",\"rowIndex\":3,\"vectorCommandCount\":84,\"connectorCandidateCount\":5,\"nonConnectorCommandCount\":79,\"rowCohortConnectorCandidateCount\":5,\"connectorOnlySegmentCandidate\":false,\"connectorDominantSegmentCandidate\":false,\"connectorCandidateDensityPermille\":59,\"matchedConnectorCoveragePermille\":1000,\"dualEndpointMatchedConnectorCoveragePermille\":1000}"
+            "\"fdmIndexConnectorCompositionGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexConnectorComposition\",\"source\":\"FDMIndex.vectorCommands+FDMIndex.connectorCandidates\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-contained-composition-internal-stroke-role-unproven\",\"rowIndex\":3,\"vectorCommandCount\":84,\"connectorCandidateCount\":5,\"nonConnectorCommandCount\":79,\"rowCohortConnectorCandidateCount\":5,\"connectorOnlySegmentCandidate\":false,\"connectorDominantSegmentCandidate\":false,\"connectorCandidateDensityPermille\":59,\"matchedConnectorCoveragePermille\":1000,\"dualEndpointMatchedConnectorCoveragePermille\":1000}"
         ));
         assert!(layer_tree.contains(
             "\"axisRuleSourceOrderGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+parentRelativeSourceOrder\",\"source\":\"FDMVector.commandRelativeOffset+compoundParentRelativeOffset\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"mixed-connector-axis-rule-parent-span-paint-order-unproven\",\"rowIndex\":3,\"dualEndpointConnectorCount\":5,\"sourceOrderBackedDualEndpointConnectorCount\":5,\"connectorParentRelativeOffsetRange\":{\"start\":1138,\"end\":5242},\"axisRuleParentRelativeOffsetRange\":{\"start\":4058,\"end\":5640},\"connectorBeforeAxisRuleParentSpanCount\":2,\"connectorBetweenAxisRuleParentSpanCount\":3,\"connectorAfterAxisRuleParentSpanCount\":0,\"connectorAxisRuleParentSpanUnclassifiedCount\":0}"
         ));
         assert!(layer_tree.contains(
-            "\"fdmIndexConnectorCompositionGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexConnectorComposition\",\"source\":\"FDMIndex.vectorCommands+FDMIndex.connectorCandidates\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-disjoint-connector-composition-ownership-and-paint-order-unproven\",\"rowIndex\":0,\"vectorCommandCount\":271,\"connectorCandidateCount\":11,\"nonConnectorCommandCount\":260,\"rowCohortConnectorCandidateCount\":24,\"connectorOnlySegmentCandidate\":false,\"connectorDominantSegmentCandidate\":false,\"connectorCandidateDensityPermille\":40,\"matchedConnectorCoveragePermille\":1000,\"dualEndpointMatchedConnectorCoveragePermille\":166}"
+            "\"fdmIndexConnectorCompositionGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexConnectorComposition\",\"source\":\"FDMIndex.vectorCommands+FDMIndex.connectorCandidates\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-contained-composition-internal-stroke-role-unproven\",\"rowIndex\":0,\"vectorCommandCount\":271,\"connectorCandidateCount\":11,\"nonConnectorCommandCount\":260,\"rowCohortConnectorCandidateCount\":24,\"connectorOnlySegmentCandidate\":false,\"connectorDominantSegmentCandidate\":false,\"connectorCandidateDensityPermille\":40,\"matchedConnectorCoveragePermille\":1000,\"dualEndpointMatchedConnectorCoveragePermille\":166}"
         ));
         assert!(layer_tree.contains(
             "\"axisRuleSourceOrderGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+parentRelativeSourceOrder\",\"source\":\"FDMVector.commandRelativeOffset+compoundParentRelativeOffset\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"connector-between-axis-rule-parent-span-paint-order-unproven\",\"rowIndex\":0,\"dualEndpointConnectorCount\":4,\"sourceOrderBackedDualEndpointConnectorCount\":4,\"connectorParentRelativeOffsetRange\":{\"start\":7644,\"end\":9734},\"axisRuleParentRelativeOffsetRange\":{\"start\":3460,\"end\":12022},\"connectorBeforeAxisRuleParentSpanCount\":0,\"connectorBetweenAxisRuleParentSpanCount\":4,\"connectorAfterAxisRuleParentSpanCount\":0,\"connectorAxisRuleParentSpanUnclassifiedCount\":0}"
         ));
         assert!(layer_tree.contains(
-            "\"fdmIndexBboxRelationGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexBboxRelation\",\"source\":\"FDMIndex.bbox+FDMVector.commandSourceBbox\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-bbox-disjoint-connector-ownership-unproven\",\"rowIndex\":3,\"indexBbox\":{\"left\":-15790,\"top\":-15057,\"right\":-9342,\"bottom\":-8384},\"containsConnectorCount\":0,\"overlapsConnectorCount\":0,\"disjointConnectorCount\":5,\"sourceBboxMissingConnectorCount\":0,\"dualEndpointContainsConnectorCount\":0,\"dualEndpointOverlapsConnectorCount\":0,\"dualEndpointDisjointConnectorCount\":5,\"dualEndpointSourceBboxMissingConnectorCount\":0}"
+            "\"fdmIndexBboxRelationGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexBboxRelation\",\"source\":\"FDMIndex.bbox+FDMVector.commandSourceBbox\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-bbox-contained-internal-stroke-role-unproven\",\"rowIndex\":3,\"indexBbox\":{\"left\":-9342,\"top\":-15790,\"right\":-8384,\"bottom\":-15057},\"containsConnectorCount\":5,\"overlapsConnectorCount\":0,\"disjointConnectorCount\":0,\"sourceBboxMissingConnectorCount\":0,\"dualEndpointContainsConnectorCount\":5,\"dualEndpointOverlapsConnectorCount\":0,\"dualEndpointDisjointConnectorCount\":0,\"dualEndpointSourceBboxMissingConnectorCount\":0}"
         ));
         assert!(layer_tree.contains(
             "\"fdmIndexConnectorCompositionGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexConnectorComposition\",\"source\":\"FDMIndex.vectorCommands+FDMIndex.connectorCandidates\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-contained-composition-internal-stroke-role-unproven\",\"rowIndex\":37,\"vectorCommandCount\":48,\"connectorCandidateCount\":4,\"nonConnectorCommandCount\":44,\"rowCohortConnectorCandidateCount\":4,\"connectorOnlySegmentCandidate\":false,\"connectorDominantSegmentCandidate\":false,\"connectorCandidateDensityPermille\":83,\"matchedConnectorCoveragePermille\":1000,\"dualEndpointMatchedConnectorCoveragePermille\":750}"
@@ -73098,7 +83546,7 @@ mod tests {
             "\"axisRuleSourceOrderGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+parentRelativeSourceOrder\",\"source\":\"FDMVector.commandRelativeOffset+compoundParentRelativeOffset\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"connector-before-axis-rule-parent-span-paint-order-unproven\",\"rowIndex\":10,\"dualEndpointConnectorCount\":1,\"sourceOrderBackedDualEndpointConnectorCount\":1,\"connectorParentRelativeOffsetRange\":{\"start\":1298,\"end\":1298},\"axisRuleParentRelativeOffsetRange\":{\"start\":1376,\"end\":2056},\"connectorBeforeAxisRuleParentSpanCount\":1,\"connectorBetweenAxisRuleParentSpanCount\":0,\"connectorAfterAxisRuleParentSpanCount\":0,\"connectorAxisRuleParentSpanUnclassifiedCount\":0}"
         ));
         assert!(layer_tree.contains(
-            "\"fdmIndexBboxRelationGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexBboxRelation\",\"source\":\"FDMIndex.bbox+FDMVector.commandSourceBbox\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-bbox-contained-internal-stroke-role-unproven\",\"rowIndex\":37,\"indexBbox\":{\"left\":-12762,\"top\":-11614,\"right\":-10144,\"bottom\":-9488},\"containsConnectorCount\":4,\"overlapsConnectorCount\":0,\"disjointConnectorCount\":0,\"sourceBboxMissingConnectorCount\":0,\"dualEndpointContainsConnectorCount\":3,\"dualEndpointOverlapsConnectorCount\":0,\"dualEndpointDisjointConnectorCount\":0,\"dualEndpointSourceBboxMissingConnectorCount\":0}"
+            "\"fdmIndexBboxRelationGate\":{\"basis\":\"sameRowFdmOpenStrokeAxisRule+fdmIndexBboxRelation\",\"source\":\"FDMIndex.bbox+FDMVector.commandSourceBbox\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"fdm-index-bbox-contained-internal-stroke-role-unproven\",\"rowIndex\":37,\"indexBbox\":{\"left\":-12762,\"top\":-10144,\"right\":-11614,\"bottom\":-9488},\"containsConnectorCount\":4,\"overlapsConnectorCount\":0,\"disjointConnectorCount\":0,\"sourceBboxMissingConnectorCount\":0,\"dualEndpointContainsConnectorCount\":3,\"dualEndpointOverlapsConnectorCount\":0,\"dualEndpointDisjointConnectorCount\":0,\"dualEndpointSourceBboxMissingConnectorCount\":0}"
         ));
         assert!(layer_tree.contains(
             "\"sourceVectorRelativeOffset\":144922,\"sourceSegment\":{\"relativeOffset\":142284,\"localOffset\":2638,\"declaredLength\":7222,\"commandCount\":64,\"commandIndex\":11,\"commandOffset\":2638}"
@@ -73391,6 +83839,19 @@ mod tests {
         assert!(layer_tree.contains("\"distancePx\":"));
         assert!(layer_tree.contains("\"probeRadiusPx\":"));
         assert!(layer_tree.contains("\"withinLineHeight\":"));
+        assert_eq!(
+            layer_tree
+                .matches("\"renderAdmissionGate\":{\"source\":\"/DocumentText+/LineMark line-rule render admission\"")
+                .count(),
+            16
+        );
+        assert!(layer_tree.contains(
+            "\"componentIndex\":2,\"componentRuleCount\":4,\"lineMarkMatched\":true,\"orthogonalGraphCandidate\":true,\"componentOrthogonalCandidate\":true"
+        ));
+        assert!(layer_tree.contains("\"bothEndpointTextAttachmentCandidate\":false"));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"document-text-grid-origin-reference-backed\",\"line-rule-endpoint-ownership-unproven\",\"line-rule-text-attachment-pair-unproven\",\"line-rule-style-role-unproven\",\"line-rule-paint-order-unproven\"],\"renderPromotionBlockedReason\":\"line-rule-render-admission-not-ready\""
+        ));
         assert!(layer_tree.contains("\"candidateSource\":\"skippedInlineLineHeader\""));
         assert!(layer_tree.contains("\"candidateSource\":\"verticalAnchorRunFromLineHeaders\""));
         assert!(layer_tree.contains("\"lineMarkProfile\":\"be16-delta-v1\""));
@@ -73419,11 +83880,26 @@ mod tests {
         assert!(layer_tree.contains("\"endpointCount\":32"));
         assert!(layer_tree.contains("\"endpointAttachmentWithinLineHeightCount\":2"));
         assert!(layer_tree.contains("\"bothEndpointAttachmentWithinLineHeightRuleCount\":0"));
+        assert!(layer_tree.contains(
+            "\"lineRuleRenderAdmissionGate\":{\"source\":\"/DocumentText+/LineMark line-rule render admission\""
+        ));
+        assert!(layer_tree.contains(
+            "\"orthogonalGraphCandidateRuleCount\":11,\"orthogonalComponentCandidateCount\":3,\"lineMarkCoverageComplete\":true,\"noIsolatedEndpointRuleCount\":3,\"bothEndpointAttachmentWithinLineHeightRuleCount\":0"
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"document-text-grid-origin-reference-backed\",\"line-rule-topology-partial-orthogonal-coverage\",\"line-rule-component-topology-unproven\",\"line-rule-endpoint-ownership-unproven\",\"line-rule-text-attachment-pair-absent\",\"line-rule-style-role-unproven\",\"line-rule-paint-order-unproven\"],\"renderPromotionBlockedReason\":\"line-rule-render-admission-not-ready\""
+        ));
         assert!(layer_tree.contains("\"lineRuleGraphComponentCount\":6"));
         assert!(layer_tree.contains("\"largestLineRuleGraphComponentRuleCount\":4"));
         assert!(layer_tree.contains("\"lineRuleGraphComponents\":["));
         assert!(layer_tree.contains(
             "\"ruleIndexes\":[2,5,13,14],\"bbox\":{\"x\":363.038,\"y\":433.500,\"width\":261.430,\"height\":200.400},\"ruleCount\":4,\"horizontalRuleCount\":2,\"verticalRuleCount\":2,\"orthogonalGraphRuleCount\":4,\"lineMarkMatchedRuleCount\":4,\"endpointCount\":8,\"isolatedEndpointCount\":3,\"totalProjectedLengthPx\":765.858"
+        ));
+        assert!(layer_tree.contains(
+            "\"orthogonalComponentCandidate\":true,\"lineMarkCoverageComplete\":true,\"renderAdmissionGate\":{\"source\":\"/DocumentText+/LineMark line-rule component render admission\""
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"document-text-grid-origin-reference-backed\",\"line-rule-component-endpoint-ownership-unproven\",\"line-rule-component-style-role-unproven\",\"line-rule-paint-order-unproven\"],\"renderPromotionBlockedReason\":\"line-rule-component-render-admission-not-ready\""
         ));
         assert!(layer_tree.contains(
             "\"ruleIndexes\":[3,6,15],\"bbox\":{\"x\":725.679,\"y\":415.500,\"width\":357.641,\"height\":200.400},\"ruleCount\":3,\"horizontalRuleCount\":2,\"verticalRuleCount\":1,\"orthogonalGraphRuleCount\":3,\"lineMarkMatchedRuleCount\":3,\"endpointCount\":6,\"isolatedEndpointCount\":3,\"totalProjectedLengthPx\":908.482"
@@ -73453,6 +83929,42 @@ mod tests {
         ));
         assert!(layer_tree.contains(
             "\"fullSpanRenderPromotionGate\":{\"basis\":\"documentTextLineHeaderCandidate+sourceMapContext\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false,\"renderPromotionBlockedReason\":\"line-header-segment-clipping-and-endpoint-ownership-unproven\",\"requiresSegmentClippingDecoded\":true,\"requiresEndpointOwnershipDecoded\":true,\"requiresPaintOrderDecoded\":true,\"fullSpanRenderableCandidateCount\":0}"
+        ));
+        assert!(layer_tree.contains(
+            "\"gridOriginAuthorityGate\":{\"basis\":\"selectedDocumentTextLineHeaders+/LineMark+/PageMark\",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false,\"selectedLineHeaderCount\":7"
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedGroupIndexes\":[21,31],\"selectedLineMarkRecordIndexes\":[22,32]"
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedLineMarkSourceUnitGate\":{\"source\":\"/LineMark selected record source-unit intervals\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false,\"selectedRecordCount\":2,\"intervalRecordCount\":2,\"allSelectedRecordsHaveIntervals\":true,\"recordIndexes\":[22,32],\"unitStarts\":[3908,5483],\"unitEnds\":[4121,5615],\"unitSpans\":[213,132],\"recordIndexDeltas\":[10],\"unitStartDeltas\":[1575],\"sourceUnitDeltaPerRecordEstimate\":157.500,\"strideCandidateSampleCount\":1,\"strideCandidateReady\":false,\"promotionReady\":false,\"blockedReason\":\"line-mark-source-unit-stride-insufficient-selected-rows\"}"
+        ));
+        assert!(layer_tree.contains(
+            "\"allSelectedHeadersHaveLineMark\":true,\"lineMarkRecordIndexesContiguous\":false,\"lineMarkRecordStride\":10,\"recordIndexMinusGroupIndexValues\":[1],\"uniformRecordIndexMinusGroupIndex\":true,\"sourceDomainRowAnchorCandidate\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"pageMarkEntryCoverage\":{\"rowIndex\":0,\"index\":0,\"flags\":65536,\"flagsHex\":\"0x00010000\",\"lineStart\":0,\"lineEnd\":39}"
+        ));
+        assert!(layer_tree.contains(
+            "\"pageMarkEntryProfileGate\":{\"source\":\"/PageMark u16 geometry profile\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false,\"entryPresent\":true,\"u16GeometryClass\":\"mixed-payload\",\"additiveGeometryProfile\":false,\"promotionSafeProfile\":false,\"blockedReason\":\"page-mark-mixed-payload-profile-not-layout-origin-authority\"}"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyGridDomain\":{\"rawMaxExtentUnits\":280,\"maxExtentUnits\":276,\"textGridColumnOriginDecoded\":false,\"textGridRowOriginDecoded\":false}"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyPageMarkYValueProbe\":{\"source\":\"/PageMark parsed entry y-value candidates\",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false,\"pageMarkEntryPresent\":true,\"candidateCount\":58,\"inPageRangeCandidateCount\":58,\"currentProjectionOriginY\":38.700"
+        ));
+        assert!(layer_tree.contains(
+            "\"nearestCurrentProjectionOriginCandidate\":{\"source\":\"parsedEntryU16\",\"interpretation\":\"direct-u16-px\",\"wordIndex\":7,\"byteOffset\":14,\"value\":39,\"valuePx\":39.000,\"residualPx\":0.300}"
+        ));
+        assert!(layer_tree.contains(
+            "\"lineBoundaryConflictGate\":{\"source\":\"/PageMark parsed entry lineStart/lineEnd vs nearest y candidate\",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"renderable\":false,\"lineStart\":0,\"lineEnd\":39,\"nearestCandidateValue\":39,\"matchesLineStart\":false,\"matchesLineEnd\":true,\"matchedBoundaryRoles\":[\"lineEnd\"],\"lineBoundaryConflict\":true,\"selectionReady\":false,\"promotionReady\":false,\"blockedReason\":\"nearest-page-mark-y-candidate-overlaps-line-boundary\"}"
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"page-mark-y-value-field-role-unproven\",\"document-text-grid-origin-reference-backed\",\"page-space-y-origin-unproven\"],\"renderPromotionBlockedReason\":\"source-only-page-space-y-origin-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"pageSpaceOriginCandidate\":null,\"pageSpaceOriginCandidateReady\":false,\"promotionReady\":false,\"blockedReasons\":[\"document-text-grid-origin-reference-backed\",\"line-header-visible-rule-selector-unproven\",\"page-space-y-origin-unproven\"],\"renderPromotionBlockedReason\":\"line-header-grid-origin-authority-unproven\""
         ));
         assert!(layer_tree.contains("\"allLineHeaderCount\":171"));
         assert!(layer_tree.contains("\"longLineHeaderCandidateCount\":103"));
@@ -73583,6 +84095,107 @@ mod tests {
         assert!(layer_tree.contains(
             "\"fillColor\":\"#7a7acc\",\"renderFillKind\":\"linearGradient\",\"renderFillColor\":\"#7a7acc\",\"renderGradient\":{\"from\":\"#003366\",\"to\":\"#7a7acc\"}"
         ));
+        assert_eq!(
+            layer_tree
+                .matches("\"type\":\"fdmTextMaskCohortSummary\"")
+                .count(),
+            1
+        );
+        assert!(layer_tree.contains("\"projectionKind\":\"fdmTextMaskCohortSummary\""));
+        assert!(
+            layer_tree
+                .contains("\"basis\":\"fdmVectorClosedFillCohort+documentTextRightNeighbor\"")
+        );
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"fdm-text-mask-document-text-alignment-unproven\""
+        ));
+        assert!(layer_tree.contains("\"cohortCount\":24"));
+        assert!(layer_tree.contains("\"rightNeighborCandidateCount\":7"));
+        assert!(layer_tree.contains("\"topTextLikeComponentCandidateCount\":3"));
+        assert!(layer_tree.contains("\"componentRightNeighborCandidateCount\":1"));
+        assert!(layer_tree.contains(
+            "\"rowIndex\":5,\"primitiveCount\":22,\"blackFillPrimitiveCount\":12,\"whiteFillPrimitiveCount\":10,\"counterOverlayCount\":0"
+        ));
+        assert!(layer_tree.contains(
+            "\"projectedBbox\":{\"x\":465.107,\"y\":84.575,\"width\":34.683,\"height\":76.196},\"sourceBbox\":{\"left\":-11828,\"top\":-15758,\"right\":-11470,\"bottom\":-14984},\"rightNeighborTextSlotCandidate\":{\"source\":\"/DocumentText\",\"sourceBacked\":true,\"decoded\":false,\"candidateRelation\":\"right-neighbor-overlapping-y\",\"text\":\"5\""
+        ));
+        assert!(layer_tree.contains(
+            "\"horizontalGapPx\":12.464,\"verticalOverlapPx\":19.950,\"centerDeltaYPx\":-19.998"
+        ));
+        assert!(layer_tree.contains(
+            "\"alignmentPromotionBlockedReason\":\"fdm-text-mask-to-document-text-baseline-transform-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"componentCount\":6,\"topTextLikeComponentCandidate\":{\"source\":\"fdmVectorClosedFillComponent\""
+        ));
+        assert!(layer_tree.contains(
+            "\"componentIndex\":0,\"primitiveCount\":7,\"blackFillPrimitiveCount\":7,\"whiteFillPrimitiveCount\":0,\"counterOverlayCount\":0"
+        ));
+        assert!(layer_tree.contains(
+            "\"projectedBbox\":{\"x\":465.204,\"y\":84.575,\"width\":34.586,\"height\":10.435},\"sourceBbox\":{\"left\":-11827,\"top\":-15758,\"right\":-11470,\"bottom\":-15652},\"rightNeighborTextSlotCandidate\":{\"source\":\"/DocumentText\",\"sourceBacked\":true,\"decoded\":false,\"candidateRelation\":\"component-right-neighbor-overlapping-y\",\"text\":\"5\""
+        ));
+        assert!(layer_tree.contains(
+            "\"horizontalGapPx\":12.464,\"verticalOverlapPx\":2.310,\"centerDeltaYPx\":12.882"
+        ));
+        assert!(layer_tree.contains(
+            "\"leadingWhitespaceBridgeCandidate\":{\"source\":\"fdmTextMaskBbox+/DocumentText pre-fragment span\",\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderPromoted\":false,\"candidateClass\":\"fdm-bbox-inside-document-text-pre-fragment-projection\",\"bridgeCandidate\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"parentTextRunSourceUnitRange\":{\"start\":578,\"end\":613},\"preFragmentSourceByteRange\":{\"start\":1156,\"end\":1198},\"preFragmentSourceUnitRange\":{\"start\":578,\"end\":599},\"preFragmentUnitCount\":21"
+        ));
+        assert!(layer_tree.contains(
+            "\"preFragmentProjectionGridUnits\":42,\"preFragmentProjectedWidthPx\":155.418,\"lineStartX\":356.837,\"textStartX\":512.255,\"sourceBboxOffsetFromLineStartPx\":108.368,\"sourceBboxEndOffsetFromLineStartPx\":142.954"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceBboxWithinPreFragmentProjection\":true,\"sourceBboxBeginsAfterLineStart\":true,\"sourceBboxEndsBeforeTextStart\":true,\"sourceBboxRightToTextStartGapPx\":12.464,\"textBaselineMinusSourceBottomPx\":8.330,\"renderPromotionBlockedReason\":\"document-text-pre-fragment-fdm-mask-role-unproven\""
+        ));
+        assert_eq!(
+            layer_tree
+                .matches("\"type\":\"fdmTextMaskRightNeighborPromotionReadiness\"")
+                .count(),
+            7
+        );
+        assert!(layer_tree.contains(
+            "\"cohortSlot\":{\"slotIndex\":6,\"text\":\"5\",\"bbox\":{\"x\":512.255,\"y\":92.700,\"width\":13.300,\"height\":19.950},\"horizontalGapPx\":12.464,\"verticalOverlapPx\":19.950,\"centerDeltaYPx\":-19.998,\"groupIndex\":2,\"sourceUnitRange\":{\"start\":599,\"end\":600},\"splitFromTextRun\":false},\"componentSlot\":{\"slotIndex\":6,\"text\":\"5\""
+        ));
+        assert!(layer_tree.contains(
+            "\"cohortComponentAgreement\":true,\"bestGapPx\":12.464,\"secondBestGapPx\":null,\"gapMarginPx\":null,\"splitFromTextRun\":false,\"fragmentCount\":1,\"preFragmentUnitCount\":21,\"sourceBboxWithinPreFragmentProjection\":true,\"sourceBboxBeginsAfterLineStart\":true,\"sourceBboxEndsBeforeTextStart\":true,\"sameSegmentGroupRunDistinctTextGroupCount\":4,\"rowAnchorAmbiguous\":true,\"baselineResidualPx\":8.330,\"promotionReady\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"document-text-slot-not-split-from-text-run\",\"line-header-y-run-placement-semantics-unproven\",\"document-text-pre-fragment-fdm-mask-role-unproven\",\"fdm-text-mask-to-document-text-baseline-transform-unproven\",\"fdm-text-mask-promotion-cross-sample-support-missing\"],\"renderPromotionBlockedReason\":\"fdm-text-mask-right-neighbor-promotion-readiness-blocked\""
+        ));
+        assert_eq!(
+            layer_tree
+                .matches("\"type\":\"fdmTextMaskSourceTransformCandidateSummary\"")
+                .count(),
+            1
+        );
+        assert!(
+            layer_tree
+                .contains("\"projectionKind\":\"fdmTextMaskSourceTransformCandidateSummary\"")
+        );
+        assert!(layer_tree.contains(
+            "\"candidateCount\":1,\"preFragmentBridgeCandidateCount\":1,\"cohortComponentAgreementCount\":1,\"rowAnchorAmbiguousCandidateCount\":1,\"slotNotSplitCandidateCount\":1"
+        ));
+        assert!(
+            layer_tree
+                .contains("\"sourceUnitsPerTextGridUnitXRange\":{\"min\":38.196,\"max\":38.196}")
+        );
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"fdm-source-to-document-text-transform-reference-backed-and-row-anchor-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"rowIndex\":5,\"candidateClass\":\"top-text-like-component-to-document-text-pre-fragment\",\"componentIndex\":0,\"slotIndex\":6,\"slotText\":\"5\""
+        ));
+        assert!(layer_tree.contains(
+            "\"currentProjectionGridOffsetRange\":{\"start\":29.285,\"end\":38.632,\"span\":9.347}"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceXTransformCandidate\":{\"sourceUnitsPerTextGridUnit\":38.196,\"lineStartSourceX\":-12945.565,\"textStartSourceX\":-11341.348,\"sourceGapToTextStartX\":128.652,\"transformAuthorityProven\":false}"
+        ));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"fdm-text-mask-component-to-document-text-alignment-unproven\""
+        ));
         assert!(layer_tree.contains("\"rowIndex\":23,\"commandIndex\":8001"));
         assert!(layer_tree.contains("\"renderStrokeColor\":\"#ffffff\""));
         assert!(layer_tree.contains("\"type\":\"textRun\",\"bbox\":{\"x\":46.001,\"y\":38.700"));
@@ -73599,6 +84212,16 @@ mod tests {
         assert!(layer_tree.contains("\"text\":\"NASサーバ\""));
         assert!(layer_tree.contains("\"text\":\"ﾍﾟﾝﾌﾟﾛｯﾀｰ"));
         assert!(layer_tree.contains("\"text\":\"ｲﾝｸｼﾞｪｯﾄﾌﾟﾛｯﾀｰ\""));
+        assert!(layer_tree.contains("\"text\":\"5\""));
+        assert!(layer_tree.contains(
+            "\"lineHeaderSameSegmentGroupRun\":{\"basis\":\"same-offset-extent-contiguous-groups\",\"offsetUnits\":84,\"extentUnits\":174,\"startGroupIndex\":1,\"endGroupIndex\":6,\"groupCount\":6,\"positionInRun\":1}"
+        ));
+        assert!(layer_tree.contains(
+            "\"lineHeaderYPlacementCandidate\":{\"source\":\"/DocumentText line-header same-offset/extent group run\",\"sourceBacked\":true,\"decoded\":false,\"diagnosticOnly\":true,\"renderPromoted\":false,\"sameSegmentGroupRunPresent\":true,\"startGroupIndex\":1,\"endGroupIndex\":6,\"groupCount\":6,\"positionInRun\":1,\"sameSegmentGroupRunTextSlotCount\":5,\"sameSegmentGroupRunDistinctTextGroupCount\":4,\"sameSegmentGroupRunAmbiguousAsRowAnchor\":true,\"renderPromotionBlockedDetail\":\"same-segment-run-spans-multiple-visible-text-rows\",\"currentGroupIndex\":2,\"renderPromotionBlockedReason\":\"line-header-y-run-placement-semantics-unproven\"}"
+        ));
+        assert!(layer_tree.contains(
+            "\"lineHeaderSameSegmentGroupRun\":{\"basis\":\"same-offset-extent-contiguous-groups\",\"offsetUnits\":0,\"extentUnits\":84,\"startGroupIndex\":27,\"endGroupIndex\":31,\"groupCount\":5,\"positionInRun\":2}"
+        ));
         assert!(layer_tree.contains("\"fillColorBasis\":\"shanai-lan-text-match-fallback\""));
         assert!(layer_tree.contains("\"type\":\"shanaiLanTextStyleEvidenceSummary\""));
         assert!(layer_tree.contains("\"projectionKind\":\"shanaiLanTextStyleEvidenceSummary\""));
@@ -73612,6 +84235,7 @@ mod tests {
         assert!(layer_tree.contains("\"splitFromTextRunSlotCount\":14"));
         assert!(layer_tree.contains("\"multiFragmentParentTextRunSlotCount\":14"));
         assert!(layer_tree.contains("\"maxParentTextRunFragmentCount\":5"));
+        assert!(layer_tree.contains("\"mixedFillMultiFragmentParentRunCount\":0"));
         assert!(layer_tree.contains("\"fillColorBasisCounts\":[{\"fillColorBasis\":\"default-text-fill\",\"fillColor\":\"#111111\",\"count\":35},{\"fillColorBasis\":\"shanai-lan-text-match-fallback\",\"fillColor\":\"#000080\",\"count\":2},{\"fillColorBasis\":\"shanai-lan-text-match-fallback\",\"fillColor\":\"#008000\",\"count\":1}]"));
         assert!(layer_tree.contains(
             "\"documentViewStyleGroupCandidateCounts\":[{\"documentViewStyleGroupCandidate\":3,\"count\":8}]"
@@ -73624,6 +84248,12 @@ mod tests {
         ));
         assert!(layer_tree.contains(
             "\"controlKindHex\":\"0x0010\",\"firstFieldWordHex\":\"0x0017\",\"fillColorBasis\":\"shanai-lan-text-match-fallback\",\"fillColor\":\"#000080\",\"count\":1"
+        ));
+        assert!(layer_tree.contains(
+            "\"parentTextRunSourceSpan\":{\"byteStart\":12060,\"byteEnd\":12384,\"unitStart\":6030,\"unitEnd\":6192},\"slotCount\":5,\"fillColorBasisCount\":1,\"fillColorCount\":1,\"fallbackFillColorSlotCount\":0,\"defaultFillColorSlotCount\":5"
+        ));
+        assert!(layer_tree.contains(
+            "\"fillColorBases\":[\"default-text-fill\"],\"fillColors\":[\"#111111\"],\"styleBoundaryProven\":false,\"renderPromotionBlockedReason\":\"document-text-fragment-style-boundary-unproven\""
         ));
         assert!(layer_tree.contains("\"textStyleLinkEvidence\":{\"decoded\":false,\"source\":\"DocumentText+DocumentTextPositionTables+DocumentViewStyles\",\"styleLinkProven\":false,\"textLayoutStyleRecordCount\":0,\"documentViewStyleGroupCount\":9"));
         assert!(layer_tree.contains("\"documentViewStyleGroupCandidate\":3,\"documentViewStyleGroupCandidateBasis\":\"document-text-position-count-tail-field-f7\""));
@@ -73775,6 +84405,13 @@ mod tests {
             "data-fragment-style-blocked-reason=\"document-text-fragment-style-boundary-unproven\""
         ));
         assert!(svg.contains("data-line-header-raw-words-hex=\"0x001c,0x0030"));
+        assert!(svg.contains("data-line-header-same-segment-run-present=\"true\""));
+        assert!(svg.contains(
+            "data-line-header-same-segment-run-start-group=\"1\" data-line-header-same-segment-run-end-group=\"6\" data-line-header-same-segment-run-group-count=\"6\" data-line-header-same-segment-run-position=\"1\" data-line-header-same-segment-run-text-slot-count=\"5\" data-line-header-same-segment-run-distinct-text-group-count=\"4\" data-line-header-same-segment-run-ambiguous-row-anchor=\"true\" data-line-header-y-placement-blocked-detail=\"same-segment-run-spans-multiple-visible-text-rows\" data-line-header-y-placement-blocked-reason=\"line-header-y-run-placement-semantics-unproven\""
+        ));
+        assert!(svg.contains(
+            "data-line-header-same-segment-run-start-group=\"27\" data-line-header-same-segment-run-end-group=\"31\" data-line-header-same-segment-run-group-count=\"5\" data-line-header-same-segment-run-position=\"2\" data-line-header-same-segment-run-text-slot-count=\"4\" data-line-header-same-segment-run-distinct-text-group-count=\"2\""
+        ));
         assert!(svg.contains("data-fill-color-basis=\"shanai-lan-text-match-fallback\""));
         assert!(svg.contains("data-style-link-proven=\"false\""));
         assert!(svg.contains(
@@ -73948,6 +84585,30 @@ mod tests {
             graph_with_axis_rule_dual.render_promotion_blocked_reason(),
             "same-row-axis-rule-parent-normalized-order-unproven"
         );
+
+        let graph_with_axis_rule_owner_gate = FdmConnectorGraphDiagnosticSummary {
+            fdm_open_stroke_axis_rule_match_summary: FdmConnectorRuleSetMatchDiagnosticSummary {
+                dual_endpoint_match_connector_count: 21,
+                ..Default::default()
+            },
+            fdm_open_stroke_axis_rule_owner_promotion_gate_summary:
+                FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary {
+                    dual_endpoint_match_connector_count: 21,
+                    dual_endpoint_owner_candidate_count: 21,
+                    nearest_fdm_owner_rows_match_count: 21,
+                    nearest_fdm_owner_row_matches_connector_row_count: 21,
+                    after_owner_parent_command_span_count: 20,
+                    after_owner_parent_relative_offset_span_count: 20,
+                    before_owner_parent_command_span_count: 1,
+                    before_owner_parent_relative_offset_span_count: 1,
+                    ..Default::default()
+                },
+            ..graph
+        };
+        assert_eq!(
+            graph_with_axis_rule_owner_gate.render_promotion_blocked_reason(),
+            "connector-parent-command-outside-nearest-owner-parent-command-span"
+        );
     }
 
     #[test]
@@ -73982,6 +84643,38 @@ mod tests {
         assert_eq!(
             gate.parent_normalized_order_gate_blocked_reason(),
             "connector-parent-relative-offset-outside-nearest-owner-parent-relative-offset-span"
+        );
+
+        let partial_gate = FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary {
+            dual_endpoint_match_connector_count: 2,
+            dual_endpoint_owner_candidate_count: 2,
+            nearest_fdm_owner_rows_match_count: 2,
+            nearest_fdm_owner_row_matches_connector_row_count: 2,
+            between_owner_parent_command_span_count: 1,
+            between_owner_parent_relative_offset_span_count: 1,
+            parent_normalized_ordered_same_row_same_connector_count: 1,
+            after_owner_parent_command_span_count: 1,
+            after_owner_parent_relative_offset_span_count: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            partial_gate.parent_normalized_order_gate_blocked_reason(),
+            "connector-parent-command-outside-nearest-owner-parent-command-span"
+        );
+
+        let axis_disagreement_gate = FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary {
+            dual_endpoint_match_connector_count: 2,
+            dual_endpoint_owner_candidate_count: 2,
+            nearest_fdm_owner_rows_match_count: 2,
+            nearest_fdm_owner_row_matches_connector_row_count: 2,
+            between_owner_parent_command_span_count: 2,
+            between_owner_parent_relative_offset_span_count: 2,
+            parent_normalized_ordered_same_row_same_connector_count: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            axis_disagreement_gate.parent_normalized_order_gate_blocked_reason(),
+            "parent-command-source-order-axis-disagreement"
         );
     }
 
@@ -74529,14 +85222,61 @@ mod tests {
         assert!(!u16_values_are_monotonic_non_decreasing(&[242, 85]));
         assert!(values_reused_after_different_value(&[174, 734, 174]));
         assert!(!values_reused_after_different_value(&[414, 414, 414]));
+
+        let unstable_cross_table_hints = TableGridSourceGapToPageLineGapReadinessHints {
+            transition_count: 3,
+            same_page_mark_entry_transition_count: 3,
+            all_transitions_same_page_mark_entry: true,
+            source_range_gap_to_page_line_gap_max_abs_delta_units: Some(147),
+            row_source_start_gap_to_page_line_gap_max_abs_delta_units: Some(674),
+            segment_offset_gap_to_page_line_gap_max_abs_delta_units: Some(105),
+            best_candidate_transform_kind: Some("segment-offset-gap"),
+            best_candidate_max_abs_delta_units: Some(105),
+            source_range_units_per_page_line_gap_spread: Some(12.25),
+            row_source_start_units_per_page_line_gap_spread: Some(42.125),
+            segment_offset_units_per_page_line_gap_spread: Some(29.875),
+        };
+        assert_eq!(
+            unstable_cross_table_hints.table_family_transform_blocked_reason(),
+            Some("source-gap-to-page-line-gap-transform-unstable-across-table-family")
+        );
+
+        let absolute_y_slot_candidate = TableGridSourceOnlyPageMarkAbsoluteYSlotCandidate {
+            source: "rawRecordHeaderTailU16Subrecord",
+            interpretation: "direct-u16-px",
+            field_index: 2,
+            tail_block16_word_index: Some(11),
+            raw_record_scan_index: Some(2),
+            raw_record_index: Some(2),
+            byte_offset: 178,
+            subrecord_byte_offset: 174,
+            subrecord_line_start_candidate: 85,
+            subrecord_line_end_candidate: 140,
+            value: 768,
+            value_px: 768.0,
+        };
+        let absolute_y_slot_disagreement = TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
+            line_domain_y: Some(817.539),
+            selected_span_units: Some(58),
+            line_domain_projected_y: Some(875.539),
+            candidates: vec![absolute_y_slot_candidate.clone()],
+            best_absolute_y_slot: Some(absolute_y_slot_candidate),
+            residual_px: Some(107.539),
+            agrees: false,
+        };
+        assert_eq!(
+            table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(
+                &absolute_y_slot_disagreement
+            ),
+            "line-domain-projection-disagrees-with-page-mark-absolute-y-slot"
+        );
     }
 
     #[test]
     fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available()
      {
-        let sample_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples/ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd");
+        let sample_path =
+            local_samples_dir().join("ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd");
         let reference_pdf_path = sample_path.with_extension("pdf");
         if !sample_path.exists() || !reference_pdf_path.exists() {
             return;
@@ -74586,6 +85326,34 @@ mod tests {
                 .unwrap()
                 .contains("data-projection=\"tsaitenReferenceProjection\"")
         );
+        let tsaiten_page_layout = PageLayout::new(
+            renamed_core.page_width_px() as f32,
+            renamed_core.page_height_px() as f32,
+        );
+        let renamed_lines = renamed_core.page_lines(0).unwrap();
+        let scoring_column_count = scoring_table
+            .column_segment_grid_candidate()
+            .unwrap()
+            .column_count();
+        let scoring_generic_overlay = table_grid_overlay_layout(
+            tsaiten_page_layout,
+            &document,
+            renamed_lines,
+            0,
+            scoring_table,
+            scoring_column_count,
+        );
+        let scoring_legacy_reference_overlay = tsaiten_table_grid_overlay_layout(
+            tsaiten_page_layout,
+            &document,
+            scoring_table,
+            scoring_column_count,
+        )
+        .unwrap();
+        assert!((scoring_generic_overlay.0 - tsaiten_page_layout.margin_px()).abs() < 0.001);
+        assert!((scoring_generic_overlay.2 - tsaiten_page_layout.body_width_px()).abs() < 0.001);
+        assert!((scoring_generic_overlay.0 - scoring_legacy_reference_overlay.0).abs() > 1.0);
+        assert!((scoring_generic_overlay.2 - scoring_legacy_reference_overlay.2).abs() > 1.0);
 
         let mut core = DocumentCore::from_document(document);
         core.set_file_name(sample_path.to_string_lossy());
@@ -74626,25 +85394,53 @@ mod tests {
             "\"sourceDerivedLayoutCandidate\":{\"source\":\"documentTextLineHeaders+fallbackTextAnchors\",\"sourceBacked\":true,\"referenceBacked\":false"
         ));
         assert!(layer_tree.contains(
-            "\"sourceDerivedLayoutCandidate\":null,\"sourceDerivedLayoutReadiness\":{\"source\":\"sourceDerivedLayoutGate+documentTextLineHeaders+/LineMark\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"sourcePlacementEvidencePresent\":false,\"candidateRowCount\":4,\"requestedColumnCount\":3,\"lineHeaderRowCount\":4,\"rawHeaderCount\":2,\"matchedRowCount\":0,\"fullMatchedRowCount\":0,\"matchedCellHeaderCount\":0,\"requiredCellHeaderCount\":12,\"commonMatchedColumnCount\":0,\"rowsWithoutHeaders\":[1,2],\"rowsWithoutMatchedCellHeaders\":[0,1,2,3],\"rowsWithPartialCellHeaderCoverage\":[],\"lineHeaderRowsHomogeneous\":false,\"lineMarkRowRecordSelection\":\"previous-compact-row-span-record\",\"lineMarkRowsExactAndContiguous\":false,\"sourceDerivedLayoutCandidatePresent\":false,\"sourceDerivedLayoutRenderable\":false,\"sourceDerivedLayoutBlockedReason\":null"
+            "\"sourceDerivedLayoutReadiness\":{\"source\":\"sourceDerivedLayoutGate+documentTextLineHeaders+/LineMark\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"sourcePlacementEvidencePresent\":false,\"candidateRowCount\":4,\"requestedColumnCount\":3,\"lineHeaderRowCount\":4,\"rawHeaderCount\":2,\"matchedRowCount\":0,\"fullMatchedRowCount\":0,\"matchedCellHeaderCount\":0,\"requiredCellHeaderCount\":12,\"commonMatchedColumnCount\":0,\"rowsWithoutHeaders\":[1,2],\"rowsWithoutMatchedCellHeaders\":[0,1,2,3],\"rowsWithPartialCellHeaderCoverage\":[],\"lineHeaderRowsHomogeneous\":false,\"lineMarkRowRecordSelection\":\"previous-compact-row-span-record\",\"lineMarkRowsExactAndContiguous\":false,\"sourceDerivedLayoutCandidatePresent\":true,\"sourceDerivedLayoutRenderable\":false,\"sourceDerivedLayoutBlockedReason\":\"sparse-sibling-derived-candidate-render-ineligible\""
         ));
         assert!(layer_tree.contains(
-            "\"rejectionReasons\":[\"source-placement-evidence-missing\",\"line-header-cell-geometry-incomplete\",\"no-common-matched-cell-header-columns\",\"line-header-rows-not-homogeneous\",\"line-mark-rows-not-exact-source-boundaries\",\"source-derived-layout-candidate-absent\"],\"renderPromotionContribution\":\"source-derived-layout-readiness-gate\",\"renderPromotionBlockedReason\":\"source-derived-layout-not-renderable\""
+            "\"referenceFallbackAdmissionGate\":{\"source\":\"table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate\",\"diagnosticOnly\":true"
+        ));
+        assert_eq!(
+            layer_tree.matches("\"referenceFallbackUsed\":true").count(),
+            2
+        );
+        assert!(layer_tree.contains(
+            "\"referenceLayoutPresent\":true,\"referenceFallbackAllowed\":true,\"referenceFallbackUsed\":true,\"sourceLayoutCandidatePresent\":true,\"sourceRenderLayoutPresent\":false,\"sourceLayoutRenderable\":false,\"sourceOnlyPageYAdmissionReady\":false,\"sourceOnlyPageYAdmissionBasis\":null,\"sourceReplacementBlockedReason\":\"source-derived-layout-not-renderable\""
         ));
         assert!(layer_tree.contains(
-            "\"pageSpaceSolver\":{\"source\":\"documentTextLineHeaders+/LineMark+/PageMark\",\"solverVersion\":\"table-page-space-v1\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"solverStage\":\"candidate-absent\",\"sourcePlacementEvidencePresent\":false,\"candidateRowCount\":4,\"requestedColumnCount\":3,\"commonMatchedColumnCount\":0,\"matchedCellHeaderCount\":0,\"requiredCellHeaderCount\":12"
+            "\"referenceLayoutPresent\":true,\"referenceFallbackAllowed\":true,\"referenceFallbackUsed\":true,\"sourceLayoutCandidatePresent\":true,\"sourceRenderLayoutPresent\":false,\"sourceLayoutRenderable\":false,\"sourceOnlyPageYAdmissionReady\":false,\"sourceOnlyPageYAdmissionBasis\":null,\"sourceReplacementBlockedReason\":\"source-page-y-render-admission-not-ready\""
         ));
         assert!(layer_tree.contains(
-            "\"sourceDerivedLayoutCandidatePresent\":false,\"sourceDerivedLayoutRenderable\":false,\"pageOriginAuthority\":null,\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":false"
+            "\"rejectionReasons\":[\"source-placement-evidence-missing\",\"line-header-cell-geometry-incomplete\",\"no-common-matched-cell-header-columns\",\"line-header-rows-not-homogeneous\",\"line-mark-rows-not-exact-source-boundaries\",\"sparse-sibling-derived-candidate-render-ineligible\",\"source-derived-layout-not-renderable\"],\"renderPromotionContribution\":\"source-derived-layout-readiness-gate\",\"renderPromotionBlockedReason\":\"source-derived-layout-not-renderable\""
         ));
         assert!(layer_tree.contains(
-            "\"referenceCalibrationReplacementGate\":{\"source\":\"table-page-space-v1 reference calibration replacement gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"replacementReady\":false,\"sourceLayoutCandidatePresent\":false,\"sourceLayoutRenderable\":false,\"horizontalSolverReady\":false,\"sourceColumnSplitReady\":false,\"pageSpaceHorizontalTransformReady\":false,\"rowHeightSolverReady\":false,\"yOriginSolverReady\":false"
+            "\"pageSpaceSolver\":{\"source\":\"documentTextLineHeaders+/LineMark+/PageMark\",\"solverVersion\":\"table-page-space-v1\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"solverStage\":\"blocked-horizontal-transform\",\"sourcePlacementEvidencePresent\":false,\"candidateRowCount\":4,\"requestedColumnCount\":3,\"commonMatchedColumnCount\":0,\"matchedCellHeaderCount\":0,\"requiredCellHeaderCount\":12"
         ));
         assert!(layer_tree.contains(
-            "\"blockedReasons\":[\"source-derived-layout-candidate-absent\",\"table-horizontal-source-transform-incomplete\",\"source-column-split-not-ready\",\"table-horizontal-page-space-transform-incomplete\",\"table-row-height-source-transform-incomplete\",\"source-page-y-transform-not-decoded\"],\"renderPromotionContribution\":\"reference-calibration-replacement-gate\",\"renderPromotionBlockedReason\":\"source-table-page-space-not-ready\""
+            "\"sourceDerivedLayoutCandidatePresent\":true,\"sourceDerivedLayoutRenderable\":false,\"pageOriginAuthority\":\"none\",\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":false"
         ));
         assert!(layer_tree.contains(
-            "\"pageSpaceHorizontalTransformGate\":{\"source\":\"documentTextLineHeaders+/LineMark page-space horizontal transform gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"promotionReady\":false,\"sourceLayoutCandidatePresent\":false,\"sourceColumnSplitReady\":false,\"xUnitAllRowsAgree\":false,\"fullExtentUnitsPresent\":false,\"sourceFrameDecoded\":false,\"pageOriginAuthority\":null"
+            "\"referenceCalibrationReplacementGate\":{\"source\":\"table-page-space-v1 reference calibration replacement gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"replacementReady\":false,\"sourceLayoutCandidatePresent\":true,\"sourceLayoutRenderable\":false,\"horizontalSolverReady\":false,\"sourceColumnSplitReady\":false,\"pageSpaceHorizontalTransformReady\":false,\"rowHeightSolverReady\":false,\"yOriginSolverReady\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"table-horizontal-source-transform-incomplete\",\"source-column-split-not-ready\",\"table-horizontal-page-space-transform-incomplete\",\"table-row-height-source-transform-incomplete\",\"source-page-y-transform-not-decoded\",\"source-derived-layout-not-renderable\"],\"renderPromotionContribution\":\"reference-calibration-replacement-gate\",\"renderPromotionBlockedReason\":\"source-table-page-space-not-ready\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyAxisAdmissionGate\":{\"source\":\"pageSpaceHorizontalTransformGate+sourcePageYTransformGate source-only selector coupling\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"admissionReady\":false,\"activeSourceLayoutAdmissionReady\":false,\"activeSourceLayoutAdmissionBasis\":null,\"sourceOnlySelectorFallbackIgnoredByActiveSourceLayout\":false,\"sourceLayoutCandidatePresent\":true,\"sourceLayoutRenderable\":false,\"horizontalAxisReady\":false,\"horizontalSelectorCandidatePresent\":true,\"horizontalSelectorInBestAgreementGroup\":true,\"horizontalCandidateCount\":4,\"horizontalAgreementGroupCount\":3,\"horizontalBestSupportCount\":2,\"horizontalUniqueBestSupported\":true,\"horizontalBestSupportedSelectedX\":174.000,\"horizontalBestSupportedSelectedWidth\":421.000"
+        ));
+        assert!(layer_tree.contains(
+            "\"horizontalBestSupportedFrameBases\":[\"page-mark-word14-first-slot-word15-half-gap\",\"page-mark-word14-first-slot-word15-half-gap\"],\"yAxisReady\":false,\"ySelectorCandidatePresent\":true,\"ySelectorSingleSupportFallback\":false,\"ySelectorSupportFragmentedByTable\":true,\"ySelectorSupportCount\":2,\"ySelectorCrossTableSupportPresent\":true,\"ySelectorAgreementAdmissible\":false,\"ySelectorAdmissionBlockedReason\":\"source-y-origin-selector-fragmented-by-table-not-render-admissible\",\"ySelectorSupportBlockedReasons\":[\"cross-table-row-boundary-offset-transform-required\",\"page-line-gap-projection-does-not-decode-table-y-origin\"],\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\""
+        ));
+        assert!(layer_tree.contains(
+            "\"pageMarkAbsoluteYSlotSemanticsReady\":false,\"pageMarkAbsoluteYSlotBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"pageMarkAbsoluteYSlotResidualPx\":-723.913,\"yCandidateCount\":9,\"yAgreementGroupCount\":8,\"yBestSupportCount\":2,\"yUniqueBestSupported\":true,\"ySelectedOriginBasis\":\"cross-table-combined-previous-row-span-first-record\",\"ySelectedY\":235.087,\"ySelectedRowHeight\":23.298,\"ySelectorTableCandidateIndexes\":[0]"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyAxisCandidateBBox\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceOnlyAxisCandidateBBox\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidatePresent\":true,\"bboxPresent\":true,\"horizontalCandidatePresent\":true,\"yCandidatePresent\":true,\"rowHeightCandidatePresent\":true,\"rowCount\":4,\"horizontalFrameBasis\":\"page-mark-word14-first-slot-word15-half-gap\",\"yOriginBasis\":\"cross-table-combined-previous-row-span-first-record\",\"rowHeight\":23.298,\"bbox\":{\"x\":174.000,\"y\":235.087,\"width\":421.000,\"height\":93.192}"
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"source-column-split-not-ready\",\"source-row-height-not-ready\",\"source-horizontal-axis-not-render-admissible\",\"source-y-origin-selector-fragmented-by-table\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"source-y-axis-not-render-admissible\",\"source-derived-layout-not-renderable\"],\"renderPromotionContribution\":\"source-only-axis-selector-admission-gate\",\"renderPromotionBlockedReason\":\"source-page-space-axis-selector-coupling-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"pageSpaceHorizontalTransformGate\":{\"source\":\"documentTextLineHeaders+/LineMark page-space horizontal transform gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"promotionReady\":false,\"sourceLayoutCandidatePresent\":true,\"sourceColumnSplitReady\":false,\"xUnitAllRowsAgree\":false,\"fullExtentUnitsPresent\":false,\"sourceFrameDecoded\":false,\"pageOriginAuthority\":\"none\""
         ));
         assert!(layer_tree.contains(
             "\"sourceFrameHypotheses\":[{\"frameBasis\":\"page-mark-word14-first-slot-word15-direct\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"coordinateBasis\":\"page-mark-u16-fields+cross-table-line-header-slots\",\"pageMarkXWord14\":194,\"pageMarkWidthWord\":423,\"firstColumnSlotUnits\":20,\"xAdjustmentUnits\":20.000,\"widthAdjustmentUnits\":0.000,\"xAdjustmentBasis\":\"cross-table-first-column-slot\",\"widthAdjustmentBasis\":\"none\",\"selectedX\":174.000,\"selectedWidth\":423.000"
@@ -74662,22 +85458,40 @@ mod tests {
             "\"blockedReasons\":[\"source-horizontal-field-semantics-still-unproven\"],\"renderPromotionContribution\":\"source-horizontal-frame-candidate-agreement-gate\",\"renderPromotionBlockedReason\":\"source-horizontal-field-semantics-unproven\""
         ));
         assert!(layer_tree.contains(
-            "\"blockedReasons\":[\"source-derived-layout-candidate-absent\",\"source-column-split-not-ready\",\"source-x-unit-range-not-row-stable\",\"source-full-line-extent-units-missing\",\"page-space-horizontal-frame-not-decoded\",\"line-mark-rows-not-exact-source-boundaries\"],\"renderPromotionContribution\":\"source-page-space-horizontal-transform-gate\",\"renderPromotionBlockedReason\":\"table-horizontal-page-space-transform-incomplete\""
+            "\"blockedReasons\":[\"source-column-split-not-ready\",\"source-x-unit-range-not-row-stable\",\"source-full-line-extent-units-missing\",\"page-space-horizontal-frame-not-decoded\",\"line-mark-rows-not-exact-source-boundaries\",\"sparse-sibling-derived-candidate-render-ineligible\"],\"renderPromotionContribution\":\"source-page-space-horizontal-transform-gate\",\"renderPromotionBlockedReason\":\"table-horizontal-page-space-transform-incomplete\""
         ));
         assert!(layer_tree.contains(
-            "\"sourcePageYTransformGate\":{\"source\":\"documentTextLineHeaders+/LineMark+/PageMark y-origin promotion gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"promotionReady\":false,\"lineMarkRowsExactAndContiguous\":false,\"pageOriginAuthority\":null,\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":false,\"subrecordLineSpanReadinessPresent\":true"
+            "\"sourcePageYTransformGate\":{\"source\":\"documentTextLineHeaders+/LineMark+/PageMark y-origin promotion gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"promotionReady\":false,\"lineMarkRowsExactAndContiguous\":false,\"pageOriginAuthority\":\"none\",\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":false,\"subrecordLineSpanReadinessPresent\":true"
         ));
         assert!(layer_tree.contains(
             "\"selectedPostRowGapSpanOrderedCoverage\":{\"policy\":\"one-tolerance-hit-with-unique-subrecord-candidate-per-line-mark-record\",\"matchedRecordIndexes\":[8,10,12],\"matchedCandidateByteOffsets\":[414,414,414],\"uniqueCandidateByteOffsets\":[414],\"duplicateCandidateByteOffsets\":[414],\"matchedRecordCount\":3,\"uniqueCandidateCount\":1,\"duplicateCandidateReuseCount\":1,\"orderedUniqueCoverageComplete\":false}"
         ));
         assert!(layer_tree.contains(
-            "\"sourceOnlyPageYOriginHypothesis\":{\"source\":\"sourcePageYTransformGate source-only page-y origin hypothesis\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidatePresent\":true,\"candidateKind\":\"cross-table-page-line-domain\",\"yOriginReadinessClass\":\"cross-table-line-domain-only\",\"originDecisionReady\":false,\"yOriginReadinessBlockedReasons\":[\"cross-table-line-domain-present\",\"line-domain-to-page-space-origin-transform-required\",\"source-unit-to-page-line-piecewise-fit-not-exact\",\"source-gap-to-page-line-gap-transform-not-stable\",\"source-order-vs-subrecord-order-contradiction\",\"decoded-page-y-origin-missing\"],\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":false,\"pageMarkAbsoluteYSlotCandidatePresent\":false,\"pageMarkAbsoluteYSlotY\":null,\"pageMarkAbsoluteYSlotBlockedReason\":null,\"pageOriginAuthority\":null"
+            "\"subrecordSpanRoleGate\":{\"source\":\"/PageMark raw u16 subrecord line-span role classifier\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"dominantSpanRole\":\"selected-post-row-gap\",\"dominantSpanRoleHitCount\":3,\"selectedPostRowGapSpanHitCount\":3,\"selectedPostRowGapSpanTargetCount\":4,\"selectedPostRowGapSpanComplete\":false,\"rowSpanHitCount\":0,\"rowSpanTargetCount\":4,\"previousRowSpanHitCount\":0,\"compactRowSpanHitCount\":0,\"rowSpanComplete\":false,\"selectedPostRowGapRoleDominant\":true,\"rowSpanRoleDominant\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"subrecord-spans-prefer-post-row-gap-family\",\"selected-post-row-gap-span-incomplete\",\"row-span-family-not-covered-by-subrecords\",\"post-row-gap-match-is-not-visible-row-height\",\"subrecord-span-role-semantics-unproven\",\"page-y-origin-transform-undecoded\"],\"renderPromotionContribution\":\"page-mark-subrecord-span-role-gate\",\"renderPromotionBlockedReason\":\"page-mark-subrecord-spans-match-post-row-gaps-not-row-heights\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyPageYOriginHypothesis\":{\"source\":\"sourcePageYTransformGate source-only page-y origin hypothesis\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidatePresent\":true,\"candidateKind\":\"cross-table-page-line-domain\",\"yOriginReadinessClass\":\"cross-table-line-domain-only\",\"originDecisionReady\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":false,\"pageMarkAbsoluteYSlotCandidatePresent\":true,\"pageMarkAbsoluteYSlotY\":1024.000,\"pageMarkAbsoluteYSlotBlockedReason\":\"page-mark-absolute-y-slot-semantics-unproven\",\"pageOriginAuthority\":\"none\""
         ));
         assert!(layer_tree.contains(
             "\"sourceGapToPageLineGapReadinessHints\":{\"source\":\"sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.sourceGapToPageLineGapReadinessHints\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transitionCount\":3,\"samePageMarkEntryTransitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"sourceRangeGapToPageLineGapMaxAbsDeltaUnits\":182,\"rowSourceStartGapToPageLineGapMaxAbsDeltaUnits\":295,\"segmentOffsetGapToPageLineGapMaxAbsDeltaUnits\":105,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105"
         ));
         assert!(layer_tree.contains(
-            "\"sourceRangeUnitsPerPageLineGapSpread\":12.250,\"rowSourceStartUnitsPerPageLineGapSpread\":42.125,\"segmentOffsetUnitsPerPageLineGapSpread\":29.875,\"sourceGapToPageLineGapTransformStable\":false,\"renderPromotionBlockedReason\":\"source-gap-to-page-line-gap-transform-not-stable\""
+            "\"transformCandidateCount\":3,\"exactTransformCandidateCount\":0,\"bestCandidateTransitionCoverageCount\":3,\"bestCandidateUnitsPerPageLineGapSpread\":29.875,\"lowestSpreadCandidateTransformKind\":\"direct-source-range-gap\",\"lowestSpreadUnitsPerPageLineGapSpread\":12.250"
+        ));
+        assert!(layer_tree.contains(
+            "\"transformCandidateSummaries\":[{\"transformKind\":\"direct-source-range-gap\",\"selected\":false,\"stable\":false,\"transitionCoverageCount\":3,\"maxAbsDeltaUnits\":182,\"unitsPerPageLineGapSpread\":12.250,\"declineReason\":\"higher-max-delta-than-selected-transform\",\"renderPromotionBlockedReason\":\"source-gap-to-page-line-gap-transform-not-stable\"}"
+        ));
+        assert!(layer_tree.contains(
+            "{\"transformKind\":\"segment-offset-gap\",\"selected\":true,\"stable\":false,\"transitionCoverageCount\":3,\"maxAbsDeltaUnits\":105,\"unitsPerPageLineGapSpread\":29.875,\"declineReason\":null,\"renderPromotionBlockedReason\":\"source-gap-to-page-line-gap-transform-not-stable\"}"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceRangeUnitsPerPageLineGapSpread\":12.250,\"rowSourceStartUnitsPerPageLineGapSpread\":42.125,\"segmentOffsetUnitsPerPageLineGapSpread\":29.875,\"sourceGapToPageLineGapTransformStable\":false,\"tableFamilySourceGapToPageLineGapTransformStable\":false,\"tableFamilyTransformBlockedReason\":\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"renderPromotionBlockedReason\":\"source-gap-to-page-line-gap-transform-not-stable\""
         ));
         assert!(layer_tree.contains(
             "\"crossTableLineDomainEvidence\":{\"present\":true,\"allRecordsWithinSinglePageMarkEntry\":true,\"allOffsetsStable\":true,\"allOffsetsRequireTransform\":true,\"stableRowBoundaryOffsetCandidateUnits\":-82,\"piecewiseAllTablesExact\":false,\"piecewiseMaxAbsResidualRecordIndexes\":0.106,\"combinedLineMarkRecordIndexes\":[7,9,11,13,21,23,25,27,32,34,36]"
@@ -74692,16 +85506,22 @@ mod tests {
             "\"renderPromotionContribution\":\"source-only-page-y-origin-hypothesis\",\"renderPromotionBlockedReason\":\"source-page-y-origin-inference-pending\""
         ));
         assert!(layer_tree.contains(
-            "\"sourceOnlyPageYOriginCandidateAgreementGate\":{\"source\":\"sourcePageYTransformGate.sourcePageYOriginHypotheses agreement\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidateCount\":9,\"agreementGroupCount\":8,\"bestSupportCount\":2,\"uniqueBestSupported\":true,\"bestSupportedSelectedY\":235.087,\"bestSupportedRowHeight\":23.298,\"bestSupportedOriginBases\":[\"cross-table-combined-previous-row-span-first-record\",\"cross-table-previous-row-span-table-first-row\"]"
+            "\"sourceOnlyPageYOriginCandidateAgreementGate\":{\"source\":\"sourcePageYTransformGate.sourcePageYOriginHypotheses agreement\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidateCount\":9,\"agreementGroupCount\":8,\"bestSupportCount\":2,\"uniqueBestSupported\":true,\"bestSupportedSelectedY\":235.087,\"bestSupportedRowHeight\":23.298,\"bestSupportedOriginBases\":[\"cross-table-combined-previous-row-span-first-record\",\"cross-table-previous-row-span-table-first-row\"],\"bestSupportedTableCandidateIndexes\":[0],\"bestSupportedTableCandidateCount\":1,\"bestSupportedCoversMultipleTableCandidates\":false"
         ));
         assert!(layer_tree.contains(
-            "\"crossTablePreviousRowSpanSupportCount\":5,\"crossTablePreviousRowSpanUniqueBestSupported\":true,\"crossTablePreviousRowSpanReady\":false,\"crossTablePreviousRowSpanReadinessBlockedReasons\":[\"cross-table-row-boundary-offset-transform-required\",\"page-line-gap-projection-does-not-decode-table-y-origin\"]"
+            "\"crossTablePreviousRowSpanSupportCount\":5,\"crossTablePreviousRowSpanTableCandidateIndexes\":[0,1,2,3],\"crossTablePreviousRowSpanTableCandidateCount\":4,\"crossTablePreviousRowSpanUniqueBestSupported\":true,\"crossTablePreviousRowSpanReady\":false,\"crossTablePreviousRowSpanBestGroupCoversMultipleTables\":false,\"crossTablePreviousRowSpanBestGroupTableCoverageRatio\":0.250,\"crossTablePreviousRowSpanSupportFragmentedByTable\":true,\"crossTablePreviousRowSpanReadinessBlockedReasons\":[\"cross-table-row-boundary-offset-transform-required\",\"page-line-gap-projection-does-not-decode-table-y-origin\"]"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyPageYOriginSelector\":{\"source\":\"sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":0,\"selectionBasis\":\"best-supported-source-only-y-origin-agreement-group\",\"singleSupportFallback\":false,\"selectedOriginBasis\":\"cross-table-combined-previous-row-span-first-record\",\"selectedY\":235.087,\"selectedRowHeight\":23.298,\"supportCount\":2,\"supportOriginBases\":[\"cross-table-combined-previous-row-span-first-record\",\"cross-table-previous-row-span-table-first-row\"],\"supportTableCandidateIndexes\":[0],\"supportCoversMultipleTableCandidates\":false,\"supportFragmentedByTable\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"supportBlockedReasons\":[\"cross-table-row-boundary-offset-transform-required\",\"page-line-gap-projection-does-not-decode-table-y-origin\"],\"renderPromotionContribution\":\"source-only-page-y-origin-selector\",\"renderPromotionBlockedReason\":\"cross-table-previous-row-span-support-fragmented-by-table\""
         ));
         assert!(layer_tree.contains(
             "{\"selectedY\":235.087,\"rowHeight\":23.298,\"supportCount\":2,\"originBases\":[\"cross-table-combined-previous-row-span-first-record\",\"cross-table-previous-row-span-table-first-row\"],\"tableCandidateIndexes\":[0],\"contributions\":[\"cross-table-row-boundary-offset-diagnostic-only\",\"cross-table-row-boundary-offset-diagnostic-only\"]"
         ));
         assert!(layer_tree.contains(
-            "\"renderPromotionContribution\":\"source-page-y-origin-candidate-agreement-gate\",\"renderPromotionBlockedReason\":\"source-page-y-origin-agreement-unproven\""
+            "\"blockedReasons\":[\"source-page-y-origin-field-semantics-still-unproven\",\"source-page-y-origin-best-support-not-cross-table\",\"cross-table-previous-row-span-support-fragmented-by-table\"],\"renderPromotionContribution\":\"source-page-y-origin-candidate-agreement-gate\",\"renderPromotionBlockedReason\":\"source-page-y-origin-agreement-unproven\""
         ));
         assert!(layer_tree.contains(
             "\"sourceOnlyPageYOriginDomainGate\":{\"source\":\"sourcePageYTransformGate.sourceOnlyPageYOriginDomainGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"directLineMarkPageSpaceOriginPresent\":false,\"crossTableLineDomainPresent\":true,\"crossTableLineDomainRecordCount\":11,\"crossTableLineDomainTableCount\":4,\"combinedLineMarkRecordYPitchPx\":23.298"
@@ -74752,7 +85572,16 @@ mod tests {
             "\"sourceRangeGapUnits\":[190,72,138],\"rowSourceStartGapUnits\":[303,160,230],\"previousFamilyRecordGaps\":[8,2,5],\"selectedFamilyRecordGaps\":[8,2,5],\"selectedMinusPreviousFamilyRecordGapDeltas\":[0,0,0]"
         ));
         assert!(layer_tree.contains(
-            "\"sourceGapToPageLineGapDecoded\":false,\"pageSpaceTransitionOriginDecoded\":false,\"blockedReasons\":[\"previous-and-selected-family-transitions-share-line-domain-gaps\",\"source-gap-to-page-line-gap-transform-missing\",\"source-range-gap-to-page-line-gap-ratio-not-stable\",\"row-source-start-gap-to-page-line-gap-ratio-not-stable\",\"source-gap-to-page-line-gap-segment-offset-transform-missing\",\"table-family-transition-rule-undecoded\",\"page-space-transition-origin-undecoded\"],\"renderPromotionContribution\":\"table-family-transition-semantics-readiness\",\"renderPromotionBlockedReason\":\"table-family-transition-semantics-undecoded\"},\"lineDomainRequiresOffsetTransform\":true,\"pageSpaceOriginDecoded\":false"
+            "\"sourceGapToPageLineGapDecoded\":false,\"pageSpaceTransitionOriginDecoded\":false,\"blockedReasons\":[\"previous-and-selected-family-transitions-share-line-domain-gaps\",\"source-gap-to-page-line-gap-transform-missing\",\"source-range-gap-to-page-line-gap-ratio-not-stable\",\"row-source-start-gap-to-page-line-gap-ratio-not-stable\",\"source-gap-to-page-line-gap-segment-offset-transform-missing\",\"table-family-transition-rule-undecoded\",\"page-space-transition-origin-undecoded\"],\"renderPromotionContribution\":\"table-family-transition-semantics-readiness\",\"renderPromotionBlockedReason\":\"table-family-transition-semantics-undecoded\"}"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyPageYOriginDomainGate.sourceGapToPageLineGapTransformAdmissionGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transformDomain\":\"source-unit-gap-to-page-mark-line-index-gap\",\"canDecodeSourceTransform\":false,\"tableFamilyTransformStable\":false,\"tableFamilyTransformBlockedReason\":\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"transitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105"
+        ));
+        assert!(layer_tree.contains(
+            "\"bestCandidateMaxAbsDeltaUnits\":105,\"transformCandidateCount\":3,\"exactTransformCandidateCount\":0,\"bestCandidateTransitionCoverageCount\":3,\"bestCandidateUnitsPerPageLineGapSpread\":29.875,\"lowestSpreadCandidateTransformKind\":\"direct-source-range-gap\",\"lowestSpreadUnitsPerPageLineGapSpread\":12.250,\"declinedTransformCandidates\":[{\"transformKind\":\"direct-source-range-gap\",\"selected\":false,\"stable\":false,\"transitionCoverageCount\":3,\"maxAbsDeltaUnits\":182"
+        ));
+        assert!(layer_tree.contains(
+            "\"declaredBlockers\":[\"source-gap-to-page-line-gap-transform-not-stable\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"source-gap-to-page-line-gap-transform-undecoded\"],\"renderPromotionContribution\":\"source-gap-to-page-line-gap-transform-admission-gate\",\"renderPromotionBlockedReason\":\"source-gap-to-page-line-gap-transform-not-stable\"},\"lineDomainRequiresOffsetTransform\":true,\"pageSpaceOriginDecoded\":false"
         ));
         assert!(layer_tree.contains(
             "\"sourceOnlyPageMarkAbsoluteYSlotGate\":{\"source\":\"/PageMark raw u16 subrecord scan+/LineMark source page-line projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-vs-page-mark-absolute-y-slot\""
@@ -74764,10 +85593,28 @@ mod tests {
             "\"lineDomainPostRowGapProjectionProbe\":{\"source\":\"sourcePageYTransformGate line-domain + post-row-gap span projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-unit-as-px\",\"selectionReady\":false,\"promotionReady\":false,\"lineDomainY\":235.087,\"selectedPostRowGapSpanFirstUnits\":65,\"selectedPostRowGapSpanComplete\":false,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"projectedY\":300.087,\"referenceTableTopY\":301.005,\"residualPx\":-0.919,\"absResidualPx\":0.919,\"withinTwoPx\":true"
         ));
         assert!(layer_tree.contains(
+            "\"sourceOnlyProjectionDomainGate\":{\"source\":\"sourcePageYTransformGate source-only line-domain/post-row-gap projection domain gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"sourceProjectionPresent\":true,\"lineDomainPresent\":true,\"selectedPostRowGapSpanPresent\":true,\"selectedPostRowGapSpanComplete\":false,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"sourceUnitDomain\":\"line-mark-record-y-plus-page-mark-subrecord-gap-units\",\"lineDomainY\":235.087,\"selectedPostRowGapSpanFirstUnits\":65,\"projectedY\":300.087,\"blockedReasons\":[\"cross-domain-source-units-treated-as-px\",\"selected-spacing-records-are-post-row-gap-family\",\"selected-post-row-gap-span-incomplete\",\"selected-post-row-gap-span-not-ordered-unique\",\"page-y-origin-transform-undecoded\"],\"renderPromotionContribution\":\"source-only-line-domain-post-row-gap-projection-domain-gate\",\"renderPromotionBlockedReason\":\"line-domain-post-row-gap-projection-crosses-source-unit-domain\"}"
+        ));
+        assert!(layer_tree.contains(
             "\"blockedReasons\":[\"cross-domain-source-units-treated-as-px\",\"selected-spacing-records-are-post-row-gap-family\",\"selected-post-row-gap-span-incomplete\",\"selected-post-row-gap-span-not-ordered-unique\",\"reference-only-validation\",\"page-y-origin-transform-undecoded\"],\"renderPromotionContribution\":\"line-domain-post-row-gap-projection-probe\",\"renderPromotionBlockedReason\":\"line-domain-post-row-gap-projection-crosses-source-unit-domain\""
         ));
         assert!(layer_tree.contains(
-            "\"blockedReasons\":[\"source-derived-layout-candidate-absent\",\"page-mark-subrecord-spans-do-not-decode-page-y-origin\",\"page-mark-cross-table-raw-record-order-regression\",\"page-mark-cross-table-subrecord-ordering-unproven\",\"cross-table-row-boundary-offset-transform-required\",\"decoded-line-mark-page-y-transform-missing\"],\"renderPromotionContribution\":\"source-page-y-transform-gate\",\"renderPromotionBlockedReason\":\"source-page-y-transform-not-decoded\""
+            "\"sourceOnlyPageYRenderAdmissionGate\":{\"source\":\"sourcePageYTransformGate source-only page-y render admission gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"admissionReady\":false,\"directLineMarkOriginAdmissible\":false,\"sourceLayoutCandidatePresent\":true,\"pageOriginAuthority\":\"none\",\"lineMarkRowsExactAndContiguous\":false,\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":false,\"crossTableLineDomainPresent\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlySelectorBlockedReason\":\"source-y-origin-selector-fragmented-by-table-not-render-admissible\",\"sourceOnlySelectorSupportBlockedReasons\":[\"cross-table-row-boundary-offset-transform-required\",\"page-line-gap-projection-does-not-decode-table-y-origin\"]"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyPageYRenderAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transformDomain\":\"source-unit-gap-to-page-mark-line-index-gap\",\"canDecodeSourceTransform\":false,\"tableFamilyTransformStable\":false,\"tableFamilyTransformBlockedReason\":\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"transitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105"
+        ));
+        assert!(layer_tree.contains(
+            "\"pageMarkAbsoluteYSlotSemanticsReady\":false,\"pageMarkAbsoluteYSlotBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"pageMarkAbsoluteYSlotResidualPx\":-723.913"
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"direct-line-mark-page-origin-absent\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"cross-table-line-domain-not-page-space-origin\",\"source-order-vs-subrecord-order-contradiction\",\"cross-table-row-boundary-offset-transform-required\",\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"source-y-origin-selector-fragmented-by-table-not-render-admissible\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"decoded-line-mark-page-y-transform-missing\"],\"renderPromotionContribution\":\"source-only-page-y-render-admission-gate\",\"renderPromotionBlockedReason\":\"source-page-y-render-admission-not-ready\""
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"line-mark-page-origin-candidate-absent\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"page-mark-subrecord-spans-do-not-decode-page-y-origin\",\"page-mark-cross-table-raw-record-order-regression\",\"page-mark-cross-table-subrecord-ordering-unproven\",\"cross-table-row-boundary-offset-transform-required\",\"decoded-line-mark-page-y-transform-missing\"],\"renderPromotionContribution\":\"source-page-y-transform-gate\",\"renderPromotionBlockedReason\":\"source-page-y-transform-not-decoded\""
         ));
         assert!(layer_tree.contains(
             "\"crossTableRowBoundaryOffsetConsistency\":{\"source\":\"/LineMark previous row-span boundaries+cross-table sparse sibling order\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"currentTableCandidateIndex\":0,\"sparseTableCandidateIndex\":4,\"relatedTableCandidateIndexes\":[0,1,2,3],\"relatedTableCount\":4,\"tableCountWithPreviousRowSpanAlignment\":4,\"rowBoundaryOffsetCandidateUnits\":[-82,-82,-82,-82],\"stableRowBoundaryOffsetCandidateUnits\":-82,\"allRelatedTablesHaveOffsetCandidate\":true,\"allOffsetsStable\":true,\"allOffsetsRequireTransform\":true"
@@ -74857,7 +85704,7 @@ mod tests {
             "\"selectedSpacingLineMarkStartUnits\":[1886,2036,2179],\"selectedSpacingLineMarkEndUnits\":[1944,2088,2233],\"selectedSpacingStartResidualUnits\":[29,10,9],\"selectedSpacingEndResidualUnits\":[-24,-30,-28],\"selectedSpacingSpanResidualUnits\":[-53,-40,-37],\"selectedMinusPreviousRecordIndexGaps\":[1,1,1],\"selectedMinusPreviousRecordYDeltaPx\":[23.298,23.298,23.298],\"rowSourceStartUnits\":[1857,2026,2170],\"rowSourceEndUnits\":[1968,2118,2261],\"lineMarkStartUnits\":[1775,1944,2088],\"lineMarkEndUnits\":[1886,2036,2179],\"startResidualUnits\":[-82,-82,-82],\"endResidualUnits\":[-82,-82,-82],\"spanResidualUnits\":[0,0,0],\"rowBoundaryOffsetCandidateUnits\":-82,\"offsetNormalizedStartResidualUnits\":[0,0,0],\"offsetNormalizedEndResidualUnits\":[0,0,0],\"offsetNormalizedExactBoundaryAligned\":true,\"exactBoundaryAligned\":false,\"spanOnlyMatch\":true"
         ));
         assert!(layer_tree.contains(
-            "\"renderPromoted\":false,\"renderPromotionAuthority\":null,\"renderPromotionBlockedReason\":\"source-derived-layout-candidate-absent\""
+            "\"renderPromoted\":false,\"renderPromotionAuthority\":null,\"renderPromotionBlockedReason\":\"sparse-sibling-derived-candidate-render-ineligible\""
         ));
         assert!(layer_tree.contains(
             "\"lineMarkRecordIndexes\":[8,10,12,14],\"uniformLineMarkRecordStride\":true,\"lineMarkRecordStride\":2,\"interleavedLineMarkRecordCountBetweenRows\":1"
@@ -74876,6 +85723,19 @@ mod tests {
         ));
         assert!(layer_tree.contains(
             "\"sourceColumnWidthBasis\":null,\"sourceColumnWidthFractions\":[],\"blockedReasons\":[\"compact-line-header-cell-geometry-incomplete\",\"source-line-header-column-widths-missing\"],\"renderPromotionContribution\":\"sparse-sibling-column-readiness-gate\",\"renderPromotionBlockedReason\":\"source-column-split-not-ready\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sparseSiblingDerivedCompactCellGeometry\":{\"source\":\"sparseTableSiblingEvidence compact cell geometry prerequisite\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"candidateRowCount\":4,\"matchedRowCount\":4,\"candidateSegmentCount\":12,\"matchedSegmentCount\":12,\"compactToSparseColumnOffsetCandidate\":3,\"matchedSparseColumnIndexes\":[3,4,5],\"derivedMatchedCellCount\":12,\"requiredCellCount\":12,\"derivedCellGeometryCoverageComplete\":true,\"sourcePlacementPrerequisiteReady\":true,\"renderPromotionContribution\":\"sparse-sibling-derived-geometry-prerequisite\",\"renderPromotionBlockedReason\":\"sparse-sibling-derived-geometry-diagnostic-only\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceDerivedLayoutCandidate\":{\"source\":\"sparseTableSiblingEvidence compact cell geometry candidate\",\"sourceBacked\":true,\"referenceBacked\":false"
+        ));
+        assert!(layer_tree.contains("\"provenance\":\"sparseSiblingDerived\""));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"sparse-sibling-derived-candidate-render-ineligible\""
+        ));
+        assert!(layer_tree.contains(
+            "\"decodedSourcePlacementEvidence\":false,\"decodedSourcePlacementMatchCount\":0,\"decodedSourcePlacementRequiredCellCount\":12"
         ));
         assert!(layer_tree.contains(
             "\"compactRow\":0,\"sparseRow\":0,\"sourceIntervalIndex\":1,\"sourceRange\":{\"start\":304,\"end\":411},\"compactCellCount\":3,\"sparseCellCount\":7,\"sparseEmptyCellCount\":4,\"sparseNonEmptyCellCount\":3,\"firstNonEmptySparseColumnIndex\":3,\"lastNonEmptySparseColumnIndex\":5,\"compactToSparseColumnOffset\":3"
@@ -74947,7 +85807,7 @@ mod tests {
             "\"matchedCellHeaderCount\":0,\"postRowGapCorrelationComplete\":true,\"postRowGapMatchCount\":4,\"postRowGapExactSpanMatchCount\":4,\"rawPageMarkScanHeaderCount\":15,\"rawPageMarkSingleHeaderMatched\":true"
         ));
         assert!(layer_tree.contains(
-            "\"subrecordLineSpanReadiness\":{\"source\":\"/PageMark raw u16 subrecord line ranges+/LineMark+sparseTableSiblingEvidence\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"spanToleranceUnits\":3,\"selectedSpacingRecordIndexes\":[8,10,12,14],\"previousRowSpanRecordIndexes\":[7,9,11,13],\"selectedPostRowGapSpanTargets\":[65,65,65,67],\"postRowGapSpanTargets\":[65,65,65,67],\"previousRowSpanTargets\":[107,113,113,113],\"compactRowSpanTargets\":[107,113,113,113],\"candidateCount\":7,\"selectedPostRowGapSpanHitCount\":3,\"previousRowSpanHitCount\":0,\"compactRowSpanHitCount\":0,\"selectedPostRowGapSpanComplete\":false,\"previousRowSpanComplete\":false,\"compactRowSpanComplete\":false,\"selectedPostRowGapSpanMaxAbsResidualUnits\":5,\"previousRowSpanMaxAbsResidualUnits\":51,\"compactRowSpanMaxAbsResidualUnits\":51,\"pageYTransformDecoded\":false"
+            "\"subrecordLineSpanReadiness\":{\"source\":\"/PageMark raw u16 subrecord line ranges+/LineMark+sparseTableSiblingEvidence\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"spanToleranceUnits\":3,\"selectedSpacingRecordIndexes\":[8,10,12,14],\"previousRowSpanRecordIndexes\":[7,9,11,13],\"selectedPostRowGapSpanTargets\":[65,65,65,67],\"postRowGapSpanTargets\":[65,65,65,67],\"previousRowSpanTargets\":[107,113,113,113],\"compactRowSpanTargets\":[107,113,113,113],\"candidateCount\":7,\"selectedPostRowGapSpanHitCount\":3,\"previousRowSpanHitCount\":0,\"compactRowSpanHitCount\":0,\"selectedPostRowGapSpanComplete\":false,\"previousRowSpanComplete\":false,\"compactRowSpanComplete\":false,\"selectedPostRowGapSpanMaxAbsResidualUnits\":5,\"previousRowSpanMaxAbsResidualUnits\":51,\"compactRowSpanMaxAbsResidualUnits\":51,\"subrecordSpanRoleGate\":"
         ));
         assert!(layer_tree.contains(
             "\"referenceValidationThresholdPx\":8.000,\"rawRecordIndexReferenceFit\":false,\"rawRecordIndexMaxAbsResidualPx\":82.005"
@@ -75007,10 +85867,19 @@ mod tests {
             "\"sourceOnlyHorizontalFieldSelector\":{\"source\":\"sparseSiblingSourceDerivedLayouts+/PageMark horizontal fields\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":0,\"pageMarkFieldSource\":\"crossTableRowBoundaryOffsetConsistency\",\"compactColumnCount\":3,\"selectionBasis\":\"compact-three-column-page-mark-word15-half-gap\",\"selectedFrameBasis\":\"page-mark-word14-first-slot-word15-half-gap\",\"pageMarkXWord14\":194,\"pageMarkWidthWord\":423,\"firstColumnSlotUnits\":20,\"firstIntercellGapUnits\":4,\"xAdjustmentUnits\":20.000,\"widthAdjustmentUnits\":2.000,\"xAdjustmentBasis\":\"cross-table-first-column-slot\",\"widthAdjustmentBasis\":\"cross-table-half-first-intercell-gap\",\"selectedX\":174.000,\"selectedWidth\":421.000"
         ));
         assert!(layer_tree.contains(
+            "\"sourceWidthFieldRoleGate\":{\"source\":\"sparseSiblingSourceDerivedLayouts+/PageMark width-field role gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"pageMarkFieldSource\":\"crossTableRowBoundaryOffsetConsistency\",\"compactColumnCount\":3,\"pageMarkXWord14\":194,\"pageMarkWord15\":423,\"pageMarkWord21\":564,\"firstColumnSlotUnits\":20,\"firstIntercellGapUnits\":4,\"selectedWidthWordIndex\":15,\"selectedWidthWord\":423,\"selectedWidthFieldRole\":\"compact-three-column-visible-width\""
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedWidthAdjustmentBasis\":\"cross-table-half-first-intercell-gap\",\"selectedFrameBasis\":\"page-mark-word14-first-slot-word15-half-gap\",\"selectionBasis\":\"compact-three-column-page-mark-word15-half-gap\",\"twoColumnWidthCandidatePresent\":false,\"threeColumnWidthCandidatePresent\":true,\"selectorMatchesCompactColumnCount\":true,\"renderPromotionContribution\":\"source-horizontal-width-field-role-gate\",\"renderPromotionBlockedReason\":\"width-field-role-semantics-needs-cross-sample-validation\""
+        ));
+        assert!(layer_tree.contains(
             "\"frameBasis\":\"page-mark-word14-first-slot-word15-half-gap\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"coordinateBasis\":\"page-mark-u16-fields+cross-table-line-header-slots\",\"pageMarkXWord14\":194,\"pageMarkWidthWord\":423,\"firstColumnSlotUnits\":20,\"xAdjustmentUnits\":20.000,\"widthAdjustmentUnits\":2.000,\"xAdjustmentBasis\":\"cross-table-first-column-slot\",\"widthAdjustmentBasis\":\"cross-table-half-first-intercell-gap\",\"selectedX\":174.000,\"selectedWidth\":421.000"
         ));
         assert!(layer_tree.contains(
             "\"pageMarkScopedYTransformProbe\":{\"source\":\"/PageMark scoped raw fields+referenceTableBBox\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"tolerancePx\":2.000,\"lineMarkRecordIndexes\":[8,10,12,14],\"parsedEntryMatchCount\":4,\"singleParsedPageMarkEntryMatched\":true,\"matchedParsedPageMarkEntryIndex\":0,\"rawHeaderMatchCount\":4,\"singleRawRecordHeaderMatched\":true,\"matchedRawRecordHeaderIndex\":0"
+        ));
+        assert!(layer_tree.contains(
+            "\"lineMarkRecordIndexes\":[8,10,12,14],\"parsedEntryMatchCount\":4,\"singleParsedPageMarkEntryMatched\":true,\"matchedParsedPageMarkEntryIndex\":0,\"rawHeaderMatchCount\":4,\"singleRawRecordHeaderMatched\":true,\"matchedRawRecordHeaderIndex\":0,\"referenceBBoxUsed\":true,\"referenceTargetBasis\":\"referenceTableBBox.rowTopTargets\",\"sourceOnlyReplacementBlockedReason\":\"page-mark-scoped-y-transform-targets-reference-backed\""
         ));
         assert!(layer_tree.contains(
             "\"rowDeltaCandidatePolicy\":\"adjacent-ordered-candidate-value-delta\",\"rowDeltaNearestCandidates\""
@@ -75143,6 +86012,12 @@ mod tests {
             "\"sourceOnlyHorizontalFieldSelector\":{\"source\":\"sparseSiblingSourceDerivedLayouts+/PageMark horizontal fields\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":3,\"pageMarkFieldSource\":\"sourceDerivedLayoutCandidate\",\"compactColumnCount\":2,\"selectionBasis\":\"compact-two-column-page-mark-word21-half-slot\",\"selectedFrameBasis\":\"page-mark-word14-first-slot-word21-half-slot\",\"pageMarkXWord14\":194,\"pageMarkWidthWord\":564,\"firstColumnSlotUnits\":20,\"firstIntercellGapUnits\":4,\"xAdjustmentUnits\":20.000,\"widthAdjustmentUnits\":10.000,\"xAdjustmentBasis\":\"cross-table-first-column-slot\",\"widthAdjustmentBasis\":\"cross-table-half-first-column-slot\",\"selectedX\":174.000,\"selectedWidth\":554.000"
         ));
         assert!(layer_tree.contains(
+            "\"sourceWidthFieldRoleGate\":{\"source\":\"sparseSiblingSourceDerivedLayouts+/PageMark width-field role gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"pageMarkFieldSource\":\"sourceDerivedLayoutCandidate\",\"compactColumnCount\":2,\"pageMarkXWord14\":194,\"pageMarkWord15\":423,\"pageMarkWord21\":564,\"firstColumnSlotUnits\":20,\"firstIntercellGapUnits\":4,\"selectedWidthWordIndex\":21,\"selectedWidthWord\":564,\"selectedWidthFieldRole\":\"compact-two-column-visible-width\""
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedWidthAdjustmentBasis\":\"cross-table-half-first-column-slot\",\"selectedFrameBasis\":\"page-mark-word14-first-slot-word21-half-slot\",\"selectionBasis\":\"compact-two-column-page-mark-word21-half-slot\",\"twoColumnWidthCandidatePresent\":true,\"threeColumnWidthCandidatePresent\":false,\"selectorMatchesCompactColumnCount\":true,\"renderPromotionContribution\":\"source-horizontal-width-field-role-gate\",\"renderPromotionBlockedReason\":\"width-field-role-semantics-needs-cross-sample-validation\""
+        ));
+        assert!(layer_tree.contains(
             "\"frameBasis\":\"page-mark-word14-first-slot-word21-half-slot\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"coordinateBasis\":\"page-mark-u16-fields+cross-table-line-header-slots\",\"pageMarkXWord14\":194,\"pageMarkWidthWord\":564,\"firstColumnSlotUnits\":20,\"xAdjustmentUnits\":20.000,\"widthAdjustmentUnits\":10.000,\"xAdjustmentBasis\":\"cross-table-first-column-slot\",\"widthAdjustmentBasis\":\"cross-table-half-first-column-slot\",\"selectedX\":174.000,\"selectedWidth\":554.000"
         ));
         assert!(layer_tree.contains(
@@ -75186,6 +86061,24 @@ mod tests {
             "\"blockedReasons\":[\"table-horizontal-page-space-transform-incomplete\",\"source-page-y-transform-not-decoded\",\"source-derived-layout-not-renderable\"],\"renderPromotionContribution\":\"reference-calibration-replacement-gate\",\"renderPromotionBlockedReason\":\"source-table-page-space-not-ready\""
         ));
         assert!(layer_tree.contains(
+            "\"sourceOnlyAxisAdmissionGate\":{\"source\":\"pageSpaceHorizontalTransformGate+sourcePageYTransformGate source-only selector coupling\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"admissionReady\":false,\"activeSourceLayoutAdmissionReady\":false,\"activeSourceLayoutAdmissionBasis\":null,\"sourceOnlySelectorFallbackIgnoredByActiveSourceLayout\":false,\"sourceLayoutCandidatePresent\":true,\"sourceLayoutRenderable\":false,\"horizontalAxisReady\":false,\"horizontalSelectorCandidatePresent\":true,\"horizontalSelectorInBestAgreementGroup\":true,\"horizontalCandidateCount\":6,\"horizontalAgreementGroupCount\":4,\"horizontalBestSupportCount\":3,\"horizontalUniqueBestSupported\":true,\"horizontalBestSupportedSelectedX\":174.000,\"horizontalBestSupportedSelectedWidth\":554.000"
+        ));
+        assert!(layer_tree.contains(
+            "\"horizontalBestSupportedFrameBases\":[\"page-mark-word14-word21-first-slot-adjusted\",\"page-mark-word14-first-slot-word21-half-slot\",\"page-mark-word14-first-slot-word21-half-slot\"],\"yAxisReady\":false,\"ySelectorCandidatePresent\":true,\"ySelectorSingleSupportFallback\":true,\"ySelectorSupportFragmentedByTable\":false,\"ySelectorSupportCount\":1,\"ySelectorCrossTableSupportPresent\":false,\"ySelectorAgreementAdmissible\":false,\"ySelectorAdmissionBlockedReason\":\"source-y-origin-selector-single-support-fallback-not-render-admissible\",\"ySelectorSupportBlockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-semantics-unproven\"],\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\""
+        ));
+        assert!(layer_tree.contains(
+            "\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transformDomain\":\"source-unit-gap-to-page-mark-line-index-gap\",\"canDecodeSourceTransform\":false,\"tableFamilyTransformStable\":false,\"tableFamilyTransformBlockedReason\":\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"transitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105,\"transformCandidateCount\":3,\"exactTransformCandidateCount\":0"
+        ));
+        assert!(layer_tree.contains(
+            "\"pageMarkAbsoluteYSlotSemanticsReady\":false,\"pageMarkAbsoluteYSlotBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"pageMarkAbsoluteYSlotResidualPx\":107.539,\"yCandidateCount\":12,\"yAgreementGroupCount\":11,\"yBestSupportCount\":2,\"yUniqueBestSupported\":true,\"ySelectedOriginBasis\":\"page-mark-absolute-y-slot-field2-tail-block16-word11\",\"ySelectedY\":768.000,\"ySelectedRowHeight\":null,\"ySelectorTableCandidateIndexes\":[3]"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyAxisCandidateBBox\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceOnlyAxisCandidateBBox\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidatePresent\":true,\"bboxPresent\":true,\"horizontalCandidatePresent\":true,\"yCandidatePresent\":true,\"rowHeightCandidatePresent\":true,\"rowCount\":3,\"horizontalFrameBasis\":\"page-mark-word14-word21-first-slot-adjusted\",\"yOriginBasis\":\"page-mark-absolute-y-slot-field2-tail-block16-word11\",\"rowHeight\":21.000,\"bbox\":{\"x\":174.000,\"y\":768.000,\"width\":554.000,\"height\":63.000}"
+        ));
+        assert!(layer_tree.contains(
+            "\"blockedReasons\":[\"source-horizontal-axis-not-render-admissible\",\"source-y-origin-selector-single-support-fallback\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"source-y-axis-not-render-admissible\",\"source-derived-layout-not-renderable\"],\"renderPromotionContribution\":\"source-only-axis-selector-admission-gate\",\"renderPromotionBlockedReason\":\"source-page-space-axis-selector-coupling-unproven\""
+        ));
+        assert!(layer_tree.contains(
             "\"pageSpaceHorizontalTransformGate\":{\"source\":\"documentTextLineHeaders+/LineMark page-space horizontal transform gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"promotionReady\":false,\"sourceLayoutCandidatePresent\":true,\"sourceColumnSplitReady\":true,\"xUnitAllRowsAgree\":true,\"fullExtentUnitsPresent\":true,\"sourceFrameDecoded\":false,\"pageOriginAuthority\":\"lineMarkPageGridStrideRawRecordIndex\",\"lineMarkRowsExactAndContiguous\":false,\"sourceDerivedLayoutBlockedReason\":\"line-mark-record-stride-to-page-y-transform-unproven\",\"xUnitRangeBasis\":\"matched-cells\",\"xUnitRange\":{\"start\":0,\"end\":100},\"fullExtentUnits\":144,\"xOriginInsetBasis\":\"none\""
         ));
         assert!(layer_tree.contains(
@@ -75222,6 +86115,9 @@ mod tests {
             "\"selectedPostRowGapSpanOrderedCoverage\":{\"policy\":\"one-tolerance-hit-with-unique-subrecord-candidate-per-line-mark-record\",\"matchedRecordIndexes\":[33,35,37],\"matchedCandidateByteOffsets\":[174,734,174],\"uniqueCandidateByteOffsets\":[174,734],\"duplicateCandidateByteOffsets\":[174],\"matchedRecordCount\":3,\"uniqueCandidateCount\":2,\"duplicateCandidateReuseCount\":1,\"orderedUniqueCoverageComplete\":false}"
         ));
         assert!(layer_tree.contains(
+            "\"subrecordSpanRoleGate\":{\"source\":\"/PageMark raw u16 subrecord line-span role classifier\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"dominantSpanRole\":\"selected-post-row-gap\",\"dominantSpanRoleHitCount\":3,\"selectedPostRowGapSpanHitCount\":3,\"selectedPostRowGapSpanTargetCount\":3,\"selectedPostRowGapSpanComplete\":true,\"rowSpanHitCount\":0,\"rowSpanTargetCount\":3,\"previousRowSpanHitCount\":0,\"compactRowSpanHitCount\":0,\"rowSpanComplete\":false,\"selectedPostRowGapRoleDominant\":true,\"rowSpanRoleDominant\":false"
+        ));
+        assert!(layer_tree.contains(
             "\"lineMarkStrideToPageYPromotionReadiness\":{\"source\":\"/LineMark+/PageMark stride-to-page-y promotion readiness\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"promotionReady\":false,\"strideCandidatePresent\":true,\"lineMarkPageOriginPresent\":false,\"selectedPostRowGapSpanComplete\":true,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"sourceOnlyStrideRowCoverage\":{\"source\":\"/LineMark source unit ranges+table row source unit ranges\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"coordinateSpace\":\"documentTextSourceUnits\",\"policy\":\"previous-line-mark-record-span-equals-table-row-source-span\",\"candidateRowCount\":3,\"matchedRowCount\":3,\"allRowsCovered\":true,\"lineMarkRecordSelection\":\"previous-compact-row-span-record\",\"lineMarkRecordIndexes\":[32,34,36],\"uniformLineMarkRecordStride\":true,\"lineMarkRecordStride\":2,\"matchesStrideCandidateRecordIndexes\":true,\"rowSpanUnits\":[111,92,91],\"lineMarkSpanUnits\":[111,92,91],\"rowSpanResidualUnits\":[0,0,0],\"pageYTransformDecoded\":false,\"renderPromotionContribution\":\"source-only-line-mark-row-span-coverage\",\"renderPromotionBlockedReason\":null}"
         ));
         assert!(layer_tree.contains(
@@ -75243,7 +86139,19 @@ mod tests {
             "\"originBases\":[\"line-mark-stride-collapsed-record-index-first-row\"],\"tableCandidateIndexes\":[],\"contributions\":[\"source-only-line-mark-stride-page-y-origin\"],\"blockedReasons\":[\"line-mark-record-stride-to-page-y-transform-unproven\"]"
         ));
         assert!(layer_tree.contains(
-            "{\"selectedY\":768.000,\"rowHeight\":null,\"supportCount\":1,\"originBases\":[\"page-mark-absolute-y-slot-field2-tail-block16-word11\"],\"tableCandidateIndexes\":[3],\"contributions\":[\"source-only-page-mark-absolute-y-slot-y-origin\"],\"blockedReasons\":[\"page-mark-absolute-y-slot-semantics-unproven\"]}"
+            "\"sourceOnlyPageYOriginSelector\":{\"source\":\"sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":1,\"selectionBasis\":\"single-support-source-only-y-origin-fallback\",\"singleSupportFallback\":true,\"selectedOriginBasis\":\"line-mark-stride-raw-record-index-first-row\",\"selectedY\":534.000,\"selectedRowHeight\":21.000"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyPageYOriginSelector\":{\"source\":\"sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":2,\"selectionBasis\":\"single-support-source-only-y-origin-fallback\",\"singleSupportFallback\":true,\"selectedOriginBasis\":\"line-mark-stride-raw-record-index-first-row\",\"selectedY\":618.000,\"selectedRowHeight\":21.000"
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyPageYOriginSelector\":{\"source\":\"sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":3,\"selectionBasis\":\"single-support-source-only-y-origin-fallback\",\"singleSupportFallback\":true,\"selectedOriginBasis\":\"page-mark-absolute-y-slot-field2-tail-block16-word11\",\"selectedY\":768.000,\"selectedRowHeight\":null,\"supportCount\":1,\"supportOriginBases\":[\"page-mark-absolute-y-slot-field2-tail-block16-word11\"],\"supportTableCandidateIndexes\":[3],\"supportCoversMultipleTableCandidates\":false,\"supportFragmentedByTable\":false"
+        ));
+        assert!(layer_tree.contains(
+            "\"supportBlockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-semantics-unproven\",\"single-source-y-origin-support-unproven\"],\"renderPromotionContribution\":\"source-only-page-y-origin-selector\",\"renderPromotionBlockedReason\":\"single-source-y-origin-support-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "{\"selectedY\":768.000,\"rowHeight\":null,\"supportCount\":1,\"originBases\":[\"page-mark-absolute-y-slot-field2-tail-block16-word11\"],\"tableCandidateIndexes\":[3],\"contributions\":[\"source-only-page-mark-absolute-y-slot-y-origin\"],\"blockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-semantics-unproven\"]}"
         ));
         assert!(layer_tree.contains(
             "\"lineMarkRowBoundaryAlignment\":{\"source\":\"/LineMark source unit boundaries+table row source unit boundaries\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"coordinateSpace\":\"documentTextSourceUnits\",\"policy\":\"line-mark-start-end-compared-to-table-row-source-start-end\",\"candidateRowCount\":3,\"rowBoundaryOffsetCandidateFamily\":\"previous-row-span-records\",\"rowBoundaryOffsetCandidateUnits\":-82,\"rowBoundaryOffsetCandidateStable\":true,\"rowBoundaryOffsetCandidateRequiresTransform\":true"
@@ -75282,10 +86190,28 @@ mod tests {
             "\"lineDomainPostRowGapProjectionProbe\":{\"source\":\"sourcePageYTransformGate line-domain + post-row-gap span projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-unit-as-px\",\"selectionReady\":false,\"promotionReady\":false,\"lineDomainY\":817.539,\"selectedPostRowGapSpanFirstUnits\":58,\"selectedPostRowGapSpanComplete\":true,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"projectedY\":875.539,\"referenceTableTopY\":768.014,\"residualPx\":107.525,\"absResidualPx\":107.525,\"withinTwoPx\":false"
         ));
         assert!(layer_tree.contains(
+            "\"sourceOnlyProjectionDomainGate\":{\"source\":\"sourcePageYTransformGate source-only line-domain/post-row-gap projection domain gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"sourceProjectionPresent\":true,\"lineDomainPresent\":true,\"selectedPostRowGapSpanPresent\":true,\"selectedPostRowGapSpanComplete\":true,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"sourceUnitDomain\":\"line-mark-record-y-plus-page-mark-subrecord-gap-units\",\"lineDomainY\":817.539,\"selectedPostRowGapSpanFirstUnits\":58,\"projectedY\":875.539,\"blockedReasons\":[\"cross-domain-source-units-treated-as-px\",\"selected-spacing-records-are-post-row-gap-family\",\"selected-post-row-gap-span-not-ordered-unique\",\"page-y-origin-transform-undecoded\"],\"renderPromotionContribution\":\"source-only-line-domain-post-row-gap-projection-domain-gate\",\"renderPromotionBlockedReason\":\"line-domain-post-row-gap-projection-crosses-source-unit-domain\"}"
+        ));
+        assert!(layer_tree.contains(
             "\"sourceOnlyPageMarkAbsoluteYSlotGate\":{\"source\":\"/PageMark raw u16 subrecord scan+/LineMark source page-line projection\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"projectionKind\":\"line-domain-y-plus-post-row-gap-vs-page-mark-absolute-y-slot\",\"lineDomainY\":817.539,\"selectedPostRowGapSpanFirstUnits\":58,\"lineDomainProjectedY\":875.539,\"absoluteYSlotPresent\":true,\"bestAbsoluteYSlot\":{\"source\":\"rawRecordHeaderTailU16Subrecord\",\"interpretation\":\"direct-u16-px\",\"fieldIndex\":2,\"tailBlock16WordIndex\":11"
         ));
         assert!(layer_tree.contains(
             "\"absoluteYSlotY\":768.000,\"lineDomainProjectionVsAbsoluteYSlotResidualPx\":107.539,\"lineDomainProjectionAgreesWithAbsoluteYSlot\":false,\"lineageClass\":\"page-mark-absolute-y-slot\""
+        ));
+        assert!(layer_tree.contains(
+            "\"lineageClass\":\"page-mark-absolute-y-slot\",\"blockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-semantics-unproven\",\"page-y-origin-transform-undecoded\"],\"renderPromotionContribution\":\"source-only-page-mark-absolute-y-slot-gate\",\"renderPromotionBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlyPageYRenderAdmissionGate\":{\"source\":\"sourcePageYTransformGate source-only page-y render admission gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"admissionReady\":false,\"directLineMarkOriginAdmissible\":false,\"sourceLayoutCandidatePresent\":true,\"pageOriginAuthority\":\"lineMarkPageGridStrideRawRecordIndex\",\"lineMarkRowsExactAndContiguous\":false,\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":true,\"crossTableLineDomainPresent\":true"
+        ));
+        assert!(layer_tree.contains(
+            "\"selectedPostRowGapSpanComplete\":true,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"previousRowSpanComplete\":false,\"previousRowSpanOrderedUniqueCoverageComplete\":false,\"compactRowSpanComplete\":false,\"sourceOnlySelectorPresent\":true,\"sourceOnlySelectorSingleSupportFallback\":true,\"sourceOnlySelectorSupportCount\":1,\"sourceOnlySelectorSupportFragmentedByTable\":false,\"sourceOnlySelectorBlockedReason\":\"source-y-origin-selector-single-support-fallback-not-render-admissible\""
+        ));
+        assert!(layer_tree.contains(
+            "\"sourceOnlySelectorSupportBlockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-semantics-unproven\"],\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyPageYRenderAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\""
+        ));
+        assert!(layer_tree.contains(
+            "\"pageMarkAbsoluteYSlotBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"pageMarkAbsoluteYSlotResidualPx\":107.539,\"blockedReasons\":[\"direct-line-mark-page-origin-absent\",\"line-mark-record-stride-to-page-y-transform-unproven\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"cross-table-line-domain-not-page-space-origin\",\"selected-post-row-gap-spans-not-page-y-origin\",\"selected-post-row-gap-coverage-not-row-unique\",\"source-order-vs-subrecord-order-contradiction\",\"cross-table-row-boundary-offset-transform-required\",\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"source-y-origin-selector-single-support-fallback-not-render-admissible\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"decoded-line-mark-page-y-transform-missing\"]"
         ));
         assert!(layer_tree.contains(
             "\"renderPromoted\":false,\"renderPromotionAuthority\":null,\"renderPromotionBlockedReason\":\"line-mark-record-stride-to-page-y-transform-unproven\""
@@ -75294,7 +86220,7 @@ mod tests {
             "\"matchedCellHeaderCount\":6,\"postRowGapCorrelationComplete\":true,\"postRowGapMatchCount\":3,\"postRowGapExactSpanMatchCount\":3,\"rawPageMarkScanHeaderCount\":15,\"rawPageMarkSingleHeaderMatched\":true"
         ));
         assert!(layer_tree.contains(
-            "\"subrecordLineSpanReadiness\":{\"source\":\"/PageMark raw u16 subrecord line ranges+/LineMark+sparseTableSiblingEvidence\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"spanToleranceUnits\":3,\"selectedSpacingRecordIndexes\":[33,35,37],\"previousRowSpanRecordIndexes\":[32,34,36],\"selectedPostRowGapSpanTargets\":[58,52,54],\"postRowGapSpanTargets\":[58,52,54],\"previousRowSpanTargets\":[111,92,91],\"compactRowSpanTargets\":[111,92,91],\"candidateCount\":7,\"selectedPostRowGapSpanHitCount\":3,\"previousRowSpanHitCount\":0,\"compactRowSpanHitCount\":0,\"selectedPostRowGapSpanComplete\":true,\"previousRowSpanComplete\":false,\"compactRowSpanComplete\":false,\"selectedPostRowGapSpanMaxAbsResidualUnits\":3,\"previousRowSpanMaxAbsResidualUnits\":49,\"compactRowSpanMaxAbsResidualUnits\":49,\"pageYTransformDecoded\":false"
+            "\"subrecordLineSpanReadiness\":{\"source\":\"/PageMark raw u16 subrecord line ranges+/LineMark+sparseTableSiblingEvidence\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"spanToleranceUnits\":3,\"selectedSpacingRecordIndexes\":[33,35,37],\"previousRowSpanRecordIndexes\":[32,34,36],\"selectedPostRowGapSpanTargets\":[58,52,54],\"postRowGapSpanTargets\":[58,52,54],\"previousRowSpanTargets\":[111,92,91],\"compactRowSpanTargets\":[111,92,91],\"candidateCount\":7,\"selectedPostRowGapSpanHitCount\":3,\"previousRowSpanHitCount\":0,\"compactRowSpanHitCount\":0,\"selectedPostRowGapSpanComplete\":true,\"previousRowSpanComplete\":false,\"compactRowSpanComplete\":false,\"selectedPostRowGapSpanMaxAbsResidualUnits\":3,\"previousRowSpanMaxAbsResidualUnits\":49,\"compactRowSpanMaxAbsResidualUnits\":49,\"subrecordSpanRoleGate\":"
         ));
         assert!(layer_tree.contains(
             "\"referenceValidationThresholdPx\":8.000,\"rawRecordIndexReferenceFit\":false,\"rawRecordIndexMaxAbsResidualPx\":24.014"
@@ -75334,6 +86260,9 @@ mod tests {
         ));
         assert!(layer_tree.contains(
             "\"pageMarkScopedYTransformProbe\":{\"source\":\"/PageMark scoped raw fields+referenceTableBBox\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":true,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"tolerancePx\":2.000,\"lineMarkRecordIndexes\":[33,35,37],\"parsedEntryMatchCount\":3,\"singleParsedPageMarkEntryMatched\":true,\"matchedParsedPageMarkEntryIndex\":0,\"rawHeaderMatchCount\":3,\"singleRawRecordHeaderMatched\":true,\"matchedRawRecordHeaderIndex\":0"
+        ));
+        assert!(layer_tree.contains(
+            "\"lineMarkRecordIndexes\":[33,35,37],\"parsedEntryMatchCount\":3,\"singleParsedPageMarkEntryMatched\":true,\"matchedParsedPageMarkEntryIndex\":0,\"rawHeaderMatchCount\":3,\"singleRawRecordHeaderMatched\":true,\"matchedRawRecordHeaderIndex\":0,\"referenceBBoxUsed\":true,\"referenceTargetBasis\":\"referenceTableBBox.rowTopTargets\",\"sourceOnlyReplacementBlockedReason\":\"page-mark-scoped-y-transform-targets-reference-backed\""
         ));
         assert!(layer_tree.contains(
             "\"targetPx\":768.014,\"nearestCandidate\":{\"source\":\"parsedEntryU16\",\"interpretation\":\"direct-u16-px\",\"wordIndex\":83,\"byteOffset\":166,\"value\":768,\"valuePx\":768.000,\"residualPx\":-0.014}"
@@ -75399,7 +86328,7 @@ mod tests {
             "\"selectedFields\":[{\"wordIndex\":10,\"value\":564,\"hex\":\"0x0234\"},{\"wordIndex\":13,\"value\":564,\"hex\":\"0x0234\"},{\"wordIndex\":14,\"value\":194,\"hex\":\"0x00c2\""
         ));
         assert!(layer_tree.contains(
-            "\"sourceDerivedLayoutCandidate\":{\"source\":\"documentTextLineHeaders+/LineMark+/PageMark\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"projectionKind\":\"sourceDerivedDiagnosticProjection\",\"bbox\":{\"x\":72.000,\"y\":744.000,\"width\":451.181,\"height\":63.000}"
+            "\"sourceDerivedLayoutCandidate\":{\"source\":\"documentTextLineHeaders+/LineMark+/PageMark\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"provenance\":\"decodedCompactPlacement\",\"projectionKind\":\"sourceDerivedDiagnosticProjection\",\"bbox\":{\"x\":72.000,\"y\":744.000,\"width\":451.181,\"height\":63.000}"
         ));
         assert!(layer_tree.contains(
             "\"horizontalUnitTransformReadiness\":{\"source\":\"documentTextLineHeaders\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectedXUnitRangeBasis\":\"matched-cells\",\"selectedXUnitRange\":{\"start\":0,\"end\":100},\"selectedWidthUnits\":100,\"fullExtentUnits\":144,\"selectedWidthRatioToFullExtent\":0.694"
@@ -75408,7 +86337,7 @@ mod tests {
             "\"rowAgreementCount\":3,\"allRowsAgree\":true,\"trailingHeaderIncluded\":false,\"includedTrailingHeaderCount\":0,\"columnSpanUnits\":[16,80],\"columnSlotWidthUnits\":[20,80],\"trailingSlotWidthUnits\":[],\"xOriginInsetUnits\":0.000,\"xOriginInsetBasis\":\"none\""
         ));
         assert!(layer_tree.contains(
-            "\"totalWidthSemanticsGate\":{\"source\":\"documentTextLineHeaders total-width semantics gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectedWidthUnits\":100,\"fullExtentUnits\":144,\"fullExtentTrailingUnits\":44,\"selectedEqualsFullExtent\":false,\"selectedIsSubsetOfFullExtent\":true,\"trailingHeaderIncluded\":false,\"includedTrailingHeaderCount\":0,\"trailingSlotEvidencePresent\":false,\"trailingSlotWidthUnits\":[],\"renderWidthBasisCandidate\":\"selected-visible-range-subset-of-full-extent\",\"renderPromotionContribution\":\"source-total-width-semantics-gate\",\"renderPromotionBlockedReason\":\"source-total-width-semantics-unproven\"}"
+            "\"totalWidthSemanticsGate\":{\"source\":\"documentTextLineHeaders total-width semantics gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectedWidthUnits\":100,\"fullExtentUnits\":144,\"fullExtentTrailingUnits\":44,\"selectedEqualsFullExtent\":false,\"selectedIsSubsetOfFullExtent\":true,\"trailingHeaderIncluded\":false,\"includedTrailingHeaderCount\":0,\"trailingSlotEvidencePresent\":false,\"trailingSlotWidthUnits\":[],\"selectedVisibleRangeSourceEvidenceReady\":false,\"sourcePlacementCoherenceGateRequired\":false,\"sourcePlacementCoherenceGateEvidencePresent\":false,\"sourcePlacementCoherenceGateResolved\":false,\"sourcePlacementCoherenceGateBlockedReasons\":[],\"renderPromotionNextGate\":\"source-total-width-semantics-decoder\",\"renderWidthBasisCandidate\":\"selected-visible-range-subset-of-full-extent\",\"renderPromotionContribution\":\"source-total-width-semantics-gate\",\"renderPromotionBlockedReason\":\"source-total-width-semantics-unproven\"}"
         ));
         assert!(
             layer_tree.contains(
@@ -75440,7 +86369,17 @@ mod tests {
         assert!(svg.contains("class=\"rjtd-column-grid-candidate\""));
         assert!(svg.contains("data-projection-kind=\"tableProjection\""));
         assert!(svg.contains("data-reference-backed=\"true\""));
+        assert_eq!(
+            svg.matches("data-reference-fallback-used=\"true\"").count(),
+            2
+        );
+        assert!(svg.contains("data-reference-fallback-admitted=\"true\""));
+        assert!(svg.contains("data-reference-fallback-blocked-reason=\"none\""));
         assert!(svg.contains("data-source-derived-layout-candidate=\"true\""));
+        assert!(svg.contains("data-source-layout-evidence-present=\"true\""));
+        assert!(svg.contains(
+            "data-render-promotion-blocked-reason=\"line-mark-record-stride-to-page-y-transform-unproven\""
+        ));
         assert!(svg.contains("data-row-source-interval-index=\"20\""));
         assert!(svg.contains("data-line-mark-record-index=\"33\""));
         assert!(svg.contains("data-page-mark-entry-index=\"0\""));
@@ -75684,9 +86623,7 @@ mod tests {
 
     #[test]
     fn local_samples_produce_validation_warning_json_when_available() {
-        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples");
+        let sample_dir = local_samples_dir();
         if !sample_dir.exists() {
             return;
         }
@@ -75784,9 +86721,7 @@ mod tests {
 
     #[test]
     fn local_samples_project_column_grid_candidates_to_svg_and_layer_tree_when_available() {
-        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples");
+        let sample_dir = local_samples_dir();
         if !sample_dir.exists() {
             return;
         }
@@ -75873,11 +86808,10 @@ mod tests {
                         assert!(svg.contains("data-reference-backed=\"false\""));
                         assert!(svg.contains("data-placement-derived-from-source=\"true\""));
                     }
-                    if path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .is_some_and(|name| name.contains("shanai_lan"))
-                    {
+                    if local_sample_has_capability(
+                        &path,
+                        LocalSampleCapability::UsesReferenceBackedColumnGridProjection,
+                    ) {
                         assert!(!svg.contains(
                             "data-projection-kind=\"sourceDerivedDiagnosticProjection\""
                         ));
@@ -75908,9 +86842,7 @@ mod tests {
     #[test]
     #[cfg(feature = "bitmap-images")]
     fn local_samples_project_image_payload_diagnostics_when_available() {
-        let sample_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("rjtd-testdata/local-samples");
+        let sample_dir = local_samples_dir();
         if !sample_dir.exists() {
             return;
         }
@@ -75922,6 +86854,13 @@ mod tests {
         let mut svg_overlay_count = 0usize;
         let mut layer_op_count = 0usize;
         let mut overlay_json_count = 0usize;
+        let mut ownership_proven_count = 0usize;
+        let mut frame_geometry_candidate_count = 0usize;
+        let mut embedding_frame_trace_count = 0usize;
+        let mut source_frame_record_geometry_count = 0usize;
+        let mut candidate_frame_bbox_count = 0usize;
+        let mut payload_frame_aspect_fit_count = 0usize;
+        let mut final_gate_blocker_count = 0usize;
         let mut failures = Vec::new();
 
         let no_jtd_samples = fs::read_dir(&sample_dir).unwrap().all(|entry| {
@@ -75971,15 +86910,87 @@ mod tests {
                     overlay_json_count += overlay_images
                         .matches("\"type\":\"jtdImagePayloadCandidate\"")
                         .count();
+                    ownership_proven_count +=
+                        layer_tree.matches("\"ownershipProven\":true").count();
+                    frame_geometry_candidate_count += layer_tree
+                        .matches("\"frameGeometryCandidatePresent\":true")
+                        .count();
+                    embedding_frame_trace_count += layer_tree
+                        .matches("\"embeddingFrameTracePresent\":true")
+                        .count();
+                    source_frame_record_geometry_count += layer_tree
+                        .matches("\"sourceFrameRecordGeometryPresent\":true")
+                        .count();
+                    candidate_frame_bbox_count += layer_tree
+                        .matches(
+                            "\"candidateFrameBBox\":{\"source\":\"EmbeddingInfo+/FrameRecord\"",
+                        )
+                        .count();
+                    payload_frame_aspect_fit_count += layer_tree
+                        .matches("\"payloadFrameAspectFit\":{\"source\":\"imagePayloadDimensions+/FrameRecord\"")
+                        .count();
+                    final_gate_blocker_count += layer_tree
+                        .matches(
+                            "\"renderPromotionBlockedReason\":\"image-payload-frame-geometry-present-but-page-assignment-and-paint-order-unproven\"",
+                        )
+                        .count();
 
                     assert!(svg.contains("data:image/png;base64,"));
                     assert!(svg.contains("data-decoded=\"false\""));
                     assert!(svg.contains("data-geometry-decoded=\"false\""));
                     assert!(svg.contains("data-placement-proven=\"false\""));
+                    assert!(svg.contains("data-diagnostic-renderable=\"true\""));
+                    assert!(svg.contains("data-renderable=\"false\""));
+                    assert!(svg.contains("data-frame-reference-row-count=\""));
+                    assert!(svg.contains("data-frame-coordinate-row-count=\""));
+                    assert!(svg.contains("data-frame-linked-window-row-count=\""));
+                    assert!(svg.contains("data-frame-geometry-candidate-present=\""));
+                    assert!(svg.contains("data-embedding-frame-trace-present=\""));
+                    assert!(svg.contains("data-source-frame-record-geometry-present=\""));
+                    assert!(svg.contains("data-candidate-frame-bbox-present=\""));
+                    assert!(svg.contains("data-candidate-frame-x=\""));
+                    assert!(svg.contains("data-candidate-frame-y=\""));
+                    assert!(svg.contains("data-candidate-frame-width=\""));
+                    assert!(svg.contains("data-candidate-frame-height=\""));
+                    assert!(svg.contains("data-payload-frame-aspect-fit-present=\""));
+                    assert!(svg.contains("data-payload-frame-aspect-delta-permille=\""));
+                    assert!(svg.contains("data-best-payload-frame-aspect-delta-permille=\""));
+                    assert!(svg.contains("data-current-payload-best-frame-aspect-candidate=\""));
                     assert!(layer_tree.contains("\"placementProven\":false"));
-                    assert!(layer_tree.contains("\"renderable\":true"));
+                    assert!(layer_tree.contains("\"diagnosticRenderable\":true"));
+                    assert!(layer_tree.contains("\"renderable\":false"));
+                    assert!(layer_tree.contains("\"ownershipProven\":"));
+                    assert!(layer_tree.contains("\"frameReferenceRowCount\":"));
+                    assert!(layer_tree.contains("\"frameCoordinateRowCount\":"));
+                    assert!(layer_tree.contains("\"frameLinkedWindowRowCount\":"));
+                    assert!(layer_tree.contains("\"frameGeometryCandidatePresent\":"));
+                    assert!(layer_tree.contains("\"embeddingFrameTracePresent\":"));
+                    assert!(layer_tree.contains("\"sourceFrameRecordGeometryPresent\":"));
+                    assert!(layer_tree.contains("\"sourceFrameTrace\":"));
+                    assert!(layer_tree.contains("\"candidateFrameBBox\":"));
+                    assert!(layer_tree.contains("\"payloadFrameAspectFit\":"));
+                    assert!(layer_tree.contains("\"pageGeometryProven\":false"));
+                    assert!(layer_tree.contains("\"paintOrderDecoded\":false"));
+                    assert!(layer_tree.contains("\"renderPromotionBlockedReason\":"));
+                    assert!(layer_tree.contains("\"objectEnvelope\":"));
                     assert!(overlay_images.contains("\"placementProven\":false"));
                     assert!(overlay_images.contains("\"geometryDecoded\":false"));
+                    assert!(overlay_images.contains("\"diagnosticRenderable\":true"));
+                    assert!(overlay_images.contains("\"renderable\":false"));
+                    assert!(overlay_images.contains("\"ownershipProven\":"));
+                    assert!(overlay_images.contains("\"frameReferenceRowCount\":"));
+                    assert!(overlay_images.contains("\"frameCoordinateRowCount\":"));
+                    assert!(overlay_images.contains("\"frameLinkedWindowRowCount\":"));
+                    assert!(overlay_images.contains("\"frameGeometryCandidatePresent\":"));
+                    assert!(overlay_images.contains("\"embeddingFrameTracePresent\":"));
+                    assert!(overlay_images.contains("\"sourceFrameRecordGeometryPresent\":"));
+                    assert!(overlay_images.contains("\"sourceFrameTrace\":"));
+                    assert!(overlay_images.contains("\"candidateFrameBBox\":"));
+                    assert!(overlay_images.contains("\"payloadFrameAspectFit\":"));
+                    assert!(overlay_images.contains("\"pageGeometryProven\":false"));
+                    assert!(overlay_images.contains("\"paintOrderDecoded\":false"));
+                    assert!(overlay_images.contains("\"renderPromotionBlockedReason\":"));
+                    assert!(overlay_images.contains("\"objectEnvelope\":"));
                 }
                 Err(error) => failures.push(format!("{}: {error}", path.display())),
             }
@@ -75992,6 +87003,13 @@ mod tests {
         assert_eq!(svg_overlay_count, projected_payload_count);
         assert_eq!(layer_op_count, projected_payload_count);
         assert_eq!(overlay_json_count, image_payload_count);
+        assert!(ownership_proven_count > 0);
+        assert!(frame_geometry_candidate_count > 0);
+        assert!(embedding_frame_trace_count > 0);
+        assert!(source_frame_record_geometry_count > 0);
+        assert!(candidate_frame_bbox_count > 0);
+        assert!(payload_frame_aspect_fit_count > 0);
+        assert!(final_gate_blocker_count > 0);
     }
 
     #[test]

@@ -1,0 +1,149 @@
+G003 C003 safety regression guard
+Generated: 2026-07-02T01:41:27Z
+Scenario: focused local tsaiten test, live fallback/admission extraction, and git diff/status audit.
+
+== Focused Rust test ==
+COMMAND: cd rjtd && cargo test -p rjtd-model tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.14s
+
+TEST_EXIT_CODE=0
+
+== Live nested scoring geometry/admission extraction ==
+COMMAND: cd rjtd && cargo run -q -p rjtd-cli -- page-layer-tree ../rjtd-testdata/local-samples/ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd 0 | jq ...
+{
+  "sparseSiblingDerivedCompactCellGeometry": {
+    "source": "sparseTableSiblingEvidence compact cell geometry prerequisite",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "candidateRowCount": 4,
+    "matchedRowCount": 4,
+    "candidateSegmentCount": 12,
+    "matchedSegmentCount": 12,
+    "compactToSparseColumnOffsetCandidate": 3,
+    "matchedSparseColumnIndexes": [
+      3,
+      4,
+      5
+    ],
+    "derivedMatchedCellCount": 12,
+    "requiredCellCount": 12,
+    "derivedCellGeometryCoverageComplete": true,
+    "sourcePlacementPrerequisiteReady": true,
+    "renderPromotionContribution": "sparse-sibling-derived-geometry-prerequisite",
+    "renderPromotionBlockedReason": "sparse-sibling-derived-geometry-diagnostic-only"
+  },
+  "sourceDerivedLayoutCandidate": null,
+  "referenceFallbackAdmissionGate": {
+    "source": "table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "referenceLayoutPresent": true,
+    "referenceFallbackAllowed": true,
+    "referenceFallbackUsed": true,
+    "sourceLayoutCandidatePresent": false,
+    "sourceRenderLayoutPresent": false,
+    "sourceLayoutRenderable": false,
+    "sourceOnlyPageYAdmissionReady": false,
+    "sourceOnlyPageYAdmissionBasis": null,
+    "sourceReplacementBlockedReason": "source-derived-layout-candidate-absent",
+    "blockedReason": null,
+    "renderPromotionContribution": "reference-fallback-admission-gate",
+    "renderPromotionBlockedReason": null
+  }
+}
+CLI_EXIT_CODE=0
+
+== Reference fallback count across live page-layer-tree ==
+COMMAND: cd rjtd && cargo run -q -p rjtd-cli -- page-layer-tree ... | jq referenceFallbackUsed count
+2
+FALLBACK_COUNT_EXIT_CODE=0
+
+== Task gate audit ==
+COMMAND: rg task 11/18/19/20/F1-F4 gate lines
+openjtd-spec/rfc/0008-object-stream-candidates.ja.md:211:同じ ABC table は outer `topTextTableSourceGapEvidence` も nested source-only readiness state から報告する。`sourceTopTextPlacementReadinessGate` が preceding instruction anchor、selected visible width、trailing header semantics、adjacent `/LineMark`/`/PageMark` coupling を証明した場合、outer evidence は `sourceTopTextPlacementReady:true`、blocked reasons なし、render-promotion blocker なしを記録する。Reference bbox residuals は diagnostic evidence のままであり、render authority には使わない。
+openjtd-spec/rfc/0008-object-stream-candidates.ja.md:231:Table layer diagnostics は `referenceFallbackAdmissionGate` も expose するようになった。これは既存の visible reference-fallback boolean を source-only page-y admission contract に接続する behavior-preserving audit surface である。この gate は `success_data-test` ABC tables が renderable source-derived layout を使いながら reference fallback を suppress していることを報告する (`referenceFallbackAllowed:false`、`referenceFallbackUsed:false`、`sourceOnlyPageYAdmissionReady:true`)。current PDF-backed `tsaiten` visible tables はまだ legacy reference fallback を使うが、`source-derived-layout-candidate-absent` や `source-page-y-render-admission-not-ready` のような source replacement blockers を明示するため、rendered output を変えずに残りの calibration-removal work を inspect できる。
+openjtd-spec/rfc/0008-object-stream-candidates.md:211:The same ABC table now reports the outer `topTextTableSourceGapEvidence` from the nested source-only readiness state. Once `sourceTopTextPlacementReadinessGate` proves the preceding instruction anchor, selected visible width, trailing header semantics, and adjacent `/LineMark`/`/PageMark` coupling, the outer evidence records `sourceTopTextPlacementReady:true`, no blocked reasons, and no render-promotion blocker. Reference bbox residuals remain diagnostic evidence only and do not supply render authority.
+openjtd-spec/rfc/0008-object-stream-candidates.md:231:Table layer diagnostics now also expose `referenceFallbackAdmissionGate`, a behavior-preserving audit surface that connects the existing visible reference-fallback boolean to the source-only page-y admission contract. The gate reports that `success_data-test` ABC tables suppress reference fallback while using the renderable source-derived layout (`referenceFallbackAllowed:false`, `referenceFallbackUsed:false`, `sourceOnlyPageYAdmissionReady:true`). Current PDF-backed `tsaiten` visible tables still use the legacy reference fallback, but they now carry explicit source replacement blockers such as `source-derived-layout-candidate-absent` and `source-page-y-render-admission-not-ready`, making the remaining calibration-removal work visible without changing rendered output.
+.omo/plans/current-progress-next-plan.md:95:| 20 | 1-19 | F1-F4 | none |
+.omo/plans/current-progress-next-plan.md:179:- [ ] 11. Promote `tsaiten` only to source-only readiness when both table families satisfy the admission contract
+.omo/plans/current-progress-next-plan.md:184:  QA scenarios: Happy: if admission becomes ready and local `tsaiten` assets exist, assert `referenceFallbackAllowed:false`, `referenceFallbackUsed:false`, `sourceOnlyPageYAdmissionReady:true`, and source-only basis records for both visible table families in the local sample test. Failure: if either family remains blocked or assets are absent, assert the same visible reference output where testable plus updated blocker strings, and mark TODO item still unchecked rather than claiming source-only replacement. Evidence `.omo/evidence/current-progress-next-plan/task-11-tsaiten-admission.log`
+.omo/plans/current-progress-next-plan.md:245:  Current preflight note: PDF export and page-1 comparison evidence was generated out of order on 2026-07-01 after task 11 was confirmed blocked. Treat `.omo/evidence/current-progress-next-plan/task-19-visual-qa.md`, `.omo/evidence/current-progress-next-plan/task-19-visual-compare.md`, and `.omo/evidence/current-progress-next-plan/task-19-compare/task-19-page1-comparison-contact-sheet.png` as preflight evidence only. They do not complete this checkbox, do not unblock 20/F1-F4, and must be rerun or explicitly refreshed after 11 and 18 are complete.
+.omo/plans/current-progress-next-plan.md:338:  Parallelization: Wave 5 | Blocked by: 1-19 | Blocks: F1-F4
+.omo/plans/current-progress-next-plan.md:346:- [ ] F1. Plan compliance audit
+.omo/plans/current-progress-next-plan.md:350:  QA scenarios: Happy: create a compliance matrix showing every scope item and the evidence file that proves it. Failure: any missing evidence or skipped sample claim fails F1 and returns to the owning todo. Evidence `.omo/evidence/current-progress-next-plan/f1-plan-compliance.log`
+.omo/plans/current-progress-next-plan.md:352:- [ ] F2. Code quality review
+.omo/plans/current-progress-next-plan.md:358:- [ ] F3. Real manual QA
+.omo/plans/current-progress-next-plan.md:362:  QA scenarios: Happy: Rust suite is green and visual/sample checks are either executed with evidence or explicitly skipped with missing asset/tool names; if task 19 visual evidence is reused, F3 states whether it is preflight or refreshed final evidence. Failure: any failing command, unqualified visual claim, missing comparison artifact, or unreported `shanai_lan` connector-line visual gap blocks handoff. Evidence `.omo/evidence/current-progress-next-plan/f3-manual-qa.md`
+.omo/plans/current-progress-next-plan.md:364:- [ ] F4. Scope fidelity
+.omo/plans/current-progress-next-plan.md:389:- `.omo/evidence/current-progress-next-plan/` contains task evidence for todos 1-20 and final verification receipts F1-F4.
+TODO.md:267:- [x] Recover remaining text hidden behind unknown inline formatting/control records; `sample-academic.jtd` plain-text extraction is complete; the `0xff1c`/`0xff1e` values previously flagged as hidden content are U+FF1C/U+FF1E full-width angle brackets, not control codes; RFC 0009 documents the self-describing variable-length `0x001c` header record that the current parser skips correctly by stopping on `0x001c` and resuming on `0x001f`.
+TODO.md:634:- [x] Align the outer ABC `topTextTableSourceGapEvidence` with its nested source-only readiness gate. The nested `sourceTopTextPlacementReadinessGate` already proves that the instruction anchor, selected table width, trailing header semantics, and adjacent `/LineMark`/`/PageMark` grid coupling are source-ready, so the outer evidence now reports `sourceTopTextPlacementReady:true`, empty `readinessBlockedReasons`, contribution `source-top-text-placement-readiness`, and `renderPromotionBlockedReason:null` instead of the stale `page-space-y-origin-unproven` blocker. This is render-preserving and keeps reference bbox residuals diagnostic-only.
+TODO.md:687:- [x] Expose a `referenceFallbackAdmissionGate` on table layer JSON and SVG diagnostics so the legacy reference-table fallback can be audited from the same source-only admission contract. The gate reuses the existing visible-render boolean: `success_data-test` ABC tables report `referenceFallbackAllowed:false`, `referenceFallbackUsed:false`, `sourceOnlyPageYAdmissionReady:true`, and `blockedReason:"active-source-layout-admission-suppresses-reference-fallback"` while still rendering from the source-derived layout. Current `tsaiten` visible tables continue to use reference fallback (`referenceFallbackAllowed:true`, two `referenceFallbackUsed:true` SVG groups), but now carry `sourceReplacementBlockedReason` values such as `source-derived-layout-candidate-absent` and `source-page-y-render-admission-not-ready` so the remaining removal work is explicit without changing output.
+TODO.ja.md:224:- [x] unknown inline formatting/control records の背後に隠れた残り text を復元する。`sample-academic.jtd` のプレーンテキスト抽出は完了済み。以前「隠れたコンテンツ」として疑われた `0xff1c`/`0xff1e` は制御コードではなく U+FF1C/U+FF1E の全角不等号文字であることを確認。RFC 0009 で、現在のパーサーが `0x001c` で停止し `0x001f` で再開することにより自己記述型ヘッダーを正しくスキップしていることを文書化。
+TODO.ja.md:551:- [x] outer ABC `topTextTableSourceGapEvidence` を nested source-only readiness gate と整合させる。nested `sourceTopTextPlacementReadinessGate` は instruction anchor、selected table width、trailing header semantics、adjacent `/LineMark`/`/PageMark` grid coupling が source-ready であることをすでに証明しているため、outer evidence も `sourceTopTextPlacementReady:true`、empty `readinessBlockedReasons`、contribution `source-top-text-placement-readiness`、`renderPromotionBlockedReason:null` を報告する。古い `page-space-y-origin-unproven` blocker は解除し、reference bbox residuals は diagnostic-only のまま保持する。
+TODO.ja.md:661:- [x] table layer JSON と SVG diagnostics に `referenceFallbackAdmissionGate` を expose し、legacy reference-table fallback を同じ source-only admission contract から audit できるようにする。gate は既存の visible-render boolean を再利用する。`success_data-test` ABC table は source-derived layout で render される一方、`referenceFallbackAllowed:false`、`referenceFallbackUsed:false`、`sourceOnlyPageYAdmissionReady:true`、`blockedReason:"active-source-layout-admission-suppresses-reference-fallback"` を報告する。current `tsaiten` visible tables は引き続き reference fallback を使う (`referenceFallbackAllowed:true`、SVG で `referenceFallbackUsed:true` group が 2 件) が、`sourceReplacementBlockedReason` として `source-derived-layout-candidate-absent` や `source-page-y-render-admission-not-ready` を持つため、出力を変えずに残りの removal work が明示される。
+rjtd/crates/rjtd-model/src/lib.rs:71:const JSFART2_CONTENTS_MAGIC_UTF16LE: &[u8; 22] = b"M\0S\0T\0U\0D\0I\0O\0.\0O\0C\0X\0";
+rjtd/crates/rjtd-model/src/lib.rs:106:const JSEQ3_CONTENTS_MAGIC_UTF16LE: &[u8; 16] = b"M\0A\0T\0H\0.\0V\0A\0F\0";
+rjtd/crates/rjtd-model/src/lib.rs:13497:    if stream.starts_with(JSFART2_CONTENTS_MAGIC_UTF16LE) {
+rjtd/crates/rjtd-model/src/lib.rs:13532:    if stream.get(..JSFART2_CONTENTS_MAGIC_UTF16LE.len())? != JSFART2_CONTENTS_MAGIC_UTF16LE {
+rjtd/crates/rjtd-model/src/lib.rs:13836:    if stream.get(..JSEQ3_CONTENTS_MAGIC_UTF16LE.len())? != JSEQ3_CONTENTS_MAGIC_UTF16LE {
+rjtd/crates/rjtd-model/src/lib.rs:73923:    output.push_str(",\"sourceOnlyPageYAdmissionReady\":");
+rjtd/crates/rjtd-model/src/lib.rs:81133:            "\"referenceLayoutPresent\":false,\"referenceFallbackAllowed\":false,\"referenceFallbackUsed\":false,\"sourceLayoutCandidatePresent\":true,\"sourceRenderLayoutPresent\":true,\"sourceLayoutRenderable\":true,\"sourceOnlyPageYAdmissionReady\":true,\"sourceOnlyPageYAdmissionBasis\":\"line-mark-page-grid-direct-origin\",\"sourceReplacementBlockedReason\":null,\"blockedReason\":\"active-source-layout-admission-suppresses-reference-fallback\""
+rjtd/crates/rjtd-model/src/lib.rs:85258:            "\"referenceLayoutPresent\":true,\"referenceFallbackAllowed\":true,\"referenceFallbackUsed\":true,\"sourceLayoutCandidatePresent\":false,\"sourceRenderLayoutPresent\":false,\"sourceLayoutRenderable\":false,\"sourceOnlyPageYAdmissionReady\":false,\"sourceOnlyPageYAdmissionBasis\":null,\"sourceReplacementBlockedReason\":\"source-derived-layout-candidate-absent\""
+rjtd/crates/rjtd-model/src/lib.rs:85261:            "\"referenceLayoutPresent\":true,\"referenceFallbackAllowed\":true,\"referenceFallbackUsed\":true,\"sourceLayoutCandidatePresent\":true,\"sourceRenderLayoutPresent\":false,\"sourceLayoutRenderable\":false,\"sourceOnlyPageYAdmissionReady\":false,\"sourceOnlyPageYAdmissionBasis\":null,\"sourceReplacementBlockedReason\":\"source-page-y-render-admission-not-ready\""
+GATE_RG_EXIT_CODE=0
+
+== Intended G003 diff anchors ==
+COMMAND: git diff -- rjtd/crates/rjtd-model/src/lib.rs | rg sparse geometry anchors
+1084:+    output.push_str(",\"sparseSiblingDerivedCompactCellGeometry\":");
+1085:+    push_table_grid_sparse_sibling_derived_compact_cell_geometry_json(output, document, candidate);
+2066:+fn push_table_grid_sparse_sibling_derived_compact_cell_geometry_json(
+2113:+    output.push_str(",\"derivedCellGeometryCoverageComplete\":");
+2119:+    output.push_str(",\"sourcePlacementPrerequisiteReady\":");
+2125:+    output.push_str(",\"renderPromotionContribution\":\"sparse-sibling-derived-geometry-prerequisite\"");
+2128:+        "sparse-sibling-derived-geometry-diagnostic-only",
+13517:+            "\"sparseSiblingDerivedCompactCellGeometry\":{\"source\":\"sparseTableSiblingEvidence compact cell geometry prerequisite\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"candidateRowCount\":4,\"matchedRowCount\":4,\"candidateSegmentCount\":12,\"matchedSegmentCount\":12,\"compactToSparseColumnOffsetCandidate\":3,\"matchedSparseColumnIndexes\":[3,4,5],\"derivedMatchedCellCount\":12,\"requiredCellCount\":12,\"derivedCellGeometryCoverageComplete\":true,\"sourcePlacementPrerequisiteReady\":true,\"renderPromotionContribution\":\"sparse-sibling-derived-geometry-prerequisite\",\"renderPromotionBlockedReason\":\"sparse-sibling-derived-geometry-diagnostic-only\""
+DIFF_ANCHOR_EXIT_CODE=0
+
+== Git status and diff stat ==
+COMMAND: git status --short
+ M TODO.ja.md
+ M TODO.md
+ M openjtd-spec/rfc/0008-object-stream-candidates.ja.md
+ M openjtd-spec/rfc/0008-object-stream-candidates.md
+ M rjtd/crates/rjtd-cli/src/main.rs
+ M rjtd/crates/rjtd-cli/tests/streams.rs
+ M rjtd/crates/rjtd-export/src/lib.rs
+ M rjtd/crates/rjtd-model/src/lib.rs
+?? .omo/
+?? AGENTS.md
+?? rjtd/AGENTS.md
+GIT_STATUS_EXIT_CODE=0
+COMMAND: git diff --stat -- rjtd/crates/rjtd-model/src/lib.rs .omo/notepad.md .omo/evidence/current-progress-next-plan/ulw-task-11b-scoring-sparse-geometry-red.txt .omo/evidence/current-progress-next-plan/ulw-task-11b-scoring-sparse-geometry-green.txt
+ rjtd/crates/rjtd-model/src/lib.rs | 11568 ++++++++++++++++++++++++++++++++++--
+ 1 file changed, 11212 insertions(+), 356 deletions(-)
+GIT_DIFF_STAT_EXIT_CODE=0
+
+== Post-write review notes ==
+rjtd/crates/rjtd-model/src/lib.rs pure LOC: 83650
+Local rjtd/AGENTS.md marks rjtd-model/src/lib.rs as an intentionally large central file; this slice stayed localized to one diagnostic helper and one focused tsaiten assertion rather than opportunistically splitting unrelated code.
+LSP diagnostics attempted via mcp__lsp.diagnostics for rjtd-model/src/lib.rs; daemon request timed out, so cargo test plus live CLI extraction are the diagnostic fallback for this ULW slice.
+No new unsafe, unwrap, expect, or type-erasure escape hatch was introduced by the sparse geometry helper; helper is diagnostic-only and has a single caller in geometryDerivationEvidence JSON serialization.
+No commit/stage was performed because the user did not request a commit and the worktree contains pre-existing unrelated tracked changes in TODO/RFC/CLI/export/model files.
+
+== Cleanup receipt ==
+cleanup: cargo test and cargo run exited; no tmux session, browser context, bound port, container, or temp dir was spawned by this QA; previous G003 worker was closed before this recording; no live QA resource remains.

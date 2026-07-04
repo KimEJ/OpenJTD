@@ -1,0 +1,5274 @@
+# G002 C001 scoring source-placement decision map
+Started: 2026-07-02T10:23:50+09:00
+Workspace: /Users/kimuj5090/Documents/rjtd
+Sample: rjtd-testdata/local-samples/ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd
+
+## Focused Rust test
+Command: cd rjtd && cargo test -p rjtd-model tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available -- --exact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.17s
+
+cargo_test_exit=0
+
+## Live CLI layer-tree extraction for scoring table candidate 0
+Command: cd rjtd && cargo run -q -p rjtd-cli -- page-layer-tree ../rjtd-testdata/local-samples/ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd 0 | jq '[.. tableGridCandidate][0]'
+{
+  "candidateIndex": null,
+  "colCountCandidate": 3,
+  "textPreview": null,
+  "sourceDerivedLayoutCandidate": null,
+  "sourceDerivedLayoutReadiness": {
+    "source": "sourceDerivedLayoutGate+documentTextLineHeaders+/LineMark",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "sourcePlacementEvidencePresent": false,
+    "candidateRowCount": 4,
+    "requestedColumnCount": 3,
+    "lineHeaderRowCount": 4,
+    "rawHeaderCount": 2,
+    "matchedRowCount": 0,
+    "fullMatchedRowCount": 0,
+    "matchedCellHeaderCount": 0,
+    "requiredCellHeaderCount": 12,
+    "commonMatchedColumnCount": 0,
+    "rowsWithoutHeaders": [
+      1,
+      2
+    ],
+    "rowsWithoutMatchedCellHeaders": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "rowsWithPartialCellHeaderCoverage": [],
+    "lineHeaderRowsHomogeneous": false,
+    "lineMarkRowRecordSelection": "previous-compact-row-span-record",
+    "lineMarkRowsExactAndContiguous": false,
+    "sourceDerivedLayoutCandidatePresent": false,
+    "sourceDerivedLayoutRenderable": false,
+    "sourceDerivedLayoutBlockedReason": null,
+    "rejectionReasons": [
+      "source-placement-evidence-missing",
+      "line-header-cell-geometry-incomplete",
+      "no-common-matched-cell-header-columns",
+      "line-header-rows-not-homogeneous",
+      "line-mark-rows-not-exact-source-boundaries",
+      "source-derived-layout-candidate-absent"
+    ],
+    "renderPromotionContribution": "source-derived-layout-readiness-gate",
+    "renderPromotionBlockedReason": "source-derived-layout-not-renderable"
+  },
+  "sparseSiblingColumnPromotionReadiness": null,
+  "referenceFallbackAdmissionGate": {
+    "source": "table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "referenceLayoutPresent": true,
+    "referenceFallbackAllowed": true,
+    "referenceFallbackUsed": true,
+    "sourceLayoutCandidatePresent": false,
+    "sourceRenderLayoutPresent": false,
+    "sourceLayoutRenderable": false,
+    "sourceOnlyPageYAdmissionReady": false,
+    "sourceOnlyPageYAdmissionBasis": null,
+    "sourceReplacementBlockedReason": "source-derived-layout-candidate-absent",
+    "blockedReason": null,
+    "renderPromotionContribution": "reference-fallback-admission-gate",
+    "renderPromotionBlockedReason": null
+  },
+  "pageSpaceSolver": {
+    "source": "documentTextLineHeaders+/LineMark+/PageMark",
+    "solverVersion": "table-page-space-v1",
+    "diagnosticOnly": true,
+    "sourceBacked": true,
+    "referenceBacked": false,
+    "decoded": false,
+    "geometryDecoded": false,
+    "placementDerived": false,
+    "solverStage": "candidate-absent",
+    "sourcePlacementEvidencePresent": false,
+    "candidateRowCount": 4,
+    "requestedColumnCount": 3,
+    "commonMatchedColumnCount": 0,
+    "matchedCellHeaderCount": 0,
+    "requiredCellHeaderCount": 12,
+    "horizontalSolverReady": false,
+    "rowHeightSolverReady": false,
+    "yOriginSolverReady": false,
+    "lineHeaderRowsHomogeneous": false,
+    "lineMarkRowRecordSelection": "previous-compact-row-span-record",
+    "lineMarkRowsExactAndContiguous": false,
+    "sourceDerivedLayoutCandidatePresent": false,
+    "sourceDerivedLayoutRenderable": false,
+    "pageOriginAuthority": null,
+    "lineMarkPageOriginPresent": false,
+    "lineMarkPageOriginStridePresent": false,
+    "referenceCalibrationReplacementGate": {
+      "source": "table-page-space-v1 reference calibration replacement gate",
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "replacementReady": false,
+      "sourceLayoutCandidatePresent": false,
+      "sourceLayoutRenderable": false,
+      "horizontalSolverReady": false,
+      "sourceColumnSplitReady": false,
+      "pageSpaceHorizontalTransformReady": false,
+      "rowHeightSolverReady": false,
+      "yOriginSolverReady": false,
+      "blockedReasons": [
+        "source-derived-layout-candidate-absent",
+        "table-horizontal-source-transform-incomplete",
+        "source-column-split-not-ready",
+        "table-horizontal-page-space-transform-incomplete",
+        "table-row-height-source-transform-incomplete",
+        "source-page-y-transform-not-decoded"
+      ],
+      "renderPromotionContribution": "reference-calibration-replacement-gate",
+      "renderPromotionBlockedReason": "source-table-page-space-not-ready"
+    },
+    "sourceOnlyAxisAdmissionGate": {
+      "source": "pageSpaceHorizontalTransformGate+sourcePageYTransformGate source-only selector coupling",
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "referenceBBoxUsedForSelection": false,
+      "admissionReady": false,
+      "activeSourceLayoutAdmissionReady": false,
+      "activeSourceLayoutAdmissionBasis": null,
+      "sourceOnlySelectorFallbackIgnoredByActiveSourceLayout": false,
+      "sourceLayoutCandidatePresent": false,
+      "sourceLayoutRenderable": false,
+      "horizontalAxisReady": false,
+      "horizontalSelectorCandidatePresent": true,
+      "horizontalSelectorInBestAgreementGroup": true,
+      "horizontalCandidateCount": 4,
+      "horizontalAgreementGroupCount": 3,
+      "horizontalBestSupportCount": 2,
+      "horizontalUniqueBestSupported": true,
+      "horizontalBestSupportedSelectedX": 174.000,
+      "horizontalBestSupportedSelectedWidth": 421.000,
+      "horizontalBestSupportedFrameBases": [
+        "page-mark-word14-first-slot-word15-half-gap",
+        "page-mark-word14-first-slot-word15-half-gap"
+      ],
+      "yAxisReady": false,
+      "ySelectorCandidatePresent": true,
+      "ySelectorSingleSupportFallback": false,
+      "ySelectorSupportFragmentedByTable": true,
+      "ySelectorSupportCount": 2,
+      "ySelectorCrossTableSupportPresent": true,
+      "ySelectorAgreementAdmissible": false,
+      "ySelectorAdmissionBlockedReason": "source-y-origin-selector-fragmented-by-table-not-render-admissible",
+      "ySelectorSupportBlockedReasons": [
+        "cross-table-row-boundary-offset-transform-required",
+        "page-line-gap-projection-does-not-decode-table-y-origin"
+      ],
+      "sourceGapToPageLineGapTransformAdmissionGate": {
+        "source": "sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "referenceBBoxUsed": false,
+        "selectionReady": false,
+        "transformDomain": "source-unit-gap-to-page-mark-line-index-gap",
+        "canDecodeSourceTransform": false,
+        "tableFamilyTransformStable": false,
+        "tableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "transitionCount": 3,
+        "allTransitionsSamePageMarkEntry": true,
+        "bestCandidateTransformKind": "segment-offset-gap",
+        "bestCandidateMaxAbsDeltaUnits": 105,
+        "transformCandidateCount": 3,
+        "exactTransformCandidateCount": 0,
+        "bestCandidateTransitionCoverageCount": 3,
+        "bestCandidateUnitsPerPageLineGapSpread": 29.875,
+        "lowestSpreadCandidateTransformKind": "direct-source-range-gap",
+        "lowestSpreadUnitsPerPageLineGapSpread": 12.250,
+        "declinedTransformCandidates": [
+          {
+            "transformKind": "direct-source-range-gap",
+            "selected": false,
+            "stable": false,
+            "transitionCoverageCount": 3,
+            "maxAbsDeltaUnits": 182,
+            "unitsPerPageLineGapSpread": 12.250,
+            "declineReason": "higher-max-delta-than-selected-transform",
+            "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+          },
+          {
+            "transformKind": "direct-row-source-start-gap",
+            "selected": false,
+            "stable": false,
+            "transitionCoverageCount": 3,
+            "maxAbsDeltaUnits": 295,
+            "unitsPerPageLineGapSpread": 42.125,
+            "declineReason": "higher-max-delta-than-selected-transform",
+            "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+          }
+        ],
+        "declaredBlockers": [
+          "source-gap-to-page-line-gap-transform-not-stable",
+          "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+          "source-gap-to-page-line-gap-transform-undecoded"
+        ],
+        "renderPromotionContribution": "source-gap-to-page-line-gap-transform-admission-gate",
+        "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+      },
+      "pageMarkAbsoluteYSlotSemanticsReady": false,
+      "pageMarkAbsoluteYSlotBlockedReason": "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+      "pageMarkAbsoluteYSlotResidualPx": -723.913,
+      "yCandidateCount": 9,
+      "yAgreementGroupCount": 8,
+      "yBestSupportCount": 2,
+      "yUniqueBestSupported": true,
+      "ySelectedOriginBasis": "cross-table-combined-previous-row-span-first-record",
+      "ySelectedY": 235.087,
+      "ySelectedRowHeight": 23.298,
+      "ySelectorTableCandidateIndexes": [
+        0
+      ],
+      "sourceOnlyAxisCandidateBBox": {
+        "source": "sourceOnlyAxisAdmissionGate.sourceOnlyAxisCandidateBBox",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "referenceBBoxUsed": false,
+        "selectionReady": false,
+        "candidatePresent": true,
+        "bboxPresent": true,
+        "horizontalCandidatePresent": true,
+        "yCandidatePresent": true,
+        "rowHeightCandidatePresent": true,
+        "rowCount": 4,
+        "horizontalFrameBasis": "page-mark-word14-first-slot-word15-half-gap",
+        "yOriginBasis": "cross-table-combined-previous-row-span-first-record",
+        "rowHeight": 23.298,
+        "bbox": {
+          "x": 174.000,
+          "y": 235.087,
+          "width": 421.000,
+          "height": 93.192
+        },
+        "renderPromotionContribution": "source-only-axis-candidate-bbox",
+        "renderPromotionBlockedReason": "source-page-space-axis-selector-coupling-unproven"
+      },
+      "blockedReasons": [
+        "source-derived-layout-candidate-absent",
+        "source-column-split-not-ready",
+        "source-row-height-not-ready",
+        "source-horizontal-axis-not-render-admissible",
+        "source-y-origin-selector-fragmented-by-table",
+        "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "source-y-axis-not-render-admissible",
+        "source-derived-layout-not-renderable"
+      ],
+      "renderPromotionContribution": "source-only-axis-selector-admission-gate",
+      "renderPromotionBlockedReason": "source-page-space-axis-selector-coupling-unproven"
+    },
+    "pageSpaceHorizontalTransformGate": {
+      "source": "documentTextLineHeaders+/LineMark page-space horizontal transform gate",
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "promotionReady": false,
+      "sourceLayoutCandidatePresent": false,
+      "sourceColumnSplitReady": false,
+      "xUnitAllRowsAgree": false,
+      "fullExtentUnitsPresent": false,
+      "sourceFrameDecoded": false,
+      "pageOriginAuthority": null,
+      "lineMarkRowsExactAndContiguous": false,
+      "sourceDerivedLayoutBlockedReason": null,
+      "xUnitRangeBasis": null,
+      "xUnitRange": null,
+      "fullExtentUnits": null,
+      "xOriginInsetBasis": null,
+      "sourceFrameAdmissionGate": {
+        "source": "sourceDerivedLayoutCandidate+sourceFrameAdmission",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "promotionReady": false,
+        "sourceFrameDecoded": false,
+        "renderFrameBasis": null,
+        "selectedX": null,
+        "selectedWidth": null,
+        "selectedStartUnits": null,
+        "selectedWidthUnits": null,
+        "fullExtentUnits": null,
+        "xOriginInsetUnits": null,
+        "xOriginInsetBasis": null,
+        "xOriginInsetApplied": false,
+        "pageBodyFrameX": 72.000,
+        "pageBodyFrameWidth": 649.701,
+        "pageBodyUnitPx": null,
+        "selectedXWithoutInset": null,
+        "selectedXWithInset": null,
+        "pageMarkRawAgreementPresent": true,
+        "pageMarkRawAgreementSelectedX": 174.000,
+        "pageMarkRawAgreementSelectedWidth": 421.000,
+        "pageMarkRawAgreementSupportCount": 2,
+        "pageMarkRawAgreementFrameBases": [
+          "page-mark-word14-first-slot-word15-half-gap",
+          "page-mark-word14-first-slot-word15-half-gap"
+        ],
+        "pageMarkRawAgreementContributions": [
+          "source-only-horizontal-field-consensus",
+          "source-only-horizontal-field-selector"
+        ],
+        "pageMarkRawAgreementBlockedReasons": [
+          "cross-table-horizontal-field-semantics-unproven",
+          "cross-table-horizontal-field-semantics-unproven"
+        ],
+        "sourceFrameVsPageMarkAgreementXResidualPx": null,
+        "sourceFrameVsPageMarkAgreementWidthResidualPx": null,
+        "pageMarkRawAgreementConflictsWithRenderFrame": false,
+        "pageMarkRawAgreementRenderPromotionBlockedReason": "page-mark-horizontal-field-semantics-unproven",
+        "sourceTopTextPlacementCoherenceMirror": {
+          "source": "topTextTableSourceGapEvidence.sourceTablePlacementCoherenceGate",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "sourceTopTextPlacementEvidencePresent": false,
+          "sourceTopTextPlacementReady": false,
+          "readinessBlockedReasons": [
+            "source-top-text-placement-evidence-absent"
+          ],
+          "renderPromotionContribution": "source-horizontal-frame-top-text-placement-coherence",
+          "renderPromotionBlockedReason": "source-top-text-placement-evidence-absent"
+        },
+        "renderPromotionContribution": "source-horizontal-frame-admission-gate",
+        "renderPromotionBlockedReason": "table-horizontal-page-space-transform-incomplete"
+      },
+      "sourceFrameHypotheses": [
+        {
+          "frameBasis": "page-mark-word14-first-slot-word15-direct",
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "coordinateBasis": "page-mark-u16-fields+cross-table-line-header-slots",
+          "pageMarkXWord14": 194,
+          "pageMarkWidthWord": 423,
+          "firstColumnSlotUnits": 20,
+          "xAdjustmentUnits": 20.000,
+          "widthAdjustmentUnits": 0.000,
+          "xAdjustmentBasis": "cross-table-first-column-slot",
+          "widthAdjustmentBasis": "none",
+          "selectedX": 174.000,
+          "selectedWidth": 423.000,
+          "renderPromotionBlockedReason": "cross-table-horizontal-field-semantics-unproven"
+        },
+        {
+          "frameBasis": "page-mark-word14-first-slot-word15-half-gap",
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "coordinateBasis": "page-mark-u16-fields+cross-table-line-header-slots",
+          "pageMarkXWord14": 194,
+          "pageMarkWidthWord": 423,
+          "firstColumnSlotUnits": 20,
+          "xAdjustmentUnits": 20.000,
+          "widthAdjustmentUnits": 2.000,
+          "xAdjustmentBasis": "cross-table-first-column-slot",
+          "widthAdjustmentBasis": "cross-table-half-first-intercell-gap",
+          "selectedX": 174.000,
+          "selectedWidth": 421.000,
+          "renderPromotionBlockedReason": "cross-table-horizontal-field-semantics-unproven"
+        },
+        {
+          "frameBasis": "page-mark-word14-first-slot-word21-half-slot",
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "coordinateBasis": "page-mark-u16-fields+cross-table-line-header-slots",
+          "pageMarkXWord14": 194,
+          "pageMarkWidthWord": 564,
+          "firstColumnSlotUnits": 20,
+          "xAdjustmentUnits": 20.000,
+          "widthAdjustmentUnits": 10.000,
+          "xAdjustmentBasis": "cross-table-first-column-slot",
+          "widthAdjustmentBasis": "cross-table-half-first-column-slot",
+          "selectedX": 174.000,
+          "selectedWidth": 554.000,
+          "renderPromotionBlockedReason": "cross-table-horizontal-field-semantics-unproven"
+        }
+      ],
+      "sourceOnlyHorizontalFieldConsensus": {
+        "source": "sparseSiblingSourceDerivedLayouts+/PageMark horizontal fields",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "tableCandidateIndex": 0,
+        "pageMarkFieldSource": "crossTableRowBoundaryOffsetConsistency",
+        "sparseTableCandidateIndex": 4,
+        "relatedTableCandidateIndexes": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "sourceDerivedRelatedTableCandidateIndexes": [
+          1,
+          2,
+          3
+        ],
+        "sourceDerivedRelatedTableCount": 3,
+        "stableFirstColumnSlotUnits": 20,
+        "stableFirstMatchedCellSpanUnits": 16,
+        "stableFirstIntercellGapUnits": 4,
+        "stableXUnitRange": {
+          "start": 0,
+          "end": 100
+        },
+        "stableFullExtentUnits": 144,
+        "allRelatedLayoutsHaveStableUnitFrame": true,
+        "relatedSourceLayouts": [
+          {
+            "tableCandidateIndex": 1,
+            "rowCount": 2,
+            "columnCount": 2,
+            "xUnitRange": {
+              "start": 0,
+              "end": 100
+            },
+            "fullExtentUnits": 144,
+            "xUnitAllRowsAgree": true,
+            "firstColumnSlotUnits": 20,
+            "firstMatchedCellSpanUnits": 16,
+            "firstIntercellGapUnits": 4,
+            "matchedCellSpanUnits": [
+              16,
+              80
+            ],
+            "matchedCellGapUnits": [
+              4
+            ],
+            "columnSlotWidthUnits": [
+              20,
+              80
+            ]
+          },
+          {
+            "tableCandidateIndex": 2,
+            "rowCount": 2,
+            "columnCount": 2,
+            "xUnitRange": {
+              "start": 0,
+              "end": 100
+            },
+            "fullExtentUnits": 144,
+            "xUnitAllRowsAgree": true,
+            "firstColumnSlotUnits": 20,
+            "firstMatchedCellSpanUnits": 16,
+            "firstIntercellGapUnits": 4,
+            "matchedCellSpanUnits": [
+              16,
+              80
+            ],
+            "matchedCellGapUnits": [
+              4
+            ],
+            "columnSlotWidthUnits": [
+              20,
+              80
+            ]
+          },
+          {
+            "tableCandidateIndex": 3,
+            "rowCount": 3,
+            "columnCount": 2,
+            "xUnitRange": {
+              "start": 0,
+              "end": 100
+            },
+            "fullExtentUnits": 144,
+            "xUnitAllRowsAgree": true,
+            "firstColumnSlotUnits": 20,
+            "firstMatchedCellSpanUnits": 16,
+            "firstIntercellGapUnits": 4,
+            "matchedCellSpanUnits": [
+              16,
+              80
+            ],
+            "matchedCellGapUnits": [
+              4
+            ],
+            "columnSlotWidthUnits": [
+              20,
+              80
+            ]
+          }
+        ],
+        "sourceOnlyFrameHypotheses": [
+          {
+            "frameBasis": "page-mark-word14-first-slot-word15-direct",
+            "sourceBacked": true,
+            "referenceBacked": false,
+            "decoded": false,
+            "geometryDecoded": false,
+            "placementDerived": false,
+            "coordinateBasis": "page-mark-u16-fields+cross-table-line-header-slots",
+            "pageMarkXWord14": 194,
+            "pageMarkWidthWord": 423,
+            "firstColumnSlotUnits": 20,
+            "xAdjustmentUnits": 20.000,
+            "widthAdjustmentUnits": 0.000,
+            "xAdjustmentBasis": "cross-table-first-column-slot",
+            "widthAdjustmentBasis": "none",
+            "selectedX": 174.000,
+            "selectedWidth": 423.000,
+            "renderPromotionBlockedReason": "cross-table-horizontal-field-semantics-unproven"
+          },
+          {
+            "frameBasis": "page-mark-word14-first-slot-word15-half-gap",
+            "sourceBacked": true,
+            "referenceBacked": false,
+            "decoded": false,
+            "geometryDecoded": false,
+            "placementDerived": false,
+            "coordinateBasis": "page-mark-u16-fields+cross-table-line-header-slots",
+            "pageMarkXWord14": 194,
+            "pageMarkWidthWord": 423,
+            "firstColumnSlotUnits": 20,
+            "xAdjustmentUnits": 20.000,
+            "widthAdjustmentUnits": 2.000,
+            "xAdjustmentBasis": "cross-table-first-column-slot",
+            "widthAdjustmentBasis": "cross-table-half-first-intercell-gap",
+            "selectedX": 174.000,
+            "selectedWidth": 421.000,
+            "renderPromotionBlockedReason": "cross-table-horizontal-field-semantics-unproven"
+          },
+          {
+            "frameBasis": "page-mark-word14-first-slot-word21-half-slot",
+            "sourceBacked": true,
+            "referenceBacked": false,
+            "decoded": false,
+            "geometryDecoded": false,
+            "placementDerived": false,
+            "coordinateBasis": "page-mark-u16-fields+cross-table-line-header-slots",
+            "pageMarkXWord14": 194,
+            "pageMarkWidthWord": 564,
+            "firstColumnSlotUnits": 20,
+            "xAdjustmentUnits": 20.000,
+            "widthAdjustmentUnits": 10.000,
+            "xAdjustmentBasis": "cross-table-first-column-slot",
+            "widthAdjustmentBasis": "cross-table-half-first-column-slot",
+            "selectedX": 174.000,
+            "selectedWidth": 554.000,
+            "renderPromotionBlockedReason": "cross-table-horizontal-field-semantics-unproven"
+          }
+        ],
+        "sourceOnlyHorizontalFieldSelector": {
+          "source": "sparseSiblingSourceDerivedLayouts+/PageMark horizontal fields",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "referenceBBoxUsedForSelection": false,
+          "selectionReady": false,
+          "tableCandidateIndex": 0,
+          "pageMarkFieldSource": "crossTableRowBoundaryOffsetConsistency",
+          "compactColumnCount": 3,
+          "selectionBasis": "compact-three-column-page-mark-word15-half-gap",
+          "selectedFrameBasis": "page-mark-word14-first-slot-word15-half-gap",
+          "pageMarkXWord14": 194,
+          "pageMarkWidthWord": 423,
+          "firstColumnSlotUnits": 20,
+          "firstIntercellGapUnits": 4,
+          "xAdjustmentUnits": 20.000,
+          "widthAdjustmentUnits": 2.000,
+          "xAdjustmentBasis": "cross-table-first-column-slot",
+          "widthAdjustmentBasis": "cross-table-half-first-intercell-gap",
+          "selectedX": 174.000,
+          "selectedWidth": 421.000,
+          "sourceWidthFieldRoleGate": {
+            "source": "sparseSiblingSourceDerivedLayouts+/PageMark width-field role gate",
+            "diagnosticOnly": true,
+            "sourceBacked": true,
+            "referenceBacked": false,
+            "decoded": false,
+            "geometryDecoded": false,
+            "placementDerived": false,
+            "referenceBBoxUsedForSelection": false,
+            "selectionReady": false,
+            "pageMarkFieldSource": "crossTableRowBoundaryOffsetConsistency",
+            "compactColumnCount": 3,
+            "pageMarkXWord14": 194,
+            "pageMarkWord15": 423,
+            "pageMarkWord21": 564,
+            "firstColumnSlotUnits": 20,
+            "firstIntercellGapUnits": 4,
+            "selectedWidthWordIndex": 15,
+            "selectedWidthWord": 423,
+            "selectedWidthFieldRole": "compact-three-column-visible-width",
+            "selectedWidthAdjustmentUnits": 2.000,
+            "selectedWidthAdjustmentBasis": "cross-table-half-first-intercell-gap",
+            "selectedFrameBasis": "page-mark-word14-first-slot-word15-half-gap",
+            "selectionBasis": "compact-three-column-page-mark-word15-half-gap",
+            "twoColumnWidthCandidatePresent": false,
+            "threeColumnWidthCandidatePresent": true,
+            "selectorMatchesCompactColumnCount": true,
+            "renderPromotionContribution": "source-horizontal-width-field-role-gate",
+            "renderPromotionBlockedReason": "width-field-role-semantics-needs-cross-sample-validation"
+          },
+          "renderPromotionContribution": "source-only-horizontal-field-selector",
+          "renderPromotionBlockedReason": "cross-table-horizontal-field-semantics-unproven"
+        },
+        "renderPromotionContribution": "source-only-horizontal-field-consensus",
+        "renderPromotionBlockedReason": "cross-table-horizontal-field-semantics-unproven"
+      },
+      "sourceFrameCandidateAgreementGate": {
+        "source": "pageSpaceHorizontalTransformGate.sourceFrameHypotheses agreement",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "selectionReady": false,
+        "candidateCount": 4,
+        "agreementGroupCount": 3,
+        "bestSupportCount": 2,
+        "uniqueBestSupported": true,
+        "sourceOnlyUniqueSelectionCandidatePresent": true,
+        "sourceOnlyUniqueSelectionDiagnosticOnly": true,
+        "sourceOnlyUniqueSelectionPromotionReady": false,
+        "sourceOnlyUniqueSelectionPromotionBlockedReason": "source-horizontal-field-semantics-unproven",
+        "bestSupportedSelectedX": 174.000,
+        "bestSupportedSelectedWidth": 421.000,
+        "bestSupportedFrameBases": [
+          "page-mark-word14-first-slot-word15-half-gap",
+          "page-mark-word14-first-slot-word15-half-gap"
+        ],
+        "agreementGroups": [
+          {
+            "selectedX": 174.000,
+            "selectedWidth": 421.000,
+            "supportCount": 2,
+            "frameBases": [
+              "page-mark-word14-first-slot-word15-half-gap",
+              "page-mark-word14-first-slot-word15-half-gap"
+            ],
+            "contributions": [
+              "source-only-horizontal-field-consensus",
+              "source-only-horizontal-field-selector"
+            ],
+            "blockedReasons": [
+              "cross-table-horizontal-field-semantics-unproven",
+              "cross-table-horizontal-field-semantics-unproven"
+            ]
+          },
+          {
+            "selectedX": 174.000,
+            "selectedWidth": 423.000,
+            "supportCount": 1,
+            "frameBases": [
+              "page-mark-word14-first-slot-word15-direct"
+            ],
+            "contributions": [
+              "source-only-horizontal-field-consensus"
+            ],
+            "blockedReasons": [
+              "cross-table-horizontal-field-semantics-unproven"
+            ]
+          },
+          {
+            "selectedX": 174.000,
+            "selectedWidth": 554.000,
+            "supportCount": 1,
+            "frameBases": [
+              "page-mark-word14-first-slot-word21-half-slot"
+            ],
+            "contributions": [
+              "source-only-horizontal-field-consensus"
+            ],
+            "blockedReasons": [
+              "cross-table-horizontal-field-semantics-unproven"
+            ]
+          }
+        ],
+        "blockedReasons": [
+          "source-horizontal-field-semantics-still-unproven"
+        ],
+        "renderPromotionContribution": "source-horizontal-frame-candidate-agreement-gate",
+        "renderPromotionBlockedReason": "source-horizontal-field-semantics-unproven"
+      },
+      "blockedReasons": [
+        "source-derived-layout-candidate-absent",
+        "source-column-split-not-ready",
+        "source-x-unit-range-not-row-stable",
+        "source-full-line-extent-units-missing",
+        "page-space-horizontal-frame-not-decoded",
+        "line-mark-rows-not-exact-source-boundaries"
+      ],
+      "renderPromotionContribution": "source-page-space-horizontal-transform-gate",
+      "renderPromotionBlockedReason": "table-horizontal-page-space-transform-incomplete"
+    },
+    "sourcePageYTransformGate": {
+      "source": "documentTextLineHeaders+/LineMark+/PageMark y-origin promotion gate",
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "promotionReady": false,
+      "lineMarkRowsExactAndContiguous": false,
+      "pageOriginAuthority": null,
+      "lineMarkPageOriginPresent": false,
+      "lineMarkPageOriginStridePresent": false,
+      "subrecordLineSpanReadinessPresent": true,
+      "selectedPostRowGapSpanComplete": false,
+      "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+      "previousRowSpanComplete": false,
+      "previousRowSpanOrderedUniqueCoverageComplete": false,
+      "selectedPostRowGapSpanOrderedCoverage": {
+        "policy": "one-tolerance-hit-with-unique-subrecord-candidate-per-line-mark-record",
+        "matchedRecordIndexes": [
+          8,
+          10,
+          12
+        ],
+        "matchedCandidateByteOffsets": [
+          414,
+          414,
+          414
+        ],
+        "uniqueCandidateByteOffsets": [
+          414
+        ],
+        "duplicateCandidateByteOffsets": [
+          414
+        ],
+        "matchedRecordCount": 3,
+        "uniqueCandidateCount": 1,
+        "duplicateCandidateReuseCount": 1,
+        "orderedUniqueCoverageComplete": false
+      },
+      "previousRowSpanOrderedCoverage": {
+        "policy": "one-tolerance-hit-with-unique-subrecord-candidate-per-line-mark-record",
+        "matchedRecordIndexes": [],
+        "matchedCandidateByteOffsets": [],
+        "uniqueCandidateByteOffsets": [],
+        "duplicateCandidateByteOffsets": [],
+        "matchedRecordCount": 0,
+        "uniqueCandidateCount": 0,
+        "duplicateCandidateReuseCount": 0,
+        "orderedUniqueCoverageComplete": false
+      },
+      "crossTableSubrecordOrderingProbe": {
+        "source": "/PageMark raw u16 subrecord line ranges+cross-table sparse sibling order",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "currentTableCandidateIndex": 0,
+        "relatedTableCandidateIndexes": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "relatedTableCount": 4,
+        "sourceOrderingBasis": "tableCandidate.source_start",
+        "relatedTableSourceRanges": [
+          {
+            "start": 304,
+            "end": 945
+          },
+          {
+            "start": 1135,
+            "end": 1395
+          },
+          {
+            "start": 1467,
+            "end": 1719
+          },
+          {
+            "start": 1857,
+            "end": 2261
+          }
+        ],
+        "sourceOrderMatchesProbeOrder": true,
+        "combinedMatchedRowCount": 9,
+        "combinedLineMarkRecordIndexes": [
+          8,
+          10,
+          12,
+          22,
+          26,
+          28,
+          33,
+          35,
+          37
+        ],
+        "combinedMatchedByteOffsets": [
+          414,
+          414,
+          414,
+          174,
+          414,
+          174,
+          174,
+          734,
+          174
+        ],
+        "combinedRawRecordScanIndexes": [
+          3,
+          3,
+          3,
+          2,
+          3,
+          2,
+          2,
+          6,
+          2
+        ],
+        "combinedTailBlock16WordIndexes": [
+          9,
+          9,
+          9,
+          9,
+          9,
+          9,
+          9,
+          1,
+          9
+        ],
+        "combinedLineStartCandidates": [
+          242,
+          242,
+          242,
+          85,
+          242,
+          85,
+          85,
+          437,
+          85
+        ],
+        "combinedLineEndCandidates": [
+          304,
+          304,
+          304,
+          140,
+          304,
+          140,
+          140,
+          489,
+          140
+        ],
+        "combinedField2Values": [
+          1024,
+          1024,
+          1024,
+          768,
+          1024,
+          768,
+          768,
+          256,
+          768
+        ],
+        "monotonicRawRecordScanIndex": false,
+        "monotonicLineStartCandidate": false,
+        "familyReusedAfterLaterFamily": true,
+        "crossTableOrderingConsistent": false,
+        "sourceOrderVsSubrecordOrderContradiction": true,
+        "sourceOrderContradictionReasons": [
+          "raw-record-scan-index-regresses-under-source-order",
+          "subrecord-line-start-regresses-under-source-order",
+          "subrecord-family-reused-after-later-family-under-source-order"
+        ]
+      },
+      "crossTableRowBoundaryOffsetConsistency": {
+        "source": "/LineMark previous row-span boundaries+cross-table sparse sibling order",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "currentTableCandidateIndex": 0,
+        "sparseTableCandidateIndex": 4,
+        "relatedTableCandidateIndexes": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "relatedTableCount": 4,
+        "tableCountWithPreviousRowSpanAlignment": 4,
+        "rowBoundaryOffsetCandidateUnits": [
+          -82,
+          -82,
+          -82,
+          -82
+        ],
+        "stableRowBoundaryOffsetCandidateUnits": -82,
+        "allRelatedTablesHaveOffsetCandidate": true,
+        "allOffsetsStable": true,
+        "allOffsetsRequireTransform": true,
+        "offsetNormalizationPolicy": "row-source-boundaries-plus-stable-offset-must-equal-previous-line-mark-boundaries",
+        "allOffsetNormalizedBoundariesExact": true,
+        "pageMarkLineDomainPolicy": "previous-row-span-records-must-share-one-page-mark-entry-and-monotonic-line-offsets",
+        "combinedLineMarkRecordIndexes": [
+          7,
+          9,
+          11,
+          13,
+          21,
+          23,
+          25,
+          27,
+          32,
+          34,
+          36
+        ],
+        "pageMarkEntryIndex": 0,
+        "pageIndexCandidate": 0,
+        "pageLineStart": 0,
+        "pageLineEnd": 42,
+        "pageMarkU16FieldCount": 137,
+        "pageMarkU16FieldPreview": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          42,
+          0,
+          0,
+          564,
+          0,
+          0,
+          564,
+          194,
+          423,
+          223,
+          564,
+          564,
+          370,
+          255,
+          564,
+          0,
+          0
+        ],
+        "pageMarkU16FieldPreviewHex": [
+          "0x0000",
+          "0x0000",
+          "0x0001",
+          "0x0000",
+          "0x0000",
+          "0x0000",
+          "0x0000",
+          "0x002a",
+          "0x0000",
+          "0x0000",
+          "0x0234",
+          "0x0000",
+          "0x0000",
+          "0x0234",
+          "0x00c2",
+          "0x01a7",
+          "0x00df",
+          "0x0234",
+          "0x0234",
+          "0x0172",
+          "0x00ff",
+          "0x0234",
+          "0x0000",
+          "0x0000"
+        ],
+        "combinedLineOffsetsFromPageStart": [
+          7,
+          9,
+          11,
+          13,
+          21,
+          23,
+          25,
+          27,
+          32,
+          34,
+          36
+        ],
+        "combinedLineOffsetsMonotonic": true,
+        "combinedLineMarkRecordYProjection": {
+          "source": "/PageMark line range+page layout body line gap",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "combinedLineMarkRecordYPitchPx": 23.298,
+          "combinedLineMarkRecordYPitchBasis": "pageMarkBodyLineGap",
+          "combinedLineMarkRecordYTopPx": [
+            235.087,
+            281.683,
+            328.279,
+            374.875,
+            561.260,
+            607.856,
+            654.452,
+            701.048,
+            817.539,
+            864.135,
+            910.731
+          ],
+          "combinedLineMarkRecordYSpanPx": 675.645,
+          "renderPromotionBlockedReason": "page-line-gap-projection-does-not-decode-table-y-origin"
+        },
+        "sourceUnitToPageLineIndexFit": {
+          "source": "/DocumentText row source units+/LineMark previous-row-span records",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "fitBasis": "rowSourceStartUnits-to-lineMarkRecordIndexes",
+          "rowSourceStartUnits": [
+            304,
+            476,
+            654,
+            832,
+            1135,
+            1307,
+            1467,
+            1627,
+            1857,
+            2026,
+            2170
+          ],
+          "lineMarkRecordIndexes": [
+            7,
+            9,
+            11,
+            13,
+            21,
+            23,
+            25,
+            27,
+            32,
+            34,
+            36
+          ],
+          "slopeRecordIndexesPerSourceUnit": 0.016,
+          "interceptRecordIndex": 1.220,
+          "fittedRecordIndexes": [
+            6.147,
+            8.935,
+            11.821,
+            14.706,
+            19.618,
+            22.406,
+            24.999,
+            27.593,
+            31.321,
+            34.060,
+            36.394
+          ],
+          "residualRecordIndexes": [
+            0.853,
+            0.065,
+            -0.821,
+            -1.706,
+            1.382,
+            0.594,
+            0.001,
+            -0.593,
+            0.679,
+            -0.060,
+            -0.394
+          ],
+          "maxAbsResidualRecordIndexes": 1.706,
+          "exactFit": false,
+          "rows": [
+            {
+              "tableCandidateIndex": 0,
+              "rowIndex": 0,
+              "rowSourceStartUnits": 304,
+              "lineMarkRecordIndex": 7,
+              "fittedRecordIndex": 6.147,
+              "residualRecordIndex": 0.853
+            },
+            {
+              "tableCandidateIndex": 0,
+              "rowIndex": 1,
+              "rowSourceStartUnits": 476,
+              "lineMarkRecordIndex": 9,
+              "fittedRecordIndex": 8.935,
+              "residualRecordIndex": 0.065
+            },
+            {
+              "tableCandidateIndex": 0,
+              "rowIndex": 2,
+              "rowSourceStartUnits": 654,
+              "lineMarkRecordIndex": 11,
+              "fittedRecordIndex": 11.821,
+              "residualRecordIndex": -0.821
+            },
+            {
+              "tableCandidateIndex": 0,
+              "rowIndex": 3,
+              "rowSourceStartUnits": 832,
+              "lineMarkRecordIndex": 13,
+              "fittedRecordIndex": 14.706,
+              "residualRecordIndex": -1.706
+            },
+            {
+              "tableCandidateIndex": 1,
+              "rowIndex": 0,
+              "rowSourceStartUnits": 1135,
+              "lineMarkRecordIndex": 21,
+              "fittedRecordIndex": 19.618,
+              "residualRecordIndex": 1.382
+            },
+            {
+              "tableCandidateIndex": 1,
+              "rowIndex": 1,
+              "rowSourceStartUnits": 1307,
+              "lineMarkRecordIndex": 23,
+              "fittedRecordIndex": 22.406,
+              "residualRecordIndex": 0.594
+            },
+            {
+              "tableCandidateIndex": 2,
+              "rowIndex": 0,
+              "rowSourceStartUnits": 1467,
+              "lineMarkRecordIndex": 25,
+              "fittedRecordIndex": 24.999,
+              "residualRecordIndex": 0.001
+            },
+            {
+              "tableCandidateIndex": 2,
+              "rowIndex": 1,
+              "rowSourceStartUnits": 1627,
+              "lineMarkRecordIndex": 27,
+              "fittedRecordIndex": 27.593,
+              "residualRecordIndex": -0.593
+            },
+            {
+              "tableCandidateIndex": 3,
+              "rowIndex": 0,
+              "rowSourceStartUnits": 1857,
+              "lineMarkRecordIndex": 32,
+              "fittedRecordIndex": 31.321,
+              "residualRecordIndex": 0.679
+            },
+            {
+              "tableCandidateIndex": 3,
+              "rowIndex": 1,
+              "rowSourceStartUnits": 2026,
+              "lineMarkRecordIndex": 34,
+              "fittedRecordIndex": 34.060,
+              "residualRecordIndex": -0.060
+            },
+            {
+              "tableCandidateIndex": 3,
+              "rowIndex": 2,
+              "rowSourceStartUnits": 2170,
+              "lineMarkRecordIndex": 36,
+              "fittedRecordIndex": 36.394,
+              "residualRecordIndex": -0.394
+            }
+          ],
+          "renderPromotionBlockedReason": "source-unit-to-page-line-affine-fit-not-exact"
+        },
+        "sourceUnitToPageLineIndexPiecewiseFit": {
+          "source": "/DocumentText row source units+/LineMark previous-row-span records table-piecewise",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "fitBasis": "per-related-table-rowSourceStartUnits-to-lineMarkRecordIndexes",
+          "groupingBasis": "crossTableRowBoundaryOffsetConsistency.tables",
+          "globalFitExact": false,
+          "allTableFitsExact": false,
+          "maxTableFitResidualRecordIndexes": 0.106,
+          "samePageMarkEntryContinuity": true,
+          "pieceCount": 4,
+          "transitionCount": 3,
+          "pieces": [
+            {
+              "tableCandidateIndex": 0,
+              "sourceRange": {
+                "start": 304,
+                "end": 945
+              },
+              "rowCount": 4,
+              "rowSourceStartUnits": [
+                304,
+                476,
+                654,
+                832
+              ],
+              "lineMarkRecordIndexes": [
+                7,
+                9,
+                11,
+                13
+              ],
+              "slopeRecordIndexesPerSourceUnit": 0.011,
+              "interceptRecordIndex": 3.570,
+              "fittedRecordIndexes": [
+                7.021,
+                8.973,
+                10.993,
+                13.013
+              ],
+              "residualRecordIndexes": [
+                -0.021,
+                0.027,
+                0.007,
+                -0.013
+              ],
+              "maxAbsResidualRecordIndexes": 0.027,
+              "exactFit": false,
+              "pageMarkRecordsWithinSingleEntry": true
+            },
+            {
+              "tableCandidateIndex": 1,
+              "sourceRange": {
+                "start": 1135,
+                "end": 1395
+              },
+              "rowCount": 2,
+              "rowSourceStartUnits": [
+                1135,
+                1307
+              ],
+              "lineMarkRecordIndexes": [
+                21,
+                23
+              ],
+              "slopeRecordIndexesPerSourceUnit": 0.012,
+              "interceptRecordIndex": 7.802,
+              "fittedRecordIndexes": [
+                21.000,
+                23.000
+              ],
+              "residualRecordIndexes": [
+                0.000,
+                0.000
+              ],
+              "maxAbsResidualRecordIndexes": 0.000,
+              "exactFit": true,
+              "pageMarkRecordsWithinSingleEntry": true
+            },
+            {
+              "tableCandidateIndex": 2,
+              "sourceRange": {
+                "start": 1467,
+                "end": 1719
+              },
+              "rowCount": 2,
+              "rowSourceStartUnits": [
+                1467,
+                1627
+              ],
+              "lineMarkRecordIndexes": [
+                25,
+                27
+              ],
+              "slopeRecordIndexesPerSourceUnit": 0.013,
+              "interceptRecordIndex": 6.663,
+              "fittedRecordIndexes": [
+                25.000,
+                27.000
+              ],
+              "residualRecordIndexes": [
+                0.000,
+                0.000
+              ],
+              "maxAbsResidualRecordIndexes": 0.000,
+              "exactFit": true,
+              "pageMarkRecordsWithinSingleEntry": true
+            },
+            {
+              "tableCandidateIndex": 3,
+              "sourceRange": {
+                "start": 1857,
+                "end": 2261
+              },
+              "rowCount": 3,
+              "rowSourceStartUnits": [
+                1857,
+                2026,
+                2170
+              ],
+              "lineMarkRecordIndexes": [
+                32,
+                34,
+                36
+              ],
+              "slopeRecordIndexesPerSourceUnit": 0.013,
+              "interceptRecordIndex": 8.270,
+              "fittedRecordIndexes": [
+                31.951,
+                34.106,
+                35.943
+              ],
+              "residualRecordIndexes": [
+                0.049,
+                -0.106,
+                0.057
+              ],
+              "maxAbsResidualRecordIndexes": 0.106,
+              "exactFit": false,
+              "pageMarkRecordsWithinSingleEntry": true
+            }
+          ],
+          "transitions": [
+            {
+              "fromTableCandidateIndex": 0,
+              "toTableCandidateIndex": 1,
+              "previousLastSourceUnit": 832,
+              "nextFirstSourceUnit": 1135,
+              "sourceRangeGapUnits": 190,
+              "rowSourceStartGapUnits": 303,
+              "previousLastRecordIndex": 13,
+              "nextFirstRecordIndex": 21,
+              "lineMarkRecordGap": 8,
+              "samePageMarkEntry": true
+            },
+            {
+              "fromTableCandidateIndex": 1,
+              "toTableCandidateIndex": 2,
+              "previousLastSourceUnit": 1307,
+              "nextFirstSourceUnit": 1467,
+              "sourceRangeGapUnits": 72,
+              "rowSourceStartGapUnits": 160,
+              "previousLastRecordIndex": 23,
+              "nextFirstRecordIndex": 25,
+              "lineMarkRecordGap": 2,
+              "samePageMarkEntry": true
+            },
+            {
+              "fromTableCandidateIndex": 2,
+              "toTableCandidateIndex": 3,
+              "previousLastSourceUnit": 1627,
+              "nextFirstSourceUnit": 1857,
+              "sourceRangeGapUnits": 138,
+              "rowSourceStartGapUnits": 230,
+              "previousLastRecordIndex": 27,
+              "nextFirstRecordIndex": 32,
+              "lineMarkRecordGap": 5,
+              "samePageMarkEntry": true
+            }
+          ],
+          "renderPromotionContribution": "source-unit-to-page-line-piecewise-fit-diagnostic-only",
+          "renderPromotionBlockedReason": "piecewise-fit-does-not-decode-page-y-origin"
+        },
+        "piecewiseRecordFamilyGapYDiagnostic": {
+          "source": "/DocumentText row source units+/LineMark families (selected-spacing vs previous-row-span)+piecewise transitions",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "relatedTableCandidateIndexes": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "tableCount": 4,
+          "recordFamilyInterpretation": "selected-records-match-post-row-gaps-previous-records-match-row-spans",
+          "stableSelectedMinusPreviousRecordIndexGap": 1,
+          "allSelectedRecordsOneAfterPrevious": true,
+          "stableSelectedMinusPreviousRecordYDeltaPx": 23.298,
+          "allRecordFamiliesWithinSinglePageMarkEntry": true,
+          "tables": [
+            {
+              "tableCandidateIndex": 0,
+              "sourceRange": {
+                "start": 304,
+                "end": 945
+              },
+              "rowCount": 4,
+              "previousRecordIndexes": [
+                7,
+                9,
+                11,
+                13
+              ],
+              "selectedRecordIndexes": [
+                8,
+                10,
+                12,
+                14
+              ],
+              "previousPageMarkLineOffsetsFromEntryStart": [
+                7,
+                9,
+                11,
+                13
+              ],
+              "selectedPageMarkLineOffsetsFromEntryStart": [
+                8,
+                10,
+                12,
+                14
+              ],
+              "previousRecordYTopPx": [
+                235.087,
+                281.683,
+                328.279,
+                374.875
+              ],
+              "selectedRecordYTopPx": [
+                258.385,
+                304.981,
+                351.577,
+                398.173
+              ],
+              "selectedMinusPreviousRecordIndexGaps": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "selectedMinusPreviousRecordYDeltaPx": [
+                23.298,
+                23.298,
+                23.298,
+                23.298
+              ],
+              "previousStartResidualUnits": [
+                -82,
+                -82,
+                -82,
+                -82
+              ],
+              "previousEndResidualUnits": [
+                -82,
+                -82,
+                -82,
+                -82
+              ],
+              "previousSpanResidualUnits": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "selectedStartResidualUnits": [
+                25,
+                31,
+                31,
+                31
+              ],
+              "selectedEndResidualUnits": [
+                -17,
+                -17,
+                -17,
+                -15
+              ],
+              "selectedSpanResidualUnits": [
+                -42,
+                -48,
+                -48,
+                -46
+              ]
+            },
+            {
+              "tableCandidateIndex": 1,
+              "sourceRange": {
+                "start": 1135,
+                "end": 1395
+              },
+              "rowCount": 2,
+              "previousRecordIndexes": [
+                21,
+                23
+              ],
+              "selectedRecordIndexes": [
+                22,
+                24
+              ],
+              "previousPageMarkLineOffsetsFromEntryStart": [
+                21,
+                23
+              ],
+              "selectedPageMarkLineOffsetsFromEntryStart": [
+                22,
+                24
+              ],
+              "previousRecordYTopPx": [
+                561.260,
+                607.856
+              ],
+              "selectedRecordYTopPx": [
+                584.558,
+                631.154
+              ],
+              "selectedMinusPreviousRecordIndexGaps": [
+                1,
+                1
+              ],
+              "selectedMinusPreviousRecordYDeltaPx": [
+                23.298,
+                23.298
+              ],
+              "previousStartResidualUnits": [
+                -82,
+                -82
+              ],
+              "previousEndResidualUnits": [
+                -82,
+                -82
+              ],
+              "previousSpanResidualUnits": [
+                0,
+                0
+              ],
+              "selectedStartResidualUnits": [
+                32,
+                6
+              ],
+              "selectedEndResidualUnits": [
+                -24,
+                -10
+              ],
+              "selectedSpanResidualUnits": [
+                -56,
+                -16
+              ]
+            },
+            {
+              "tableCandidateIndex": 2,
+              "sourceRange": {
+                "start": 1467,
+                "end": 1719
+              },
+              "rowCount": 2,
+              "previousRecordIndexes": [
+                25,
+                27
+              ],
+              "selectedRecordIndexes": [
+                26,
+                28
+              ],
+              "previousPageMarkLineOffsetsFromEntryStart": [
+                25,
+                27
+              ],
+              "selectedPageMarkLineOffsetsFromEntryStart": [
+                26,
+                28
+              ],
+              "previousRecordYTopPx": [
+                654.452,
+                701.048
+              ],
+              "selectedRecordYTopPx": [
+                677.750,
+                724.346
+              ],
+              "selectedMinusPreviousRecordIndexGaps": [
+                1,
+                1
+              ],
+              "selectedMinusPreviousRecordYDeltaPx": [
+                23.298,
+                23.298
+              ],
+              "previousStartResidualUnits": [
+                -82,
+                -82
+              ],
+              "previousEndResidualUnits": [
+                -82,
+                -82
+              ],
+              "previousSpanResidualUnits": [
+                0,
+                0
+              ],
+              "selectedStartResidualUnits": [
+                14,
+                10
+              ],
+              "selectedEndResidualUnits": [
+                -18,
+                -28
+              ],
+              "selectedSpanResidualUnits": [
+                -32,
+                -38
+              ]
+            },
+            {
+              "tableCandidateIndex": 3,
+              "sourceRange": {
+                "start": 1857,
+                "end": 2261
+              },
+              "rowCount": 3,
+              "previousRecordIndexes": [
+                32,
+                34,
+                36
+              ],
+              "selectedRecordIndexes": [
+                33,
+                35,
+                37
+              ],
+              "previousPageMarkLineOffsetsFromEntryStart": [
+                32,
+                34,
+                36
+              ],
+              "selectedPageMarkLineOffsetsFromEntryStart": [
+                33,
+                35,
+                37
+              ],
+              "previousRecordYTopPx": [
+                817.539,
+                864.135,
+                910.731
+              ],
+              "selectedRecordYTopPx": [
+                840.837,
+                887.433,
+                934.029
+              ],
+              "selectedMinusPreviousRecordIndexGaps": [
+                1,
+                1,
+                1
+              ],
+              "selectedMinusPreviousRecordYDeltaPx": [
+                23.298,
+                23.298,
+                23.298
+              ],
+              "previousStartResidualUnits": [
+                -82,
+                -82,
+                -82
+              ],
+              "previousEndResidualUnits": [
+                -82,
+                -82,
+                -82
+              ],
+              "previousSpanResidualUnits": [
+                0,
+                0,
+                0
+              ],
+              "selectedStartResidualUnits": [
+                29,
+                10,
+                9
+              ],
+              "selectedEndResidualUnits": [
+                -24,
+                -30,
+                -28
+              ],
+              "selectedSpanResidualUnits": [
+                -53,
+                -40,
+                -37
+              ]
+            }
+          ],
+          "transitions": [
+            {
+              "fromTableCandidateIndex": 0,
+              "toTableCandidateIndex": 1,
+              "sourceRangeGapUnits": 190,
+              "rowSourceStartGapUnits": 303,
+              "previousFamilyRecordGap": 8,
+              "selectedFamilyRecordGap": 8,
+              "selectedMinusPreviousFamilyRecordGapDelta": 0,
+              "previousFamilyYGapPx": 186.385,
+              "selectedFamilyYGapPx": 186.385,
+              "selectedMinusPreviousFamilyYGapDeltaPx": 0.000,
+              "samePageMarkEntry": true
+            },
+            {
+              "fromTableCandidateIndex": 1,
+              "toTableCandidateIndex": 2,
+              "sourceRangeGapUnits": 72,
+              "rowSourceStartGapUnits": 160,
+              "previousFamilyRecordGap": 2,
+              "selectedFamilyRecordGap": 2,
+              "selectedMinusPreviousFamilyRecordGapDelta": 0,
+              "previousFamilyYGapPx": 46.596,
+              "selectedFamilyYGapPx": 46.596,
+              "selectedMinusPreviousFamilyYGapDeltaPx": 0.000,
+              "samePageMarkEntry": true
+            },
+            {
+              "fromTableCandidateIndex": 2,
+              "toTableCandidateIndex": 3,
+              "sourceRangeGapUnits": 138,
+              "rowSourceStartGapUnits": 230,
+              "previousFamilyRecordGap": 5,
+              "selectedFamilyRecordGap": 5,
+              "selectedMinusPreviousFamilyRecordGapDelta": 0,
+              "previousFamilyYGapPx": 116.490,
+              "selectedFamilyYGapPx": 116.490,
+              "selectedMinusPreviousFamilyYGapDeltaPx": 0.000,
+              "samePageMarkEntry": true
+            }
+          ],
+          "renderPromotionContribution": "source-unit-to-page-line-family-gap-piecewise-diagnostic-only",
+          "renderPromotionBlockedReason": "piecewise-family-gap-y-comparison-blocks-page-y-origin"
+        },
+        "sourceOnlyPageMarkSlotScopedSubrecordYSequenceProbe": {
+          "source": "/PageMark raw u16 subrecord scan+/LineMark source page-line projection",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "referenceBBoxUsed": false,
+          "selectionReady": false,
+          "grouping": "fieldIndex+tailBlock16WordIndex",
+          "sourceYTargetBasis": "page-mark-line-range-plus-page-layout-body-line-gap",
+          "tolerancePx": 2.000,
+          "pageMarkEntryIndex": 0,
+          "pageIndexCandidate": 0,
+          "pageLineStart": 0,
+          "pageLineEnd": 42,
+          "rawHeaderMatchCount": 11,
+          "singleRawRecordHeaderMatched": true,
+          "matchedRawRecordHeaderIndex": 0,
+          "lineMarkRecordIndexes": [
+            7,
+            9,
+            11,
+            13,
+            21,
+            23,
+            25,
+            27,
+            32,
+            34,
+            36
+          ],
+          "sourceLineMarkRecordYTopPx": [
+            235.087,
+            281.683,
+            328.279,
+            374.875,
+            561.260,
+            607.856,
+            654.452,
+            701.048,
+            817.539,
+            864.135,
+            910.731
+          ],
+          "sourceLineMarkRecordYDeltasPx": [
+            46.596,
+            46.596,
+            46.596,
+            186.385,
+            46.596,
+            46.596,
+            46.596,
+            116.490,
+            46.596,
+            46.596
+          ],
+          "subrecordLineRangeCandidatePolicy": "words4To6WithinScannedRecordHeaderMaxLineEnd",
+          "subrecordLineRangeMaxCandidate": 709,
+          "pageScaleCandidates": {
+            "source": "/PageMark selected fields+layout",
+            "pageWidthPx": 793.701,
+            "pageHeightPx": 1122.520,
+            "pageHeightPxPerWord21Unit": 1.990,
+            "pageHeightPxPerWord13Plus14Unit": 1.481,
+            "word21": 564,
+            "word13Plus14": 758
+          },
+          "slotCount": 112,
+          "sameHeaderSlotCount": 0,
+          "sameHeaderBestSourceTableTopSlot": null,
+          "sameHeaderBestSourceRowTopSlot": null,
+          "sameHeaderBestSourceRowDeltaSlot": null,
+          "foreignHeaderSlotCount": 112,
+          "foreignHeaderBestSourceTableTopSlot": null,
+          "bestSourceTableTopSlot": null,
+          "bestSourceRowTopSlot": null,
+          "bestSourceRowDeltaSlot": null,
+          "bestOrderedLineMarkRecordCoverageSlot": null,
+          "sameHeaderSlots": [],
+          "slots": [
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "direct-u16-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 2,
+              "tailBlock16WordIndex": 3,
+              "memberCount": 2,
+              "rawRecordIndexes": [
+                3,
+                8
+              ],
+              "rawRecordScanIndexes": [
+                3,
+                6
+              ],
+              "byteOffsets": [
+                338,
+                738
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                20.913,
+                -25.683,
+                -72.279,
+                -118.875,
+                206.740,
+                160.144,
+                113.548,
+                66.952,
+                -49.539,
+                -96.135,
+                -142.731
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 97.594,
+              "rowTopMaxAbsResidualPx": 206.740,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                -512.000
+              ],
+              "rowDeltaResidualsPx": [
+                -558.596,
+                -558.596,
+                -558.596,
+                -698.385,
+                -558.596,
+                -558.596,
+                -558.596,
+                -628.490,
+                -558.596,
+                -558.596
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 579.564,
+              "rowDeltaMaxAbsResidualPx": 698.385,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 169,
+                  "byteOffset": 338,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 3,
+                  "subrecordLineStartCandidate": 192,
+                  "subrecordLineEndCandidate": 241,
+                  "value": 768,
+                  "valuePx": 768.000
+                },
+                {
+                  "wordIndex": 369,
+                  "byteOffset": 738,
+                  "rawRecordIndex": 8,
+                  "rawRecordScanIndex": 6,
+                  "tailBlock16WordIndex": 3,
+                  "subrecordLineStartCandidate": 437,
+                  "subrecordLineEndCandidate": 489,
+                  "value": 256,
+                  "valuePx": 256.000
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "direct-u16-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 2,
+              "tailBlock16WordIndex": 5,
+              "memberCount": 2,
+              "rawRecordIndexes": [
+                3,
+                8
+              ],
+              "rawRecordScanIndexes": [
+                3,
+                6
+              ],
+              "byteOffsets": [
+                374,
+                774
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                302.913,
+                256.317,
+                209.721,
+                163.125,
+                2.740,
+                -43.856,
+                -90.452,
+                -137.048,
+                -253.539,
+                -300.135,
+                -346.731
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 191.507,
+              "rowTopMaxAbsResidualPx": 346.731,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                26.000
+              ],
+              "rowDeltaResidualsPx": [
+                -20.596,
+                -20.596,
+                -20.596,
+                -160.385,
+                -20.596,
+                -20.596,
+                -20.596,
+                -90.490,
+                -20.596,
+                -20.596
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 41.564,
+              "rowDeltaMaxAbsResidualPx": 160.385,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 187,
+                  "byteOffset": 374,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 5,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 538,
+                  "valuePx": 538.000
+                },
+                {
+                  "wordIndex": 387,
+                  "byteOffset": 774,
+                  "rawRecordIndex": 8,
+                  "rawRecordScanIndex": 6,
+                  "tailBlock16WordIndex": 5,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 564,
+                  "valuePx": 564.000
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "direct-u16-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 2,
+              "tailBlock16WordIndex": 13,
+              "memberCount": 2,
+              "rawRecordIndexes": [
+                2,
+                3
+              ],
+              "rawRecordScanIndexes": [
+                2,
+                3
+              ],
+              "byteOffsets": [
+                214,
+                454
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                257.913,
+                211.317,
+                164.721,
+                118.125,
+                -23.260,
+                -69.856,
+                -116.452,
+                -163.048,
+                -279.539,
+                -326.135,
+                -372.731
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 191.191,
+              "rowTopMaxAbsResidualPx": 372.731,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                -45.000
+              ],
+              "rowDeltaResidualsPx": [
+                -91.596,
+                -91.596,
+                -91.596,
+                -231.385,
+                -91.596,
+                -91.596,
+                -91.596,
+                -161.490,
+                -91.596,
+                -91.596
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 112.564,
+              "rowDeltaMaxAbsResidualPx": 231.385,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 107,
+                  "byteOffset": 214,
+                  "rawRecordIndex": 2,
+                  "rawRecordScanIndex": 2,
+                  "tailBlock16WordIndex": 13,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 538,
+                  "valuePx": 538.000
+                },
+                {
+                  "wordIndex": 227,
+                  "byteOffset": 454,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 13,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 493,
+                  "valuePx": 493.000
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "direct-u16-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 2,
+              "tailBlock16WordIndex": 11,
+              "memberCount": 3,
+              "rawRecordIndexes": [
+                2,
+                3,
+                14
+              ],
+              "rawRecordScanIndexes": [
+                2,
+                3,
+                13
+              ],
+              "byteOffsets": [
+                178,
+                418,
+                1074
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                -235.087,
+                -281.683,
+                -328.279,
+                -374.875,
+                206.740,
+                160.144,
+                113.548,
+                66.952,
+                -49.539,
+                -96.135,
+                113.269
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 184.204,
+              "rowTopMaxAbsResidualPx": 374.875,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                256.000,
+                -1024.000
+              ],
+              "rowDeltaResidualsPx": [
+                209.404,
+                209.404,
+                209.404,
+                69.615,
+                209.404,
+                209.404,
+                209.404,
+                139.510,
+                209.404,
+                209.404
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 188.436,
+              "rowDeltaMaxAbsResidualPx": 209.404,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 89,
+                  "byteOffset": 178,
+                  "rawRecordIndex": 2,
+                  "rawRecordScanIndex": 2,
+                  "tailBlock16WordIndex": 11,
+                  "subrecordLineStartCandidate": 85,
+                  "subrecordLineEndCandidate": 140,
+                  "value": 768,
+                  "valuePx": 768.000
+                },
+                {
+                  "wordIndex": 209,
+                  "byteOffset": 418,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 11,
+                  "subrecordLineStartCandidate": 242,
+                  "subrecordLineEndCandidate": 304,
+                  "value": 1024,
+                  "valuePx": 1024.000
+                },
+                {
+                  "wordIndex": 537,
+                  "byteOffset": 1074,
+                  "rawRecordIndex": 14,
+                  "rawRecordScanIndex": 13,
+                  "tailBlock16WordIndex": 11,
+                  "subrecordLineStartCandidate": 0,
+                  "subrecordLineEndCandidate": 0,
+                  "value": 0,
+                  "valuePx": 0.000
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "centipoint-to-css-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 1,
+              "tailBlock16WordIndex": 10,
+              "memberCount": 3,
+              "rawRecordIndexes": [
+                2,
+                3,
+                14
+              ],
+              "rawRecordScanIndexes": [
+                2,
+                3,
+                13
+              ],
+              "byteOffsets": [
+                176,
+                416,
+                1072
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                -235.020,
+                225.171,
+                178.574,
+                131.978,
+                -54.407,
+                -101.003,
+                -147.599,
+                -194.195,
+                -310.686,
+                -357.282,
+                -403.878
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 212.708,
+              "rowTopMaxAbsResidualPx": 403.878,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                0.000,
+                506.787
+              ],
+              "rowDeltaResidualsPx": [
+                -46.596,
+                -46.596,
+                -46.596,
+                -186.385,
+                -46.596,
+                -46.596,
+                -46.596,
+                -116.490,
+                -46.596,
+                -46.596
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 67.564,
+              "rowDeltaMaxAbsResidualPx": 186.385,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 88,
+                  "byteOffset": 176,
+                  "rawRecordIndex": 2,
+                  "rawRecordScanIndex": 2,
+                  "tailBlock16WordIndex": 10,
+                  "subrecordLineStartCandidate": 85,
+                  "subrecordLineEndCandidate": 140,
+                  "value": 5,
+                  "valuePx": 0.067
+                },
+                {
+                  "wordIndex": 208,
+                  "byteOffset": 416,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 10,
+                  "subrecordLineStartCandidate": 242,
+                  "subrecordLineEndCandidate": 304,
+                  "value": 5,
+                  "valuePx": 0.067
+                },
+                {
+                  "wordIndex": 536,
+                  "byteOffset": 1072,
+                  "rawRecordIndex": 14,
+                  "rawRecordScanIndex": 13,
+                  "tailBlock16WordIndex": 10,
+                  "subrecordLineStartCandidate": 0,
+                  "subrecordLineEndCandidate": 0,
+                  "value": 38014,
+                  "valuePx": 506.853
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "centipoint-to-css-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 0,
+              "tailBlock16WordIndex": 10,
+              "memberCount": 1,
+              "rawRecordIndexes": [
+                14
+              ],
+              "rawRecordScanIndexes": [
+                13
+              ],
+              "byteOffsets": [
+                1072
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                271.767,
+                225.171,
+                178.574,
+                131.978,
+                -54.407,
+                -101.003,
+                -147.599,
+                -194.195,
+                -310.686,
+                -357.282,
+                -403.878
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 216.049,
+              "rowTopMaxAbsResidualPx": 403.878,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [],
+              "rowDeltaResidualsPx": [],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": null,
+              "rowDeltaMaxAbsResidualPx": null,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 536,
+                  "byteOffset": 1072,
+                  "rawRecordIndex": 14,
+                  "rawRecordScanIndex": 13,
+                  "tailBlock16WordIndex": 10,
+                  "subrecordLineStartCandidate": 0,
+                  "subrecordLineEndCandidate": 0,
+                  "value": 38014,
+                  "valuePx": 506.853
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "centipoint-to-css-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 2,
+              "tailBlock16WordIndex": 10,
+              "memberCount": 1,
+              "rawRecordIndexes": [
+                14
+              ],
+              "rawRecordScanIndexes": [
+                13
+              ],
+              "byteOffsets": [
+                1072
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                271.767,
+                225.171,
+                178.574,
+                131.978,
+                -54.407,
+                -101.003,
+                -147.599,
+                -194.195,
+                -310.686,
+                -357.282,
+                -403.878
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 216.049,
+              "rowTopMaxAbsResidualPx": 403.878,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [],
+              "rowDeltaResidualsPx": [],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": null,
+              "rowDeltaMaxAbsResidualPx": null,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 536,
+                  "byteOffset": 1072,
+                  "rawRecordIndex": 14,
+                  "rawRecordScanIndex": 13,
+                  "tailBlock16WordIndex": 10,
+                  "subrecordLineStartCandidate": 0,
+                  "subrecordLineEndCandidate": 0,
+                  "value": 38014,
+                  "valuePx": 506.853
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "direct-u16-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 6,
+              "tailBlock16WordIndex": 7,
+              "memberCount": 2,
+              "rawRecordIndexes": [
+                3,
+                8
+              ],
+              "rawRecordScanIndexes": [
+                3,
+                6
+              ],
+              "byteOffsets": [
+                346,
+                746
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                5.913,
+                -40.683,
+                -87.279,
+                114.125,
+                -72.260,
+                -118.856,
+                -165.452,
+                -212.048,
+                -328.539,
+                -375.135,
+                -421.731
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 176.547,
+              "rowTopMaxAbsResidualPx": 421.731,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                248.000
+              ],
+              "rowDeltaResidualsPx": [
+                201.404,
+                201.404,
+                201.404,
+                61.615,
+                201.404,
+                201.404,
+                201.404,
+                131.510,
+                201.404,
+                201.404
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 180.436,
+              "rowDeltaMaxAbsResidualPx": 201.404,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 173,
+                  "byteOffset": 346,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 7,
+                  "subrecordLineStartCandidate": 192,
+                  "subrecordLineEndCandidate": 241,
+                  "value": 241,
+                  "valuePx": 241.000
+                },
+                {
+                  "wordIndex": 373,
+                  "byteOffset": 746,
+                  "rawRecordIndex": 8,
+                  "rawRecordScanIndex": 6,
+                  "tailBlock16WordIndex": 7,
+                  "subrecordLineStartCandidate": 437,
+                  "subrecordLineEndCandidate": 489,
+                  "value": 489,
+                  "valuePx": 489.000
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "direct-u16-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 4,
+              "tailBlock16WordIndex": 5,
+              "memberCount": 2,
+              "rawRecordIndexes": [
+                3,
+                8
+              ],
+              "rawRecordScanIndexes": [
+                3,
+                6
+              ],
+              "byteOffsets": [
+                342,
+                742
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                -43.087,
+                -89.683,
+                108.721,
+                62.125,
+                -124.260,
+                -170.856,
+                -217.452,
+                -264.048,
+                -380.539,
+                -427.135,
+                -473.731
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 214.694,
+              "rowTopMaxAbsResidualPx": 473.731,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                245.000
+              ],
+              "rowDeltaResidualsPx": [
+                198.404,
+                198.404,
+                198.404,
+                58.615,
+                198.404,
+                198.404,
+                198.404,
+                128.510,
+                198.404,
+                198.404
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 177.436,
+              "rowDeltaMaxAbsResidualPx": 198.404,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 171,
+                  "byteOffset": 342,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 5,
+                  "subrecordLineStartCandidate": 192,
+                  "subrecordLineEndCandidate": 241,
+                  "value": 192,
+                  "valuePx": 192.000
+                },
+                {
+                  "wordIndex": 371,
+                  "byteOffset": 742,
+                  "rawRecordIndex": 8,
+                  "rawRecordScanIndex": 6,
+                  "tailBlock16WordIndex": 5,
+                  "subrecordLineStartCandidate": 437,
+                  "subrecordLineEndCandidate": 489,
+                  "value": 437,
+                  "valuePx": 437.000
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "direct-u16-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 0,
+              "tailBlock16WordIndex": 3,
+              "memberCount": 2,
+              "rawRecordIndexes": [
+                3,
+                8
+              ],
+              "rawRecordScanIndexes": [
+                3,
+                6
+              ],
+              "byteOffsets": [
+                370,
+                770
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                134.913,
+                88.317,
+                41.721,
+                -4.875,
+                -191.260,
+                -237.856,
+                -284.452,
+                -331.048,
+                -447.539,
+                -494.135,
+                -540.731
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 254.259,
+              "rowTopMaxAbsResidualPx": 540.731,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                0.000
+              ],
+              "rowDeltaResidualsPx": [
+                -46.596,
+                -46.596,
+                -46.596,
+                -186.385,
+                -46.596,
+                -46.596,
+                -46.596,
+                -116.490,
+                -46.596,
+                -46.596
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 67.564,
+              "rowDeltaMaxAbsResidualPx": 186.385,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 185,
+                  "byteOffset": 370,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 3,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 370,
+                  "valuePx": 370.000
+                },
+                {
+                  "wordIndex": 385,
+                  "byteOffset": 770,
+                  "rawRecordIndex": 8,
+                  "rawRecordScanIndex": 6,
+                  "tailBlock16WordIndex": 3,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 370,
+                  "valuePx": 370.000
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "direct-u16-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 0,
+              "tailBlock16WordIndex": 11,
+              "memberCount": 2,
+              "rawRecordIndexes": [
+                2,
+                3
+              ],
+              "rawRecordScanIndexes": [
+                2,
+                3
+              ],
+              "byteOffsets": [
+                210,
+                450
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                134.913,
+                88.317,
+                41.721,
+                -4.875,
+                -191.260,
+                -237.856,
+                -284.452,
+                -331.048,
+                -447.539,
+                -494.135,
+                -540.731
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 254.259,
+              "rowTopMaxAbsResidualPx": 540.731,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                0.000
+              ],
+              "rowDeltaResidualsPx": [
+                -46.596,
+                -46.596,
+                -46.596,
+                -186.385,
+                -46.596,
+                -46.596,
+                -46.596,
+                -116.490,
+                -46.596,
+                -46.596
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 67.564,
+              "rowDeltaMaxAbsResidualPx": 186.385,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 105,
+                  "byteOffset": 210,
+                  "rawRecordIndex": 2,
+                  "rawRecordScanIndex": 2,
+                  "tailBlock16WordIndex": 11,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 370,
+                  "valuePx": 370.000
+                },
+                {
+                  "wordIndex": 225,
+                  "byteOffset": 450,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 11,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 370,
+                  "valuePx": 370.000
+                }
+              ]
+            },
+            {
+              "source": "rawRecordHeaderTailU16Subrecord",
+              "interpretation": "centipoint-to-css-px",
+              "grouping": "fieldIndex+tailBlock16WordIndex",
+              "fieldIndex": 6,
+              "tailBlock16WordIndex": 1,
+              "memberCount": 2,
+              "rawRecordIndexes": [
+                2,
+                3
+              ],
+              "rawRecordScanIndexes": [
+                2,
+                3
+              ],
+              "byteOffsets": [
+                222,
+                462
+              ],
+              "rowLineRangeCoverageCount": 0,
+              "tableTopResidualsPx": [],
+              "tableTopHitCount": 0,
+              "rowTopResidualsPx": [
+                78.633,
+                32.037,
+                -7.612,
+                -54.208,
+                -240.593,
+                -287.189,
+                -333.786,
+                -380.382,
+                -496.872,
+                -543.468,
+                -590.065
+              ],
+              "rowTopCoverageCount": 0,
+              "rowTopMeanAbsResidualPx": 276.804,
+              "rowTopMaxAbsResidualPx": 590.065,
+              "rowDeltaResidualBasis": "adjacent-ordered-member-value-delta",
+              "rowDeltaCandidateDeltasPx": [
+                6.947
+              ],
+              "rowDeltaResidualsPx": [
+                -39.649,
+                -39.650,
+                -39.650,
+                -179.438,
+                -39.650,
+                -39.650,
+                -39.649,
+                -109.544,
+                -39.650,
+                -39.650
+              ],
+              "rowDeltaCoverageCount": 0,
+              "rowDeltaMeanAbsResidualPx": 60.618,
+              "rowDeltaMaxAbsResidualPx": 179.438,
+              "orderedLineMarkRecordCoveragePolicy": "one-ordered-subrecord-member-per-line-mark-record",
+              "orderedLineMarkRecordCoverageCount": 0,
+              "orderedLineMarkRecordCoverageComplete": false,
+              "orderedLineMarkRecordIndexesCovered": [],
+              "orderedLineMarkRecordMemberByteOffsets": [],
+              "sampleMembers": [
+                {
+                  "wordIndex": 111,
+                  "byteOffset": 222,
+                  "rawRecordIndex": 2,
+                  "rawRecordScanIndex": 2,
+                  "tailBlock16WordIndex": 1,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 23529,
+                  "valuePx": 313.720
+                },
+                {
+                  "wordIndex": 231,
+                  "byteOffset": 462,
+                  "rawRecordIndex": 3,
+                  "rawRecordScanIndex": 3,
+                  "tailBlock16WordIndex": 1,
+                  "subrecordLineStartCandidate": null,
+                  "subrecordLineEndCandidate": null,
+                  "value": 24050,
+                  "valuePx": 320.667
+                }
+              ]
+            }
+          ],
+          "renderPromotionContribution": "source-only-page-mark-slot-sequence-diagnostic-only",
+          "renderPromotionBlockedReason": "page-mark-source-y-slot-candidates-do-not-decode-page-y-origin"
+        },
+        "allRecordsWithinSinglePageMarkEntry": true,
+        "tables": [
+          {
+            "tableCandidateIndex": 0,
+            "sourceRange": {
+              "start": 304,
+              "end": 945
+            },
+            "rowCount": 4,
+            "lineMarkRecordIndexes": [
+              7,
+              9,
+              11,
+              13
+            ],
+            "pageMarkLineOffsetsFromEntryStart": [
+              7,
+              9,
+              11,
+              13
+            ],
+            "pageMarkRecordsWithinSingleEntry": true,
+            "lineMarkRecordYTopPx": [
+              235.087,
+              281.683,
+              328.279,
+              374.875
+            ],
+            "selectedSpacingRecordIndexes": [
+              8,
+              10,
+              12,
+              14
+            ],
+            "selectedSpacingPageMarkLineOffsetsFromEntryStart": [
+              8,
+              10,
+              12,
+              14
+            ],
+            "selectedSpacingRecordsWithinSingleEntry": true,
+            "selectedSpacingRecordYTopPx": [
+              258.385,
+              304.981,
+              351.577,
+              398.173
+            ],
+            "selectedSpacingLineMarkStartUnits": [
+              329,
+              507,
+              685,
+              863
+            ],
+            "selectedSpacingLineMarkEndUnits": [
+              394,
+              572,
+              750,
+              930
+            ],
+            "selectedSpacingStartResidualUnits": [
+              25,
+              31,
+              31,
+              31
+            ],
+            "selectedSpacingEndResidualUnits": [
+              -17,
+              -17,
+              -17,
+              -15
+            ],
+            "selectedSpacingSpanResidualUnits": [
+              -42,
+              -48,
+              -48,
+              -46
+            ],
+            "selectedMinusPreviousRecordIndexGaps": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "selectedMinusPreviousRecordYDeltaPx": [
+              23.298,
+              23.298,
+              23.298,
+              23.298
+            ],
+            "rowSourceStartUnits": [
+              304,
+              476,
+              654,
+              832
+            ],
+            "rowSourceEndUnits": [
+              411,
+              589,
+              767,
+              945
+            ],
+            "lineMarkStartUnits": [
+              222,
+              394,
+              572,
+              750
+            ],
+            "lineMarkEndUnits": [
+              329,
+              507,
+              685,
+              863
+            ],
+            "startResidualUnits": [
+              -82,
+              -82,
+              -82,
+              -82
+            ],
+            "endResidualUnits": [
+              -82,
+              -82,
+              -82,
+              -82
+            ],
+            "spanResidualUnits": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "rowBoundaryOffsetCandidateUnits": -82,
+            "offsetNormalizedStartResidualUnits": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "offsetNormalizedEndResidualUnits": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "offsetNormalizedExactBoundaryAligned": true,
+            "exactBoundaryAligned": false,
+            "spanOnlyMatch": true
+          },
+          {
+            "tableCandidateIndex": 1,
+            "sourceRange": {
+              "start": 1135,
+              "end": 1395
+            },
+            "rowCount": 2,
+            "lineMarkRecordIndexes": [
+              21,
+              23
+            ],
+            "pageMarkLineOffsetsFromEntryStart": [
+              21,
+              23
+            ],
+            "pageMarkRecordsWithinSingleEntry": true,
+            "lineMarkRecordYTopPx": [
+              561.260,
+              607.856
+            ],
+            "selectedSpacingRecordIndexes": [
+              22,
+              24
+            ],
+            "selectedSpacingPageMarkLineOffsetsFromEntryStart": [
+              22,
+              24
+            ],
+            "selectedSpacingRecordsWithinSingleEntry": true,
+            "selectedSpacingRecordYTopPx": [
+              584.558,
+              631.154
+            ],
+            "selectedSpacingLineMarkStartUnits": [
+              1167,
+              1313
+            ],
+            "selectedSpacingLineMarkEndUnits": [
+              1225,
+              1385
+            ],
+            "selectedSpacingStartResidualUnits": [
+              32,
+              6
+            ],
+            "selectedSpacingEndResidualUnits": [
+              -24,
+              -10
+            ],
+            "selectedSpacingSpanResidualUnits": [
+              -56,
+              -16
+            ],
+            "selectedMinusPreviousRecordIndexGaps": [
+              1,
+              1
+            ],
+            "selectedMinusPreviousRecordYDeltaPx": [
+              23.298,
+              23.298
+            ],
+            "rowSourceStartUnits": [
+              1135,
+              1307
+            ],
+            "rowSourceEndUnits": [
+              1249,
+              1395
+            ],
+            "lineMarkStartUnits": [
+              1053,
+              1225
+            ],
+            "lineMarkEndUnits": [
+              1167,
+              1313
+            ],
+            "startResidualUnits": [
+              -82,
+              -82
+            ],
+            "endResidualUnits": [
+              -82,
+              -82
+            ],
+            "spanResidualUnits": [
+              0,
+              0
+            ],
+            "rowBoundaryOffsetCandidateUnits": -82,
+            "offsetNormalizedStartResidualUnits": [
+              0,
+              0
+            ],
+            "offsetNormalizedEndResidualUnits": [
+              0,
+              0
+            ],
+            "offsetNormalizedExactBoundaryAligned": true,
+            "exactBoundaryAligned": false,
+            "spanOnlyMatch": true
+          },
+          {
+            "tableCandidateIndex": 2,
+            "sourceRange": {
+              "start": 1467,
+              "end": 1719
+            },
+            "rowCount": 2,
+            "lineMarkRecordIndexes": [
+              25,
+              27
+            ],
+            "pageMarkLineOffsetsFromEntryStart": [
+              25,
+              27
+            ],
+            "pageMarkRecordsWithinSingleEntry": true,
+            "lineMarkRecordYTopPx": [
+              654.452,
+              701.048
+            ],
+            "selectedSpacingRecordIndexes": [
+              26,
+              28
+            ],
+            "selectedSpacingPageMarkLineOffsetsFromEntryStart": [
+              26,
+              28
+            ],
+            "selectedSpacingRecordsWithinSingleEntry": true,
+            "selectedSpacingRecordYTopPx": [
+              677.750,
+              724.346
+            ],
+            "selectedSpacingLineMarkStartUnits": [
+              1481,
+              1637
+            ],
+            "selectedSpacingLineMarkEndUnits": [
+              1545,
+              1691
+            ],
+            "selectedSpacingStartResidualUnits": [
+              14,
+              10
+            ],
+            "selectedSpacingEndResidualUnits": [
+              -18,
+              -28
+            ],
+            "selectedSpacingSpanResidualUnits": [
+              -32,
+              -38
+            ],
+            "selectedMinusPreviousRecordIndexGaps": [
+              1,
+              1
+            ],
+            "selectedMinusPreviousRecordYDeltaPx": [
+              23.298,
+              23.298
+            ],
+            "rowSourceStartUnits": [
+              1467,
+              1627
+            ],
+            "rowSourceEndUnits": [
+              1563,
+              1719
+            ],
+            "lineMarkStartUnits": [
+              1385,
+              1545
+            ],
+            "lineMarkEndUnits": [
+              1481,
+              1637
+            ],
+            "startResidualUnits": [
+              -82,
+              -82
+            ],
+            "endResidualUnits": [
+              -82,
+              -82
+            ],
+            "spanResidualUnits": [
+              0,
+              0
+            ],
+            "rowBoundaryOffsetCandidateUnits": -82,
+            "offsetNormalizedStartResidualUnits": [
+              0,
+              0
+            ],
+            "offsetNormalizedEndResidualUnits": [
+              0,
+              0
+            ],
+            "offsetNormalizedExactBoundaryAligned": true,
+            "exactBoundaryAligned": false,
+            "spanOnlyMatch": true
+          },
+          {
+            "tableCandidateIndex": 3,
+            "sourceRange": {
+              "start": 1857,
+              "end": 2261
+            },
+            "rowCount": 3,
+            "lineMarkRecordIndexes": [
+              32,
+              34,
+              36
+            ],
+            "pageMarkLineOffsetsFromEntryStart": [
+              32,
+              34,
+              36
+            ],
+            "pageMarkRecordsWithinSingleEntry": true,
+            "lineMarkRecordYTopPx": [
+              817.539,
+              864.135,
+              910.731
+            ],
+            "selectedSpacingRecordIndexes": [
+              33,
+              35,
+              37
+            ],
+            "selectedSpacingPageMarkLineOffsetsFromEntryStart": [
+              33,
+              35,
+              37
+            ],
+            "selectedSpacingRecordsWithinSingleEntry": true,
+            "selectedSpacingRecordYTopPx": [
+              840.837,
+              887.433,
+              934.029
+            ],
+            "selectedSpacingLineMarkStartUnits": [
+              1886,
+              2036,
+              2179
+            ],
+            "selectedSpacingLineMarkEndUnits": [
+              1944,
+              2088,
+              2233
+            ],
+            "selectedSpacingStartResidualUnits": [
+              29,
+              10,
+              9
+            ],
+            "selectedSpacingEndResidualUnits": [
+              -24,
+              -30,
+              -28
+            ],
+            "selectedSpacingSpanResidualUnits": [
+              -53,
+              -40,
+              -37
+            ],
+            "selectedMinusPreviousRecordIndexGaps": [
+              1,
+              1,
+              1
+            ],
+            "selectedMinusPreviousRecordYDeltaPx": [
+              23.298,
+              23.298,
+              23.298
+            ],
+            "rowSourceStartUnits": [
+              1857,
+              2026,
+              2170
+            ],
+            "rowSourceEndUnits": [
+              1968,
+              2118,
+              2261
+            ],
+            "lineMarkStartUnits": [
+              1775,
+              1944,
+              2088
+            ],
+            "lineMarkEndUnits": [
+              1886,
+              2036,
+              2179
+            ],
+            "startResidualUnits": [
+              -82,
+              -82,
+              -82
+            ],
+            "endResidualUnits": [
+              -82,
+              -82,
+              -82
+            ],
+            "spanResidualUnits": [
+              0,
+              0,
+              0
+            ],
+            "rowBoundaryOffsetCandidateUnits": -82,
+            "offsetNormalizedStartResidualUnits": [
+              0,
+              0,
+              0
+            ],
+            "offsetNormalizedEndResidualUnits": [
+              0,
+              0,
+              0
+            ],
+            "offsetNormalizedExactBoundaryAligned": true,
+            "exactBoundaryAligned": false,
+            "spanOnlyMatch": true
+          }
+        ],
+        "renderPromotionContribution": "cross-table-row-boundary-offset-diagnostic-only",
+        "renderPromotionBlockedReason": "row-boundary-offset-transform-does-not-decode-page-y-origin"
+      },
+      "lineMarkStrideToPageYPromotionReadiness": {
+        "source": "/LineMark+/PageMark stride-to-page-y promotion readiness",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "promotionReady": false,
+        "strideCandidatePresent": false,
+        "lineMarkPageOriginPresent": false,
+        "selectedPostRowGapSpanComplete": false,
+        "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+        "sourceOnlyStrideRowCoverage": null,
+        "lineMarkRowBoundaryAlignment": {
+          "source": "/LineMark source unit boundaries+table row source unit boundaries",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "coordinateSpace": "documentTextSourceUnits",
+          "policy": "line-mark-start-end-compared-to-table-row-source-start-end",
+          "candidateRowCount": 4,
+          "rowBoundaryOffsetCandidateFamily": "previous-row-span-records",
+          "rowBoundaryOffsetCandidateUnits": -82,
+          "rowBoundaryOffsetCandidateStable": true,
+          "rowBoundaryOffsetCandidateRequiresTransform": true,
+          "previousRowSpanRecordAlignmentOffsetNormalizedExact": true,
+          "selectedSpacingRecordAlignment": {
+            "family": "selected-spacing-records",
+            "spanInterpretation": "selected-record-overlaps-row-and-matches-post-row-gap-span",
+            "rowCount": 4,
+            "lineMarkRecordIndexes": [
+              8,
+              10,
+              12,
+              14
+            ],
+            "uniformLineMarkRecordStride": true,
+            "lineMarkRecordStride": 2,
+            "matchesStrideCandidateRecordIndexes": false,
+            "rowSourceStartUnits": [
+              304,
+              476,
+              654,
+              832
+            ],
+            "rowSourceEndUnits": [
+              411,
+              589,
+              767,
+              945
+            ],
+            "lineMarkStartUnits": [
+              329,
+              507,
+              685,
+              863
+            ],
+            "lineMarkEndUnits": [
+              394,
+              572,
+              750,
+              930
+            ],
+            "startResidualUnits": [
+              25,
+              31,
+              31,
+              31
+            ],
+            "endResidualUnits": [
+              -17,
+              -17,
+              -17,
+              -15
+            ],
+            "spanResidualUnits": [
+              -42,
+              -48,
+              -48,
+              -46
+            ],
+            "exactBoundaryMatchCount": 0,
+            "exactBoundaryAligned": false,
+            "startResidualStable": false,
+            "endResidualStable": false,
+            "spanResidualStable": false,
+            "stableStartResidualUnits": null,
+            "stableEndResidualUnits": null,
+            "stableSpanResidualUnits": null,
+            "rowBoundaryOffsetCandidateUnits": null,
+            "offsetNormalizationPolicy": "line-mark-boundary-minus-row-source-boundary-minus-stable-offset",
+            "offsetNormalizedStartResidualUnits": [],
+            "offsetNormalizedEndResidualUnits": [],
+            "offsetNormalizedExactBoundaryMatchCount": 0,
+            "offsetNormalizedExactBoundaryAligned": false,
+            "spanOnlyMatch": false,
+            "rows": [
+              {
+                "compactRow": 0,
+                "sparseRow": 0,
+                "sourceIntervalIndex": 1,
+                "lineMarkRecordIndex": 8,
+                "rowSourceUnitRange": {
+                  "start": 304,
+                  "end": 411
+                },
+                "lineMarkUnitRange": {
+                  "start": 329,
+                  "end": 394
+                },
+                "startResidualUnits": 25,
+                "endResidualUnits": -17,
+                "spanResidualUnits": -42,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 1,
+                "sparseRow": 2,
+                "sourceIntervalIndex": 3,
+                "lineMarkRecordIndex": 10,
+                "rowSourceUnitRange": {
+                  "start": 476,
+                  "end": 589
+                },
+                "lineMarkUnitRange": {
+                  "start": 507,
+                  "end": 572
+                },
+                "startResidualUnits": 31,
+                "endResidualUnits": -17,
+                "spanResidualUnits": -48,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 2,
+                "sparseRow": 4,
+                "sourceIntervalIndex": 5,
+                "lineMarkRecordIndex": 12,
+                "rowSourceUnitRange": {
+                  "start": 654,
+                  "end": 767
+                },
+                "lineMarkUnitRange": {
+                  "start": 685,
+                  "end": 750
+                },
+                "startResidualUnits": 31,
+                "endResidualUnits": -17,
+                "spanResidualUnits": -48,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 3,
+                "sparseRow": 6,
+                "sourceIntervalIndex": 7,
+                "lineMarkRecordIndex": 14,
+                "rowSourceUnitRange": {
+                  "start": 832,
+                  "end": 945
+                },
+                "lineMarkUnitRange": {
+                  "start": 863,
+                  "end": 930
+                },
+                "startResidualUnits": 31,
+                "endResidualUnits": -15,
+                "spanResidualUnits": -46,
+                "exactBoundaryAligned": false
+              }
+            ]
+          },
+          "previousRowSpanRecordAlignment": {
+            "family": "previous-row-span-records",
+            "spanInterpretation": "previous-record-span-equals-compact-row-span",
+            "rowCount": 4,
+            "lineMarkRecordIndexes": [
+              7,
+              9,
+              11,
+              13
+            ],
+            "uniformLineMarkRecordStride": true,
+            "lineMarkRecordStride": 2,
+            "matchesStrideCandidateRecordIndexes": false,
+            "rowSourceStartUnits": [
+              304,
+              476,
+              654,
+              832
+            ],
+            "rowSourceEndUnits": [
+              411,
+              589,
+              767,
+              945
+            ],
+            "lineMarkStartUnits": [
+              222,
+              394,
+              572,
+              750
+            ],
+            "lineMarkEndUnits": [
+              329,
+              507,
+              685,
+              863
+            ],
+            "startResidualUnits": [
+              -82,
+              -82,
+              -82,
+              -82
+            ],
+            "endResidualUnits": [
+              -82,
+              -82,
+              -82,
+              -82
+            ],
+            "spanResidualUnits": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "exactBoundaryMatchCount": 0,
+            "exactBoundaryAligned": false,
+            "startResidualStable": true,
+            "endResidualStable": true,
+            "spanResidualStable": true,
+            "stableStartResidualUnits": -82,
+            "stableEndResidualUnits": -82,
+            "stableSpanResidualUnits": 0,
+            "rowBoundaryOffsetCandidateUnits": -82,
+            "offsetNormalizationPolicy": "line-mark-boundary-minus-row-source-boundary-minus-stable-offset",
+            "offsetNormalizedStartResidualUnits": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "offsetNormalizedEndResidualUnits": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "offsetNormalizedExactBoundaryMatchCount": 4,
+            "offsetNormalizedExactBoundaryAligned": true,
+            "spanOnlyMatch": true,
+            "rows": [
+              {
+                "compactRow": 0,
+                "sparseRow": 0,
+                "sourceIntervalIndex": 1,
+                "lineMarkRecordIndex": 7,
+                "rowSourceUnitRange": {
+                  "start": 304,
+                  "end": 411
+                },
+                "lineMarkUnitRange": {
+                  "start": 222,
+                  "end": 329
+                },
+                "startResidualUnits": -82,
+                "endResidualUnits": -82,
+                "spanResidualUnits": 0,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 1,
+                "sparseRow": 2,
+                "sourceIntervalIndex": 3,
+                "lineMarkRecordIndex": 9,
+                "rowSourceUnitRange": {
+                  "start": 476,
+                  "end": 589
+                },
+                "lineMarkUnitRange": {
+                  "start": 394,
+                  "end": 507
+                },
+                "startResidualUnits": -82,
+                "endResidualUnits": -82,
+                "spanResidualUnits": 0,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 2,
+                "sparseRow": 4,
+                "sourceIntervalIndex": 5,
+                "lineMarkRecordIndex": 11,
+                "rowSourceUnitRange": {
+                  "start": 654,
+                  "end": 767
+                },
+                "lineMarkUnitRange": {
+                  "start": 572,
+                  "end": 685
+                },
+                "startResidualUnits": -82,
+                "endResidualUnits": -82,
+                "spanResidualUnits": 0,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 3,
+                "sparseRow": 6,
+                "sourceIntervalIndex": 7,
+                "lineMarkRecordIndex": 13,
+                "rowSourceUnitRange": {
+                  "start": 832,
+                  "end": 945
+                },
+                "lineMarkUnitRange": {
+                  "start": 750,
+                  "end": 863
+                },
+                "startResidualUnits": -82,
+                "endResidualUnits": -82,
+                "spanResidualUnits": 0,
+                "exactBoundaryAligned": false
+              }
+            ]
+          },
+          "nextRecordAlignment": {
+            "family": "next-records",
+            "spanInterpretation": "next-record-neighboring-row-span-candidate",
+            "rowCount": 4,
+            "lineMarkRecordIndexes": [
+              9,
+              11,
+              13,
+              15
+            ],
+            "uniformLineMarkRecordStride": true,
+            "lineMarkRecordStride": 2,
+            "matchesStrideCandidateRecordIndexes": false,
+            "rowSourceStartUnits": [
+              304,
+              476,
+              654,
+              832
+            ],
+            "rowSourceEndUnits": [
+              411,
+              589,
+              767,
+              945
+            ],
+            "lineMarkStartUnits": [
+              394,
+              572,
+              750,
+              930
+            ],
+            "lineMarkEndUnits": [
+              507,
+              685,
+              863,
+              931
+            ],
+            "startResidualUnits": [
+              90,
+              96,
+              96,
+              98
+            ],
+            "endResidualUnits": [
+              96,
+              96,
+              96,
+              -14
+            ],
+            "spanResidualUnits": [
+              6,
+              0,
+              0,
+              -112
+            ],
+            "exactBoundaryMatchCount": 0,
+            "exactBoundaryAligned": false,
+            "startResidualStable": false,
+            "endResidualStable": false,
+            "spanResidualStable": false,
+            "stableStartResidualUnits": null,
+            "stableEndResidualUnits": null,
+            "stableSpanResidualUnits": null,
+            "rowBoundaryOffsetCandidateUnits": null,
+            "offsetNormalizationPolicy": "line-mark-boundary-minus-row-source-boundary-minus-stable-offset",
+            "offsetNormalizedStartResidualUnits": [],
+            "offsetNormalizedEndResidualUnits": [],
+            "offsetNormalizedExactBoundaryMatchCount": 0,
+            "offsetNormalizedExactBoundaryAligned": false,
+            "spanOnlyMatch": false,
+            "rows": [
+              {
+                "compactRow": 0,
+                "sparseRow": 0,
+                "sourceIntervalIndex": 1,
+                "lineMarkRecordIndex": 9,
+                "rowSourceUnitRange": {
+                  "start": 304,
+                  "end": 411
+                },
+                "lineMarkUnitRange": {
+                  "start": 394,
+                  "end": 507
+                },
+                "startResidualUnits": 90,
+                "endResidualUnits": 96,
+                "spanResidualUnits": 6,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 1,
+                "sparseRow": 2,
+                "sourceIntervalIndex": 3,
+                "lineMarkRecordIndex": 11,
+                "rowSourceUnitRange": {
+                  "start": 476,
+                  "end": 589
+                },
+                "lineMarkUnitRange": {
+                  "start": 572,
+                  "end": 685
+                },
+                "startResidualUnits": 96,
+                "endResidualUnits": 96,
+                "spanResidualUnits": 0,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 2,
+                "sparseRow": 4,
+                "sourceIntervalIndex": 5,
+                "lineMarkRecordIndex": 13,
+                "rowSourceUnitRange": {
+                  "start": 654,
+                  "end": 767
+                },
+                "lineMarkUnitRange": {
+                  "start": 750,
+                  "end": 863
+                },
+                "startResidualUnits": 96,
+                "endResidualUnits": 96,
+                "spanResidualUnits": 0,
+                "exactBoundaryAligned": false
+              },
+              {
+                "compactRow": 3,
+                "sparseRow": 6,
+                "sourceIntervalIndex": 7,
+                "lineMarkRecordIndex": 15,
+                "rowSourceUnitRange": {
+                  "start": 832,
+                  "end": 945
+                },
+                "lineMarkUnitRange": {
+                  "start": 930,
+                  "end": 931
+                },
+                "startResidualUnits": 98,
+                "endResidualUnits": -14,
+                "spanResidualUnits": -112,
+                "exactBoundaryAligned": false
+              }
+            ]
+          },
+          "pageYTransformDecoded": false,
+          "renderPromotionContribution": "source-only-line-mark-row-boundary-alignment",
+          "renderPromotionBlockedReason": "line-mark-row-boundaries-require-source-offset-transform"
+        },
+        "pageMarkEntryLineBoundsCoverage": null,
+        "pageMarkSubrecordLineRangeRecordCoverage": null,
+        "rawRecordSourceRangeCoverageDomain": "legacy-cross-domain-document-text-unit-range-vs-page-mark-line-index",
+        "rawRecordSourceRangeCoverageUsableForPromotion": false,
+        "rawRecordSourceRangeCoverage": {
+          "candidateRowCount": 4,
+          "rowSourceCoverageCount": 3,
+          "allRowsHaveHeaderCoverage": false,
+          "totalOverlappingHeaderCount": 8,
+          "matchedScanIndexes": [
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            11,
+            14
+          ],
+          "matchedScanIndexesMonotonic": true
+        },
+        "crossTableOrderingConsistent": false,
+        "sourceOrderVsSubrecordOrderContradiction": true,
+        "blockedReasons": [
+          "line-mark-stride-candidate-absent",
+          "line-mark-page-origin-candidate-absent",
+          "selected-post-row-gap-span-incomplete",
+          "selected-post-row-gap-subrecord-coverage-not-ordered-unique",
+          "source-only-stride-row-coverage-absent",
+          "page-mark-entry-line-bounds-coverage-absent",
+          "cross-table-subrecord-ordering-inconsistent",
+          "source-order-vs-subrecord-order-contradiction",
+          "decoded-page-y-origin-missing"
+        ],
+        "renderPromotionContribution": "line-mark-stride-to-page-y-readiness-gate",
+        "renderPromotionBlockedReason": "stride-y-hypothesis-needs-source-only-validation"
+      },
+      "sourceOnlyPageYOriginHypothesis": {
+        "source": "sourcePageYTransformGate source-only page-y origin hypothesis",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "referenceBBoxUsed": false,
+        "selectionReady": false,
+        "candidatePresent": true,
+        "candidateKind": "cross-table-page-line-domain",
+        "yOriginReadinessClass": "cross-table-line-domain-only",
+        "originDecisionReady": false,
+        "yOriginReadinessBlockedReasons": [
+          "cross-table-line-domain-present",
+          "line-domain-to-page-space-origin-transform-required",
+          "source-unit-to-page-line-piecewise-fit-not-exact",
+          "source-gap-to-page-line-gap-transform-not-stable",
+          "source-order-vs-subrecord-order-contradiction",
+          "decoded-page-y-origin-missing"
+        ],
+        "lineMarkPageOriginPresent": false,
+        "lineMarkPageOriginStridePresent": false,
+        "pageMarkAbsoluteYSlotCandidatePresent": false,
+        "pageMarkAbsoluteYSlotY": null,
+        "pageMarkAbsoluteYSlotBlockedReason": null,
+        "pageOriginAuthority": null,
+        "sourceGapToPageLineGapReadinessHints": {
+          "source": "sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.sourceGapToPageLineGapReadinessHints",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "referenceBBoxUsed": false,
+          "selectionReady": false,
+          "transitionCount": 3,
+          "samePageMarkEntryTransitionCount": 3,
+          "allTransitionsSamePageMarkEntry": true,
+          "sourceRangeGapToPageLineGapMaxAbsDeltaUnits": 182,
+          "rowSourceStartGapToPageLineGapMaxAbsDeltaUnits": 295,
+          "segmentOffsetGapToPageLineGapMaxAbsDeltaUnits": 105,
+          "bestCandidateTransformKind": "segment-offset-gap",
+          "bestCandidateMaxAbsDeltaUnits": 105,
+          "transformCandidateCount": 3,
+          "exactTransformCandidateCount": 0,
+          "bestCandidateTransitionCoverageCount": 3,
+          "bestCandidateUnitsPerPageLineGapSpread": 29.875,
+          "lowestSpreadCandidateTransformKind": "direct-source-range-gap",
+          "lowestSpreadUnitsPerPageLineGapSpread": 12.250,
+          "transformCandidateSummaries": [
+            {
+              "transformKind": "direct-source-range-gap",
+              "selected": false,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 182,
+              "unitsPerPageLineGapSpread": 12.250,
+              "declineReason": "higher-max-delta-than-selected-transform",
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            },
+            {
+              "transformKind": "direct-row-source-start-gap",
+              "selected": false,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 295,
+              "unitsPerPageLineGapSpread": 42.125,
+              "declineReason": "higher-max-delta-than-selected-transform",
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            },
+            {
+              "transformKind": "segment-offset-gap",
+              "selected": true,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 105,
+              "unitsPerPageLineGapSpread": 29.875,
+              "declineReason": null,
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            }
+          ],
+          "declinedTransformCandidates": [
+            {
+              "transformKind": "direct-source-range-gap",
+              "selected": false,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 182,
+              "unitsPerPageLineGapSpread": 12.250,
+              "declineReason": "higher-max-delta-than-selected-transform",
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            },
+            {
+              "transformKind": "direct-row-source-start-gap",
+              "selected": false,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 295,
+              "unitsPerPageLineGapSpread": 42.125,
+              "declineReason": "higher-max-delta-than-selected-transform",
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            }
+          ],
+          "sourceRangeUnitsPerPageLineGapSpread": 12.250,
+          "rowSourceStartUnitsPerPageLineGapSpread": 42.125,
+          "segmentOffsetUnitsPerPageLineGapSpread": 29.875,
+          "sourceGapToPageLineGapTransformStable": false,
+          "tableFamilySourceGapToPageLineGapTransformStable": false,
+          "tableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        },
+        "sourceLayoutRenderable": false,
+        "lineHeaderRowsHomogeneous": false,
+        "lineMarkRowsExactAndContiguous": false,
+        "directLineMarkPageOrigin": null,
+        "strideLineMarkPageOrigin": null,
+        "pageMarkAbsoluteYSlotOrigin": null,
+        "crossTableLineDomainEvidence": {
+          "present": true,
+          "allRecordsWithinSinglePageMarkEntry": true,
+          "allOffsetsStable": true,
+          "allOffsetsRequireTransform": true,
+          "stableRowBoundaryOffsetCandidateUnits": -82,
+          "piecewiseAllTablesExact": false,
+          "piecewiseMaxAbsResidualRecordIndexes": 0.106,
+          "combinedLineMarkRecordIndexes": [
+            7,
+            9,
+            11,
+            13,
+            21,
+            23,
+            25,
+            27,
+            32,
+            34,
+            36
+          ],
+          "combinedLineMarkRecordYTopPx": [
+            235.087,
+            281.683,
+            328.279,
+            374.875,
+            561.260,
+            607.856,
+            654.452,
+            701.048,
+            817.539,
+            864.135,
+            910.731
+          ]
+        },
+        "crossTablePreviousRowSpanSelectorPresent": true,
+        "crossTablePreviousRowSpanSupportCount": 5,
+        "crossTablePreviousRowSpanSelectionReady": false,
+        "crossTablePreviousRowSpanReadinessInputs": {
+          "previousRowSpanComplete": false,
+          "previousRowSpanOrderedUniqueCoverageComplete": false,
+          "crossTableOffsetsStable": true,
+          "crossTableOffsetsRequireTransform": true,
+          "piecewiseAllTablesExact": false,
+          "crossTableOrderingConsistent": false,
+          "crossTableOrderRegresses": true,
+          "decodedPageYOriginPresent": false
+        },
+        "subrecordSpanEvidence": {
+          "present": true,
+          "selectedPostRowGapSpanComplete": false,
+          "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+          "previousRowSpanComplete": false,
+          "previousRowSpanOrderedUniqueCoverageComplete": false,
+          "compactRowSpanComplete": false
+        },
+        "crossTableOrderingConsistent": false,
+        "crossTableOrderRegresses": true,
+        "blockedReasons": [
+          "source-derived-layout-candidate-absent",
+          "gate-line-mark-rows-not-exact-source-boundaries",
+          "cross-table-subrecord-ordering-inconsistent",
+          "source-order-vs-subrecord-order-contradiction",
+          "cross-table-row-boundary-offset-transform-required",
+          "source-unit-to-page-line-piecewise-fit-not-exact",
+          "decoded-page-y-origin-missing"
+        ],
+        "renderPromotionContribution": "source-only-page-y-origin-hypothesis",
+        "renderPromotionBlockedReason": "source-page-y-origin-inference-pending"
+      },
+      "sourceOnlyPageYOriginCandidateAgreementGate": {
+        "source": "sourcePageYTransformGate.sourcePageYOriginHypotheses agreement",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "referenceBBoxUsed": false,
+        "selectionReady": false,
+        "candidateCount": 9,
+        "agreementGroupCount": 8,
+        "bestSupportCount": 2,
+        "uniqueBestSupported": true,
+        "bestSupportedSelectedY": 235.087,
+        "bestSupportedRowHeight": 23.298,
+        "bestSupportedOriginBases": [
+          "cross-table-combined-previous-row-span-first-record",
+          "cross-table-previous-row-span-table-first-row"
+        ],
+        "bestSupportedTableCandidateIndexes": [
+          0
+        ],
+        "bestSupportedTableCandidateCount": 1,
+        "bestSupportedCoversMultipleTableCandidates": false,
+        "crossTablePreviousRowSpanSupportCount": 5,
+        "crossTablePreviousRowSpanTableCandidateIndexes": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "crossTablePreviousRowSpanTableCandidateCount": 4,
+        "crossTablePreviousRowSpanUniqueBestSupported": true,
+        "crossTablePreviousRowSpanReady": false,
+        "crossTablePreviousRowSpanBestGroupCoversMultipleTables": false,
+        "crossTablePreviousRowSpanBestGroupTableCoverageRatio": 0.250,
+        "crossTablePreviousRowSpanSupportFragmentedByTable": true,
+        "crossTablePreviousRowSpanReadinessBlockedReasons": [
+          "cross-table-row-boundary-offset-transform-required",
+          "page-line-gap-projection-does-not-decode-table-y-origin"
+        ],
+        "sourceOnlyPageYOriginSelector": {
+          "source": "sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "referenceBBoxUsedForSelection": false,
+          "selectionReady": false,
+          "tableCandidateIndex": 0,
+          "selectionBasis": "best-supported-source-only-y-origin-agreement-group",
+          "singleSupportFallback": false,
+          "selectedOriginBasis": "cross-table-combined-previous-row-span-first-record",
+          "selectedY": 235.087,
+          "selectedRowHeight": 23.298,
+          "supportCount": 2,
+          "supportOriginBases": [
+            "cross-table-combined-previous-row-span-first-record",
+            "cross-table-previous-row-span-table-first-row"
+          ],
+          "supportTableCandidateIndexes": [
+            0
+          ],
+          "supportCoversMultipleTableCandidates": false,
+          "supportFragmentedByTable": true,
+          "contributions": [
+            "cross-table-row-boundary-offset-diagnostic-only",
+            "cross-table-row-boundary-offset-diagnostic-only"
+          ],
+          "supportBlockedReasons": [
+            "cross-table-row-boundary-offset-transform-required",
+            "page-line-gap-projection-does-not-decode-table-y-origin"
+          ],
+          "renderPromotionContribution": "source-only-page-y-origin-selector",
+          "renderPromotionBlockedReason": "cross-table-previous-row-span-support-fragmented-by-table"
+        },
+        "agreementGroups": [
+          {
+            "selectedY": 235.087,
+            "rowHeight": 23.298,
+            "supportCount": 2,
+            "originBases": [
+              "cross-table-combined-previous-row-span-first-record",
+              "cross-table-previous-row-span-table-first-row"
+            ],
+            "tableCandidateIndexes": [
+              0
+            ],
+            "contributions": [
+              "cross-table-row-boundary-offset-diagnostic-only",
+              "cross-table-row-boundary-offset-diagnostic-only"
+            ],
+            "blockedReasons": [
+              "cross-table-row-boundary-offset-transform-required",
+              "page-line-gap-projection-does-not-decode-table-y-origin"
+            ]
+          },
+          {
+            "selectedY": 258.385,
+            "rowHeight": 23.298,
+            "supportCount": 1,
+            "originBases": [
+              "cross-table-selected-spacing-table-first-row"
+            ],
+            "tableCandidateIndexes": [
+              0
+            ],
+            "contributions": [
+              "source-unit-to-page-line-family-gap-piecewise-diagnostic-only"
+            ],
+            "blockedReasons": [
+              "selected-spacing-record-family-is-not-page-y-origin"
+            ]
+          },
+          {
+            "selectedY": 561.260,
+            "rowHeight": 23.298,
+            "supportCount": 1,
+            "originBases": [
+              "cross-table-previous-row-span-table-first-row"
+            ],
+            "tableCandidateIndexes": [
+              1
+            ],
+            "contributions": [
+              "cross-table-row-boundary-offset-diagnostic-only"
+            ],
+            "blockedReasons": [
+              "cross-table-row-boundary-offset-transform-required"
+            ]
+          },
+          {
+            "selectedY": 584.558,
+            "rowHeight": 23.298,
+            "supportCount": 1,
+            "originBases": [
+              "cross-table-selected-spacing-table-first-row"
+            ],
+            "tableCandidateIndexes": [
+              1
+            ],
+            "contributions": [
+              "source-unit-to-page-line-family-gap-piecewise-diagnostic-only"
+            ],
+            "blockedReasons": [
+              "selected-spacing-record-family-is-not-page-y-origin"
+            ]
+          },
+          {
+            "selectedY": 654.452,
+            "rowHeight": 23.298,
+            "supportCount": 1,
+            "originBases": [
+              "cross-table-previous-row-span-table-first-row"
+            ],
+            "tableCandidateIndexes": [
+              2
+            ],
+            "contributions": [
+              "cross-table-row-boundary-offset-diagnostic-only"
+            ],
+            "blockedReasons": [
+              "cross-table-row-boundary-offset-transform-required"
+            ]
+          },
+          {
+            "selectedY": 677.750,
+            "rowHeight": 23.298,
+            "supportCount": 1,
+            "originBases": [
+              "cross-table-selected-spacing-table-first-row"
+            ],
+            "tableCandidateIndexes": [
+              2
+            ],
+            "contributions": [
+              "source-unit-to-page-line-family-gap-piecewise-diagnostic-only"
+            ],
+            "blockedReasons": [
+              "selected-spacing-record-family-is-not-page-y-origin"
+            ]
+          },
+          {
+            "selectedY": 817.539,
+            "rowHeight": 23.298,
+            "supportCount": 1,
+            "originBases": [
+              "cross-table-previous-row-span-table-first-row"
+            ],
+            "tableCandidateIndexes": [
+              3
+            ],
+            "contributions": [
+              "cross-table-row-boundary-offset-diagnostic-only"
+            ],
+            "blockedReasons": [
+              "cross-table-row-boundary-offset-transform-required"
+            ]
+          },
+          {
+            "selectedY": 840.837,
+            "rowHeight": 23.298,
+            "supportCount": 1,
+            "originBases": [
+              "cross-table-selected-spacing-table-first-row"
+            ],
+            "tableCandidateIndexes": [
+              3
+            ],
+            "contributions": [
+              "source-unit-to-page-line-family-gap-piecewise-diagnostic-only"
+            ],
+            "blockedReasons": [
+              "selected-spacing-record-family-is-not-page-y-origin"
+            ]
+          }
+        ],
+        "blockedReasons": [
+          "source-page-y-origin-field-semantics-still-unproven",
+          "source-page-y-origin-best-support-not-cross-table",
+          "cross-table-previous-row-span-support-fragmented-by-table"
+        ],
+        "renderPromotionContribution": "source-page-y-origin-candidate-agreement-gate",
+        "renderPromotionBlockedReason": "source-page-y-origin-agreement-unproven"
+      },
+      "sourceOnlyPageYOriginDomainGate": {
+        "source": "sourcePageYTransformGate.sourceOnlyPageYOriginDomainGate",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "referenceBBoxUsed": false,
+        "selectionReady": false,
+        "directLineMarkPageSpaceOriginPresent": false,
+        "crossTableLineDomainPresent": true,
+        "crossTableLineDomainRecordCount": 11,
+        "crossTableLineDomainTableCount": 4,
+        "combinedLineMarkRecordYPitchPx": 23.298,
+        "combinedLineMarkRecordYTopPx": [
+          235.087,
+          281.683,
+          328.279,
+          374.875,
+          561.260,
+          607.856,
+          654.452,
+          701.048,
+          817.539,
+          864.135,
+          910.731
+        ],
+        "stableSelectedMinusPreviousRecordIndexGap": 1,
+        "stableSelectedMinusPreviousRecordYDeltaPx": 23.298,
+        "selectedSpacingRecordsArePostRowGapFamily": true,
+        "piecewiseTransitionCount": 3,
+        "piecewiseTransitionRecordGaps": [
+          8,
+          2,
+          5
+        ],
+        "samePageMarkEntryTransitionCount": 3,
+        "transitionSemanticsReadiness": {
+          "source": "sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "referenceBBoxUsed": false,
+          "selectionReady": false,
+          "transitionCount": 3,
+          "samePageMarkEntryTransitionCount": 3,
+          "allTransitionsSamePageMarkEntry": true,
+          "transitionEvidenceDomain": "page-mark-line-index",
+          "transitionPairs": [
+            {
+              "fromTableCandidateIndex": 0,
+              "toTableCandidateIndex": 1,
+              "sourceRangeGapUnits": 190,
+              "rowSourceStartGapUnits": 303,
+              "previousFamilyRecordGap": 8,
+              "selectedFamilyRecordGap": 8,
+              "selectedMinusPreviousFamilyRecordGapDelta": 0,
+              "previousFamilyYGapPx": 186.385,
+              "selectedFamilyYGapPx": 186.385,
+              "selectedMinusPreviousFamilyYGapDeltaPx": 0.000,
+              "samePageMarkEntry": true
+            },
+            {
+              "fromTableCandidateIndex": 1,
+              "toTableCandidateIndex": 2,
+              "sourceRangeGapUnits": 72,
+              "rowSourceStartGapUnits": 160,
+              "previousFamilyRecordGap": 2,
+              "selectedFamilyRecordGap": 2,
+              "selectedMinusPreviousFamilyRecordGapDelta": 0,
+              "previousFamilyYGapPx": 46.596,
+              "selectedFamilyYGapPx": 46.596,
+              "selectedMinusPreviousFamilyYGapDeltaPx": 0.000,
+              "samePageMarkEntry": true
+            },
+            {
+              "fromTableCandidateIndex": 2,
+              "toTableCandidateIndex": 3,
+              "sourceRangeGapUnits": 138,
+              "rowSourceStartGapUnits": 230,
+              "previousFamilyRecordGap": 5,
+              "selectedFamilyRecordGap": 5,
+              "selectedMinusPreviousFamilyRecordGapDelta": 0,
+              "previousFamilyYGapPx": 116.490,
+              "selectedFamilyYGapPx": 116.490,
+              "selectedMinusPreviousFamilyYGapDeltaPx": 0.000,
+              "samePageMarkEntry": true
+            }
+          ],
+          "sourceRangeGapUnits": [
+            190,
+            72,
+            138
+          ],
+          "rowSourceStartGapUnits": [
+            303,
+            160,
+            230
+          ],
+          "previousFamilyRecordGaps": [
+            8,
+            2,
+            5
+          ],
+          "selectedFamilyRecordGaps": [
+            8,
+            2,
+            5
+          ],
+          "selectedMinusPreviousFamilyRecordGapDeltas": [
+            0,
+            0,
+            0
+          ],
+          "previousFamilyYGapPx": [
+            186.385,
+            46.596,
+            116.490
+          ],
+          "selectedFamilyYGapPx": [
+            186.385,
+            46.596,
+            116.490
+          ],
+          "selectedMinusPreviousFamilyYGapDeltaPx": [
+            0.000,
+            0.000,
+            0.000
+          ],
+          "familyGapsStableAcrossRecordFamilies": true,
+          "previousAndSelectedTransitionRecordGapsAgree": true,
+          "previousAndSelectedTransitionYGapsAgree": true,
+          "sourceRangeUnitsPerPreviousRecordGap": [
+            23.750,
+            36.000,
+            27.600
+          ],
+          "rowSourceStartUnitsPerPreviousRecordGap": [
+            37.875,
+            80.000,
+            46.000
+          ],
+          "previousYGapPxPerRecordGap": [
+            23.298,
+            23.298,
+            23.298
+          ],
+          "sourceRangeGapRatioStable": false,
+          "rowSourceStartGapRatioStable": false,
+          "previousYGapRatioStable": true,
+          "sourceGapToPageLineGapDirectMapDiagnostic": {
+            "source": "sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.sourceGapToPageLineGapDirectMapDiagnostic",
+            "diagnosticOnly": true,
+            "sourceBacked": true,
+            "referenceBacked": false,
+            "decoded": false,
+            "geometryDecoded": false,
+            "placementDerived": false,
+            "referenceBBoxUsed": false,
+            "selectionReady": false,
+            "gapBasis": "same-page-mark-entry lineMarkRecordGap as page-mark-line-index gap",
+            "sourceRangeGapUnits": [
+              190,
+              72,
+              138
+            ],
+            "rowSourceStartGapUnits": [
+              303,
+              160,
+              230
+            ],
+            "pageLineGaps": [
+              8,
+              2,
+              5
+            ],
+            "sourceRangeGapMinusPageLineGapUnits": [
+              182,
+              70,
+              133
+            ],
+            "rowSourceStartGapMinusPageLineGapUnits": [
+              295,
+              158,
+              225
+            ],
+            "sourceRangeGapEqualsPageLineGap": [
+              false,
+              false,
+              false
+            ],
+            "rowSourceStartGapEqualsPageLineGap": [
+              false,
+              false,
+              false
+            ],
+            "allSourceRangeGapsEqualPageLineGaps": false,
+            "allRowSourceStartGapsEqualPageLineGaps": false,
+            "sourceRangeUnitsPerPageLineGap": [
+              23.750,
+              36.000,
+              27.600
+            ],
+            "rowSourceStartUnitsPerPageLineGap": [
+              37.875,
+              80.000,
+              46.000
+            ],
+            "sourceRangeUnitsPerPageLineGapStable": false,
+            "rowSourceStartUnitsPerPageLineGapStable": false,
+            "renderPromotionContribution": "source-gap-to-page-line-gap-direct-map-diagnostic-only",
+            "renderPromotionBlockedReason": "source-gap-to-page-line-gap-direct-map-not-decoded"
+          },
+          "sourceGapToPageLineGapSegmentOffsetDiagnostic": {
+            "source": "sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.sourceGapToPageLineGapSegmentOffsetDiagnostic",
+            "diagnosticOnly": true,
+            "sourceBacked": true,
+            "referenceBacked": false,
+            "decoded": false,
+            "geometryDecoded": false,
+            "placementDerived": false,
+            "referenceBBoxUsed": false,
+            "selectionReady": false,
+            "offsetBasis": "rowSourceStartGapUnits minus sourceRangeGapUnits",
+            "sourceRangeGapUnits": [
+              190,
+              72,
+              138
+            ],
+            "rowSourceStartGapUnits": [
+              303,
+              160,
+              230
+            ],
+            "segmentOffsetGapUnits": [
+              113,
+              88,
+              92
+            ],
+            "pageLineGaps": [
+              8,
+              2,
+              5
+            ],
+            "segmentOffsetGapMinusPageLineGapUnits": [
+              105,
+              86,
+              87
+            ],
+            "segmentOffsetGapEqualsPageLineGap": [
+              false,
+              false,
+              false
+            ],
+            "allSegmentOffsetsEqualPageLineGaps": false,
+            "segmentOffsetUnitsPerPageLineGap": [
+              14.125,
+              44.000,
+              18.400
+            ],
+            "segmentOffsetUnitsPerPageLineGapStable": false,
+            "segmentOffsetTransformDecoded": false,
+            "renderPromotionContribution": "source-gap-to-page-line-gap-segment-offset-diagnostic-only",
+            "renderPromotionBlockedReason": "source-gap-to-page-line-gap-segment-offset-not-decoded"
+          },
+          "sourceGapToPageLineGapTransformReadiness": {
+            "source": "sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.sourceGapToPageLineGapTransformReadiness",
+            "diagnosticOnly": true,
+            "sourceBacked": true,
+            "referenceBacked": false,
+            "decoded": false,
+            "geometryDecoded": false,
+            "placementDerived": false,
+            "referenceBBoxUsed": false,
+            "selectionReady": false,
+            "transformDomain": "source-unit-gap-to-page-mark-line-index-gap",
+            "candidateTransformCount": 3,
+            "acceptedTransformKind": null,
+            "directMapDeclined": true,
+            "declinedTransformKinds": [
+              "direct-source-range-gap",
+              "direct-row-source-start-gap",
+              "segment-offset-gap"
+            ],
+            "directMapEvidence": "source gaps do not equal page-line gaps and their ratios are unstable",
+            "blockedReasons": [
+              "source-range-gap-not-equal-page-line-gap",
+              "row-source-start-gap-not-equal-page-line-gap",
+              "source-range-gap-ratio-not-stable",
+              "row-source-start-gap-ratio-not-stable",
+              "segment-offset-gap-not-equal-page-line-gap",
+              "segment-offset-gap-ratio-not-stable",
+              "source-gap-to-page-line-gap-segment-offset-transform-missing",
+              "source-gap-to-page-line-gap-transform-undecoded"
+            ],
+            "nextRequiredEvidence": "decode source-gap unit domain or segment transition offset rule before page-space y promotion",
+            "renderPromotionContribution": "source-gap-to-page-line-gap-transform-readiness",
+            "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-decoded"
+          },
+          "sourceGapToPageLineGapReadinessHints": {
+            "source": "sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.sourceGapToPageLineGapReadinessHints",
+            "diagnosticOnly": true,
+            "sourceBacked": true,
+            "referenceBacked": false,
+            "decoded": false,
+            "geometryDecoded": false,
+            "placementDerived": false,
+            "referenceBBoxUsed": false,
+            "selectionReady": false,
+            "transitionCount": 3,
+            "samePageMarkEntryTransitionCount": 3,
+            "allTransitionsSamePageMarkEntry": true,
+            "sourceRangeGapToPageLineGapMaxAbsDeltaUnits": 182,
+            "rowSourceStartGapToPageLineGapMaxAbsDeltaUnits": 295,
+            "segmentOffsetGapToPageLineGapMaxAbsDeltaUnits": 105,
+            "bestCandidateTransformKind": "segment-offset-gap",
+            "bestCandidateMaxAbsDeltaUnits": 105,
+            "transformCandidateCount": 3,
+            "exactTransformCandidateCount": 0,
+            "bestCandidateTransitionCoverageCount": 3,
+            "bestCandidateUnitsPerPageLineGapSpread": 29.875,
+            "lowestSpreadCandidateTransformKind": "direct-source-range-gap",
+            "lowestSpreadUnitsPerPageLineGapSpread": 12.250,
+            "transformCandidateSummaries": [
+              {
+                "transformKind": "direct-source-range-gap",
+                "selected": false,
+                "stable": false,
+                "transitionCoverageCount": 3,
+                "maxAbsDeltaUnits": 182,
+                "unitsPerPageLineGapSpread": 12.250,
+                "declineReason": "higher-max-delta-than-selected-transform",
+                "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+              },
+              {
+                "transformKind": "direct-row-source-start-gap",
+                "selected": false,
+                "stable": false,
+                "transitionCoverageCount": 3,
+                "maxAbsDeltaUnits": 295,
+                "unitsPerPageLineGapSpread": 42.125,
+                "declineReason": "higher-max-delta-than-selected-transform",
+                "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+              },
+              {
+                "transformKind": "segment-offset-gap",
+                "selected": true,
+                "stable": false,
+                "transitionCoverageCount": 3,
+                "maxAbsDeltaUnits": 105,
+                "unitsPerPageLineGapSpread": 29.875,
+                "declineReason": null,
+                "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+              }
+            ],
+            "declinedTransformCandidates": [
+              {
+                "transformKind": "direct-source-range-gap",
+                "selected": false,
+                "stable": false,
+                "transitionCoverageCount": 3,
+                "maxAbsDeltaUnits": 182,
+                "unitsPerPageLineGapSpread": 12.250,
+                "declineReason": "higher-max-delta-than-selected-transform",
+                "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+              },
+              {
+                "transformKind": "direct-row-source-start-gap",
+                "selected": false,
+                "stable": false,
+                "transitionCoverageCount": 3,
+                "maxAbsDeltaUnits": 295,
+                "unitsPerPageLineGapSpread": 42.125,
+                "declineReason": "higher-max-delta-than-selected-transform",
+                "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+              }
+            ],
+            "sourceRangeUnitsPerPageLineGapSpread": 12.250,
+            "rowSourceStartUnitsPerPageLineGapSpread": 42.125,
+            "segmentOffsetUnitsPerPageLineGapSpread": 29.875,
+            "sourceGapToPageLineGapTransformStable": false,
+            "tableFamilySourceGapToPageLineGapTransformStable": false,
+            "tableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+            "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+          },
+          "sourceGapToPageLineGapDecoded": false,
+          "pageSpaceTransitionOriginDecoded": false,
+          "blockedReasons": [
+            "previous-and-selected-family-transitions-share-line-domain-gaps",
+            "source-gap-to-page-line-gap-transform-missing",
+            "source-range-gap-to-page-line-gap-ratio-not-stable",
+            "row-source-start-gap-to-page-line-gap-ratio-not-stable",
+            "source-gap-to-page-line-gap-segment-offset-transform-missing",
+            "table-family-transition-rule-undecoded",
+            "page-space-transition-origin-undecoded"
+          ],
+          "renderPromotionContribution": "table-family-transition-semantics-readiness",
+          "renderPromotionBlockedReason": "table-family-transition-semantics-undecoded"
+        },
+        "sourceGapToPageLineGapTransformAdmissionGate": {
+          "source": "sourceOnlyPageYOriginDomainGate.sourceGapToPageLineGapTransformAdmissionGate",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "referenceBBoxUsed": false,
+          "selectionReady": false,
+          "transformDomain": "source-unit-gap-to-page-mark-line-index-gap",
+          "canDecodeSourceTransform": false,
+          "tableFamilyTransformStable": false,
+          "tableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+          "transitionCount": 3,
+          "allTransitionsSamePageMarkEntry": true,
+          "bestCandidateTransformKind": "segment-offset-gap",
+          "bestCandidateMaxAbsDeltaUnits": 105,
+          "transformCandidateCount": 3,
+          "exactTransformCandidateCount": 0,
+          "bestCandidateTransitionCoverageCount": 3,
+          "bestCandidateUnitsPerPageLineGapSpread": 29.875,
+          "lowestSpreadCandidateTransformKind": "direct-source-range-gap",
+          "lowestSpreadUnitsPerPageLineGapSpread": 12.250,
+          "declinedTransformCandidates": [
+            {
+              "transformKind": "direct-source-range-gap",
+              "selected": false,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 182,
+              "unitsPerPageLineGapSpread": 12.250,
+              "declineReason": "higher-max-delta-than-selected-transform",
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            },
+            {
+              "transformKind": "direct-row-source-start-gap",
+              "selected": false,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 295,
+              "unitsPerPageLineGapSpread": 42.125,
+              "declineReason": "higher-max-delta-than-selected-transform",
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            }
+          ],
+          "declaredBlockers": [
+            "source-gap-to-page-line-gap-transform-not-stable",
+            "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+            "source-gap-to-page-line-gap-transform-undecoded"
+          ],
+          "renderPromotionContribution": "source-gap-to-page-line-gap-transform-admission-gate",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        },
+        "lineDomainRequiresOffsetTransform": true,
+        "pageSpaceOriginDecoded": false,
+        "blockedReasons": [
+          "direct-line-mark-page-space-origin-absent",
+          "cross-table-evidence-is-page-mark-line-domain",
+          "line-domain-to-page-space-origin-transform-required",
+          "table-family-transition-semantics-undecoded",
+          "selected-spacing-records-are-post-row-gap-family",
+          "page-space-table-origin-undecoded"
+        ],
+        "renderPromotionContribution": "source-page-y-origin-domain-gate",
+        "renderPromotionBlockedReason": "source-page-y-line-domain-not-page-space-origin"
+      },
+      "sourceOnlyPageMarkAbsoluteYSlotGate": {
+        "source": "/PageMark raw u16 subrecord scan+/LineMark source page-line projection",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "referenceBBoxUsed": false,
+        "selectionReady": false,
+        "projectionKind": "line-domain-y-plus-post-row-gap-vs-page-mark-absolute-y-slot",
+        "lineDomainY": 235.087,
+        "selectedPostRowGapSpanFirstUnits": 65,
+        "lineDomainProjectedY": 300.087,
+        "absoluteYSlotPresent": true,
+        "bestAbsoluteYSlot": {
+          "source": "rawRecordHeaderTailU16Subrecord",
+          "interpretation": "direct-u16-px",
+          "fieldIndex": 2,
+          "tailBlock16WordIndex": 11,
+          "rawRecordScanIndexes": [
+            3
+          ],
+          "rawRecordIndexes": [
+            3
+          ],
+          "byteOffsets": [
+            418
+          ],
+          "subrecordByteOffsets": [
+            414
+          ],
+          "subrecordLineStartCandidates": [
+            242
+          ],
+          "subrecordLineEndCandidates": [
+            304
+          ],
+          "value": 1024,
+          "valuePx": 1024.000
+        },
+        "absoluteYSlotY": 1024.000,
+        "lineDomainProjectionVsAbsoluteYSlotResidualPx": -723.913,
+        "lineDomainProjectionAgreesWithAbsoluteYSlot": false,
+        "lineageClass": "page-mark-absolute-y-slot",
+        "blockedReasons": [
+          "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+          "page-mark-absolute-y-slot-semantics-unproven",
+          "page-y-origin-transform-undecoded"
+        ],
+        "renderPromotionContribution": "source-only-page-mark-absolute-y-slot-gate",
+        "renderPromotionBlockedReason": "line-domain-projection-disagrees-with-page-mark-absolute-y-slot"
+      },
+      "lineDomainPostRowGapProjectionProbe": {
+        "source": "sourcePageYTransformGate line-domain + post-row-gap span projection",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": true,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "projectionKind": "line-domain-y-plus-post-row-gap-unit-as-px",
+        "selectionReady": false,
+        "promotionReady": false,
+        "lineDomainY": 235.087,
+        "selectedPostRowGapSpanFirstUnits": 65,
+        "selectedPostRowGapSpanComplete": false,
+        "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+        "projectedY": 300.087,
+        "referenceTableTopY": 301.005,
+        "residualPx": -0.919,
+        "absResidualPx": 0.919,
+        "withinTwoPx": true,
+        "sourceOnlyProjectionDomainGate": {
+          "source": "sourcePageYTransformGate source-only line-domain/post-row-gap projection domain gate",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "referenceBBoxUsed": false,
+          "selectionReady": false,
+          "sourceProjectionPresent": true,
+          "lineDomainPresent": true,
+          "selectedPostRowGapSpanPresent": true,
+          "selectedPostRowGapSpanComplete": false,
+          "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+          "sourceUnitDomain": "line-mark-record-y-plus-page-mark-subrecord-gap-units",
+          "lineDomainY": 235.087,
+          "selectedPostRowGapSpanFirstUnits": 65,
+          "projectedY": 300.087,
+          "blockedReasons": [
+            "cross-domain-source-units-treated-as-px",
+            "selected-spacing-records-are-post-row-gap-family",
+            "selected-post-row-gap-span-incomplete",
+            "selected-post-row-gap-span-not-ordered-unique",
+            "page-y-origin-transform-undecoded"
+          ],
+          "renderPromotionContribution": "source-only-line-domain-post-row-gap-projection-domain-gate",
+          "renderPromotionBlockedReason": "line-domain-post-row-gap-projection-crosses-source-unit-domain"
+        },
+        "blockedReasons": [
+          "cross-domain-source-units-treated-as-px",
+          "selected-spacing-records-are-post-row-gap-family",
+          "selected-post-row-gap-span-incomplete",
+          "selected-post-row-gap-span-not-ordered-unique",
+          "reference-only-validation",
+          "page-y-origin-transform-undecoded"
+        ],
+        "renderPromotionContribution": "line-domain-post-row-gap-projection-probe",
+        "renderPromotionBlockedReason": "line-domain-post-row-gap-projection-crosses-source-unit-domain"
+      },
+      "sourceOnlyPageYRenderAdmissionGate": {
+        "source": "sourcePageYTransformGate source-only page-y render admission gate",
+        "diagnosticOnly": true,
+        "sourceBacked": true,
+        "referenceBacked": false,
+        "decoded": false,
+        "geometryDecoded": false,
+        "placementDerived": false,
+        "referenceBBoxUsed": false,
+        "admissionReady": false,
+        "directLineMarkOriginAdmissible": false,
+        "sourceLayoutCandidatePresent": false,
+        "pageOriginAuthority": null,
+        "lineMarkRowsExactAndContiguous": false,
+        "lineMarkPageOriginPresent": false,
+        "lineMarkPageOriginStridePresent": false,
+        "crossTableLineDomainPresent": true,
+        "selectedPostRowGapSpanComplete": false,
+        "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+        "previousRowSpanComplete": false,
+        "previousRowSpanOrderedUniqueCoverageComplete": false,
+        "compactRowSpanComplete": false,
+        "sourceOnlySelectorPresent": true,
+        "sourceOnlySelectorSingleSupportFallback": false,
+        "sourceOnlySelectorSupportCount": 2,
+        "sourceOnlySelectorSupportFragmentedByTable": true,
+        "sourceOnlySelectorBlockedReason": "source-y-origin-selector-fragmented-by-table-not-render-admissible",
+        "sourceOnlySelectorSupportBlockedReasons": [
+          "cross-table-row-boundary-offset-transform-required",
+          "page-line-gap-projection-does-not-decode-table-y-origin"
+        ],
+        "sourceGapToPageLineGapTransformAdmissionGate": {
+          "source": "sourceOnlyPageYRenderAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate",
+          "diagnosticOnly": true,
+          "sourceBacked": true,
+          "referenceBacked": false,
+          "decoded": false,
+          "geometryDecoded": false,
+          "placementDerived": false,
+          "referenceBBoxUsed": false,
+          "selectionReady": false,
+          "transformDomain": "source-unit-gap-to-page-mark-line-index-gap",
+          "canDecodeSourceTransform": false,
+          "tableFamilyTransformStable": false,
+          "tableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+          "transitionCount": 3,
+          "allTransitionsSamePageMarkEntry": true,
+          "bestCandidateTransformKind": "segment-offset-gap",
+          "bestCandidateMaxAbsDeltaUnits": 105,
+          "transformCandidateCount": 3,
+          "exactTransformCandidateCount": 0,
+          "bestCandidateTransitionCoverageCount": 3,
+          "bestCandidateUnitsPerPageLineGapSpread": 29.875,
+          "lowestSpreadCandidateTransformKind": "direct-source-range-gap",
+          "lowestSpreadUnitsPerPageLineGapSpread": 12.250,
+          "declinedTransformCandidates": [
+            {
+              "transformKind": "direct-source-range-gap",
+              "selected": false,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 182,
+              "unitsPerPageLineGapSpread": 12.250,
+              "declineReason": "higher-max-delta-than-selected-transform",
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            },
+            {
+              "transformKind": "direct-row-source-start-gap",
+              "selected": false,
+              "stable": false,
+              "transitionCoverageCount": 3,
+              "maxAbsDeltaUnits": 295,
+              "unitsPerPageLineGapSpread": 42.125,
+              "declineReason": "higher-max-delta-than-selected-transform",
+              "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+            }
+          ],
+          "declaredBlockers": [
+            "source-gap-to-page-line-gap-transform-not-stable",
+            "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+            "source-gap-to-page-line-gap-transform-undecoded"
+          ],
+          "renderPromotionContribution": "source-gap-to-page-line-gap-transform-admission-gate",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        },
+        "sourceGapToPageLineGapTableFamilyTransformRequired": true,
+        "sourceGapToPageLineGapTableFamilyTransformStable": false,
+        "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "pageMarkAbsoluteYSlotSemanticsReady": false,
+        "pageMarkAbsoluteYSlotBlockedReason": "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+        "pageMarkAbsoluteYSlotResidualPx": -723.913,
+        "blockedReasons": [
+          "source-derived-layout-candidate-absent",
+          "direct-line-mark-page-origin-absent",
+          "line-mark-rows-not-exact-source-boundaries",
+          "cross-table-line-domain-not-page-space-origin",
+          "source-order-vs-subrecord-order-contradiction",
+          "cross-table-row-boundary-offset-transform-required",
+          "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+          "source-y-origin-selector-fragmented-by-table-not-render-admissible",
+          "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+          "decoded-line-mark-page-y-transform-missing"
+        ],
+        "renderPromotionContribution": "source-only-page-y-render-admission-gate",
+        "renderPromotionBlockedReason": "source-page-y-render-admission-not-ready"
+      },
+      "blockedReasons": [
+        "source-derived-layout-candidate-absent",
+        "page-mark-subrecord-spans-do-not-decode-page-y-origin",
+        "page-mark-cross-table-raw-record-order-regression",
+        "page-mark-cross-table-subrecord-ordering-unproven",
+        "cross-table-row-boundary-offset-transform-required",
+        "decoded-line-mark-page-y-transform-missing"
+      ],
+      "renderPromotionContribution": "source-page-y-transform-gate",
+      "renderPromotionBlockedReason": "source-page-y-transform-not-decoded"
+    },
+    "renderPromoted": false,
+    "renderPromotionAuthority": null,
+    "renderPromotionBlockedReason": "source-derived-layout-candidate-absent"
+  },
+  "sourceOnlyAxisAdmissionGate": null
+}
+
+## Static code anchors
+37141:fn push_table_grid_source_derived_layout_readiness_json(
+72474:fn source_derived_table_grid_overlay_layout(
+72742:fn table_grid_source_derived_layout_is_renderable(layout: &TableGridSourceDerivedLayout) -> bool {
+73258:fn table_grid_decoded_source_placement_evidence_present(
+73296:fn table_candidate_document_text_line_header_rows(
+73378:fn table_candidate_line_header_matched_cell_count(
+
+## Focused source slices
+ 37141	fn push_table_grid_source_derived_layout_readiness_json(
+ 37142	    output: &mut String,
+ 37143	    document: &Document,
+ 37144	    candidate: &TableCandidate,
+ 37145	    column_count: usize,
+ 37146	    source_layout: Option<&TableGridSourceDerivedLayout>,
+ 37147	) {
+ 37148	    let source_placement_evidence_present =
+ 37149	        table_grid_decoded_source_placement_evidence_present(document, candidate);
+ 37150	    let rows = table_candidate_document_text_line_header_rows(document, candidate);
+ 37151	    let row_count = candidate.intervals().len();
+ 37152	    let raw_header_count = rows
+ 37153	        .iter()
+ 37154	        .map(TableCandidateLineHeaderRow::raw_header_count)
+ 37155	        .sum::<usize>();
+ 37156	    let matched_row_count = rows.iter().filter(|row| row.matched_cell_count > 0).count();
+ 37157	    let full_matched_row_count = rows
+ 37158	        .iter()
+ 37159	        .filter(|row| row.matched_cell_count >= row.expected_cell_count)
+ 37160	        .count();
+ 37161	    let matched_cell_header_count = rows.iter().map(|row| row.matched_cell_count).sum::<usize>();
+ 37162	    let required_cell_header_count = rows
+ 37163	        .iter()
+ 37164	        .map(|row| row.expected_cell_count)
+ 37165	        .sum::<usize>();
+ 37166	    let common_matched_column_count = rows
+ 37167	        .iter()
+ 37168	        .map(|row| row.matched_cell_count)
+ 37169	        .min()
+ 37170	        .unwrap_or(0)
+ 37171	        .min(column_count);
+ 37172	    let rows_without_headers = rows
+ 37173	        .iter()
+ 37174	        .filter(|row| row.headers.is_empty())
+ 37175	        .map(|row| row.row_index)
+ 37176	        .collect::<Vec<_>>();
+ 37177	    let rows_without_matched_cell_headers = rows
+ 37178	        .iter()
+ 37179	        .filter(|row| row.matched_cell_count == 0)
+ 37180	        .map(|row| row.row_index)
+ 37181	        .collect::<Vec<_>>();
+ 37182	    let rows_with_partial_cell_header_coverage = rows
+ 37183	        .iter()
+ 37184	        .filter(|row| {
+ 37185	            row.matched_cell_count > 0 && row.matched_cell_count < row.expected_cell_count
+ 37186	        })
+ 37187	        .map(|row| row.row_index)
+ 37188	        .collect::<Vec<_>>();
+ 37189	    let line_header_rows_homogeneous = table_grid_line_header_rows_are_homogeneous(&rows);
+ 37190	    let resolved_line_mark_rows =
+ 37191	        table_grid_resolved_line_mark_rows_for_rows(document, candidate, &rows);
+ 37192	    let line_mark_row_record_selection =
+ 37193	        table_grid_line_mark_row_record_selection(&resolved_line_mark_rows);
+ 37194	    let line_mark_rows_exact_and_contiguous =
+ 37195	        table_grid_line_mark_rows_are_exact_and_contiguous(document, candidate, &rows);
+ 37196	    let source_layout_present = source_layout.is_some();
+ 37197	    let source_layout_renderable = source_layout
+ 37198	        .as_ref()
+ 37199	        .is_some_and(|layout| table_grid_source_derived_layout_is_renderable(layout));
+ 37200	
+ 37201	    let mut rejection_reasons = Vec::new();
+ 37202	    if column_count == 0 {
+ 37203	        rejection_reasons.push("column-count-zero");
+ 37204	    }
+ 37205	    if !source_placement_evidence_present {
+ 37206	        rejection_reasons.push("source-placement-evidence-missing");
+ 37207	    }
+ 37208	    if rows.is_empty() {
+ 37209	        rejection_reasons.push("line-header-rows-missing");
+ 37210	    }
+ 37211	    if raw_header_count == 0 {
+ 37212	        rejection_reasons.push("line-header-raw-headers-missing");
+ 37213	    }
+ 37214	    if matched_cell_header_count < required_cell_header_count {
+ 37215	        rejection_reasons.push("line-header-cell-geometry-incomplete");
+ 37216	    }
+ 37217	    if common_matched_column_count == 0 {
+ 37218	        rejection_reasons.push("no-common-matched-cell-header-columns");
+ 37219	    }
+ 37220	    if !line_header_rows_homogeneous {
+ 37221	        rejection_reasons.push("line-header-rows-not-homogeneous");
+ 37222	    }
+ 37223	    if !line_mark_rows_exact_and_contiguous {
+ 37224	        rejection_reasons.push("line-mark-rows-not-exact-source-boundaries");
+ 37225	    }
+ 37226	    if !source_layout_present {
+ 37227	        rejection_reasons.push("source-derived-layout-candidate-absent");
+ 37228	    }
+ 72474	fn source_derived_table_grid_overlay_layout(
+ 72475	    layout: PageLayout,
+ 72476	    document: &Document,
+ 72477	    lines: &[PageTextLine],
+ 72478	    overlay_index: usize,
+ 72479	    candidate: &TableCandidate,
+ 72480	    column_count: usize,
+ 72481	) -> Option<TableGridSourceDerivedLayout> {
+ 72482	    if column_count == 0
+ 72483	        || !table_grid_decoded_source_placement_evidence_present(document, candidate)
+ 72484	    {
+ 72485	        return None;
+ 72486	    }
+ 72487	
+ 72488	    let rows = table_candidate_document_text_line_header_rows(document, candidate);
+ 72489	    let first_row = rows.first()?;
+ 72490	    let matched_column_count = rows
+ 72491	        .iter()
+ 72492	        .map(|row| row.matched_cell_count)
+ 72493	        .min()
+ 72494	        .unwrap_or(0)
+ 72495	        .min(column_count);
+ 72496	    if matched_column_count == 0 || first_row.headers.len() < matched_column_count {
+ 72497	        return None;
+ 72498	    }
+ 73258	fn table_grid_decoded_source_placement_evidence_present(
+ 73259	    document: &Document,
+ 73260	    candidate: &TableCandidate,
+ 73261	) -> bool {
+ 73262	    let required = table_grid_decoded_source_placement_required_cell_count(candidate);
+ 73263	    required > 0 && table_grid_decoded_source_placement_match_count(document, candidate) >= required
+ 73264	}
+ 73265	
+ 73266	fn table_grid_decoded_source_placement_required_cell_count(candidate: &TableCandidate) -> usize {
+ 73267	    candidate.cell_count_candidate()
+ 73268	}
+ 73269	
+ 73270	fn table_grid_decoded_source_placement_match_count(
+ 73271	    document: &Document,
+ 73272	    candidate: &TableCandidate,
+ 73273	) -> usize {
+ 73274	    table_candidate_document_text_line_header_rows(document, candidate)
+ 73275	        .iter()
+ 73276	        .map(|row| row.matched_cell_count)
+ 73277	        .sum()
+ 73278	}
+ 73279	
+ 73280	#[derive(Debug, Clone, PartialEq, Eq)]
+ 73281	struct TableCandidateLineHeaderRow {
+ 73282	    row_index: usize,
+ 73283	    source_start: usize,
+ 73284	    source_end: usize,
+ 73285	    expected_cell_count: usize,
+ 73286	    matched_cell_count: usize,
+ 73287	    headers: Vec<ShanaiLanLineHeader>,
+ 73288	}
+ 73289	
+ 73290	impl TableCandidateLineHeaderRow {
+ 73291	    fn raw_header_count(&self) -> usize {
+ 73292	        self.headers.len()
+ 73293	    }
+ 73294	}
+ 73295	
+ 73296	fn table_candidate_document_text_line_header_rows(
+ 73297	    document: &Document,
+ 73298	    candidate: &TableCandidate,
+ 73299	) -> Vec<TableCandidateLineHeaderRow> {
+ 73300	    if !candidate.is_document_text_control_run_candidate() {
+ 73301	        return Vec::new();
+ 73302	    }
+ 73303	    let Some(bytes) = document_text_raw_stream(document) else {
+ 73304	        return Vec::new();
+ 73305	    };
+ 73306	
+ 73307	    candidate
+ 73308	        .intervals()
+ 73309	        .iter()
+ 73310	        .enumerate()
+ 73311	        .map(|(row_index, interval)| {
+ 73312	            let expected_cell_count = interval.column_segments().len();
+ 73313	            let headers =
+ 73314	                table_candidate_line_headers_for_interval(bytes, candidate.basis(), interval);
+ 73315	            let matched_cell_count =
+ 73316	                table_candidate_line_header_matched_cell_count(&headers, expected_cell_count);
+ 73317	            TableCandidateLineHeaderRow {
+ 73318	                row_index,
+ 73319	                source_start: interval.source_start(),
+ 73320	                source_end: interval.source_end(),
+ 73321	                expected_cell_count,
+ 73322	                matched_cell_count,
+ 73323	                headers,
+ 73324	            }
+ 73325	        })
+ 73326	        .collect()
+ 73327	}
+ 73328	
+ 73329	fn table_candidate_line_headers_for_interval(
+ 73330	    bytes: &[u8],
+ 73331	    basis: TextCountRangeOverlapBasis,
+ 73332	    interval: &TableCandidateInterval,
+ 73333	) -> Vec<ShanaiLanLineHeader> {
+ 73334	    let Some((mut offset, end)) = table_candidate_interval_byte_range(
+ 73335	        bytes,
+ 73336	        basis,
+ 73337	        interval.source_start(),
+ 73338	        interval.source_end(),
+ 73339	    ) else {
+ 73340	        return Vec::new();
+ 73341	    };
+ 73342	    if offset % 2 != 0 {
+ 73343	        offset += 1;
+ 73344	    }
+ 73345	    let mut headers = Vec::new();
+ 73346	    while offset + 24 <= end {
+ 73347	        if let Some(header) = shanai_lan_line_header_at(bytes, offset) {
+ 73348	            headers.push(header);
+ 73349	            offset = header.end;
+ 73350	        } else {
+ 73351	            offset += 2;
+ 73352	        }
+ 73353	    }
+ 73354	    headers
+ 73355	}
+ 73356	
+ 73357	fn table_candidate_interval_byte_range(
+ 73358	    bytes: &[u8],
+ 73359	    basis: TextCountRangeOverlapBasis,
+ 73360	    source_start: usize,
+ 73361	    source_end: usize,
+ 73362	) -> Option<(usize, usize)> {
+ 73363	    if source_start >= source_end {
+ 73364	        return None;
+ 73365	    }
+ 73366	    let (byte_start, byte_end) = match basis {
+ 73367	        TextCountRangeOverlapBasis::Byte => (source_start, source_end),
+ 73368	        TextCountRangeOverlapBasis::Unit => {
+ 73369	            (source_start.checked_mul(2)?, source_end.checked_mul(2)?)
+ 73370	        }
+ 73371	    };
+ 73372	    if byte_start >= bytes.len() || byte_start >= byte_end {
+ 73373	        return None;
+ 73374	    }
+ 73375	    Some((byte_start, byte_end.min(bytes.len())))
+ 73376	}
+ 73377	
+ 73378	fn table_candidate_line_header_matched_cell_count(
+ 73379	    headers: &[ShanaiLanLineHeader],
+ 73380	    expected_cell_count: usize,
+ 73381	) -> usize {
+ 73382	    if expected_cell_count == 0 || headers.len() < expected_cell_count {
+ 73383	        return 0;
+ 73384	    }
+ 73385	    let mut previous_offset = None;
+ 73386	    for header in headers {
+ 73387	        if header.extent_units <= header.offset_units || header.font_size_units == 0 {
+ 73388	            return 0;
+ 73389	        }
+ 73390	        if previous_offset.is_some_and(|offset| header.offset_units <= offset) {
+ 73391	            return 0;
+ 73392	        }
+ 73393	        previous_offset = Some(header.offset_units);
+ 73394	    }
+ 73395	    expected_cell_count
+ 73396	}
+
+## Decision map
+Observed scoring live output keeps sourcePlacementEvidencePresent:false, matchedCellHeaderCount:0, requiredCellHeaderCount:12, sourceDerivedLayoutCandidatePresent:false, and sourceDerivedLayoutCandidate:null.
+The source_derived_table_grid_overlay_layout entry gate returns None when table_grid_decoded_source_placement_evidence_present is false. That evidence is currently the sum of compact interval line-header matched cells.
+Sparse sibling topology is complete (4/4 rows, 12/12 segments, compactToSparseColumnOffsetCandidate:3), but sparse topology is exposed only as diagnostic/readiness evidence and does not feed table_candidate_document_text_line_header_rows or decoded source placement match count.
+Therefore the next safe implementation target, if one exists, is not y admission; it is an alternate source-placement evidence path that can derive scoring column/row layout from sparse-sibling topology without treating reference bbox or PageMark y candidates as render authority.
+cleanup: cargo test and cargo run exited; no tmux/browser/ports/temp dirs spawned.

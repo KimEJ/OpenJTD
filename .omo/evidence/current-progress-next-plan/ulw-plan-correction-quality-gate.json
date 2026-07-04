@@ -1,0 +1,134 @@
+{
+  "codeReview": {
+    "by": "lazycodex-code-reviewer",
+    "recommendation": "APPROVE",
+    "codeQualityStatus": "CLEAR",
+    "reportPath": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-code-review.md",
+    "evidence": "Boulder and ledger JSON/JSONL parse; plan marks task 19 evidence as preflight only; shanai_lan connector risk remains visible; tasks 11/18/19/20 and F1-F4 remain unchecked.",
+    "blockers": []
+  },
+  "manualQa": {
+    "by": "lazycodex-qa-executor",
+    "status": "passed",
+    "evidence": "C001-C003 CLI/filesystem evidence files are non-empty, include cleanup receipts, and prove the plan/state correction without runtime leftovers.",
+    "surfaceEvidence": [
+      {
+        "id": "surface-c001-plan-state",
+        "criterionRef": "C001",
+        "surface": "cli",
+        "invocation": "rg preflight/task-19-visual-compare/contact-sheet/shanai_lan terms across plan, Boulder, ledger, and compare report",
+        "verdict": "passed",
+        "artifactRefs": ["artifact-c001"]
+      },
+      {
+        "id": "surface-c002-blocked-checkboxes",
+        "criterionRef": "C002",
+        "surface": "cli",
+        "invocation": "rg unchecked blocked task checkboxes and jq Boulder status/blocked_by/formal_task_19_status",
+        "verdict": "passed",
+        "artifactRefs": ["artifact-c002"]
+      },
+      {
+        "id": "surface-c003-state-artifacts",
+        "criterionRef": "C003",
+        "surface": "cli",
+        "invocation": "jq JSON/JSONL validation plus test -s visual reports/contact sheet/generated PDFs and git status scope listing",
+        "verdict": "passed",
+        "artifactRefs": ["artifact-c003"]
+      }
+    ],
+    "adversarialCases": [
+      {
+        "id": "adv-cleanup-receipts",
+        "criterionRef": "C001-C003",
+        "scenario": "Each criterion evidence must include cleanup receipt.",
+        "expectedBehavior": "cleanup receipt present; no runtime resources spawned",
+        "verdict": "passed",
+        "artifactRefs": ["artifact-c001", "artifact-c002", "artifact-c003"]
+      },
+      {
+        "id": "adv-blocked-task-accidental-completion",
+        "criterionRef": "C002",
+        "scenario": "Blocked tasks must remain unchecked while preflight visual evidence exists.",
+        "expectedBehavior": "Tasks 11/18/19/20 and F1-F4 remain unchecked; Boulder remains blocked by task 11",
+        "verdict": "passed",
+        "artifactRefs": ["artifact-c002"]
+      },
+      {
+        "id": "adv-visual-risk-omission",
+        "criterionRef": "C001",
+        "scenario": "shanai_lan connector-line visual gap must not be hidden by task 19 preflight evidence.",
+        "expectedBehavior": "Risk appears in plan/Boulder/ledger/compare evidence and task 19 remains formal unchecked",
+        "verdict": "passed",
+        "artifactRefs": ["artifact-c001", "artifact-visual-compare"]
+      }
+    ],
+    "artifactRefs": [
+      {
+        "id": "artifact-c001",
+        "kind": "cli-transcript",
+        "description": "C001 preflight visual evidence and risk propagation proof.",
+        "path": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c001.txt"
+      },
+      {
+        "id": "artifact-c002",
+        "kind": "cli-transcript",
+        "description": "C002 unchecked blocked tasks and Boulder blocked status proof.",
+        "path": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c002.txt"
+      },
+      {
+        "id": "artifact-c003",
+        "kind": "cli-transcript",
+        "description": "C003 parse/non-empty artifact and dirty-scope proof.",
+        "path": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-c003.txt"
+      },
+      {
+        "id": "artifact-contact-sheet",
+        "kind": "image",
+        "description": "Task 19 page-1 generated/reference/diff contact sheet.",
+        "path": ".omo/evidence/current-progress-next-plan/task-19-compare/task-19-page1-comparison-contact-sheet.png"
+      },
+      {
+        "id": "artifact-visual-compare",
+        "kind": "log",
+        "description": "Task 19 visual diff metrics and shanai_lan connector-line risk.",
+        "path": ".omo/evidence/current-progress-next-plan/task-19-visual-compare.md"
+      }
+    ]
+  },
+  "gateReview": {
+    "by": "lazycodex-gate-reviewer",
+    "recommendation": "APPROVE",
+    "reportPath": ".omo/evidence/current-progress-next-plan/ulw-plan-correction-gate-review.md",
+    "evidence": "Scoped ULW status has 1 in-progress goal with criteria pass 3/3; c001/c002/c003 are non-empty with cleanup receipts; checkpoint is ready.",
+    "blockers": []
+  },
+  "iteration": {
+    "fullRerun": true,
+    "status": "passed",
+    "rerunCommands": [
+      "omo ulw-loop status --json",
+      "test -s .omo/evidence/current-progress-next-plan/ulw-plan-correction-c001.txt",
+      "test -s .omo/evidence/current-progress-next-plan/ulw-plan-correction-c002.txt",
+      "test -s .omo/evidence/current-progress-next-plan/ulw-plan-correction-c003.txt",
+      "jq -e . .omo/boulder.json",
+      "jq -e . .omo/ulw-loop/019f1af2-fdef-7733-9d5e-e5823a51f79e/goals.json"
+    ],
+    "evidence": "Local checks and three independent reviewer approvals passed."
+  },
+  "criteriaCoverage": {
+    "totalCriteria": 3,
+    "passCount": 3,
+    "originalIntent": "User asked to update the plan after PDF sample comparison and proceed through omo:ulw-loop.",
+    "desiredOutcome": "Plan/state now distinguish preflight PDF visual evidence from formal task 19 completion, keep task 19 gated, and carry shanai_lan connector-line visual risk forward.",
+    "userOutcomeReview": "The requested plan correction is captured with observable CLI evidence and ULW criteria all passed.",
+    "adversarialClassesCovered": [
+      "stale_state",
+      "dirty_worktree",
+      "misleading_success_output",
+      "missing_cleanup_receipt",
+      "accidental_blocked_task_completion",
+      "visual_risk_omission"
+    ]
+  }
+}

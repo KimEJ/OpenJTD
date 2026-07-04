@@ -1,0 +1,23 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available ... FAILED
+
+failures:
+
+---- tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available stdout ----
+
+thread 'tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available' (6502396) panicked at crates/rjtd-model/src/lib.rs:85506:9:
+assertion failed: layer_tree.contains("\"sparseSiblingDerivedCompactCellGeometry\":{\"source\":\"sparseTableSiblingEvidence compact cell geometry prerequisite\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"candidateRowCount\":4,\"matchedRowCount\":4,\"candidateSegmentCount\":12,\"matchedSegmentCount\":12,\"compactToSparseColumnOffsetCandidate\":3,\"matchedSparseColumnIndexes\":[3,4,5],\"derivedMatchedCellCount\":12,\"requiredCellCount\":12,\"derivedCellGeometryCoverageComplete\":true,\"sourcePlacementPrerequisiteReady\":true,\"renderPromotionContribution\":\"sparse-sibling-derived-geometry-prerequisite\",\"renderPromotionBlockedReason\":\"sparse-sibling-derived-geometry-diagnostic-only\"")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.09s
+
+error: test failed, to rerun pass `-p rjtd-model --lib`
+
+EXIT_CODE=101

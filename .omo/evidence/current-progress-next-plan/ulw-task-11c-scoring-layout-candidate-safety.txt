@@ -1,0 +1,334 @@
+G004 safety regression guard
+Generated: 2026-07-02T02:14:20Z
+
+== cargo fmt --all -- --check ==
+fmt: pass
+
+== cargo check -p rjtd-model ==
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+
+== focused tsaiten test ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 1 test
+test tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.14s
+
+
+== live fallback/admission extraction ==
+{"referenceFallbackUsedCount":2,"scoring":{"candidate":{"source":"sparseTableSiblingEvidence compact cell geometry candidate","provenance":"sparseSiblingDerived","sourceBacked":true,"referenceBacked":false,"renderPromotionBlockedReason":"sparse-sibling-derived-candidate-render-ineligible"},"readiness":{"sourceDerivedLayoutCandidatePresent":true,"sourceDerivedLayoutRenderable":false,"sourcePlacementEvidencePresent":false},"fallback":{"source":"table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate","diagnosticOnly":true,"sourceBacked":true,"referenceBacked":false,"decoded":false,"geometryDecoded":false,"placementDerived":false,"referenceLayoutPresent":true,"referenceFallbackAllowed":true,"referenceFallbackUsed":true,"sourceLayoutCandidatePresent":true,"sourceRenderLayoutPresent":false,"sourceLayoutRenderable":false,"sourceOnlyPageYAdmissionReady":false,"sourceOnlyPageYAdmissionBasis":null,"sourceReplacementBlockedReason":"source-derived-layout-not-renderable","blockedReason":null,"renderPromotionContribution":"reference-fallback-admission-gate","renderPromotionBlockedReason":null}},"lower":{"fallback":{"source":"table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate","diagnosticOnly":true,"sourceBacked":true,"referenceBacked":false,"decoded":false,"geometryDecoded":false,"placementDerived":false,"referenceLayoutPresent":true,"referenceFallbackAllowed":true,"referenceFallbackUsed":true,"sourceLayoutCandidatePresent":true,"sourceRenderLayoutPresent":false,"sourceLayoutRenderable":false,"sourceOnlyPageYAdmissionReady":false,"sourceOnlyPageYAdmissionBasis":null,"sourceReplacementBlockedReason":"source-page-y-render-admission-not-ready","blockedReason":null,"renderPromotionContribution":"reference-fallback-admission-gate","renderPromotionBlockedReason":null}}}
+
+== task gate audit ==
+../.omo/plans/current-progress-next-plan.md:95:| 20 | 1-19 | F1-F4 | none |
+../.omo/plans/current-progress-next-plan.md:245:  Current preflight note: PDF export and page-1 comparison evidence was generated out of order on 2026-07-01 after task 11 was confirmed blocked. Treat `.omo/evidence/current-progress-next-plan/task-19-visual-qa.md`, `.omo/evidence/current-progress-next-plan/task-19-visual-compare.md`, and `.omo/evidence/current-progress-next-plan/task-19-compare/task-19-page1-comparison-contact-sheet.png` as preflight evidence only. They do not complete this checkbox, do not unblock 20/F1-F4, and must be rerun or explicitly refreshed after 11 and 18 are complete.
+../.omo/plans/current-progress-next-plan.md:337:  What to do / Must NOT do: Summarize changed files, evidence logs, remaining risks, and suggested atomic commit boundaries. Include the task 19 preflight-vs-formal distinction and carry the `shanai_lan` connector-line visual gap from `task-19-visual-compare.md` as a remaining risk until a later gated task proves it resolved. Do not stage or commit unless the user explicitly asks. If committing later, use the Lore Commit Protocol with `Constraint`, `Rejected`, `Confidence`, `Scope-risk`, `Directive`, `Tested`, and `Not-tested` trailers as useful.
+../.omo/plans/current-progress-next-plan.md:338:  Parallelization: Wave 5 | Blocked by: 1-19 | Blocks: F1-F4
+../.omo/plans/current-progress-next-plan.md:341:  QA scenarios: Happy: handoff names every changed tracked file, every new artifact, exact verification commands, remaining risks, the task 19 comparison/contact-sheet artifacts, and whether visual QA was formal or preflight. Failure: if `git status --short` includes unexpected unrelated files, classify them and keep them out of commit recommendations; if preflight visual evidence exists while task 19 remains unchecked, state that it is not completion evidence. Evidence `.omo/evidence/current-progress-next-plan/task-20-handoff.md`
+../.omo/plans/current-progress-next-plan.md:346:- [ ] F1. Plan compliance audit
+../.omo/plans/current-progress-next-plan.md:350:  QA scenarios: Happy: create a compliance matrix showing every scope item and the evidence file that proves it. Failure: any missing evidence or skipped sample claim fails F1 and returns to the owning todo. Evidence `.omo/evidence/current-progress-next-plan/f1-plan-compliance.log`
+../.omo/plans/current-progress-next-plan.md:352:- [ ] F2. Code quality review
+../.omo/plans/current-progress-next-plan.md:358:- [ ] F3. Real manual QA
+../.omo/plans/current-progress-next-plan.md:359:  What to do / Must NOT do: Run agent-executed manual QA: final Rust suite plus available local sample/PDF checks. Must not claim local-sample or visual coverage when assets/tools are missing, and must not treat preflight task 19 evidence as final manual QA unless it was rerun or explicitly refreshed after 11 and 18 completed.
+../.omo/plans/current-progress-next-plan.md:362:  QA scenarios: Happy: Rust suite is green and visual/sample checks are either executed with evidence or explicitly skipped with missing asset/tool names; if task 19 visual evidence is reused, F3 states whether it is preflight or refreshed final evidence. Failure: any failing command, unqualified visual claim, missing comparison artifact, or unreported `shanai_lan` connector-line visual gap blocks handoff. Evidence `.omo/evidence/current-progress-next-plan/f3-manual-qa.md`
+../.omo/plans/current-progress-next-plan.md:364:- [ ] F4. Scope fidelity
+../.omo/plans/current-progress-next-plan.md:365:  What to do / Must NOT do: Confirm no product code was touched outside named todo scopes, no generated artifacts were committed unintentionally, and all remaining risks are explicitly reported. Include task 19 preflight PDFs/PNGs/contact sheets in generated-artifact classification and keep the unchecked formal task status visible. Must not hide unrelated dirty worktree entries.
+../.omo/plans/current-progress-next-plan.md:368:  QA scenarios: Happy: final status is classified by tracked WIP, planning artifacts, generated artifacts, unchecked formal tasks, and remaining risks. Failure: any unexpected file is classified before handoff; generated artifacts are not staged unless explicitly requested; preflight task 19 artifacts are not used to imply the checkbox is complete. Evidence `.omo/evidence/current-progress-next-plan/f4-scope-fidelity.md`
+../.omo/plans/current-progress-next-plan.md:389:- `.omo/evidence/current-progress-next-plan/` contains task evidence for todos 1-20 and final verification receipts F1-F4.
+../TODO.md:267:- [x] Recover remaining text hidden behind unknown inline formatting/control records; `sample-academic.jtd` plain-text extraction is complete; the `0xff1c`/`0xff1e` values previously flagged as hidden content are U+FF1C/U+FF1E full-width angle brackets, not control codes; RFC 0009 documents the self-describing variable-length `0x001c` header record that the current parser skips correctly by stopping on `0x001c` and resuming on `0x001f`.
+../TODO.ja.md:224:- [x] unknown inline formatting/control records の背後に隠れた残り text を復元する。`sample-academic.jtd` のプレーンテキスト抽出は完了済み。以前「隠れたコンテンツ」として疑われた `0xff1c`/`0xff1e` は制御コードではなく U+FF1C/U+FF1E の全角不等号文字であることを確認。RFC 0009 で、現在のパーサーが `0x001c` で停止し `0x001f` で再開することにより自己記述型ヘッダーを正しくスキップしていることを文書化。
+
+== git status --short ==
+ M TODO.ja.md
+ M TODO.md
+ M openjtd-spec/rfc/0008-object-stream-candidates.ja.md
+ M openjtd-spec/rfc/0008-object-stream-candidates.md
+ M rjtd/crates/rjtd-cli/src/main.rs
+ M rjtd/crates/rjtd-cli/tests/streams.rs
+ M rjtd/crates/rjtd-export/src/lib.rs
+ M rjtd/crates/rjtd-model/src/lib.rs
+?? .omo/
+?? AGENTS.md
+?? rjtd/AGENTS.md
+
+== git diff --stat ==
+ TODO.ja.md                                         |    75 +-
+ TODO.md                                            |    75 +-
+ .../rfc/0008-object-stream-candidates.ja.md        |    73 +-
+ openjtd-spec/rfc/0008-object-stream-candidates.md  |    73 +-
+ rjtd/crates/rjtd-cli/src/main.rs                   |   144 +-
+ rjtd/crates/rjtd-cli/tests/streams.rs              |    48 +-
+ rjtd/crates/rjtd-export/src/lib.rs                 |  2019 +++-
+ rjtd/crates/rjtd-model/src/lib.rs                  | 11754 ++++++++++++++++++-
+ 8 files changed, 13712 insertions(+), 549 deletions(-)
+
+== focused diff anchors ==
+diff --git a/rjtd/crates/rjtd-model/src/lib.rs b/rjtd/crates/rjtd-model/src/lib.rs
+index d31e1a0..013b127 100644
+--- a/rjtd/crates/rjtd-model/src/lib.rs
++++ b/rjtd/crates/rjtd-model/src/lib.rs
+@@ -195,6 +195,11 @@ const FDM_VECTOR_RENDERED_PRIMITIVE_MARKERS: [[u8; 4]; 12] = [
+     *b"\x01\x00\x09\x60",
+ ];
+ const FDM_VECTOR_PATH_DIAGNOSTIC_MAX_SPAN_RATIO: f32 = 0.28;
++const FDM_TEXT_MASK_COHORT_MIN_PRIMITIVES: usize = 3;
++const FDM_TEXT_MASK_COHORT_LIMIT: usize = 24;
++const FDM_TEXT_MASK_RIGHT_NEIGHBOR_MAX_GAP_FACTOR: f32 = 3.0;
++const FDM_TEXT_MASK_COMPONENT_MIN_PRIMITIVES: usize = 3;
++const FDM_TEXT_MASK_COMPONENT_MAX_HEIGHT_LINE_FACTOR: f32 = 0.85;
+ const FDM_CONNECTOR_CANDIDATE_MIN_SOURCE_SPAN_UNITS: i32 = 500;
+ const FDM_CONNECTOR_CANDIDATE_MIN_PROJECTED_SPAN_PX: f32 = 48.0;
+ const FDM_OPEN_STROKE_AXIS_RULE_MIN_PROJECTED_SPAN_PX: f32 = 5.0;
+@@ -616,6 +621,7 @@ const APP_PAGE_WIDTH_PX: f32 = 794.0;
+ const APP_PAGE_HEIGHT_PX: f32 = 1123.0;
+ const APP_PAGE_MARGIN_PX: f32 = 72.0;
+ const APP_FONT_SIZE_PX: f32 = 13.3;
++const APP_TABLE_BASE_FONT_SIZE_UNITS: f32 = 12.0;
+ const APP_LINE_HEIGHT_PX: f32 = 23.0;
+ const APP_DEFAULT_COLUMN_WIDTH_PX: f32 =
+     (APP_PAGE_WIDTH_PX - (APP_PAGE_MARGIN_PX * 2.0)) / APP_WRAP_COLUMNS as f32;
+@@ -1755,7 +1761,10 @@ impl DocumentCore {
+         self.page_lines(page_num)?;
+         let mut controls = Vec::new();
+         for control in projected_text_controls(&self.document) {
+-            let rect = self.cursor_rect_for(control.paragraph_index, control.char_offset)?;
++            let Ok(rect) = self.cursor_rect_for(control.paragraph_index, control.char_offset)
++            else {
++                continue;
++            };
+             if rect.page_index != page_num as usize {
+                 continue;
+             }
+@@ -7303,6 +7312,67 @@ impl ObjectJsfartArtFrameCandidate {
+     }
+ }
+ 
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct ObjectJsfartStreamProfileCandidate {
++    magic_family: String,
++    magic_family_hex: String,
++    magic_offset: usize,
++    magic_ascii_or_utf16_preview: String,
++    header_prefix: Vec<u8>,
++    structured_art_candidate_present: bool,
++    render_promotion_blocked_reason: String,
++}
++
++impl ObjectJsfartStreamProfileCandidate {
++    fn new(
++        magic_family: impl Into<String>,
++        magic_family_hex: impl Into<String>,
++        magic_offset: usize,
++        magic_ascii_or_utf16_preview: impl Into<String>,
++        header_prefix: Vec<u8>,
++        structured_art_candidate_present: bool,
++        render_promotion_blocked_reason: impl Into<String>,
++    ) -> Self {
++        Self {
++            magic_family: magic_family.into(),
++            magic_family_hex: magic_family_hex.into(),
++            magic_offset,
++            magic_ascii_or_utf16_preview: magic_ascii_or_utf16_preview.into(),
++            header_prefix,
++            structured_art_candidate_present,
++            render_promotion_blocked_reason: render_promotion_blocked_reason.into(),
++        }
++    }
++
++    pub fn magic_family(&self) -> &str {
++        &self.magic_family
++    }
++
++    pub fn magic_family_hex(&self) -> &str {
++        &self.magic_family_hex
++    }
++
++    pub fn magic_offset(&self) -> usize {
++        self.magic_offset
++    }
++
++    pub fn magic_ascii_or_utf16_preview(&self) -> &str {
++        &self.magic_ascii_or_utf16_preview
++    }
++
++    pub fn header_prefix(&self) -> &[u8] {
++        &self.header_prefix
++    }
++
++    pub fn structured_art_candidate_present(&self) -> bool {
++        self.structured_art_candidate_present
++    }
++
++    pub fn render_promotion_blocked_reason(&self) -> &str {
++        &self.render_promotion_blocked_reason
++    }
++}
++
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct ObjectJsfartArtCandidate {
+     magic: String,
+@@ -8205,6 +8275,7 @@ pub struct ObjectStreamCandidate {
+     figure_link_candidate: Option<ObjectFigureLinkCandidate>,
+     embedded_press_snapshot_candidate: Option<ObjectEmbeddedPressSnapshotCandidate>,
+     fdm_text_candidates: Vec<ObjectFdmTextCandidate>,
++    jsfart_stream_profile_candidate: Option<ObjectJsfartStreamProfileCandidate>,
+     jsfart_art_candidate: Option<ObjectJsfartArtCandidate>,
+     jseq3_formula_candidate: Option<ObjectJseq3FormulaCandidate>,
+     svg_offsets: Vec<usize>,
+@@ -9393,6 +9464,7 @@ pub struct ObjectStreamCandidateEvidence {
+     figure_link_candidate: Option<ObjectFigureLinkCandidate>,
+     embedded_press_snapshot_candidate: Option<ObjectEmbeddedPressSnapshotCandidate>,
+     fdm_text_candidates: Vec<ObjectFdmTextCandidate>,
++    jsfart_stream_profile_candidate: Option<ObjectJsfartStreamProfileCandidate>,
+     jsfart_art_candidate: Option<ObjectJsfartArtCandidate>,
+     jseq3_formula_candidate: Option<ObjectJseq3FormulaCandidate>,
+     svg_offsets: Vec<usize>,
+@@ -9416,6 +9488,7 @@ impl ObjectStreamCandidateEvidence {
+             figure_link_candidate: None,
+             embedded_press_snapshot_candidate: None,
+             fdm_text_candidates: Vec::new(),
++            jsfart_stream_profile_candidate: None,
+             jsfart_art_candidate: None,
+             jseq3_formula_candidate: None,
+             svg_offsets,
+@@ -9465,6 +9538,14 @@ impl ObjectStreamCandidateEvidence {
+         self
+     }
+ 
++    fn with_jsfart_stream_profile_candidate(
++        mut self,
++        profile: Option<ObjectJsfartStreamProfileCandidate>,
++    ) -> Self {
++        self.jsfart_stream_profile_candidate = profile;
++        self
++    }
++
+     fn with_jsfart_art_candidate(mut self, art: Option<ObjectJsfartArtCandidate>) -> Self {
+         self.jsfart_art_candidate = art;
+         self
+@@ -9505,6 +9586,7 @@ impl ObjectStreamCandidate {
+             figure_link_candidate: evidence.figure_link_candidate,
+             embedded_press_snapshot_candidate: evidence.embedded_press_snapshot_candidate,
+             fdm_text_candidates: evidence.fdm_text_candidates,
++            jsfart_stream_profile_candidate: evidence.jsfart_stream_profile_candidate,
+             jsfart_art_candidate: evidence.jsfart_art_candidate,
+             jseq3_formula_candidate: evidence.jseq3_formula_candidate,
+             svg_offsets: evidence.svg_offsets,
+@@ -9621,6 +9703,10 @@ impl ObjectStreamCandidate {
+         &self.fdm_text_candidates
+     }
+ 
++    pub fn jsfart_stream_profile_candidate(&self) -> Option<&ObjectJsfartStreamProfileCandidate> {
++        self.jsfart_stream_profile_candidate.as_ref()
++    }
++
+     pub fn jsfart_art_candidate(&self) -> Option<&ObjectJsfartArtCandidate> {
+         self.jsfart_art_candidate.as_ref()
+     }
+@@ -13317,6 +13403,8 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
+     let embedded_press_snapshot_candidate = embedded_press_snapshot_candidate_from_stream(stream);
+     let fdm_text_candidates = fdm_text_candidates_from_stream(path, stream);
+     let jsfart_art_candidate = jsfart_art_candidate_from_stream(path, stream);
++    let jsfart_stream_profile_candidate =
++        jsfart_stream_profile_candidate_from_stream(path, stream, jsfart_art_candidate.is_some());
+     let jseq3_formula_candidate = jseq3_formula_candidate_from_stream(path, stream);
+     if !image_signature_hits.is_empty() {
+         push_unique_object_reason(&mut reasons, ObjectStreamCandidateReason::ImageSignature);
+@@ -13368,12 +13456,75 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
+         .with_figure_link_candidate(figure_link_candidate)
+         .with_embedded_press_snapshot_candidate(embedded_press_snapshot_candidate)
+         .with_fdm_text_candidates(fdm_text_candidates)
++        .with_jsfart_stream_profile_candidate(jsfart_stream_profile_candidate)
+         .with_jsfart_art_candidate(jsfart_art_candidate)
+         .with_jseq3_formula_candidate(jseq3_formula_candidate),
+         stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec(),
+     ))
+ }
+ 
++fn jsfart_stream_profile_candidate_from_stream(
++    path: &str,
++    stream: &[u8],
++    structured_art_candidate_present: bool,
++) -> Option<ObjectJsfartStreamProfileCandidate> {
++    if !path.ends_with("/JSFart2Contents") {
++        return None;
++    }
++
++    let header_prefix = stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec();
++    let magic_family_hex = hex_bytes(&stream[..stream.len().min(2)]);
++    let preview = utf16le_printable_preview(&header_prefix);
++    let magic_family = jsfart_stream_magic_family(stream, &preview);
++    let render_promotion_blocked_reason = if structured_art_candidate_present {
++        "structured-jsfart-art-still-paint-authority-unproven"
++    } else {
++        "jsfart-variant-layout-undecoded"
++    };
++
++    Some(ObjectJsfartStreamProfileCandidate::new(
++        magic_family,
++        magic_family_hex,
++        0,
++        preview,
++        header_prefix,
++        structured_art_candidate_present,
++        render_promotion_blocked_reason,
++    ))
++}
++
++fn jsfart_stream_magic_family(stream: &[u8], utf16le_preview: &str) -> &'static str {
++    if stream.starts_with(JSFART2_CONTENTS_MAGIC_UTF16LE) {
++        "mstudio-ocx-utf16le"
++    } else if utf16le_preview.starts_with("JSFART.") {
++        "jsfart-object-utf16le"
++    } else if stream.get(..2).is_some_and(|prefix| prefix == [0x00, 0x00]) {
++        "zero-prefix"
++    } else if !utf16le_preview.is_empty() {
++        "utf16le-text-prefix"
++    } else {
++        "binary-prefix"
++    }
++}
++
++fn utf16le_printable_preview(bytes: &[u8]) -> String {
++    let mut preview = String::new();
++    for chunk in bytes.chunks_exact(2) {
++        let value = u16::from_le_bytes([chunk[0], chunk[1]]);
++        if value == 0 {
++            break;
++        }
++        let Some(ch) = char::from_u32(u32::from(value)) else {
++            break;
++        };
++        if ch.is_control() {
++            break;
++        }
++        preview.push(ch);
++    }
++    preview
++}
++
+ fn jsfart_art_candidate_from_stream(path: &str, stream: &[u8]) -> Option<ObjectJsfartArtCandidate> {
+     if !path.ends_with("/JSFart2Contents") {
+         return None;
+@@ -18288,6 +18439,10 @@ fn json_string(value: &str) -> String {
+     escaped
+ }
+ 
++fn json_bool(value: bool) -> &'static str {
++    if value { "true" } else { "false" }
++}
++
+ fn text_count_ranges_json(ranges: &[TextCountRange]) -> String {
+     let mut output = String::from("[");
+     for (index, range) in ranges.iter().enumerate() {
+@@ -18581,6 +18736,12 @@ fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStre
+     } else {
+
+== safety conclusion ==
+fmt: pass
+cargo check -p rjtd-model: pass
+focused tsaiten test: pass
+live extraction: scoring sourceDerivedLayoutCandidate provenance=sparseSiblingDerived, sourceBacked=true, referenceBacked=false, sourceLayoutRenderable=false, sourceOnlyPageYAdmissionReady=false, referenceFallbackUsed=true; lower table remains source-page-y-render-admission-not-ready; referenceFallbackUsed count remains 2.
+task gates: task 11 remains not promoted to full source-only readiness; downstream 18-20/F1-F4 remain gated.
+worktree note: git diff includes pre-existing unrelated rjtd-model changes in the same file; this G004 slice is anchored by TableGridSourceDerivedLayoutProvenance, sparse_sibling_derived_table_grid_overlay_layout, table_grid_source_derived_layout_candidate, renderable provenance guard, and updated tsaiten assertions.

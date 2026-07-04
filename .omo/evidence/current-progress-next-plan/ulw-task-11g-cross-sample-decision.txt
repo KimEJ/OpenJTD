@@ -1,0 +1,31 @@
+# G008 C002 cross-sample source-only implementation-or-blocker decision
+date=2026-07-02T02:57:28Z
+input=.omo/evidence/current-progress-next-plan/ulw-task-11g-cross-sample-profile-sweep.txt
+decision=branch-b-sharper-blocker
+
+## branch decision
+Selected branch b: no local cross-sample source-backed implementation target is safe yet. The cross-sample sweep found no non-tsaiten sample with a comparable table-family source-only PageMark/LineMark y sequence, no exact source-gap-to-page-line transform, and no decoded PageMark slot semantics that can promote sourceOnlyPageYAdmissionReady.
+
+## evidence summary
+- tsaiten: sourceOnlySlotProbeCount=4, slotCount=112, sameHeaderSlotCount=0, all bestSourceTableTopSlot/bestSourceRowTopSlot/bestSourceRowDeltaSlot/bestOrderedLineMarkRecordCoverageSlot null; exactTransformCandidateCount=0 and tableFamilyTransformStable=false.
+- hyo: sourceOnlySlotProbeCount=2 but slotCount=0 and all best-source slots null, so it does not repeat tsaiten source-only y evidence.
+- tmogi3_2, tmogi3_1, success_data-test, shanai_lan, 46, fax02, setsuden_05: no comparable slot-scoped source-only y sequence in page-layer-tree summaries; setsuden_05 lacks PageMark/LineMark streams.
+- success_data-test admissionReady=true is lineMarkPageGrid/simple-surface evidence with sourceOnlySlotProbeCount=0, not proof for tsaiten table-family PageMark slot or source-gap transform semantics.
+- all samples with sourceGapTransformGates report exactTransformCandidateCount=0 and tableFamilyTransformStable=false; samples without gates provide no transform evidence.
+
+## code anchors
+- rjtd/crates/rjtd-core/src/layout_mark.rs:54-72 defines PageMarkFamily labels only; PageMarkEntry raw/u32 access at rjtd/crates/rjtd-core/src/layout_mark.rs:130-145 exposes fields but does not decode page-y semantics.
+- rjtd/crates/rjtd-model/src/lib.rs:30684 emits sourceOnlyPageMarkSlotScopedSubrecordYSequenceProbe; rjtd/crates/rjtd-model/src/lib.rs:31085 keeps renderPromotionBlockedReason=page-mark-source-y-slot-candidates-do-not-decode-page-y-origin.
+- rjtd/crates/rjtd-model/src/lib.rs:39694 emits sourceOnlyPageYRenderAdmissionGate; rjtd/crates/rjtd-model/src/lib.rs:40012 emits its sourceGapToPageLineGapTransformAdmissionGate; live cross-sample evidence keeps exactTransformCandidateCount=0/tableFamilyTransformStable=false for table-family candidates.
+- rjtd/crates/rjtd-model/src/lib.rs:72525 identifies SparseSiblingDerived provenance; current scoring candidate remains render-ineligible, not page-y render admission proof.
+
+## missing evidence now named
+missingEvidence=decoded PageMark slot family or spec-backed field semantics that maps source-only PageMark/LineMark records to table-top/row-delta page-y; repeated local-sample field family with non-null table/row/delta slots; exact source-gap-to-page-line transform with bestCandidateMaxAbsDeltaUnits=0 across table family.
+unsafePromotionReason=Flipping sourceLayoutRenderable/sourceOnlyPageYAdmissionReady now would rely on diagnostic-only PageMark/LineMark comparisons or reference/fallback geometry, violating the original brief and preserving unknown-data safety.
+nextUsefulStep=Either obtain/derive PageMark slot semantics from spec or a richer corpus with table-family PageMark/LineMark y evidence, then write a failing-first assertion against that source-backed invariant before changing model gates.
+
+## no-reference-proof note
+No reference bbox or PDF visual similarity is used as proof in this decision; the decision relies on CLI source-surface diagnostics and code gate anchors only.
+
+## cleanup receipt
+rg/codegraph/printf exited; no source files edited; no tmux/browser/ports/temp dirs/subagents spawned.

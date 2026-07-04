@@ -1,0 +1,23 @@
+# C003 regression: state parses, visual artifacts remain non-empty, dirty product scope is visible
+## JSON/JSONL validation
+json-ok
+## Visual artifacts non-empty
+.omo/evidence/current-progress-next-plan/task-19-visual-qa.md	    3553 bytes
+.omo/evidence/current-progress-next-plan/task-19-visual-compare.md	    2248 bytes
+.omo/evidence/current-progress-next-plan/task-19-compare/task-19-page1-comparison-contact-sheet.png	 1210929 bytes
+openjtd-samples/pdf-output/ichitaro-20030228030923-success-002-success_data-test.pdf	  561049 bytes
+openjtd-samples/pdf-output/ichitaro-20030120132956-0007-sp-dat-tsaiten.pdf	   42251 bytes
+openjtd-samples/pdf-output/ichitaro-20030315134715-success-001-success_data-shanai_lan.pdf	  411476 bytes
+## Dirty tracked product/doc scope still visible, not hidden by plan correction
+ M TODO.ja.md
+ M TODO.md
+ M openjtd-spec/rfc/0008-object-stream-candidates.ja.md
+ M openjtd-spec/rfc/0008-object-stream-candidates.md
+ M rjtd/crates/rjtd-cli/src/main.rs
+ M rjtd/crates/rjtd-cli/tests/streams.rs
+ M rjtd/crates/rjtd-export/src/lib.rs
+ M rjtd/crates/rjtd-model/src/lib.rs
+?? .omo/
+?? AGENTS.md
+?? rjtd/AGENTS.md
+cleanup: no runtime process, tmux session, browser context, port, container, or temp dir spawned for C003; CLI-only jq/test/git evidence.

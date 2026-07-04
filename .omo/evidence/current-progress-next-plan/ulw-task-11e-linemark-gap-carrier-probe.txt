@@ -1,0 +1,1109 @@
+# G006 C002 LineMark stride and gap-carrier probe
+sample=../rjtd-testdata/local-samples/ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd
+
+## rjtd-cli line-mark-intervals
+summary	len=2846	words=1423	profile=be16-delta-v1	declared-count=45	max-records=707	parsed-records=43	base-unit=16	header=0x0902,0x0000,0x002d,0x0000,0x002d,0x0000,0x002c,0x0052,0x0003
+line-mark-interval	record=0	byte=18	word=9	delta=1	flag=0x0002	unit-start=16	unit-end=17	prev=0x0000,0x002c,0x0052,0x0003	next=0x0030,0x0002,0x0031,0x0002,0x0010,0x0000
+line-mark-interval	record=1	byte=22	word=11	delta=48	flag=0x0002	unit-start=17	unit-end=65	prev=0x0052,0x0003,0x0001,0x0002	next=0x0031,0x0002,0x0010,0x0000,0x0001,0x0002
+line-mark-interval	record=2	byte=26	word=13	delta=49	flag=0x0002	unit-start=65	unit-end=114	prev=0x0001,0x0002,0x0030,0x0002	next=0x0010,0x0000,0x0001,0x0002,0x0018,0x0002
+line-mark-interval	record=3	byte=30	word=15	delta=16	flag=0x0000	unit-start=114	unit-end=130	prev=0x0030,0x0002,0x0031,0x0002	next=0x0001,0x0002,0x0018,0x0002,0x0043,0x0002
+line-mark-interval	record=4	byte=34	word=17	delta=1	flag=0x0002	unit-start=130	unit-end=131	prev=0x0031,0x0002,0x0010,0x0000	next=0x0018,0x0002,0x0043,0x0002,0x006b,0x0002
+line-mark-interval	record=5	byte=38	word=19	delta=24	flag=0x0002	unit-start=131	unit-end=155	prev=0x0010,0x0000,0x0001,0x0002	next=0x0043,0x0002,0x006b,0x0002,0x0041,0x0002
+line-mark-interval	record=6	byte=42	word=21	delta=67	flag=0x0002	unit-start=155	unit-end=222	prev=0x0001,0x0002,0x0018,0x0002	next=0x006b,0x0002,0x0041,0x0002,0x0071,0x0002
+line-mark-interval	record=7	byte=46	word=23	delta=107	flag=0x0002	unit-start=222	unit-end=329	prev=0x0018,0x0002,0x0043,0x0002	next=0x0041,0x0002,0x0071,0x0002,0x0041,0x0002
+line-mark-interval	record=8	byte=50	word=25	delta=65	flag=0x0002	unit-start=329	unit-end=394	prev=0x0043,0x0002,0x006b,0x0002	next=0x0071,0x0002,0x0041,0x0002,0x0071,0x0002
+line-mark-interval	record=9	byte=54	word=27	delta=113	flag=0x0002	unit-start=394	unit-end=507	prev=0x006b,0x0002,0x0041,0x0002	next=0x0041,0x0002,0x0071,0x0002,0x0041,0x0002
+line-mark-interval	record=10	byte=58	word=29	delta=65	flag=0x0002	unit-start=507	unit-end=572	prev=0x0041,0x0002,0x0071,0x0002	next=0x0071,0x0002,0x0041,0x0002,0x0071,0x0002
+line-mark-interval	record=11	byte=62	word=31	delta=113	flag=0x0002	unit-start=572	unit-end=685	prev=0x0071,0x0002,0x0041,0x0002	next=0x0041,0x0002,0x0071,0x0002,0x0043,0x0002
+line-mark-interval	record=12	byte=66	word=33	delta=65	flag=0x0002	unit-start=685	unit-end=750	prev=0x0041,0x0002,0x0071,0x0002	next=0x0071,0x0002,0x0043,0x0002,0x0001,0x0002
+line-mark-interval	record=13	byte=70	word=35	delta=113	flag=0x0002	unit-start=750	unit-end=863	prev=0x0071,0x0002,0x0041,0x0002	next=0x0043,0x0002,0x0001,0x0002,0x0001,0x0002
+line-mark-interval	record=14	byte=74	word=37	delta=67	flag=0x0002	unit-start=863	unit-end=930	prev=0x0041,0x0002,0x0071,0x0002	next=0x0001,0x0002,0x0001,0x0002,0x0018,0x0002
+line-mark-interval	record=15	byte=78	word=39	delta=1	flag=0x0002	unit-start=930	unit-end=931	prev=0x0071,0x0002,0x0043,0x0002	next=0x0001,0x0002,0x0018,0x0002,0x0011,0x0002
+line-mark-interval	record=16	byte=82	word=41	delta=1	flag=0x0002	unit-start=931	unit-end=932	prev=0x0043,0x0002,0x0001,0x0002	next=0x0018,0x0002,0x0011,0x0002,0x0014,0x0002
+line-mark-interval	record=17	byte=86	word=43	delta=24	flag=0x0002	unit-start=932	unit-end=956	prev=0x0001,0x0002,0x0001,0x0002	next=0x0011,0x0002,0x0014,0x0002,0x003c,0x0002
+line-mark-interval	record=18	byte=90	word=45	delta=17	flag=0x0002	unit-start=956	unit-end=973	prev=0x0001,0x0002,0x0018,0x0002	next=0x0014,0x0002,0x003c,0x0002,0x0072,0x0002
+line-mark-interval	record=19	byte=94	word=47	delta=20	flag=0x0002	unit-start=973	unit-end=993	prev=0x0018,0x0002,0x0011,0x0002	next=0x003c,0x0002,0x0072,0x0002,0x003a,0x0002
+line-mark-interval	record=20	byte=98	word=49	delta=60	flag=0x0002	unit-start=993	unit-end=1053	prev=0x0011,0x0002,0x0014,0x0002	next=0x0072,0x0002,0x003a,0x0002,0x0058,0x0002
+line-mark-interval	record=21	byte=102	word=51	delta=114	flag=0x0002	unit-start=1053	unit-end=1167	prev=0x0014,0x0002,0x003c,0x0002	next=0x003a,0x0002,0x0058,0x0002,0x0048,0x0002
+line-mark-interval	record=22	byte=106	word=53	delta=58	flag=0x0002	unit-start=1167	unit-end=1225	prev=0x003c,0x0002,0x0072,0x0002	next=0x0058,0x0002,0x0048,0x0002,0x0060,0x0002
+line-mark-interval	record=23	byte=110	word=55	delta=88	flag=0x0002	unit-start=1225	unit-end=1313	prev=0x0072,0x0002,0x003a,0x0002	next=0x0048,0x0002,0x0060,0x0002,0x0040,0x0002
+line-mark-interval	record=24	byte=114	word=57	delta=72	flag=0x0002	unit-start=1313	unit-end=1385	prev=0x003a,0x0002,0x0058,0x0002	next=0x0060,0x0002,0x0040,0x0002,0x005c,0x0002
+line-mark-interval	record=25	byte=118	word=59	delta=96	flag=0x0002	unit-start=1385	unit-end=1481	prev=0x0058,0x0002,0x0048,0x0002	next=0x0040,0x0002,0x005c,0x0002,0x0036,0x0002
+line-mark-interval	record=26	byte=122	word=61	delta=64	flag=0x0002	unit-start=1481	unit-end=1545	prev=0x0048,0x0002,0x0060,0x0002	next=0x005c,0x0002,0x0036,0x0002,0x0001,0x0002
+line-mark-interval	record=27	byte=126	word=63	delta=92	flag=0x0002	unit-start=1545	unit-end=1637	prev=0x0060,0x0002,0x0040,0x0002	next=0x0036,0x0002,0x0001,0x0002,0x0017,0x0002
+line-mark-interval	record=28	byte=130	word=65	delta=54	flag=0x0002	unit-start=1637	unit-end=1691	prev=0x0040,0x0002,0x005c,0x0002	next=0x0001,0x0002,0x0017,0x0002,0x003c,0x0002
+line-mark-interval	record=29	byte=134	word=67	delta=1	flag=0x0002	unit-start=1691	unit-end=1692	prev=0x005c,0x0002,0x0036,0x0002	next=0x0017,0x0002,0x003c,0x0002,0x006f,0x0002
+line-mark-interval	record=30	byte=138	word=69	delta=23	flag=0x0002	unit-start=1692	unit-end=1715	prev=0x0036,0x0002,0x0001,0x0002	next=0x003c,0x0002,0x006f,0x0002,0x003a,0x0002
+line-mark-interval	record=31	byte=142	word=71	delta=60	flag=0x0002	unit-start=1715	unit-end=1775	prev=0x0001,0x0002,0x0017,0x0002	next=0x006f,0x0002,0x003a,0x0002,0x005c,0x0002
+line-mark-interval	record=32	byte=146	word=73	delta=111	flag=0x0002	unit-start=1775	unit-end=1886	prev=0x0017,0x0002,0x003c,0x0002	next=0x003a,0x0002,0x005c,0x0002,0x0034,0x0002
+line-mark-interval	record=33	byte=150	word=75	delta=58	flag=0x0002	unit-start=1886	unit-end=1944	prev=0x003c,0x0002,0x006f,0x0002	next=0x005c,0x0002,0x0034,0x0002,0x005b,0x0002
+line-mark-interval	record=34	byte=154	word=77	delta=92	flag=0x0002	unit-start=1944	unit-end=2036	prev=0x006f,0x0002,0x003a,0x0002	next=0x0034,0x0002,0x005b,0x0002,0x0036,0x0002
+line-mark-interval	record=35	byte=158	word=79	delta=52	flag=0x0002	unit-start=2036	unit-end=2088	prev=0x003a,0x0002,0x005c,0x0002	next=0x005b,0x0002,0x0036,0x0002,0x0032,0x0002
+line-mark-interval	record=36	byte=162	word=81	delta=91	flag=0x0002	unit-start=2088	unit-end=2179	prev=0x005c,0x0002,0x0034,0x0002	next=0x0036,0x0002,0x0032,0x0002,0x0031,0x0002
+line-mark-interval	record=37	byte=166	word=83	delta=54	flag=0x0002	unit-start=2179	unit-end=2233	prev=0x0034,0x0002,0x005b,0x0002	next=0x0032,0x0002,0x0031,0x0002,0x000e,0x0000
+line-mark-interval	record=38	byte=170	word=85	delta=50	flag=0x0002	unit-start=2233	unit-end=2283	prev=0x005b,0x0002,0x0036,0x0002	next=0x0031,0x0002,0x000e,0x0000,0x0031,0x0082
+line-mark-interval	record=39	byte=174	word=87	delta=49	flag=0x0002	unit-start=2283	unit-end=2332	prev=0x0036,0x0002,0x0032,0x0002	next=0x000e,0x0000,0x0031,0x0082,0x0001,0x0003
+line-mark-interval	record=40	byte=178	word=89	delta=14	flag=0x0000	unit-start=2332	unit-end=2346	prev=0x0032,0x0002,0x0031,0x0002	next=0x0031,0x0082,0x0001,0x0003,0xd575,0x0002
+line-mark-interval	record=41	byte=182	word=91	delta=49	flag=0x0082	unit-start=2346	unit-end=2395	prev=0x0031,0x0002,0x000e,0x0000	next=0x0001,0x0003,0xd575,0x0002,0x0061,0x0002
+line-mark-interval	record=42	byte=186	word=93	delta=1	flag=0x0003	unit-start=2395	unit-end=2396	prev=0x000e,0x0000,0x0031,0x0082	next=0xd575,0x0002,0x0061,0x0002,0x003e,0x0002
+line-mark-interval-stop	record=43	byte=190	delta=-10891	flag=0x0002	reason=non-positive-delta
+
+## live page-layer-tree LineMark/source-gap/gap-carrier extraction
+{
+  "sourceGapToPageLineGapTransformAdmissionGates": [
+    {
+      "source": "sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate",
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "transformDomain": "source-unit-gap-to-page-mark-line-index-gap",
+      "canDecodeSourceTransform": false,
+      "tableFamilyTransformStable": false,
+      "tableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "transitionCount": 3,
+      "allTransitionsSamePageMarkEntry": true,
+      "bestCandidateTransformKind": "segment-offset-gap",
+      "bestCandidateMaxAbsDeltaUnits": 105,
+      "transformCandidateCount": 3,
+      "exactTransformCandidateCount": 0,
+      "bestCandidateTransitionCoverageCount": 3,
+      "bestCandidateUnitsPerPageLineGapSpread": 29.875,
+      "lowestSpreadCandidateTransformKind": "direct-source-range-gap",
+      "lowestSpreadUnitsPerPageLineGapSpread": 12.250,
+      "declinedTransformCandidates": [
+        {
+          "transformKind": "direct-source-range-gap",
+          "selected": false,
+          "stable": false,
+          "transitionCoverageCount": 3,
+          "maxAbsDeltaUnits": 182,
+          "unitsPerPageLineGapSpread": 12.250,
+          "declineReason": "higher-max-delta-than-selected-transform",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        },
+        {
+          "transformKind": "direct-row-source-start-gap",
+          "selected": false,
+          "stable": false,
+          "transitionCoverageCount": 3,
+          "maxAbsDeltaUnits": 295,
+          "unitsPerPageLineGapSpread": 42.125,
+          "declineReason": "higher-max-delta-than-selected-transform",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        }
+      ],
+      "declaredBlockers": [
+        "source-gap-to-page-line-gap-transform-not-stable",
+        "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "source-gap-to-page-line-gap-transform-undecoded"
+      ],
+      "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+    },
+    {
+      "source": "sourceOnlyPageYOriginDomainGate.sourceGapToPageLineGapTransformAdmissionGate",
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "transformDomain": "source-unit-gap-to-page-mark-line-index-gap",
+      "canDecodeSourceTransform": false,
+      "tableFamilyTransformStable": false,
+      "tableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "transitionCount": 3,
+      "allTransitionsSamePageMarkEntry": true,
+      "bestCandidateTransformKind": "segment-offset-gap",
+      "bestCandidateMaxAbsDeltaUnits": 105,
+      "transformCandidateCount": 3,
+      "exactTransformCandidateCount": 0,
+      "bestCandidateTransitionCoverageCount": 3,
+      "bestCandidateUnitsPerPageLineGapSpread": 29.875,
+      "lowestSpreadCandidateTransformKind": "direct-source-range-gap",
+      "lowestSpreadUnitsPerPageLineGapSpread": 12.250,
+      "declinedTransformCandidates": [
+        {
+          "transformKind": "direct-source-range-gap",
+          "selected": false,
+          "stable": false,
+          "transitionCoverageCount": 3,
+          "maxAbsDeltaUnits": 182,
+          "unitsPerPageLineGapSpread": 12.250,
+          "declineReason": "higher-max-delta-than-selected-transform",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        },
+        {
+          "transformKind": "direct-row-source-start-gap",
+          "selected": false,
+          "stable": false,
+          "transitionCoverageCount": 3,
+          "maxAbsDeltaUnits": 295,
+          "unitsPerPageLineGapSpread": 42.125,
+          "declineReason": "higher-max-delta-than-selected-transform",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        }
+      ],
+      "declaredBlockers": [
+        "source-gap-to-page-line-gap-transform-not-stable",
+        "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "source-gap-to-page-line-gap-transform-undecoded"
+      ],
+      "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+    },
+    {
+      "source": "sourceOnlyPageYRenderAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate",
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "transformDomain": "source-unit-gap-to-page-mark-line-index-gap",
+      "canDecodeSourceTransform": false,
+      "tableFamilyTransformStable": false,
+      "tableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "transitionCount": 3,
+      "allTransitionsSamePageMarkEntry": true,
+      "bestCandidateTransformKind": "segment-offset-gap",
+      "bestCandidateMaxAbsDeltaUnits": 105,
+      "transformCandidateCount": 3,
+      "exactTransformCandidateCount": 0,
+      "bestCandidateTransitionCoverageCount": 3,
+      "bestCandidateUnitsPerPageLineGapSpread": 29.875,
+      "lowestSpreadCandidateTransformKind": "direct-source-range-gap",
+      "lowestSpreadUnitsPerPageLineGapSpread": 12.250,
+      "declinedTransformCandidates": [
+        {
+          "transformKind": "direct-source-range-gap",
+          "selected": false,
+          "stable": false,
+          "transitionCoverageCount": 3,
+          "maxAbsDeltaUnits": 182,
+          "unitsPerPageLineGapSpread": 12.250,
+          "declineReason": "higher-max-delta-than-selected-transform",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        },
+        {
+          "transformKind": "direct-row-source-start-gap",
+          "selected": false,
+          "stable": false,
+          "transitionCoverageCount": 3,
+          "maxAbsDeltaUnits": 295,
+          "unitsPerPageLineGapSpread": 42.125,
+          "declineReason": "higher-max-delta-than-selected-transform",
+          "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+        }
+      ],
+      "declaredBlockers": [
+        "source-gap-to-page-line-gap-transform-not-stable",
+        "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "source-gap-to-page-line-gap-transform-undecoded"
+      ],
+      "renderPromotionBlockedReason": "source-gap-to-page-line-gap-transform-not-stable"
+    }
+  ],
+  "sourceOnlyPageYRenderAdmissionGates": [
+    {
+      "admissionReady": false,
+      "sourceLayoutCandidatePresent": true,
+      "pageOriginAuthority": "none",
+      "directLineMarkOriginAdmissible": false,
+      "lineMarkRowsExactAndContiguous": false,
+      "pageMarkAbsoluteYSlotSemanticsReady": false,
+      "pageMarkAbsoluteYSlotResidualPx": -723.913,
+      "sourceOnlySelectorSingleSupportFallback": false,
+      "selectedPostRowGapSpanComplete": false,
+      "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+      "sourceGapToPageLineGapTableFamilyTransformStable": false,
+      "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "blockedReasons": [
+        "direct-line-mark-page-origin-absent",
+        "page-origin-authority-not-renderable-line-mark-page-grid",
+        "line-mark-rows-not-exact-source-boundaries",
+        "cross-table-line-domain-not-page-space-origin",
+        "source-order-vs-subrecord-order-contradiction",
+        "cross-table-row-boundary-offset-transform-required",
+        "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+        "source-y-origin-selector-fragmented-by-table-not-render-admissible",
+        "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "decoded-line-mark-page-y-transform-missing"
+      ]
+    },
+    {
+      "admissionReady": false,
+      "sourceLayoutCandidatePresent": true,
+      "pageOriginAuthority": "fallbackTextAnchors",
+      "directLineMarkOriginAdmissible": false,
+      "lineMarkRowsExactAndContiguous": false,
+      "pageMarkAbsoluteYSlotSemanticsReady": false,
+      "pageMarkAbsoluteYSlotResidualPx": -148.740,
+      "sourceOnlySelectorSingleSupportFallback": true,
+      "selectedPostRowGapSpanComplete": false,
+      "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+      "sourceGapToPageLineGapTableFamilyTransformStable": false,
+      "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "blockedReasons": [
+        "direct-line-mark-page-origin-absent",
+        "line-mark-record-stride-to-page-y-transform-unproven",
+        "page-origin-authority-not-renderable-line-mark-page-grid",
+        "line-mark-rows-not-exact-source-boundaries",
+        "cross-table-line-domain-not-page-space-origin",
+        "source-order-vs-subrecord-order-contradiction",
+        "cross-table-row-boundary-offset-transform-required",
+        "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+        "source-y-origin-selector-single-support-fallback-not-render-admissible",
+        "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "decoded-line-mark-page-y-transform-missing"
+      ]
+    },
+    {
+      "admissionReady": false,
+      "sourceLayoutCandidatePresent": true,
+      "pageOriginAuthority": "fallbackTextAnchors",
+      "directLineMarkOriginAdmissible": false,
+      "lineMarkRowsExactAndContiguous": false,
+      "pageMarkAbsoluteYSlotSemanticsReady": false,
+      "pageMarkAbsoluteYSlotResidualPx": -49.548,
+      "sourceOnlySelectorSingleSupportFallback": true,
+      "selectedPostRowGapSpanComplete": true,
+      "selectedPostRowGapSpanOrderedUniqueCoverageComplete": true,
+      "sourceGapToPageLineGapTableFamilyTransformStable": false,
+      "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "blockedReasons": [
+        "direct-line-mark-page-origin-absent",
+        "line-mark-record-stride-to-page-y-transform-unproven",
+        "page-origin-authority-not-renderable-line-mark-page-grid",
+        "line-mark-rows-not-exact-source-boundaries",
+        "cross-table-line-domain-not-page-space-origin",
+        "selected-post-row-gap-spans-not-page-y-origin",
+        "source-order-vs-subrecord-order-contradiction",
+        "cross-table-row-boundary-offset-transform-required",
+        "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+        "source-y-origin-selector-single-support-fallback-not-render-admissible",
+        "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "decoded-line-mark-page-y-transform-missing"
+      ]
+    },
+    {
+      "admissionReady": false,
+      "sourceLayoutCandidatePresent": true,
+      "pageOriginAuthority": "lineMarkPageGridStrideRawRecordIndex",
+      "directLineMarkOriginAdmissible": false,
+      "lineMarkRowsExactAndContiguous": false,
+      "pageMarkAbsoluteYSlotSemanticsReady": false,
+      "pageMarkAbsoluteYSlotResidualPx": 107.539,
+      "sourceOnlySelectorSingleSupportFallback": true,
+      "selectedPostRowGapSpanComplete": true,
+      "selectedPostRowGapSpanOrderedUniqueCoverageComplete": false,
+      "sourceGapToPageLineGapTableFamilyTransformStable": false,
+      "sourceGapToPageLineGapTableFamilyTransformBlockedReason": "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+      "blockedReasons": [
+        "direct-line-mark-page-origin-absent",
+        "line-mark-record-stride-to-page-y-transform-unproven",
+        "page-origin-authority-not-renderable-line-mark-page-grid",
+        "line-mark-rows-not-exact-source-boundaries",
+        "cross-table-line-domain-not-page-space-origin",
+        "selected-post-row-gap-spans-not-page-y-origin",
+        "selected-post-row-gap-coverage-not-row-unique",
+        "source-order-vs-subrecord-order-contradiction",
+        "cross-table-row-boundary-offset-transform-required",
+        "line-domain-projection-disagrees-with-page-mark-absolute-y-slot",
+        "source-y-origin-selector-single-support-fallback-not-render-admissible",
+        "source-gap-to-page-line-gap-transform-unstable-across-table-family",
+        "decoded-line-mark-page-y-transform-missing"
+      ]
+    }
+  ],
+  "crossTableRowBoundaryOffsetConsistency": [
+    {
+      "currentTableCandidateIndex": 0,
+      "sparseTableCandidateIndex": 4,
+      "relatedTableCount": 4,
+      "tableCountWithPreviousRowSpanAlignment": 4,
+      "rowBoundaryOffsetCandidateUnits": [
+        -82,
+        -82,
+        -82,
+        -82
+      ],
+      "stableRowBoundaryOffsetCandidateUnits": -82,
+      "allRelatedTablesHaveOffsetCandidate": true,
+      "allOffsetsStable": true,
+      "allOffsetsRequireTransform": true,
+      "allOffsetNormalizedBoundariesExact": true,
+      "pageMarkEntryIndex": 0,
+      "combinedLineMarkRecordIndexes": [
+        7,
+        9,
+        11,
+        13,
+        21,
+        23,
+        25,
+        27,
+        32,
+        34,
+        36
+      ],
+      "combinedLineOffsetsMonotonic": true,
+      "sourceUnitToPageLineIndexFit": {
+        "fitBasis": "rowSourceStartUnits-to-lineMarkRecordIndexes",
+        "exactFit": false,
+        "maxAbsResidualRecordIndexes": 1.706,
+        "slopeRecordIndexesPerSourceUnit": 0.016,
+        "interceptRecordIndex": 1.220
+      },
+      "sourceUnitToPageLineIndexPiecewiseFit": {
+        "globalFitExact": false,
+        "allTableFitsExact": false,
+        "maxTableFitResidualRecordIndexes": 0.106,
+        "samePageMarkEntryContinuity": true,
+        "pieceCount": 4,
+        "transitionCount": 3,
+        "pieces": [
+          {
+            "tableCandidateIndex": 0,
+            "rowCount": 4,
+            "maxAbsResidualRecordIndexes": 0.027,
+            "exactFit": false,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 1,
+            "rowCount": 2,
+            "maxAbsResidualRecordIndexes": 0.000,
+            "exactFit": true,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 2,
+            "rowCount": 2,
+            "maxAbsResidualRecordIndexes": 0.000,
+            "exactFit": true,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 3,
+            "rowCount": 3,
+            "maxAbsResidualRecordIndexes": 0.106,
+            "exactFit": false,
+            "pageMarkRecordsWithinSingleEntry": true
+          }
+        ]
+      },
+      "renderPromotionBlockedReason": "row-boundary-offset-transform-does-not-decode-page-y-origin"
+    },
+    {
+      "currentTableCandidateIndex": 1,
+      "sparseTableCandidateIndex": 4,
+      "relatedTableCount": 4,
+      "tableCountWithPreviousRowSpanAlignment": 4,
+      "rowBoundaryOffsetCandidateUnits": [
+        -82,
+        -82,
+        -82,
+        -82
+      ],
+      "stableRowBoundaryOffsetCandidateUnits": -82,
+      "allRelatedTablesHaveOffsetCandidate": true,
+      "allOffsetsStable": true,
+      "allOffsetsRequireTransform": true,
+      "allOffsetNormalizedBoundariesExact": true,
+      "pageMarkEntryIndex": 0,
+      "combinedLineMarkRecordIndexes": [
+        7,
+        9,
+        11,
+        13,
+        21,
+        23,
+        25,
+        27,
+        32,
+        34,
+        36
+      ],
+      "combinedLineOffsetsMonotonic": true,
+      "sourceUnitToPageLineIndexFit": {
+        "fitBasis": "rowSourceStartUnits-to-lineMarkRecordIndexes",
+        "exactFit": false,
+        "maxAbsResidualRecordIndexes": 1.706,
+        "slopeRecordIndexesPerSourceUnit": 0.016,
+        "interceptRecordIndex": 1.220
+      },
+      "sourceUnitToPageLineIndexPiecewiseFit": {
+        "globalFitExact": false,
+        "allTableFitsExact": false,
+        "maxTableFitResidualRecordIndexes": 0.106,
+        "samePageMarkEntryContinuity": true,
+        "pieceCount": 4,
+        "transitionCount": 3,
+        "pieces": [
+          {
+            "tableCandidateIndex": 0,
+            "rowCount": 4,
+            "maxAbsResidualRecordIndexes": 0.027,
+            "exactFit": false,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 1,
+            "rowCount": 2,
+            "maxAbsResidualRecordIndexes": 0.000,
+            "exactFit": true,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 2,
+            "rowCount": 2,
+            "maxAbsResidualRecordIndexes": 0.000,
+            "exactFit": true,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 3,
+            "rowCount": 3,
+            "maxAbsResidualRecordIndexes": 0.106,
+            "exactFit": false,
+            "pageMarkRecordsWithinSingleEntry": true
+          }
+        ]
+      },
+      "renderPromotionBlockedReason": "row-boundary-offset-transform-does-not-decode-page-y-origin"
+    },
+    {
+      "currentTableCandidateIndex": 2,
+      "sparseTableCandidateIndex": 4,
+      "relatedTableCount": 4,
+      "tableCountWithPreviousRowSpanAlignment": 4,
+      "rowBoundaryOffsetCandidateUnits": [
+        -82,
+        -82,
+        -82,
+        -82
+      ],
+      "stableRowBoundaryOffsetCandidateUnits": -82,
+      "allRelatedTablesHaveOffsetCandidate": true,
+      "allOffsetsStable": true,
+      "allOffsetsRequireTransform": true,
+      "allOffsetNormalizedBoundariesExact": true,
+      "pageMarkEntryIndex": 0,
+      "combinedLineMarkRecordIndexes": [
+        7,
+        9,
+        11,
+        13,
+        21,
+        23,
+        25,
+        27,
+        32,
+        34,
+        36
+      ],
+      "combinedLineOffsetsMonotonic": true,
+      "sourceUnitToPageLineIndexFit": {
+        "fitBasis": "rowSourceStartUnits-to-lineMarkRecordIndexes",
+        "exactFit": false,
+        "maxAbsResidualRecordIndexes": 1.706,
+        "slopeRecordIndexesPerSourceUnit": 0.016,
+        "interceptRecordIndex": 1.220
+      },
+      "sourceUnitToPageLineIndexPiecewiseFit": {
+        "globalFitExact": false,
+        "allTableFitsExact": false,
+        "maxTableFitResidualRecordIndexes": 0.106,
+        "samePageMarkEntryContinuity": true,
+        "pieceCount": 4,
+        "transitionCount": 3,
+        "pieces": [
+          {
+            "tableCandidateIndex": 0,
+            "rowCount": 4,
+            "maxAbsResidualRecordIndexes": 0.027,
+            "exactFit": false,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 1,
+            "rowCount": 2,
+            "maxAbsResidualRecordIndexes": 0.000,
+            "exactFit": true,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 2,
+            "rowCount": 2,
+            "maxAbsResidualRecordIndexes": 0.000,
+            "exactFit": true,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 3,
+            "rowCount": 3,
+            "maxAbsResidualRecordIndexes": 0.106,
+            "exactFit": false,
+            "pageMarkRecordsWithinSingleEntry": true
+          }
+        ]
+      },
+      "renderPromotionBlockedReason": "row-boundary-offset-transform-does-not-decode-page-y-origin"
+    },
+    {
+      "currentTableCandidateIndex": 3,
+      "sparseTableCandidateIndex": 4,
+      "relatedTableCount": 4,
+      "tableCountWithPreviousRowSpanAlignment": 4,
+      "rowBoundaryOffsetCandidateUnits": [
+        -82,
+        -82,
+        -82,
+        -82
+      ],
+      "stableRowBoundaryOffsetCandidateUnits": -82,
+      "allRelatedTablesHaveOffsetCandidate": true,
+      "allOffsetsStable": true,
+      "allOffsetsRequireTransform": true,
+      "allOffsetNormalizedBoundariesExact": true,
+      "pageMarkEntryIndex": 0,
+      "combinedLineMarkRecordIndexes": [
+        7,
+        9,
+        11,
+        13,
+        21,
+        23,
+        25,
+        27,
+        32,
+        34,
+        36
+      ],
+      "combinedLineOffsetsMonotonic": true,
+      "sourceUnitToPageLineIndexFit": {
+        "fitBasis": "rowSourceStartUnits-to-lineMarkRecordIndexes",
+        "exactFit": false,
+        "maxAbsResidualRecordIndexes": 1.706,
+        "slopeRecordIndexesPerSourceUnit": 0.016,
+        "interceptRecordIndex": 1.220
+      },
+      "sourceUnitToPageLineIndexPiecewiseFit": {
+        "globalFitExact": false,
+        "allTableFitsExact": false,
+        "maxTableFitResidualRecordIndexes": 0.106,
+        "samePageMarkEntryContinuity": true,
+        "pieceCount": 4,
+        "transitionCount": 3,
+        "pieces": [
+          {
+            "tableCandidateIndex": 0,
+            "rowCount": 4,
+            "maxAbsResidualRecordIndexes": 0.027,
+            "exactFit": false,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 1,
+            "rowCount": 2,
+            "maxAbsResidualRecordIndexes": 0.000,
+            "exactFit": true,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 2,
+            "rowCount": 2,
+            "maxAbsResidualRecordIndexes": 0.000,
+            "exactFit": true,
+            "pageMarkRecordsWithinSingleEntry": true
+          },
+          {
+            "tableCandidateIndex": 3,
+            "rowCount": 3,
+            "maxAbsResidualRecordIndexes": 0.106,
+            "exactFit": false,
+            "pageMarkRecordsWithinSingleEntry": true
+          }
+        ]
+      },
+      "renderPromotionBlockedReason": "row-boundary-offset-transform-does-not-decode-page-y-origin"
+    }
+  ],
+  "lineMarkRowBoundaryAlignment": [
+    {
+      "family": null,
+      "rowCount": null,
+      "lineMarkRecordIndexes": null,
+      "uniformLineMarkRecordStride": null,
+      "lineMarkRecordStride": null,
+      "matchesStrideCandidateRecordIndexes": null,
+      "exactBoundaryMatchCount": null,
+      "exactBoundaryAligned": null,
+      "startResidualStable": null,
+      "endResidualStable": null,
+      "spanResidualStable": null,
+      "stableStartResidualUnits": null,
+      "stableEndResidualUnits": null,
+      "stableSpanResidualUnits": null,
+      "offsetNormalizedExactBoundaryMatchCount": null,
+      "offsetNormalizedExactBoundaryAligned": null,
+      "spanOnlyMatch": null
+    },
+    {
+      "family": null,
+      "rowCount": null,
+      "lineMarkRecordIndexes": null,
+      "uniformLineMarkRecordStride": null,
+      "lineMarkRecordStride": null,
+      "matchesStrideCandidateRecordIndexes": null,
+      "exactBoundaryMatchCount": null,
+      "exactBoundaryAligned": null,
+      "startResidualStable": null,
+      "endResidualStable": null,
+      "spanResidualStable": null,
+      "stableStartResidualUnits": null,
+      "stableEndResidualUnits": null,
+      "stableSpanResidualUnits": null,
+      "offsetNormalizedExactBoundaryMatchCount": null,
+      "offsetNormalizedExactBoundaryAligned": null,
+      "spanOnlyMatch": null
+    },
+    {
+      "family": null,
+      "rowCount": null,
+      "lineMarkRecordIndexes": null,
+      "uniformLineMarkRecordStride": null,
+      "lineMarkRecordStride": null,
+      "matchesStrideCandidateRecordIndexes": null,
+      "exactBoundaryMatchCount": null,
+      "exactBoundaryAligned": null,
+      "startResidualStable": null,
+      "endResidualStable": null,
+      "spanResidualStable": null,
+      "stableStartResidualUnits": null,
+      "stableEndResidualUnits": null,
+      "stableSpanResidualUnits": null,
+      "offsetNormalizedExactBoundaryMatchCount": null,
+      "offsetNormalizedExactBoundaryAligned": null,
+      "spanOnlyMatch": null
+    },
+    {
+      "family": null,
+      "rowCount": null,
+      "lineMarkRecordIndexes": null,
+      "uniformLineMarkRecordStride": null,
+      "lineMarkRecordStride": null,
+      "matchesStrideCandidateRecordIndexes": null,
+      "exactBoundaryMatchCount": null,
+      "exactBoundaryAligned": null,
+      "startResidualStable": null,
+      "endResidualStable": null,
+      "spanResidualStable": null,
+      "stableStartResidualUnits": null,
+      "stableEndResidualUnits": null,
+      "stableSpanResidualUnits": null,
+      "offsetNormalizedExactBoundaryMatchCount": null,
+      "offsetNormalizedExactBoundaryAligned": null,
+      "spanOnlyMatch": null
+    }
+  ],
+  "selectedSpacingRecordAlignment": [
+    {
+      "family": "selected-spacing-records",
+      "spanInterpretation": "selected-record-overlaps-row-and-matches-post-row-gap-span",
+      "rowCount": 4,
+      "lineMarkRecordIndexes": [
+        8,
+        10,
+        12,
+        14
+      ],
+      "uniformLineMarkRecordStride": true,
+      "lineMarkRecordStride": 2,
+      "matchesStrideCandidateRecordIndexes": false,
+      "exactBoundaryMatchCount": 0,
+      "exactBoundaryAligned": false,
+      "startResidualStable": false,
+      "endResidualStable": false,
+      "spanResidualStable": false,
+      "stableStartResidualUnits": null,
+      "stableEndResidualUnits": null,
+      "stableSpanResidualUnits": null,
+      "offsetNormalizedExactBoundaryMatchCount": 0,
+      "offsetNormalizedExactBoundaryAligned": false,
+      "spanOnlyMatch": false
+    },
+    {
+      "family": "selected-spacing-records",
+      "spanInterpretation": "selected-record-overlaps-row-and-matches-post-row-gap-span",
+      "rowCount": 2,
+      "lineMarkRecordIndexes": [
+        22,
+        24
+      ],
+      "uniformLineMarkRecordStride": true,
+      "lineMarkRecordStride": 2,
+      "matchesStrideCandidateRecordIndexes": true,
+      "exactBoundaryMatchCount": 0,
+      "exactBoundaryAligned": false,
+      "startResidualStable": false,
+      "endResidualStable": false,
+      "spanResidualStable": false,
+      "stableStartResidualUnits": null,
+      "stableEndResidualUnits": null,
+      "stableSpanResidualUnits": null,
+      "offsetNormalizedExactBoundaryMatchCount": 0,
+      "offsetNormalizedExactBoundaryAligned": false,
+      "spanOnlyMatch": false
+    },
+    {
+      "family": "selected-spacing-records",
+      "spanInterpretation": "selected-record-overlaps-row-and-matches-post-row-gap-span",
+      "rowCount": 2,
+      "lineMarkRecordIndexes": [
+        26,
+        28
+      ],
+      "uniformLineMarkRecordStride": true,
+      "lineMarkRecordStride": 2,
+      "matchesStrideCandidateRecordIndexes": true,
+      "exactBoundaryMatchCount": 0,
+      "exactBoundaryAligned": false,
+      "startResidualStable": false,
+      "endResidualStable": false,
+      "spanResidualStable": false,
+      "stableStartResidualUnits": null,
+      "stableEndResidualUnits": null,
+      "stableSpanResidualUnits": null,
+      "offsetNormalizedExactBoundaryMatchCount": 0,
+      "offsetNormalizedExactBoundaryAligned": false,
+      "spanOnlyMatch": false
+    },
+    {
+      "family": "selected-spacing-records",
+      "spanInterpretation": "selected-record-overlaps-row-and-matches-post-row-gap-span",
+      "rowCount": 3,
+      "lineMarkRecordIndexes": [
+        33,
+        35,
+        37
+      ],
+      "uniformLineMarkRecordStride": true,
+      "lineMarkRecordStride": 2,
+      "matchesStrideCandidateRecordIndexes": false,
+      "exactBoundaryMatchCount": 0,
+      "exactBoundaryAligned": false,
+      "startResidualStable": false,
+      "endResidualStable": false,
+      "spanResidualStable": false,
+      "stableStartResidualUnits": null,
+      "stableEndResidualUnits": null,
+      "stableSpanResidualUnits": null,
+      "offsetNormalizedExactBoundaryMatchCount": 0,
+      "offsetNormalizedExactBoundaryAligned": false,
+      "spanOnlyMatch": false
+    }
+  ],
+  "previousRowSpanRecordAlignment": [
+    {
+      "family": "previous-row-span-records",
+      "spanInterpretation": "previous-record-span-equals-compact-row-span",
+      "rowCount": 4,
+      "lineMarkRecordIndexes": [
+        7,
+        9,
+        11,
+        13
+      ],
+      "uniformLineMarkRecordStride": true,
+      "lineMarkRecordStride": 2,
+      "matchesStrideCandidateRecordIndexes": false,
+      "exactBoundaryMatchCount": 0,
+      "exactBoundaryAligned": false,
+      "startResidualStable": true,
+      "endResidualStable": true,
+      "spanResidualStable": true,
+      "stableStartResidualUnits": -82,
+      "stableEndResidualUnits": -82,
+      "stableSpanResidualUnits": 0,
+      "offsetNormalizedExactBoundaryMatchCount": 4,
+      "offsetNormalizedExactBoundaryAligned": true,
+      "spanOnlyMatch": true
+    },
+    {
+      "family": "previous-row-span-records",
+      "spanInterpretation": "previous-record-span-equals-compact-row-span",
+      "rowCount": 2,
+      "lineMarkRecordIndexes": [
+        21,
+        23
+      ],
+      "uniformLineMarkRecordStride": true,
+      "lineMarkRecordStride": 2,
+      "matchesStrideCandidateRecordIndexes": false,
+      "exactBoundaryMatchCount": 0,
+      "exactBoundaryAligned": false,
+      "startResidualStable": true,
+      "endResidualStable": true,
+      "spanResidualStable": true,
+      "stableStartResidualUnits": -82,
+      "stableEndResidualUnits": -82,
+      "stableSpanResidualUnits": 0,
+      "offsetNormalizedExactBoundaryMatchCount": 2,
+      "offsetNormalizedExactBoundaryAligned": true,
+      "spanOnlyMatch": true
+    },
+    {
+      "family": "previous-row-span-records",
+      "spanInterpretation": "previous-record-span-equals-compact-row-span",
+      "rowCount": 2,
+      "lineMarkRecordIndexes": [
+        25,
+        27
+      ],
+      "uniformLineMarkRecordStride": true,
+      "lineMarkRecordStride": 2,
+      "matchesStrideCandidateRecordIndexes": false,
+      "exactBoundaryMatchCount": 0,
+      "exactBoundaryAligned": false,
+      "startResidualStable": true,
+      "endResidualStable": true,
+      "spanResidualStable": true,
+      "stableStartResidualUnits": -82,
+      "stableEndResidualUnits": -82,
+      "stableSpanResidualUnits": 0,
+      "offsetNormalizedExactBoundaryMatchCount": 2,
+      "offsetNormalizedExactBoundaryAligned": true,
+      "spanOnlyMatch": true
+    },
+    {
+      "family": "previous-row-span-records",
+      "spanInterpretation": "previous-record-span-equals-compact-row-span",
+      "rowCount": 3,
+      "lineMarkRecordIndexes": [
+        32,
+        34,
+        36
+      ],
+      "uniformLineMarkRecordStride": true,
+      "lineMarkRecordStride": 2,
+      "matchesStrideCandidateRecordIndexes": true,
+      "exactBoundaryMatchCount": 0,
+      "exactBoundaryAligned": false,
+      "startResidualStable": true,
+      "endResidualStable": true,
+      "spanResidualStable": true,
+      "stableStartResidualUnits": -82,
+      "stableEndResidualUnits": -82,
+      "stableSpanResidualUnits": 0,
+      "offsetNormalizedExactBoundaryMatchCount": 3,
+      "offsetNormalizedExactBoundaryAligned": true,
+      "spanOnlyMatch": true
+    }
+  ],
+  "subrecordLineSpanReadiness": [
+    {
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "selectedSpacingRecordIndexes": [
+        8,
+        10,
+        12,
+        14
+      ],
+      "previousRowSpanRecordIndexes": [
+        7,
+        9,
+        11,
+        13
+      ],
+      "selectedPostRowGapSpanTargets": [
+        65,
+        65,
+        65,
+        67
+      ],
+      "previousRowSpanTargets": [
+        107,
+        113,
+        113,
+        113
+      ],
+      "compactRowSpanTargets": [
+        107,
+        113,
+        113,
+        113
+      ],
+      "candidateCount": 7,
+      "selectedPostRowGapSpanHitCount": 3,
+      "previousRowSpanHitCount": 0,
+      "compactRowSpanHitCount": 0,
+      "selectedPostRowGapSpanComplete": false,
+      "previousRowSpanComplete": false,
+      "compactRowSpanComplete": false,
+      "selectedPostRowGapSpanMaxAbsResidualUnits": 5,
+      "previousRowSpanMaxAbsResidualUnits": 51,
+      "compactRowSpanMaxAbsResidualUnits": 51,
+      "pageYTransformDecoded": false,
+      "selectedPostRowGapSpanOrderedCoverage": {
+        "policy": "one-tolerance-hit-with-unique-subrecord-candidate-per-line-mark-record",
+        "matchedRecordIndexes": [
+          8,
+          10,
+          12
+        ],
+        "matchedCandidateByteOffsets": [
+          414,
+          414,
+          414
+        ],
+        "uniqueCandidateByteOffsets": [
+          414
+        ],
+        "duplicateCandidateByteOffsets": [
+          414
+        ],
+        "matchedRecordCount": 3,
+        "uniqueCandidateCount": 1,
+        "duplicateCandidateReuseCount": 1,
+        "orderedUniqueCoverageComplete": false
+      },
+      "previousRowSpanOrderedCoverage": {
+        "policy": "one-tolerance-hit-with-unique-subrecord-candidate-per-line-mark-record",
+        "matchedRecordIndexes": [],
+        "matchedCandidateByteOffsets": [],
+        "uniqueCandidateByteOffsets": [],
+        "duplicateCandidateByteOffsets": [],
+        "matchedRecordCount": 0,
+        "uniqueCandidateCount": 0,
+        "duplicateCandidateReuseCount": 0,
+        "orderedUniqueCoverageComplete": false
+      },
+      "subrecordSpanRoleGate": {
+        "selectionReady": false,
+        "dominantSpanRole": "selected-post-row-gap",
+        "selectedPostRowGapSpanComplete": false,
+        "rowSpanComplete": false,
+        "lineSpanRoleDecoded": false,
+        "pageYTransformDecoded": false,
+        "blockedReasons": [
+          "subrecord-spans-prefer-post-row-gap-family",
+          "selected-post-row-gap-span-incomplete",
+          "row-span-family-not-covered-by-subrecords",
+          "post-row-gap-match-is-not-visible-row-height",
+          "subrecord-span-role-semantics-unproven",
+          "page-y-origin-transform-undecoded"
+        ],
+        "renderPromotionBlockedReason": "page-mark-subrecord-spans-match-post-row-gaps-not-row-heights"
+      },
+      "renderPromotionBlockedReason": "subrecord-line-spans-match-line-ranges-not-page-y-origin"
+    },
+    {
+      "diagnosticOnly": true,
+      "sourceBacked": true,
+      "referenceBacked": false,
+      "decoded": false,
+      "geometryDecoded": false,
+      "placementDerived": false,
+      "selectedSpacingRecordIndexes": [
+        33,
+        35,
+        37
+      ],
+      "previousRowSpanRecordIndexes": [
+        32,
+        34,
+        36
+      ],
+      "selectedPostRowGapSpanTargets": [
+        58,
+        52,
+        54
+      ],
+      "previousRowSpanTargets": [
+        111,
+        92,
+        91
+      ],
+      "compactRowSpanTargets": [
+        111,
+        92,
+        91
+      ],
+      "candidateCount": 7,
+      "selectedPostRowGapSpanHitCount": 3,
+      "previousRowSpanHitCount": 0,
+      "compactRowSpanHitCount": 0,
+      "selectedPostRowGapSpanComplete": true,
+      "previousRowSpanComplete": false,
+      "compactRowSpanComplete": false,
+      "selectedPostRowGapSpanMaxAbsResidualUnits": 3,
+      "previousRowSpanMaxAbsResidualUnits": 49,
+      "compactRowSpanMaxAbsResidualUnits": 49,
+      "pageYTransformDecoded": false,
+      "selectedPostRowGapSpanOrderedCoverage": {
+        "policy": "one-tolerance-hit-with-unique-subrecord-candidate-per-line-mark-record",
+        "matchedRecordIndexes": [
+          33,
+          35,
+          37
+        ],
+        "matchedCandidateByteOffsets": [
+          174,
+          734,
+          174
+        ],
+        "uniqueCandidateByteOffsets": [
+          174,
+          734
+        ],
+        "duplicateCandidateByteOffsets": [
+          174
+        ],
+        "matchedRecordCount": 3,
+        "uniqueCandidateCount": 2,
+        "duplicateCandidateReuseCount": 1,
+        "orderedUniqueCoverageComplete": false
+      },
+      "previousRowSpanOrderedCoverage": {
+        "policy": "one-tolerance-hit-with-unique-subrecord-candidate-per-line-mark-record",
+        "matchedRecordIndexes": [],
+        "matchedCandidateByteOffsets": [],
+        "uniqueCandidateByteOffsets": [],
+        "duplicateCandidateByteOffsets": [],
+        "matchedRecordCount": 0,
+        "uniqueCandidateCount": 0,
+        "duplicateCandidateReuseCount": 0,
+        "orderedUniqueCoverageComplete": false
+      },
+      "subrecordSpanRoleGate": {
+        "selectionReady": false,
+        "dominantSpanRole": "selected-post-row-gap",
+        "selectedPostRowGapSpanComplete": true,
+        "rowSpanComplete": false,
+        "lineSpanRoleDecoded": false,
+        "pageYTransformDecoded": false,
+        "blockedReasons": [
+          "subrecord-spans-prefer-post-row-gap-family",
+          "row-span-family-not-covered-by-subrecords",
+          "post-row-gap-match-is-not-visible-row-height",
+          "subrecord-span-role-semantics-unproven",
+          "page-y-origin-transform-undecoded"
+        ],
+        "renderPromotionBlockedReason": "page-mark-subrecord-spans-match-post-row-gaps-not-row-heights"
+      },
+      "renderPromotionBlockedReason": "subrecord-line-spans-match-line-ranges-not-page-y-origin"
+    }
+  ],
+  "conclusion": "No exact source-gap-to-page-line transform exists in current diagnostics: exactTransformCandidateCount=0 and best max abs delta remains non-zero. LineMark/previous-row-span records show stable source offsets, but require a transform; PageMark subrecords prefer selected post-row gaps, do not cover row spans, and keep pageYTransformDecoded=false."
+}
+
+## cleanup receipt
+cargo run exited; no tmux/browser/ports/temp dirs/subagents spawned
