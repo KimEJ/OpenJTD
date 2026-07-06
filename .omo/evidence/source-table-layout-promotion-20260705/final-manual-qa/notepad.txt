@@ -1,0 +1,7 @@
+tier: LIGHT
+justification: independent read-only manual QA of existing artifacts and targeted CLI/PDF checks; no product code edits.
+skills:
+- ultrawork: activated by session hook; evidence-bound QA discipline.
+- manual QA executor role: user/developer contract; real scenarios and artifact matrix.
+
+self_review: Evidence artifacts checked non-empty; C001/C002/C003 claims independently parsed; targeted cargo regression rerun passed; no product files edited.

@@ -1,0 +1,5 @@
+Adversarial A001R surface=source/diff grep for forbidden production hardcoding
+Invocation: git diff -- rjtd/crates/rjtd-cli/src/main.rs rjtd/crates/rjtd-model/src/lib.rs | rg "^\+.*(PAGE 01|ichitaro-source-y-probe|pdf-output|reference_pdf|reference PDF|page01)"
+PASS observable: no added production diff lines hardcode PAGE01 sample names, corpus paths, pdf-output paths, or reference PDF filenames.
+rg_exit=1
+VERDICT PASS

@@ -1,0 +1,884 @@
+C002 render-admission RED/blocker evidence
+Objective: prove whether source-derived 3x2 table evidence may be promoted to renderable table projection.
+Promotion RED assertion used here: every selected PAGE01 layer tree should have projectionKind=tableProjection, pageSpaceSolver.renderPromoted=true, and sourceDerivedLayoutReadiness.sourceDerivedLayoutRenderable=true.
+Expected for current safe blocker: RED assertion fails, while diagnostic table candidate remains present with 6/6 source placement matches.
+
+## case: baseline
+promotion_RED_assertion_passed=False
+layer_fields=
+{
+  "candidateRenderBlocker": "page-space-origin-and-row-baseline-unproven",
+  "cellCountCandidate": 6,
+  "colCountCandidate": 3,
+  "decoded": false,
+  "decodedSourcePlacementEvidence": true,
+  "decodedSourcePlacementMatchCount": 6,
+  "decodedSourcePlacementRequiredCellCount": 6,
+  "geometryDecoded": false,
+  "horizontalPromotionReady": false,
+  "horizontalSolverReady": true,
+  "lineMarkPageOriginPresent": false,
+  "lineMarkPageOriginStridePresent": true,
+  "lineMarkRecordIndexes": [
+    2,
+    4
+  ],
+  "lineMarkRecordStride": 2,
+  "lineMarkRowsExactAndContiguous": false,
+  "lineMarkStrideBlocker": "line-mark-record-stride-to-page-y-transform-unproven",
+  "matchedCellExtentUnits": [
+    24,
+    50,
+    74
+  ],
+  "matchedCellOffsetUnits": [
+    2,
+    26,
+    52
+  ],
+  "pageMarkAbsoluteYSlotBlockedReason": "page-mark-absolute-y-slot-absent",
+  "pageMarkAbsoluteYSlotSemanticsReady": false,
+  "pageOriginAuthority": "fallbackTextAnchors",
+  "pageSpaceSolverBlocker": "page-space-origin-and-row-baseline-unproven",
+  "pageSpaceSolverStage": "blocked-y-origin-transform",
+  "placementAuthority": "documentTextLineHeaders",
+  "projectionKind": "diagnosticProjection",
+  "referenceBacked": false,
+  "referenceReplacementBlockedReasons": [
+    "table-horizontal-page-space-transform-incomplete",
+    "source-page-y-transform-not-decoded",
+    "source-derived-layout-not-renderable"
+  ],
+  "referenceReplacementReady": false,
+  "renderPromoted": false,
+  "renderPromotionAuthority": null,
+  "rowCount": 2,
+  "rowHeightSolverReady": true,
+  "sourceDerivedLayoutBlockedReason": "page-space-origin-and-row-baseline-unproven",
+  "sourceDerivedLayoutRenderBlocker": "source-derived-layout-not-renderable",
+  "sourceDerivedLayoutRenderable": false,
+  "sourceFrameAdmissionBlocker": "table-horizontal-page-space-transform-incomplete",
+  "sourceGapTransformBlocker": "source-gap-to-page-line-gap-transform-evidence-absent",
+  "sourceGapTransformCanDecode": false,
+  "sourceGapTransformStable": false,
+  "sourceLayoutEvidencePresent": true,
+  "sourceOnlyAxisAdmissionReady": false,
+  "sourcePageYPromotionReady": false,
+  "table_bbox": {
+    "height": 42.0,
+    "width": 296.203,
+    "x": 72.0,
+    "y": 81.3
+  },
+  "yOriginSolverReady": false,
+  "ySelectorAdmissionBlockedReason": "source-y-origin-selector-single-support-fallback-not-render-admissible",
+  "ySelectorSupportBlockedReasons": [
+    "stride-origin-needs-page-origin-rule"
+  ]
+}
+svg_counts=
+{
+  "<line": 0,
+  "<path": 0,
+  "<rect": 1,
+  "<text": 6,
+  "bytes": 2840,
+  "rjtd-column-grid-candidate": 0,
+  "tableGridCandidate": 0
+}
+sample_pdf_summary=
+{
+  "bytes": 8489,
+  "char_count": 45,
+  "curve_count": 0,
+  "first_chars": [
+    {
+      "text": "-",
+      "top": 781.69,
+      "x0": 287.88
+    },
+    {
+      "text": "1",
+      "top": 781.69,
+      "x0": 295.68
+    },
+    {
+      "text": "-",
+      "top": 781.69,
+      "x0": 303.12
+    },
+    {
+      "text": "P",
+      "top": 86.29,
+      "x0": 85.08
+    },
+    {
+      "text": "A",
+      "top": 86.29,
+      "x0": 90.96
+    },
+    {
+      "text": "G",
+      "top": 86.29,
+      "x0": 97.8
+    },
+    {
+      "text": "E",
+      "top": 86.29,
+      "x0": 105.0
+    },
+    {
+      "text": "0",
+      "top": 86.29,
+      "x0": 113.88
+    }
+  ],
+  "first_words": [
+    {
+      "bottom": 96.73,
+      "text": "PAGE",
+      "top": 86.29,
+      "x0": 85.08,
+      "x1": 110.38
+    },
+    {
+      "bottom": 96.73,
+      "text": "01",
+      "top": 86.29,
+      "x0": 113.88,
+      "x1": 123.49
+    },
+    {
+      "bottom": 130.33,
+      "text": "R01C01",
+      "top": 119.89,
+      "x0": 90.36,
+      "x1": 122.29
+    },
+    {
+      "bottom": 130.33,
+      "text": "R01C02",
+      "top": 119.89,
+      "x0": 154.08,
+      "x1": 187.78
+    },
+    {
+      "bottom": 130.33,
+      "text": "R01C03",
+      "top": 119.89,
+      "x0": 223.2,
+      "x1": 256.9
+    },
+    {
+      "bottom": 163.93,
+      "text": "R02C01",
+      "top": 153.49,
+      "x0": 90.36,
+      "x1": 123.97
+    },
+    {
+      "bottom": 163.93,
+      "text": "R02C02",
+      "top": 153.49,
+      "x0": 154.08,
+      "x1": 189.46
+    },
+    {
+      "bottom": 163.93,
+      "text": "R02C03",
+      "top": 153.49,
+      "x0": 223.2,
+      "x1": 258.58
+    }
+  ],
+  "line_count": 0,
+  "page_count": 1,
+  "rect_count": 15,
+  "word_count": 11
+}
+rjtd_pdf_summary=
+{
+  "bytes": 7950,
+  "char_count": 36,
+  "curve_count": 0,
+  "first_chars": [
+    {
+      "text": "R",
+      "top": 55.4,
+      "x0": 54.0
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 58.99
+    },
+    {
+      "text": "1",
+      "top": 55.4,
+      "x0": 63.97
+    },
+    {
+      "text": "C",
+      "top": 55.4,
+      "x0": 68.96
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 73.95
+    },
+    {
+      "text": "1",
+      "top": 55.4,
+      "x0": 78.94
+    },
+    {
+      "text": "R",
+      "top": 55.4,
+      "x0": 89.7
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 94.69
+    }
+  ],
+  "first_words": [
+    {
+      "bottom": 65.38,
+      "text": "R01C01",
+      "top": 55.4,
+      "x0": 54.0,
+      "x1": 83.92
+    },
+    {
+      "bottom": 65.38,
+      "text": "R01C02",
+      "top": 55.4,
+      "x0": 89.7,
+      "x1": 119.62
+    },
+    {
+      "bottom": 65.38,
+      "text": "R01C03",
+      "top": 55.4,
+      "x0": 125.32,
+      "x1": 155.25
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C01",
+      "top": 55.4,
+      "x0": 161.02,
+      "x1": 190.95
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C02",
+      "top": 55.4,
+      "x0": 196.65,
+      "x1": 226.57
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C03",
+      "top": 55.4,
+      "x0": 232.35,
+      "x1": 262.27
+    }
+  ],
+  "line_count": 0,
+  "page_count": 1,
+  "rect_count": 2,
+  "word_count": 6
+}
+
+## case: right4
+promotion_RED_assertion_passed=False
+layer_fields=
+{
+  "candidateRenderBlocker": "page-space-origin-and-row-baseline-unproven",
+  "cellCountCandidate": 6,
+  "colCountCandidate": 3,
+  "decoded": false,
+  "decodedSourcePlacementEvidence": true,
+  "decodedSourcePlacementMatchCount": 6,
+  "decodedSourcePlacementRequiredCellCount": 6,
+  "geometryDecoded": false,
+  "horizontalPromotionReady": false,
+  "horizontalSolverReady": true,
+  "lineMarkPageOriginPresent": false,
+  "lineMarkPageOriginStridePresent": true,
+  "lineMarkRecordIndexes": [
+    2,
+    4
+  ],
+  "lineMarkRecordStride": 2,
+  "lineMarkRowsExactAndContiguous": false,
+  "lineMarkStrideBlocker": "line-mark-record-stride-to-page-y-transform-unproven",
+  "matchedCellExtentUnits": [
+    8,
+    32,
+    58
+  ],
+  "matchedCellOffsetUnits": [
+    0,
+    10,
+    34
+  ],
+  "pageMarkAbsoluteYSlotBlockedReason": "page-mark-absolute-y-slot-absent",
+  "pageMarkAbsoluteYSlotSemanticsReady": false,
+  "pageOriginAuthority": "fallbackTextAnchors",
+  "pageSpaceSolverBlocker": "page-space-origin-and-row-baseline-unproven",
+  "pageSpaceSolverStage": "blocked-y-origin-transform",
+  "placementAuthority": "documentTextLineHeaders",
+  "projectionKind": "diagnosticProjection",
+  "referenceBacked": false,
+  "referenceReplacementBlockedReasons": [
+    "table-horizontal-page-space-transform-incomplete",
+    "source-page-y-transform-not-decoded",
+    "source-derived-layout-not-renderable"
+  ],
+  "referenceReplacementReady": false,
+  "renderPromoted": false,
+  "renderPromotionAuthority": null,
+  "rowCount": 2,
+  "rowHeightSolverReady": true,
+  "sourceDerivedLayoutBlockedReason": "page-space-origin-and-row-baseline-unproven",
+  "sourceDerivedLayoutRenderBlocker": "source-derived-layout-not-renderable",
+  "sourceDerivedLayoutRenderable": false,
+  "sourceFrameAdmissionBlocker": "table-horizontal-page-space-transform-incomplete",
+  "sourceGapTransformBlocker": "source-gap-to-page-line-gap-transform-evidence-absent",
+  "sourceGapTransformCanDecode": false,
+  "sourceGapTransformStable": false,
+  "sourceLayoutEvidencePresent": true,
+  "sourceOnlyAxisAdmissionReady": false,
+  "sourcePageYPromotionReady": false,
+  "table_bbox": {
+    "height": 42.0,
+    "width": 235.625,
+    "x": 72.0,
+    "y": 81.3
+  },
+  "yOriginSolverReady": false,
+  "ySelectorAdmissionBlockedReason": "source-y-origin-selector-single-support-fallback-not-render-admissible",
+  "ySelectorSupportBlockedReasons": [
+    "stride-origin-needs-page-origin-rule"
+  ]
+}
+svg_counts=
+{
+  "<line": 0,
+  "<path": 0,
+  "<rect": 1,
+  "<text": 6,
+  "bytes": 2840,
+  "rjtd-column-grid-candidate": 0,
+  "tableGridCandidate": 0
+}
+sample_pdf_summary=
+{
+  "bytes": 8418,
+  "char_count": 42,
+  "curve_count": 0,
+  "first_chars": [
+    {
+      "text": "P",
+      "top": 86.29,
+      "x0": 85.08
+    },
+    {
+      "text": "A",
+      "top": 86.29,
+      "x0": 90.96
+    },
+    {
+      "text": "G",
+      "top": 86.29,
+      "x0": 97.8
+    },
+    {
+      "text": "E",
+      "top": 86.29,
+      "x0": 105.0
+    },
+    {
+      "text": "0",
+      "top": 86.29,
+      "x0": 113.88
+    },
+    {
+      "text": "1",
+      "top": 86.29,
+      "x0": 119.52
+    },
+    {
+      "text": "R",
+      "top": 119.89,
+      "x0": 111.6
+    },
+    {
+      "text": "0",
+      "top": 119.89,
+      "x0": 117.72
+    }
+  ],
+  "first_words": [
+    {
+      "bottom": 96.73,
+      "text": "PAGE",
+      "top": 86.29,
+      "x0": 85.08,
+      "x1": 110.38
+    },
+    {
+      "bottom": 96.73,
+      "text": "01",
+      "top": 86.29,
+      "x0": 113.88,
+      "x1": 123.49
+    },
+    {
+      "bottom": 130.33,
+      "text": "R01C01",
+      "top": 119.89,
+      "x0": 111.6,
+      "x1": 143.65
+    },
+    {
+      "bottom": 130.33,
+      "text": "R01C02",
+      "top": 119.89,
+      "x0": 175.32,
+      "x1": 209.02
+    },
+    {
+      "bottom": 130.33,
+      "text": "R01C03",
+      "top": 119.89,
+      "x0": 244.44,
+      "x1": 278.14
+    },
+    {
+      "bottom": 163.93,
+      "text": "R02C01",
+      "top": 153.49,
+      "x0": 111.6,
+      "x1": 145.33
+    },
+    {
+      "bottom": 163.93,
+      "text": "R02C02",
+      "top": 153.49,
+      "x0": 175.32,
+      "x1": 210.7
+    },
+    {
+      "bottom": 163.93,
+      "text": "R02C03",
+      "top": 153.49,
+      "x0": 244.44,
+      "x1": 279.82
+    }
+  ],
+  "line_count": 0,
+  "page_count": 1,
+  "rect_count": 15,
+  "word_count": 8
+}
+rjtd_pdf_summary=
+{
+  "bytes": 7950,
+  "char_count": 36,
+  "curve_count": 0,
+  "first_chars": [
+    {
+      "text": "R",
+      "top": 55.4,
+      "x0": 54.0
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 58.99
+    },
+    {
+      "text": "1",
+      "top": 55.4,
+      "x0": 63.97
+    },
+    {
+      "text": "C",
+      "top": 55.4,
+      "x0": 68.96
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 73.95
+    },
+    {
+      "text": "1",
+      "top": 55.4,
+      "x0": 78.94
+    },
+    {
+      "text": "R",
+      "top": 55.4,
+      "x0": 89.7
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 94.69
+    }
+  ],
+  "first_words": [
+    {
+      "bottom": 65.38,
+      "text": "R01C01",
+      "top": 55.4,
+      "x0": 54.0,
+      "x1": 83.92
+    },
+    {
+      "bottom": 65.38,
+      "text": "R01C02",
+      "top": 55.4,
+      "x0": 89.7,
+      "x1": 119.62
+    },
+    {
+      "bottom": 65.38,
+      "text": "R01C03",
+      "top": 55.4,
+      "x0": 125.32,
+      "x1": 155.25
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C01",
+      "top": 55.4,
+      "x0": 161.02,
+      "x1": 190.95
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C02",
+      "top": 55.4,
+      "x0": 196.65,
+      "x1": 226.57
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C03",
+      "top": 55.4,
+      "x0": 232.35,
+      "x1": 262.27
+    }
+  ],
+  "line_count": 0,
+  "page_count": 1,
+  "rect_count": 2,
+  "word_count": 6
+}
+
+## case: down4
+promotion_RED_assertion_passed=False
+layer_fields=
+{
+  "candidateRenderBlocker": "page-space-origin-and-row-baseline-unproven",
+  "cellCountCandidate": 6,
+  "colCountCandidate": 3,
+  "decoded": false,
+  "decodedSourcePlacementEvidence": true,
+  "decodedSourcePlacementMatchCount": 6,
+  "decodedSourcePlacementRequiredCellCount": 6,
+  "geometryDecoded": false,
+  "horizontalPromotionReady": false,
+  "horizontalSolverReady": true,
+  "lineMarkPageOriginPresent": false,
+  "lineMarkPageOriginStridePresent": true,
+  "lineMarkRecordIndexes": [
+    6,
+    8
+  ],
+  "lineMarkRecordStride": 2,
+  "lineMarkRowsExactAndContiguous": false,
+  "lineMarkStrideBlocker": "line-mark-record-stride-to-page-y-transform-unproven",
+  "matchedCellExtentUnits": [
+    24,
+    50,
+    74
+  ],
+  "matchedCellOffsetUnits": [
+    2,
+    26,
+    52
+  ],
+  "pageMarkAbsoluteYSlotBlockedReason": "page-mark-absolute-y-slot-absent",
+  "pageMarkAbsoluteYSlotSemanticsReady": false,
+  "pageOriginAuthority": "fallbackTextAnchors",
+  "pageSpaceSolverBlocker": "page-space-origin-and-row-baseline-unproven",
+  "pageSpaceSolverStage": "blocked-y-origin-transform",
+  "placementAuthority": "documentTextLineHeaders",
+  "projectionKind": "diagnosticProjection",
+  "referenceBacked": false,
+  "referenceReplacementBlockedReasons": [
+    "table-horizontal-page-space-transform-incomplete",
+    "source-page-y-transform-not-decoded",
+    "source-derived-layout-not-renderable"
+  ],
+  "referenceReplacementReady": false,
+  "renderPromoted": false,
+  "renderPromotionAuthority": null,
+  "rowCount": 2,
+  "rowHeightSolverReady": true,
+  "sourceDerivedLayoutBlockedReason": "page-space-origin-and-row-baseline-unproven",
+  "sourceDerivedLayoutRenderBlocker": "source-derived-layout-not-renderable",
+  "sourceDerivedLayoutRenderable": false,
+  "sourceFrameAdmissionBlocker": "table-horizontal-page-space-transform-incomplete",
+  "sourceGapTransformBlocker": "source-gap-to-page-line-gap-transform-evidence-absent",
+  "sourceGapTransformCanDecode": false,
+  "sourceGapTransformStable": false,
+  "sourceLayoutEvidencePresent": true,
+  "sourceOnlyAxisAdmissionReady": false,
+  "sourcePageYPromotionReady": false,
+  "table_bbox": {
+    "height": 42.0,
+    "width": 296.203,
+    "x": 72.0,
+    "y": 81.3
+  },
+  "yOriginSolverReady": false,
+  "ySelectorAdmissionBlockedReason": "source-y-origin-selector-single-support-fallback-not-render-admissible",
+  "ySelectorSupportBlockedReasons": [
+    "stride-origin-needs-page-origin-rule"
+  ]
+}
+svg_counts=
+{
+  "<line": 0,
+  "<path": 0,
+  "<rect": 1,
+  "<text": 6,
+  "bytes": 2840,
+  "rjtd-column-grid-candidate": 0,
+  "tableGridCandidate": 0
+}
+sample_pdf_summary=
+{
+  "bytes": 8401,
+  "char_count": 42,
+  "curve_count": 0,
+  "first_chars": [
+    {
+      "text": "P",
+      "top": 86.29,
+      "x0": 85.08
+    },
+    {
+      "text": "A",
+      "top": 86.29,
+      "x0": 90.96
+    },
+    {
+      "text": "G",
+      "top": 86.29,
+      "x0": 97.8
+    },
+    {
+      "text": "E",
+      "top": 86.29,
+      "x0": 105.0
+    },
+    {
+      "text": "0",
+      "top": 86.29,
+      "x0": 113.88
+    },
+    {
+      "text": "1",
+      "top": 86.29,
+      "x0": 119.52
+    },
+    {
+      "text": "R",
+      "top": 186.97,
+      "x0": 90.36
+    },
+    {
+      "text": "0",
+      "top": 186.97,
+      "x0": 96.48
+    }
+  ],
+  "first_words": [
+    {
+      "bottom": 96.73,
+      "text": "PAGE",
+      "top": 86.29,
+      "x0": 85.08,
+      "x1": 110.38
+    },
+    {
+      "bottom": 96.73,
+      "text": "01",
+      "top": 86.29,
+      "x0": 113.88,
+      "x1": 123.49
+    },
+    {
+      "bottom": 197.41,
+      "text": "R01C01",
+      "top": 186.97,
+      "x0": 90.36,
+      "x1": 122.29
+    },
+    {
+      "bottom": 197.41,
+      "text": "R01C02",
+      "top": 186.97,
+      "x0": 154.08,
+      "x1": 187.78
+    },
+    {
+      "bottom": 197.41,
+      "text": "R01C03",
+      "top": 186.97,
+      "x0": 223.2,
+      "x1": 256.9
+    },
+    {
+      "bottom": 231.01,
+      "text": "R02C01",
+      "top": 220.57,
+      "x0": 90.36,
+      "x1": 123.97
+    },
+    {
+      "bottom": 231.01,
+      "text": "R02C02",
+      "top": 220.57,
+      "x0": 154.08,
+      "x1": 189.46
+    },
+    {
+      "bottom": 231.01,
+      "text": "R02C03",
+      "top": 220.57,
+      "x0": 223.2,
+      "x1": 258.58
+    }
+  ],
+  "line_count": 0,
+  "page_count": 1,
+  "rect_count": 15,
+  "word_count": 8
+}
+rjtd_pdf_summary=
+{
+  "bytes": 7950,
+  "char_count": 36,
+  "curve_count": 0,
+  "first_chars": [
+    {
+      "text": "R",
+      "top": 55.4,
+      "x0": 54.0
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 58.99
+    },
+    {
+      "text": "1",
+      "top": 55.4,
+      "x0": 63.97
+    },
+    {
+      "text": "C",
+      "top": 55.4,
+      "x0": 68.96
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 73.95
+    },
+    {
+      "text": "1",
+      "top": 55.4,
+      "x0": 78.94
+    },
+    {
+      "text": "R",
+      "top": 55.4,
+      "x0": 89.7
+    },
+    {
+      "text": "0",
+      "top": 55.4,
+      "x0": 94.69
+    }
+  ],
+  "first_words": [
+    {
+      "bottom": 65.38,
+      "text": "R01C01",
+      "top": 55.4,
+      "x0": 54.0,
+      "x1": 83.92
+    },
+    {
+      "bottom": 65.38,
+      "text": "R01C02",
+      "top": 55.4,
+      "x0": 89.7,
+      "x1": 119.62
+    },
+    {
+      "bottom": 65.38,
+      "text": "R01C03",
+      "top": 55.4,
+      "x0": 125.32,
+      "x1": 155.25
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C01",
+      "top": 55.4,
+      "x0": 161.02,
+      "x1": 190.95
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C02",
+      "top": 55.4,
+      "x0": 196.65,
+      "x1": 226.57
+    },
+    {
+      "bottom": 65.38,
+      "text": "R02C03",
+      "top": 55.4,
+      "x0": 232.35,
+      "x1": 262.27
+    }
+  ],
+  "line_count": 0,
+  "page_count": 1,
+  "rect_count": 2,
+  "word_count": 6
+}
+
+## verdict
+EXPECTED_RED: current code does not promote these source-derived table candidates to renderable tableProjection.
+Blocked-safe interpretation: table cell grouping is present (6/6 source placement matches), but page-space admission is still diagnostic-only because y-origin/page transform and horizontal page-space transform are undecoded.
+Do not promote rendering from these samples alone; doing so would require choosing fallbackTextAnchors/page body or reference PDF-derived constants as authority.
+cleanup: generated evidence artifacts only under .omo/evidence/source-table-layout-promotion-20260705; no runtime process, tmux session, browser context, bound port, container, or temp dir left open by this command.
+
+## independent architect reviewer
+Maxwell verdict: not sufficient to promote source-only tableProjection. Exact blocker: source page-Y origin remains undecoded because row-to-LineMark coupling is stride-based/interleaved rather than exact contiguous row boundaries; secondary blocker: horizontal full-extent semantics remain unproven.
+cleanup: subagent 019f3264-2446-7312-9362-2812b7592f4d was closed after completion.

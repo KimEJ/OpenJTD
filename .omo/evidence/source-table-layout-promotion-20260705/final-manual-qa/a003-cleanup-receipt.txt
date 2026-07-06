@@ -1,0 +1,9 @@
+Adversarial A003 surface=runtime/process cleanup receipt
+Invocation: ps -axo pid,command | rg "cargo test -p rjtd-cli --test source_y_probe|pdfinfo|pypdf|ulw-qa-source-table" and tmux ls
+PASS observable: no QA cargo/pdf/tmux processes from this run remain; no tmux session spawned by this QA remains.
+53447 /bin/zsh -c {\012  echo 'Adversarial A003 surface=runtime/process cleanup receipt';\012  echo 'Invocation: ps -axo pid,command | rg "cargo test -p rjtd-cli --test source_y_probe|pdfinfo|pypdf|ulw-qa-source-table" and tmux ls';\012  echo 'PASS observable: no QA cargo/pdf/tmux processes from this run remain; no tmux session spawned by this QA remains.';\012  set +e\012  ps -axo pid,command | rg 'cargo test -p rjtd-cli --test source_y_probe|pdfinfo|pypdf|ulw-qa-source-table'\012  ps_rc=$?\012  tmux ls 2>&1\012  tmux_rc=$?\012  echo "ps_rg_exit=$ps_rc"\012  echo "tmux_ls_exit=$tmux_rc"\012  if [ "$ps_rc" -eq 1 ]; then echo 'VERDICT PASS'; else echo 'VERDICT FAIL'; fi\012} > .omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a003-cleanup-receipt.txt\012cat .omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a003-cleanup-receipt.txt
+53451 rg cargo test -p rjtd-cli --test source_y_probe|pdfinfo|pypdf|ulw-qa-source-table
+zsh:8: command not found: tmux
+ps_rg_exit=0
+tmux_ls_exit=127
+VERDICT FAIL

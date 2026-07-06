@@ -1,0 +1,92 @@
+# C001 source/PDF sweep
+## table-candidates
+
+### PAGE 01.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=99-308	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=99-166,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=241-308,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+### PAGE 01_down_1Low.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=100-309	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=100-167,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=242-309,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+### PAGE 01_down_2Low.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=101-310	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=101-168,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=243-310,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+### PAGE 01_down_3Low.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=102-311	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=102-169,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=244-311,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+### PAGE 01_down_4Low.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=103-312	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=103-170,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=245-312,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+### PAGE 01_right_1Tick.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=111-356	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=111-190,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=277-356,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+### PAGE 01_right_2Tick.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=111-356	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=111-190,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=277-356,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+### PAGE 01_right_3Tick.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=111-356	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=111-190,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=277-356,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+### PAGE 01_right_4Tick.jtd
+table-candidate	0	kind=documentTextControlRunTableCandidate	range=-	boundary=-	basis=unit	delimiter=0x000e	intervals=2	first=2	last=6	source=111-356	sparse=false	cells=6/0/6	max-columns=3	interval-details=0:source-interval=2,source=111-190,line-breaks=0,text=R01C01\tR01C02\tR01C03|1:source-interval=6,source=277-356,line-breaks=0,text=R02C01\tR02C02\tR02C03	decoded=false
+
+## compare shifts
+
+### PAGE 01_down_1Low.jtd
+line-summary	baseDeclared=8	candidateDeclared=9	baseParsed=7	candidateParsed=8	lineSignatureSame=false
+table-summary	baseCandidates=1	candidateCandidates=1	baseSparseCandidates=0	candidateSparseCandidates=0	baseNonEmptyCells=6	candidateNonEmptyCells=6	tableSignatureSame=false
+table-line-header-summary	baseRows=2	candidateRows=2	baseFirstCellOffset=2	candidateFirstCellOffset=2	firstCellOffsetDelta=0	baseCellOffsets=2,26,52|2,26,52	candidateCellOffsets=2,26,52|2,26,52	lineHeaderSignatureSame=false
+admission	ready=false	reason=direct-source-diff-diagnostic-only
+
+### PAGE 01_down_2Low.jtd
+line-summary	baseDeclared=8	candidateDeclared=10	baseParsed=7	candidateParsed=9	lineSignatureSame=false
+table-summary	baseCandidates=1	candidateCandidates=1	baseSparseCandidates=0	candidateSparseCandidates=0	baseNonEmptyCells=6	candidateNonEmptyCells=6	tableSignatureSame=false
+table-line-header-summary	baseRows=2	candidateRows=2	baseFirstCellOffset=2	candidateFirstCellOffset=2	firstCellOffsetDelta=0	baseCellOffsets=2,26,52|2,26,52	candidateCellOffsets=2,26,52|2,26,52	lineHeaderSignatureSame=false
+admission	ready=false	reason=direct-source-diff-diagnostic-only
+
+### PAGE 01_down_3Low.jtd
+line-summary	baseDeclared=8	candidateDeclared=11	baseParsed=7	candidateParsed=10	lineSignatureSame=false
+table-summary	baseCandidates=1	candidateCandidates=1	baseSparseCandidates=0	candidateSparseCandidates=0	baseNonEmptyCells=6	candidateNonEmptyCells=6	tableSignatureSame=false
+table-line-header-summary	baseRows=2	candidateRows=2	baseFirstCellOffset=2	candidateFirstCellOffset=2	firstCellOffsetDelta=0	baseCellOffsets=2,26,52|2,26,52	candidateCellOffsets=2,26,52|2,26,52	lineHeaderSignatureSame=false
+admission	ready=false	reason=direct-source-diff-diagnostic-only
+
+### PAGE 01_down_4Low.jtd
+line-summary	baseDeclared=8	candidateDeclared=12	baseParsed=7	candidateParsed=11	lineSignatureSame=false
+table-summary	baseCandidates=1	candidateCandidates=1	baseSparseCandidates=0	candidateSparseCandidates=0	baseNonEmptyCells=6	candidateNonEmptyCells=6	tableSignatureSame=false
+table-line-header-summary	baseRows=2	candidateRows=2	baseFirstCellOffset=2	candidateFirstCellOffset=2	firstCellOffsetDelta=0	baseCellOffsets=2,26,52|2,26,52	candidateCellOffsets=2,26,52|2,26,52	lineHeaderSignatureSame=false
+admission	ready=false	reason=direct-source-diff-diagnostic-only
+
+### PAGE 01_right_1Tick.jtd
+line-summary	baseDeclared=8	candidateDeclared=8	baseParsed=7	candidateParsed=7	lineSignatureSame=false
+table-summary	baseCandidates=1	candidateCandidates=1	baseSparseCandidates=0	candidateSparseCandidates=0	baseNonEmptyCells=6	candidateNonEmptyCells=6	tableSignatureSame=false
+table-line-header-summary	baseRows=2	candidateRows=2	baseFirstCellOffset=2	candidateFirstCellOffset=4	firstCellOffsetDelta=2	baseCellOffsets=2,26,52|2,26,52	candidateCellOffsets=4,28,54|4,28,54	lineHeaderSignatureSame=false
+admission	ready=false	reason=direct-source-diff-diagnostic-only
+
+### PAGE 01_right_2Tick.jtd
+line-summary	baseDeclared=8	candidateDeclared=8	baseParsed=7	candidateParsed=7	lineSignatureSame=false
+table-summary	baseCandidates=1	candidateCandidates=1	baseSparseCandidates=0	candidateSparseCandidates=0	baseNonEmptyCells=6	candidateNonEmptyCells=6	tableSignatureSame=false
+table-line-header-summary	baseRows=2	candidateRows=2	baseFirstCellOffset=2	candidateFirstCellOffset=6	firstCellOffsetDelta=4	baseCellOffsets=2,26,52|2,26,52	candidateCellOffsets=6,30,56|6,30,56	lineHeaderSignatureSame=false
+admission	ready=false	reason=direct-source-diff-diagnostic-only
+
+### PAGE 01_right_3Tick.jtd
+line-summary	baseDeclared=8	candidateDeclared=8	baseParsed=7	candidateParsed=7	lineSignatureSame=false
+table-summary	baseCandidates=1	candidateCandidates=1	baseSparseCandidates=0	candidateSparseCandidates=0	baseNonEmptyCells=6	candidateNonEmptyCells=6	tableSignatureSame=false
+table-line-header-summary	baseRows=2	candidateRows=2	baseFirstCellOffset=2	candidateFirstCellOffset=8	firstCellOffsetDelta=6	baseCellOffsets=2,26,52|2,26,52	candidateCellOffsets=8,32,58|8,32,58	lineHeaderSignatureSame=false
+admission	ready=false	reason=direct-source-diff-diagnostic-only
+
+### PAGE 01_right_4Tick.jtd
+line-summary	baseDeclared=8	candidateDeclared=8	baseParsed=7	candidateParsed=7	lineSignatureSame=false
+table-summary	baseCandidates=1	candidateCandidates=1	baseSparseCandidates=0	candidateSparseCandidates=0	baseNonEmptyCells=6	candidateNonEmptyCells=6	tableSignatureSame=false
+table-line-header-summary	baseRows=2	candidateRows=2	baseFirstCellOffset=2	candidateFirstCellOffset=10	firstCellOffsetDelta=8	baseCellOffsets=2,26,52|2,26,52	candidateCellOffsets=10,34,60|10,34,60	lineHeaderSignatureSame=false
+admission	ready=false	reason=direct-source-diff-diagnostic-only
+
+## pdf coordinates
+PAGE 01.pdf	words=6	rects=15	left=90.36	top=119.89	deltaLeft=0.00	deltaTop=0.00
+PAGE 01_down_1Low.pdf	words=6	rects=15	left=90.36	top=136.69	deltaLeft=0.00	deltaTop=16.80
+PAGE 01_down_2Low.pdf	words=6	rects=15	left=90.36	top=153.49	deltaLeft=0.00	deltaTop=33.60
+PAGE 01_down_3Low.pdf	words=6	rects=15	left=90.36	top=170.29	deltaLeft=0.00	deltaTop=50.40
+PAGE 01_down_4Low.pdf	words=6	rects=15	left=90.36	top=186.97	deltaLeft=0.00	deltaTop=67.08
+PAGE 01_right_1Tick.pdf	words=6	rects=15	left=95.64	top=119.89	deltaLeft=5.28	deltaTop=0.00
+PAGE 01_right_2Tick.pdf	words=6	rects=15	left=100.92	top=119.89	deltaLeft=10.56	deltaTop=0.00
+PAGE 01_right_3Tick.pdf	words=6	rects=15	left=106.32	top=119.89	deltaLeft=15.96	deltaTop=0.00
+PAGE 01_right_4Tick.pdf	words=6	rects=15	left=111.60	top=119.89	deltaLeft=21.24	deltaTop=0.00
+
+cleanup: no runtime process, tmux session, browser context, bound port, container, or temp dir spawned; CLI/pdfplumber commands exited

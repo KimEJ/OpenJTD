@@ -1,0 +1,36 @@
+PAGE01 flow-y layer-tree admission class evidence
+
+Decision
+- User confirmed Ichitaro cannot move only the table in Y independently; moving the table down also moves following text in document flow.
+- Existing PAGE01 down samples are therefore final diagnostic samples for this path, not a request queue for more table-only-Y samples.
+- PAGE01 source-only Y render promotion remains blocked-safe: diagnostic signal is exposed, but render admission stays false.
+
+Failing-first proof
+- Command: cargo test -p rjtd-cli --test source_y_probe local_new_probe_layer_tree_keeps_flow_y_stride_diagnostic_non_admissible_when_available -- --ignored --nocapture
+- RED result before model change: failed because the layer-tree did not contain "sourceOnlyPageYAdmissionClass":"flow-y-stride-only-diagnostic".
+
+Implementation
+- rjtd/crates/rjtd-model/src/lib.rs adds sourceOnlyPageYAdmissionClass inside sourceOnlyPageYRenderAdmissionGate.
+- direct-line-mark-page-grid is reported only for the existing direct/admissible path.
+- flow-y-stride-only-diagnostic is reported when LineMark stride evidence exists without a direct page-y origin.
+- admissionReady logic is unchanged.
+
+Observed CLI surface
+- Command: ./target/debug/rjtd page-layer-tree "../rjtd-testdata/local-samples/ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_down_4Low.jtd" 0
+- Observed fields:
+  - "sourceOnlyPageYAdmissionClass":"flow-y-stride-only-diagnostic"
+  - "admissionReady":false
+  - "pageOriginAuthority":"fallbackTextAnchors"
+  - "lineMarkPageOriginStridePresent":true
+  - "renderPromotionBlockedReason":"source-page-y-render-admission-not-ready"
+
+Verification
+- cargo fmt --all --check: pass
+- cargo check -p rjtd-cli: pass
+- cargo test -p rjtd-cli --test source_y_probe -- --ignored --nocapture: pass, 6 passed
+- cargo test -p rjtd-model document_text_control -- --nocapture: pass, 6 passed
+- LSP: not run because rust-analyzer is not installed in the local stable toolchain; cargo check was used as the compiler diagnostic gate.
+
+Cleanup
+- No runtime process, tmux session, browser context, bound port, container, or temp directory was spawned.
+- No commit was created because the workspace contains a broader in-progress uncommitted probe branch and the user did not request a commit.

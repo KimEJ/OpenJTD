@@ -1,0 +1,10 @@
+Scenario S008 surface=CLI/data generated SVG/PDF projection sanity
+Invocation: python3 pypdf/SVG parser plus pdfinfo over page01*.svg and page01*-rjtd.pdf
+PASS observable: SVG artifacts contain 6 text nodes and no table grid promotion markers/lines; each PDF is one page, non-empty, and extracted text contains six RxxCxx cell labels.
+page01.svg {'bytes': 2840, '<text': 6, '<line': 0, 'tableGridCandidate': 0, 'rjtd-column-grid-candidate': 0} PASS
+page01-down4.svg {'bytes': 2840, '<text': 6, '<line': 0, 'tableGridCandidate': 0, 'rjtd-column-grid-candidate': 0} PASS
+page01-right4.svg {'bytes': 2840, '<text': 6, '<line': 0, 'tableGridCandidate': 0, 'rjtd-column-grid-candidate': 0} PASS
+page01-rjtd.pdf {'bytes': 7950, 'pages_pypdf': 1, 'pdfinfo_pages': 'Pages:           1', 'missing_labels': []} PASS
+page01-down4-rjtd.pdf {'bytes': 7950, 'pages_pypdf': 1, 'pdfinfo_pages': 'Pages:           1', 'missing_labels': []} PASS
+page01-right4-rjtd.pdf {'bytes': 7950, 'pages_pypdf': 1, 'pdfinfo_pages': 'Pages:           1', 'missing_labels': []} PASS
+VERDICT PASS

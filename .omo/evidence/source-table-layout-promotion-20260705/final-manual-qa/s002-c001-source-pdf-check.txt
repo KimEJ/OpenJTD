@@ -1,0 +1,12 @@
+Scenario S002 surface=data transcript C001 source/PDF sweep
+Invocation: python3 parser over .omo/evidence/source-table-layout-promotion-20260705/c001-source-and-pdf-sweep.txt
+PASS observable: 9 table candidates are 2 rows x 3 columns with decoded=false; right tick first-cell deltas are 2,4,6,8; PDF deltas match down 16.80/33.60/50.40/67.08 and right 5.28/10.56/15.96/21.24.
+candidate_lines 9
+candidate_problems []
+source_starts {'PAGE 01.jtd': 99, 'PAGE 01_down_1Low.jtd': 100, 'PAGE 01_down_2Low.jtd': 101, 'PAGE 01_down_3Low.jtd': 102, 'PAGE 01_down_4Low.jtd': 103, 'PAGE 01_right_1Tick.jtd': 111, 'PAGE 01_right_2Tick.jtd': 111, 'PAGE 01_right_3Tick.jtd': 111, 'PAGE 01_right_4Tick.jtd': 111}
+source_start_matches_expected True
+first_cell_deltas {'PAGE 01_down_1Low.jtd': 0, 'PAGE 01_down_2Low.jtd': 0, 'PAGE 01_down_3Low.jtd': 0, 'PAGE 01_down_4Low.jtd': 0, 'PAGE 01_right_1Tick.jtd': 2, 'PAGE 01_right_2Tick.jtd': 4, 'PAGE 01_right_3Tick.jtd': 6, 'PAGE 01_right_4Tick.jtd': 8}
+first_cell_deltas_match_expected True
+pdf_deltas {'PAGE 01.pdf': (0.0, 0.0, 6, 15), 'PAGE 01_down_1Low.pdf': (0.0, 16.8, 6, 15), 'PAGE 01_down_2Low.pdf': (0.0, 33.6, 6, 15), 'PAGE 01_down_3Low.pdf': (0.0, 50.4, 6, 15), 'PAGE 01_down_4Low.pdf': (0.0, 67.08, 6, 15), 'PAGE 01_right_1Tick.pdf': (5.28, 0.0, 6, 15), 'PAGE 01_right_2Tick.pdf': (10.56, 0.0, 6, 15), 'PAGE 01_right_3Tick.pdf': (15.96, 0.0, 6, 15), 'PAGE 01_right_4Tick.pdf': (21.24, 0.0, 6, 15)}
+pdf_deltas_match_expected True
+VERDICT PASS

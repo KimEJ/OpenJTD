@@ -1,0 +1,52 @@
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/notepad.txt
+STATUS non-empty
+460 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/notepad.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s001-artifact-inventory.txt
+STATUS non-empty
+1421 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s001-artifact-inventory.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s002-c001-source-pdf-check.txt
+STATUS non-empty
+1484 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s002-c001-source-pdf-check.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s003-c002-layer-tree-blocker-check.txt
+STATUS non-empty
+1206 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s003-c002-layer-tree-blocker-check.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s004-c002-red-blocker-transcript-check.txt
+STATUS non-empty
+574 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s004-c002-red-blocker-transcript-check.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s005-render-artifact-sanity.txt
+STATUS non-empty
+736 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s005-render-artifact-sanity.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s006-targeted-regression-rerun.txt
+STATUS non-empty
+856 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s006-targeted-regression-rerun.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s007-c003-transcript-cleanup-check.txt
+STATUS non-empty
+353 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s007-c003-transcript-cleanup-check.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s008-render-artifact-sanity-pypdf.txt
+STATUS non-empty
+1064 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s008-render-artifact-sanity-pypdf.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a001r-no-added-production-hardcoding-diff.txt
+STATUS non-empty
+423 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a001r-no-added-production-hardcoding-diff.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a002r-diff-render-promotion-guard.txt
+STATUS non-empty
+610 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a002r-diff-render-promotion-guard.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a002s-source-and-artifact-render-guard.txt
+STATUS non-empty
+20170 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a002s-source-and-artifact-render-guard.txt
+
+PATH /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a003r-cleanup-receipt.txt
+STATUS non-empty
+494 bytes /Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a003r-cleanup-receipt.txt
+

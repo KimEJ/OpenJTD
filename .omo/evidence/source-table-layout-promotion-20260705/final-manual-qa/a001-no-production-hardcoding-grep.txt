@@ -1,0 +1,35 @@
+Adversarial A001 surface=source text grep for forbidden production hardcoding
+Invocation: rg -n "PAGE 01|ichitaro-source-y-probe|pdf-output|reference PDF|reference_pdf|page01|source-y-probe" rjtd/crates/rjtd-cli/src rjtd/crates/rjtd-model/src
+PASS observable: no matches in production source directories for sample names/probe paths/reference-PDF hardcoding.
+rjtd/crates/rjtd-cli/src/main.rs:659:        Some("source-y-probe-audit") => {
+rjtd/crates/rjtd-cli/src/main.rs:660:            let path = required_path(args.next(), "source-y-probe-audit")?;
+rjtd/crates/rjtd-cli/src/main.rs:667:        Some("source-y-probe-compare") => {
+rjtd/crates/rjtd-cli/src/main.rs:668:            let base_path = required_path(args.next(), "source-y-probe-compare")?;
+rjtd/crates/rjtd-cli/src/main.rs:669:            let candidate_path = required_path(args.next(), "source-y-probe-compare")?;
+rjtd/crates/rjtd-cli/src/main.rs:4623:  rjtd source-y-probe-audit <corpus-dir>
+rjtd/crates/rjtd-cli/src/main.rs:4624:  rjtd source-y-probe-compare <base.jtd> <candidate.jtd>
+rjtd/crates/rjtd-model/src/lib.rs:78204:    fn document_core_projects_a5_ginga_front_matter_from_reference_pdf() {
+rjtd/crates/rjtd-model/src/lib.rs:78313:        let reference_pdf_path = samples_dir.join(format!("{sample_name}.pdf"));
+rjtd/crates/rjtd-model/src/lib.rs:78314:        if !sample_path.exists() || !reference_pdf_path.exists() {
+rjtd/crates/rjtd-model/src/lib.rs:78356:                "{sample_name} should match the local reference PDF page count"
+rjtd/crates/rjtd-model/src/lib.rs:78414:    fn local_a_size_and_b_size_samples_render_facing_page_decorations_when_reference_pdfs_are_available()
+rjtd/crates/rjtd-model/src/lib.rs:78422:    fn local_a5_sample_renders_facing_page_decorations_when_reference_pdf_is_available() {
+rjtd/crates/rjtd-model/src/lib.rs:78425:        let reference_pdf_path = samples_dir.join("a5.pdf");
+rjtd/crates/rjtd-model/src/lib.rs:78426:        if !sample_path.exists() || !reference_pdf_path.exists() {
+rjtd/crates/rjtd-model/src/lib.rs:79388:    fn local_tmogi3_2_projects_layout_box_text_when_reference_pdf_is_available() {
+rjtd/crates/rjtd-model/src/lib.rs:79391:        let reference_pdf_path =
+rjtd/crates/rjtd-model/src/lib.rs:79393:        if !sample_path.exists() || !reference_pdf_path.exists() {
+rjtd/crates/rjtd-model/src/lib.rs:79476:    fn local_fax02_preserves_visual_list_when_reference_pdf_is_available() {
+rjtd/crates/rjtd-model/src/lib.rs:79479:        let reference_pdf_path = sample_dir.join("fax02.pdf");
+rjtd/crates/rjtd-model/src/lib.rs:79480:        if !sample_path.exists() || !reference_pdf_path.exists() {
+rjtd/crates/rjtd-model/src/lib.rs:79556:    fn local_success_data_test_preserves_embedding_frame_candidates_when_reference_pdf_is_available()
+rjtd/crates/rjtd-model/src/lib.rs:79561:        let reference_pdf_path =
+rjtd/crates/rjtd-model/src/lib.rs:79563:        if !sample_path.exists() || !reference_pdf_path.exists() {
+rjtd/crates/rjtd-model/src/lib.rs:82974:    fn local_shanai_lan_preserves_fdm_frame_diagnostics_when_reference_pdf_is_available() {
+rjtd/crates/rjtd-model/src/lib.rs:82977:        let reference_pdf_path = sample_path.with_extension("pdf");
+rjtd/crates/rjtd-model/src/lib.rs:82978:        if !sample_path.exists() || !reference_pdf_path.exists() {
+rjtd/crates/rjtd-model/src/lib.rs:85277:    fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available()
+rjtd/crates/rjtd-model/src/lib.rs:85281:        let reference_pdf_path = sample_path.with_extension("pdf");
+rjtd/crates/rjtd-model/src/lib.rs:85282:        if !sample_path.exists() || !reference_pdf_path.exists() {
+rg_exit=0
+VERDICT FAIL

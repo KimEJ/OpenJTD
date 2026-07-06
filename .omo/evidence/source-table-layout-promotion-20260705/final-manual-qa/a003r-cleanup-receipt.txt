@@ -1,0 +1,7 @@
+Adversarial A003R surface=runtime/process cleanup receipt
+Invocation: pgrep -fl "cargo.*source_y_probe|pdfinfo .*source-table-layout-promotion|python3 .*pypdf"; command -v tmux && tmux ls || true
+PASS observable: no leftover cargo/pdf/python QA processes after excluding the current shell/pgrep; tmux unavailable or no matching ulw-qa-source-table session.
+tmux_unavailable=true (no tmux sessions could have been spawned by this QA via tmux)
+process_match_exit=1
+tmux_match_exit=1
+VERDICT PASS

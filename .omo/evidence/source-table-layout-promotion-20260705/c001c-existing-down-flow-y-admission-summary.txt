@@ -1,0 +1,56 @@
+Scope: existing PAGE 01 down samples under ichitaro-source-y-probe/new
+Command cwd: /Users/kimuj5090/Documents/rjtd
+
+Verification commands:
+
+cd /Users/kimuj5090/Documents/rjtd/rjtd
+cargo fmt --all --check
+cargo check -p rjtd-cli
+cargo test -p rjtd-cli --test source_y_probe local_new_probe_compare_reports_table_flow_y_shift_when_available -- --ignored --nocapture
+
+Results:
+- cargo fmt --all --check: PASS
+- cargo check -p rjtd-cli: PASS, no warnings
+- ignored source_y_probe table-flow-y test: PASS, 1 passed
+
+CLI surface command:
+
+for n in 1 2 3 4; do
+  printf 'CASE down_%s\n' "$n"
+  ./rjtd/target/debug/rjtd source-y-probe-compare \
+    "ichitaro-source-y-probe/new/PAGE 01.jtd" \
+    "ichitaro-source-y-probe/new/PAGE 01_down_${n}Low.jtd" |
+    rg 'table-flow-y'
+done
+
+CLI surface output:
+
+CASE down_1
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=3,5	lineMarkRecordDelta=1	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=100	firstRowSourceStartDelta=1
+table-flow-y-admission-summary	baseLineMarkRecordStride=2	candidateLineMarkRecordStride=2	baseExactSourceRangeMatchCount=0	candidateExactSourceRangeMatchCount=0	baseRowsExactAndContiguous=false	candidateRowsExactAndContiguous=false	blocker=line-mark-rows-not-exact-source-boundaries
+CASE down_2
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=4,6	lineMarkRecordDelta=2	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=101	firstRowSourceStartDelta=2
+table-flow-y-admission-summary	baseLineMarkRecordStride=2	candidateLineMarkRecordStride=2	baseExactSourceRangeMatchCount=0	candidateExactSourceRangeMatchCount=0	baseRowsExactAndContiguous=false	candidateRowsExactAndContiguous=false	blocker=line-mark-rows-not-exact-source-boundaries
+CASE down_3
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=5,7	lineMarkRecordDelta=3	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=102	firstRowSourceStartDelta=3
+table-flow-y-admission-summary	baseLineMarkRecordStride=2	candidateLineMarkRecordStride=2	baseExactSourceRangeMatchCount=0	candidateExactSourceRangeMatchCount=0	baseRowsExactAndContiguous=false	candidateRowsExactAndContiguous=false	blocker=line-mark-rows-not-exact-source-boundaries
+CASE down_4
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=6,8	lineMarkRecordDelta=4	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=103	firstRowSourceStartDelta=4
+table-flow-y-admission-summary	baseLineMarkRecordStride=2	candidateLineMarkRecordStride=2	baseExactSourceRangeMatchCount=0	candidateExactSourceRangeMatchCount=0	baseRowsExactAndContiguous=false	candidateRowsExactAndContiguous=false	blocker=line-mark-rows-not-exact-source-boundaries
+
+Conclusion:
+- The existing down samples prove a uniform table flow-y signal:
+  lineMarkRecordDelta tracks 1, 2, 3, and 4 low increments.
+- The same samples do not prove render admission yet:
+  no table row source range exactly matches a parsed LineMark record boundary,
+  so the source-only page-y renderer must stay blocked until row boundary
+  semantics are decoded or independently admitted.
+- This diagnostic is intentionally additive and CLI-only. It does not promote
+  rendering behavior.
+
+Known process gap:
+- The parent process did not capture a separate RED run for the incremental
+  table-flow-y-admission-summary test because a child executor had already
+  made both the test and implementation edits before reporting back.
+  The command surface, compile gate, and ignored local corpus test are green,
+  but this increment should not be represented as a clean test-first change.

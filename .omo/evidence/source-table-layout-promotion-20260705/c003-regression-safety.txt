@@ -1,0 +1,90 @@
+C003 regression and safety evidence
+Started: 2026-07-05T13:13:49Z
+
+## cargo fmt --all --check
+exit=0
+
+## cargo check --workspace
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+exit=0
+
+## cargo test -p rjtd-cli --test source_y_probe -- --nocapture
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/source_y_probe.rs (target/debug/deps/source_y_probe-54bdf7b041438afa)
+
+running 4 tests
+test local_new_probe_baseline_reports_document_text_table_candidate_when_available ... ok
+test local_source_y_probe_compare_reports_line_and_page_tuple_deltas_when_available ... ok
+test local_new_probe_compare_reports_table_line_header_x_shift_when_available ... ok
+test local_source_y_probe_audit_classifies_updated_probe_corpus_when_available ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+
+exit=0
+
+## cargo test -p rjtd-model document_text_control -- --nocapture
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/rjtd_model-7980f8c425d08a33)
+
+running 4 tests
+test tests::sparse_document_text_controls_preserve_empty_cells_as_table_evidence ... ok
+test tests::document_text_control_two_row_three_column_table_exposes_column_grid_candidate ... ok
+test tests::parser_preserves_document_text_control_boundaries_with_source_spans ... ok
+test tests::local_tsaiten_preserves_document_text_control_table_candidates_when_reference_pdf_is_available ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 92 filtered out; finished in 0.16s
+
+exit=0
+
+## git diff --check
+exit=0
+
+## git status --short
+ M .omo/ulw-loop/task-11-tsaiten-source-readiness-20260701/ledger.jsonl
+ M rjtd/crates/rjtd-cli/src/main.rs
+ M rjtd/crates/rjtd-model/src/lib.rs
+?? .omo/.DS_Store
+?? .omo/drafts/ichitaro-source-y-probe-corpus-codex-brief.md
+?? .omo/evidence/current-progress-next-plan/fable5-source-y-probe-review-20260705.md
+?? .omo/evidence/current-progress-next-plan/source-y-probe-coordinate-evidence-20260705.md
+?? .omo/evidence/current-progress-next-plan/source-y-probe-new-folder-audit-20260705.md
+?? .omo/evidence/current-progress-next-plan/source-y-probe-page01-3x2-implementation-20260705.md
+?? .omo/evidence/current-progress-next-plan/source-y-probe-required-next-evidence-20260705.md
+?? .omo/evidence/current-progress-next-plan/ulw-task-11i-resume-delta-audit-20260704.txt
+?? .omo/evidence/source-table-layout-promotion-20260705/
+?? .omo/ulw-loop/source-table-layout-promotion-20260705/
+?? ichitaro-source-y-probe/
+?? rjtd/crates/rjtd-cli/src/probe_compare.rs
+?? rjtd/crates/rjtd-cli/src/probe_corpus.rs
+?? rjtd/crates/rjtd-cli/src/probe_line_diff.rs
+?? rjtd/crates/rjtd-cli/src/probe_page_diff.rs
+?? rjtd/crates/rjtd-cli/src/probe_signals.rs
+?? rjtd/crates/rjtd-cli/src/probe_validation.rs
+?? rjtd/crates/rjtd-cli/tests/source_y_probe.rs
+
+## git diff --stat
+ .../ledger.jsonl                                   |  1 +
+ rjtd/crates/rjtd-cli/src/main.rs                   | 29 +++++++++++++++++++
+ rjtd/crates/rjtd-model/src/lib.rs                  | 33 ++++++++++++++++++++--
+ 3 files changed, 61 insertions(+), 2 deletions(-)
+
+## safety grep: referenceFallback/referenceBacked/sourceBacked/decoded diff lines
+
+## evidence artifacts
+.omo/evidence/source-table-layout-promotion-20260705/c001-source-and-pdf-sweep.txt
+.omo/evidence/source-table-layout-promotion-20260705/c002-render-admission-blocker.txt
+.omo/evidence/source-table-layout-promotion-20260705/c002-render-admission-or-blocker.txt
+.omo/evidence/source-table-layout-promotion-20260705/c003-regression-safety.txt
+.omo/evidence/source-table-layout-promotion-20260705/page01-down4-layer-tree.json
+.omo/evidence/source-table-layout-promotion-20260705/page01-down4-rjtd.pdf
+.omo/evidence/source-table-layout-promotion-20260705/page01-down4.svg
+.omo/evidence/source-table-layout-promotion-20260705/page01-layer-tree.json
+.omo/evidence/source-table-layout-promotion-20260705/page01-right4-layer-tree.json
+.omo/evidence/source-table-layout-promotion-20260705/page01-right4-rjtd.pdf
+.omo/evidence/source-table-layout-promotion-20260705/page01-right4.svg
+.omo/evidence/source-table-layout-promotion-20260705/page01-rjtd.pdf
+.omo/evidence/source-table-layout-promotion-20260705/page01.svg
+
+## cleanup receipt
+No dev server, browser context, tmux session, bound port, container, or temp directory was spawned for C003. Cargo commands exited; PDF/SVG/JSON artifacts intentionally retained under .omo/evidence/source-table-layout-promotion-20260705.
+Finished: 2026-07-05T13:13:52Z

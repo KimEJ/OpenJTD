@@ -1,0 +1,25 @@
+{
+  "manualQa": "clean",
+  "scenariosRun": [
+    "S1 artifact path audit: all six user-named artifacts exist and are non-empty",
+    "S2 content audit: superseded failures, final-review-fixes, C001/C002/C003 evidence inspected",
+    "S3 manualQa matrix artifactRefs audit: every referenced artifact path exists and is non-empty",
+    "S4 review blocker audit: prior code-quality/test blockers compared against final-review-fixes",
+    "S5 production diff no-promotion gate: no production diff hits for promotion/sample-hardcoding terms"
+  ],
+  "artifactChecks": "pass",
+  "userOutcomeReview": "blocked-safe no production promotion remains supported",
+  "findings": [
+    "manualQa-matrix.json reports manualQa=clean with 6/6 surfaceEvidence PASS and 3/3 adversarialCases PASS.",
+    "superseded-failures-resolution.txt explicitly resolves S003, S005, A001, A002R, and A003 as superseded/resolved-pass.",
+    "final-review-fixes.txt documents split probe modules under the 250-line blocker, cargo fmt/check, default ignored source_y_probe run, explicit --ignored local-corpus run, document_text_control tests, and git diff --check all exit 0.",
+    "C002 evidence keeps PAGE01 table evidence diagnostic-only: promotion_RED_assertion_passed=False, diagnosticProjection, renderPromoted=false, sourceDerivedLayoutRenderable=false.",
+    "Production diff gate found no tableProjection/renderPromoted/sourceDerivedLayoutRenderable/PAGE01/pdf-output/ichitaro-source-y-probe hits in rjtd-model/rjtd-cli tracked production diffs."
+  ],
+  "residualRisks": [
+    "No production source-only tableProjection is justified; page-Y/source transform remains the explicit blocker.",
+    "PDF sanity evidence confirms non-empty text output, not visual coordinate equivalence to reference PDFs.",
+    "Git worktree is dirty with untracked probe/evidence/corpus files; this rerun did not alter product code."
+  ],
+  "requiredFixes": []
+}

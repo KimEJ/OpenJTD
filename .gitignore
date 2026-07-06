@@ -1,6 +1,7 @@
 /.omx/
 /.cargo-home/
 /.DS_Store
+**/.DS_Store
 /tmp/
 /rhwp/
 /third-party/
@@ -9,6 +10,13 @@
 /rjtd-testdata/local-samples/*.jtd
 /rjtd-testdata/local-samples/*.jtt
 /rjtd-testdata/local-samples/*.jttc
+/rjtd-testdata/local-samples/**/*.jtd
+/rjtd-testdata/local-samples/**/*.jtt
+/rjtd-testdata/local-samples/**/*.jttc
+/rjtd-testdata/local-samples/**/*.pdf
+/rjtd-testdata/local-samples/**/*.png
+/rjtd-testdata/local-samples/**/*.$td
+/rjtd-testdata/local-samples/ichitaro-source-y-probe/
 **/*.rs.bk
 
 # Generated sample outputs

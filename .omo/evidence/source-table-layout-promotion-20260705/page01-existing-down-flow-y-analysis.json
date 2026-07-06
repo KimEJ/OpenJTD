@@ -1,0 +1,566 @@
+{
+  "lineHeightAssumptionPt": 16.8,
+  "cases": [
+    {
+      "key": "base",
+      "stem": "PAGE 01",
+      "jtd": "ichitaro-source-y-probe/new/PAGE 01.jtd",
+      "pdf": {
+        "cells": [
+          {
+            "text": "R01C01",
+            "x0": 90.36,
+            "top": 119.89,
+            "x1": 122.29,
+            "bottom": 130.33
+          },
+          {
+            "text": "R01C02",
+            "x0": 154.08,
+            "top": 119.89,
+            "x1": 187.78,
+            "bottom": 130.33
+          },
+          {
+            "text": "R01C03",
+            "x0": 223.2,
+            "top": 119.89,
+            "x1": 256.9,
+            "bottom": 130.33
+          },
+          {
+            "text": "R02C01",
+            "x0": 90.36,
+            "top": 153.49,
+            "x1": 123.97,
+            "bottom": 163.93
+          },
+          {
+            "text": "R02C02",
+            "x0": 154.08,
+            "top": 153.49,
+            "x1": 189.46,
+            "bottom": 163.93
+          },
+          {
+            "text": "R02C03",
+            "x0": 223.2,
+            "top": 153.49,
+            "x1": 258.58,
+            "bottom": 163.93
+          }
+        ],
+        "surrounding": [
+          {
+            "text": "PAGE",
+            "x0": 85.08,
+            "top": 86.29,
+            "x1": 110.38,
+            "bottom": 96.73
+          }
+        ],
+        "firstCell": {
+          "text": "R01C01",
+          "x0": 90.36,
+          "top": 119.89,
+          "x1": 122.29,
+          "bottom": 130.33
+        }
+      },
+      "layerTreeEvidence": ".omo/evidence/source-table-layout-promotion-20260705/page01-flow-down-base-layer-tree.json",
+      "tableCandidate": {
+        "idx": 0,
+        "kind": "documentTextControlRunTableCandidate",
+        "basis": "unit",
+        "intervals": 2,
+        "firstLine": 2,
+        "lastLine": 6,
+        "sourceStart": 99,
+        "sourceEnd": 308,
+        "cells": 6,
+        "emptyCells": 0,
+        "sourceCells": 6,
+        "cols": 3,
+        "decoded": false
+      },
+      "lineMarkRecordIndexes": [
+        2,
+        4
+      ],
+      "lineMarkStride": null,
+      "lineMarkRowsExactAndContiguous": false,
+      "lineMarkRowRecordSelection": "selected-overlap-record",
+      "projectionKind": "diagnosticProjection",
+      "sourceDerivedLayoutRenderable": false,
+      "renderPromotionBlockedReason": "source-derived-layout-not-renderable",
+      "pageOriginAuthority": "fallbackTextAnchors",
+      "renderPromoted": false,
+      "deltaVsBase": {
+        "firstLineMarkIndexDelta": 0,
+        "firstCellTopDeltaPt": 0.0,
+        "expectedDeltaFromLineIndexPt": 0.0,
+        "firstCellTopResidualPt": 0.0,
+        "firstCellXDeltaPt": 0.0,
+        "sourceStartDelta": 0
+      }
+    },
+    {
+      "key": "down1",
+      "stem": "PAGE 01_down_1Low",
+      "jtd": "ichitaro-source-y-probe/new/PAGE 01_down_1Low.jtd",
+      "pdf": {
+        "cells": [
+          {
+            "text": "R01C01",
+            "x0": 90.36,
+            "top": 136.69,
+            "x1": 122.29,
+            "bottom": 147.13
+          },
+          {
+            "text": "R01C02",
+            "x0": 154.08,
+            "top": 136.69,
+            "x1": 187.78,
+            "bottom": 147.13
+          },
+          {
+            "text": "R01C03",
+            "x0": 223.2,
+            "top": 136.69,
+            "x1": 256.9,
+            "bottom": 147.13
+          },
+          {
+            "text": "R02C01",
+            "x0": 90.36,
+            "top": 170.29,
+            "x1": 123.97,
+            "bottom": 180.73
+          },
+          {
+            "text": "R02C02",
+            "x0": 154.08,
+            "top": 170.29,
+            "x1": 189.46,
+            "bottom": 180.73
+          },
+          {
+            "text": "R02C03",
+            "x0": 223.2,
+            "top": 170.29,
+            "x1": 258.58,
+            "bottom": 180.73
+          }
+        ],
+        "surrounding": [
+          {
+            "text": "PAGE",
+            "x0": 85.08,
+            "top": 86.29,
+            "x1": 110.38,
+            "bottom": 96.73
+          }
+        ],
+        "firstCell": {
+          "text": "R01C01",
+          "x0": 90.36,
+          "top": 136.69,
+          "x1": 122.29,
+          "bottom": 147.13
+        }
+      },
+      "layerTreeEvidence": ".omo/evidence/source-table-layout-promotion-20260705/page01-flow-down-down1-layer-tree.json",
+      "tableCandidate": {
+        "idx": 0,
+        "kind": "documentTextControlRunTableCandidate",
+        "basis": "unit",
+        "intervals": 2,
+        "firstLine": 2,
+        "lastLine": 6,
+        "sourceStart": 100,
+        "sourceEnd": 309,
+        "cells": 6,
+        "emptyCells": 0,
+        "sourceCells": 6,
+        "cols": 3,
+        "decoded": false
+      },
+      "lineMarkRecordIndexes": [
+        3,
+        5
+      ],
+      "lineMarkStride": null,
+      "lineMarkRowsExactAndContiguous": false,
+      "lineMarkRowRecordSelection": "selected-overlap-record",
+      "projectionKind": "diagnosticProjection",
+      "sourceDerivedLayoutRenderable": false,
+      "renderPromotionBlockedReason": "source-derived-layout-not-renderable",
+      "pageOriginAuthority": "fallbackTextAnchors",
+      "renderPromoted": false,
+      "deltaVsBase": {
+        "firstLineMarkIndexDelta": 1,
+        "firstCellTopDeltaPt": 16.8,
+        "expectedDeltaFromLineIndexPt": 16.8,
+        "firstCellTopResidualPt": 0.0,
+        "firstCellXDeltaPt": 0.0,
+        "sourceStartDelta": 1
+      }
+    },
+    {
+      "key": "down2",
+      "stem": "PAGE 01_down_2Low",
+      "jtd": "ichitaro-source-y-probe/new/PAGE 01_down_2Low.jtd",
+      "pdf": {
+        "cells": [
+          {
+            "text": "R01C01",
+            "x0": 90.36,
+            "top": 153.49,
+            "x1": 122.29,
+            "bottom": 163.93
+          },
+          {
+            "text": "R01C02",
+            "x0": 154.08,
+            "top": 153.49,
+            "x1": 187.78,
+            "bottom": 163.93
+          },
+          {
+            "text": "R01C03",
+            "x0": 223.2,
+            "top": 153.49,
+            "x1": 256.9,
+            "bottom": 163.93
+          },
+          {
+            "text": "R02C01",
+            "x0": 90.36,
+            "top": 186.97,
+            "x1": 123.97,
+            "bottom": 197.41
+          },
+          {
+            "text": "R02C02",
+            "x0": 154.08,
+            "top": 186.97,
+            "x1": 189.46,
+            "bottom": 197.41
+          },
+          {
+            "text": "R02C03",
+            "x0": 223.2,
+            "top": 186.97,
+            "x1": 258.58,
+            "bottom": 197.41
+          }
+        ],
+        "surrounding": [
+          {
+            "text": "PAGE",
+            "x0": 85.08,
+            "top": 86.29,
+            "x1": 110.38,
+            "bottom": 96.73
+          }
+        ],
+        "firstCell": {
+          "text": "R01C01",
+          "x0": 90.36,
+          "top": 153.49,
+          "x1": 122.29,
+          "bottom": 163.93
+        }
+      },
+      "layerTreeEvidence": ".omo/evidence/source-table-layout-promotion-20260705/page01-flow-down-down2-layer-tree.json",
+      "tableCandidate": {
+        "idx": 0,
+        "kind": "documentTextControlRunTableCandidate",
+        "basis": "unit",
+        "intervals": 2,
+        "firstLine": 2,
+        "lastLine": 6,
+        "sourceStart": 101,
+        "sourceEnd": 310,
+        "cells": 6,
+        "emptyCells": 0,
+        "sourceCells": 6,
+        "cols": 3,
+        "decoded": false
+      },
+      "lineMarkRecordIndexes": [
+        4,
+        6
+      ],
+      "lineMarkStride": null,
+      "lineMarkRowsExactAndContiguous": false,
+      "lineMarkRowRecordSelection": "selected-overlap-record",
+      "projectionKind": "diagnosticProjection",
+      "sourceDerivedLayoutRenderable": false,
+      "renderPromotionBlockedReason": "source-derived-layout-not-renderable",
+      "pageOriginAuthority": "fallbackTextAnchors",
+      "renderPromoted": false,
+      "deltaVsBase": {
+        "firstLineMarkIndexDelta": 2,
+        "firstCellTopDeltaPt": 33.6,
+        "expectedDeltaFromLineIndexPt": 33.6,
+        "firstCellTopResidualPt": 0.0,
+        "firstCellXDeltaPt": 0.0,
+        "sourceStartDelta": 2
+      }
+    },
+    {
+      "key": "down3",
+      "stem": "PAGE 01_down_3Low",
+      "jtd": "ichitaro-source-y-probe/new/PAGE 01_down_3Low.jtd",
+      "pdf": {
+        "cells": [
+          {
+            "text": "R01C01",
+            "x0": 90.36,
+            "top": 170.29,
+            "x1": 122.29,
+            "bottom": 180.73
+          },
+          {
+            "text": "R01C02",
+            "x0": 154.08,
+            "top": 170.29,
+            "x1": 187.78,
+            "bottom": 180.73
+          },
+          {
+            "text": "R01C03",
+            "x0": 223.2,
+            "top": 170.29,
+            "x1": 256.9,
+            "bottom": 180.73
+          },
+          {
+            "text": "R02C01",
+            "x0": 90.36,
+            "top": 203.77,
+            "x1": 123.97,
+            "bottom": 214.21
+          },
+          {
+            "text": "R02C02",
+            "x0": 154.08,
+            "top": 203.77,
+            "x1": 189.46,
+            "bottom": 214.21
+          },
+          {
+            "text": "R02C03",
+            "x0": 223.2,
+            "top": 203.77,
+            "x1": 258.58,
+            "bottom": 214.21
+          }
+        ],
+        "surrounding": [
+          {
+            "text": "PAGE",
+            "x0": 85.08,
+            "top": 86.29,
+            "x1": 110.38,
+            "bottom": 96.73
+          }
+        ],
+        "firstCell": {
+          "text": "R01C01",
+          "x0": 90.36,
+          "top": 170.29,
+          "x1": 122.29,
+          "bottom": 180.73
+        }
+      },
+      "layerTreeEvidence": ".omo/evidence/source-table-layout-promotion-20260705/page01-flow-down-down3-layer-tree.json",
+      "tableCandidate": {
+        "idx": 0,
+        "kind": "documentTextControlRunTableCandidate",
+        "basis": "unit",
+        "intervals": 2,
+        "firstLine": 2,
+        "lastLine": 6,
+        "sourceStart": 102,
+        "sourceEnd": 311,
+        "cells": 6,
+        "emptyCells": 0,
+        "sourceCells": 6,
+        "cols": 3,
+        "decoded": false
+      },
+      "lineMarkRecordIndexes": [
+        5,
+        7
+      ],
+      "lineMarkStride": null,
+      "lineMarkRowsExactAndContiguous": false,
+      "lineMarkRowRecordSelection": "selected-overlap-record",
+      "projectionKind": "diagnosticProjection",
+      "sourceDerivedLayoutRenderable": false,
+      "renderPromotionBlockedReason": "source-derived-layout-not-renderable",
+      "pageOriginAuthority": "fallbackTextAnchors",
+      "renderPromoted": false,
+      "deltaVsBase": {
+        "firstLineMarkIndexDelta": 3,
+        "firstCellTopDeltaPt": 50.4,
+        "expectedDeltaFromLineIndexPt": 50.4,
+        "firstCellTopResidualPt": 0.0,
+        "firstCellXDeltaPt": 0.0,
+        "sourceStartDelta": 3
+      }
+    },
+    {
+      "key": "down4",
+      "stem": "PAGE 01_down_4Low",
+      "jtd": "ichitaro-source-y-probe/new/PAGE 01_down_4Low.jtd",
+      "pdf": {
+        "cells": [
+          {
+            "text": "R01C01",
+            "x0": 90.36,
+            "top": 186.97,
+            "x1": 122.29,
+            "bottom": 197.41
+          },
+          {
+            "text": "R01C02",
+            "x0": 154.08,
+            "top": 186.97,
+            "x1": 187.78,
+            "bottom": 197.41
+          },
+          {
+            "text": "R01C03",
+            "x0": 223.2,
+            "top": 186.97,
+            "x1": 256.9,
+            "bottom": 197.41
+          },
+          {
+            "text": "R02C01",
+            "x0": 90.36,
+            "top": 220.57,
+            "x1": 123.97,
+            "bottom": 231.01
+          },
+          {
+            "text": "R02C02",
+            "x0": 154.08,
+            "top": 220.57,
+            "x1": 189.46,
+            "bottom": 231.01
+          },
+          {
+            "text": "R02C03",
+            "x0": 223.2,
+            "top": 220.57,
+            "x1": 258.58,
+            "bottom": 231.01
+          }
+        ],
+        "surrounding": [
+          {
+            "text": "PAGE",
+            "x0": 85.08,
+            "top": 86.29,
+            "x1": 110.38,
+            "bottom": 96.73
+          }
+        ],
+        "firstCell": {
+          "text": "R01C01",
+          "x0": 90.36,
+          "top": 186.97,
+          "x1": 122.29,
+          "bottom": 197.41
+        }
+      },
+      "layerTreeEvidence": ".omo/evidence/source-table-layout-promotion-20260705/page01-flow-down-down4-layer-tree.json",
+      "tableCandidate": {
+        "idx": 0,
+        "kind": "documentTextControlRunTableCandidate",
+        "basis": "unit",
+        "intervals": 2,
+        "firstLine": 2,
+        "lastLine": 6,
+        "sourceStart": 103,
+        "sourceEnd": 312,
+        "cells": 6,
+        "emptyCells": 0,
+        "sourceCells": 6,
+        "cols": 3,
+        "decoded": false
+      },
+      "lineMarkRecordIndexes": [
+        6,
+        8
+      ],
+      "lineMarkStride": null,
+      "lineMarkRowsExactAndContiguous": false,
+      "lineMarkRowRecordSelection": "selected-overlap-record",
+      "projectionKind": "diagnosticProjection",
+      "sourceDerivedLayoutRenderable": false,
+      "renderPromotionBlockedReason": "source-derived-layout-not-renderable",
+      "pageOriginAuthority": "fallbackTextAnchors",
+      "renderPromoted": false,
+      "deltaVsBase": {
+        "firstLineMarkIndexDelta": 4,
+        "firstCellTopDeltaPt": 67.08,
+        "expectedDeltaFromLineIndexPt": 67.2,
+        "firstCellTopResidualPt": -0.12,
+        "firstCellXDeltaPt": 0.0,
+        "sourceStartDelta": 4
+      }
+    }
+  ],
+  "compareToBase": [
+    {
+      "key": "down1",
+      "stem": "PAGE 01_down_1Low",
+      "rawSummaryLines": [
+        "line-summary\tbaseDeclared=8\tcandidateDeclared=9\tbaseParsed=7\tcandidateParsed=8\tlineSignatureSame=false",
+        "page-summary\tbaseFamily=fixed84\tcandidateFamily=fixed84\tbaseEntries=3\tcandidateEntries=3\tpageTupleSignatureSame=true",
+        "table-summary\tbaseCandidates=1\tcandidateCandidates=1\tbaseSparseCandidates=0\tcandidateSparseCandidates=0\tbaseNonEmptyCells=6\tcandidateNonEmptyCells=6\ttableSignatureSame=false",
+        "table-line-header-summary\tbaseRows=2\tcandidateRows=2\tbaseFirstCellOffset=2\tcandidateFirstCellOffset=2\tfirstCellOffsetDelta=0\tbaseCellOffsets=2,26,52|2,26,52\tcandidateCellOffsets=2,26,52|2,26,52\tlineHeaderSignatureSame=false",
+        "admission\tready=false\treason=direct-source-diff-diagnostic-only"
+      ]
+    },
+    {
+      "key": "down2",
+      "stem": "PAGE 01_down_2Low",
+      "rawSummaryLines": [
+        "line-summary\tbaseDeclared=8\tcandidateDeclared=10\tbaseParsed=7\tcandidateParsed=9\tlineSignatureSame=false",
+        "page-summary\tbaseFamily=fixed84\tcandidateFamily=fixed84\tbaseEntries=3\tcandidateEntries=3\tpageTupleSignatureSame=true",
+        "table-summary\tbaseCandidates=1\tcandidateCandidates=1\tbaseSparseCandidates=0\tcandidateSparseCandidates=0\tbaseNonEmptyCells=6\tcandidateNonEmptyCells=6\ttableSignatureSame=false",
+        "table-line-header-summary\tbaseRows=2\tcandidateRows=2\tbaseFirstCellOffset=2\tcandidateFirstCellOffset=2\tfirstCellOffsetDelta=0\tbaseCellOffsets=2,26,52|2,26,52\tcandidateCellOffsets=2,26,52|2,26,52\tlineHeaderSignatureSame=false",
+        "admission\tready=false\treason=direct-source-diff-diagnostic-only"
+      ]
+    },
+    {
+      "key": "down3",
+      "stem": "PAGE 01_down_3Low",
+      "rawSummaryLines": [
+        "line-summary\tbaseDeclared=8\tcandidateDeclared=11\tbaseParsed=7\tcandidateParsed=10\tlineSignatureSame=false",
+        "page-summary\tbaseFamily=fixed84\tcandidateFamily=fixed84\tbaseEntries=3\tcandidateEntries=3\tpageTupleSignatureSame=true",
+        "table-summary\tbaseCandidates=1\tcandidateCandidates=1\tbaseSparseCandidates=0\tcandidateSparseCandidates=0\tbaseNonEmptyCells=6\tcandidateNonEmptyCells=6\ttableSignatureSame=false",
+        "table-line-header-summary\tbaseRows=2\tcandidateRows=2\tbaseFirstCellOffset=2\tcandidateFirstCellOffset=2\tfirstCellOffsetDelta=0\tbaseCellOffsets=2,26,52|2,26,52\tcandidateCellOffsets=2,26,52|2,26,52\tlineHeaderSignatureSame=false",
+        "admission\tready=false\treason=direct-source-diff-diagnostic-only"
+      ]
+    },
+    {
+      "key": "down4",
+      "stem": "PAGE 01_down_4Low",
+      "rawSummaryLines": [
+        "line-summary\tbaseDeclared=8\tcandidateDeclared=12\tbaseParsed=7\tcandidateParsed=11\tlineSignatureSame=false",
+        "page-summary\tbaseFamily=fixed84\tcandidateFamily=fixed84\tbaseEntries=3\tcandidateEntries=3\tpageTupleSignatureSame=true",
+        "table-summary\tbaseCandidates=1\tcandidateCandidates=1\tbaseSparseCandidates=0\tcandidateSparseCandidates=0\tbaseNonEmptyCells=6\tcandidateNonEmptyCells=6\ttableSignatureSame=false",
+        "table-line-header-summary\tbaseRows=2\tcandidateRows=2\tbaseFirstCellOffset=2\tcandidateFirstCellOffset=2\tfirstCellOffsetDelta=0\tbaseCellOffsets=2,26,52|2,26,52\tcandidateCellOffsets=2,26,52|2,26,52\tlineHeaderSignatureSame=false",
+        "admission\tready=false\treason=direct-source-diff-diagnostic-only"
+      ]
+    }
+  ]
+}

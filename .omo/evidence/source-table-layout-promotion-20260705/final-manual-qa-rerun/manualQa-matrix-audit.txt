@@ -1,0 +1,285 @@
+== jq summary ==
+{
+  "surfaceEvidenceCount": 6,
+  "adversarialCasesCount": 3,
+  "artifactRefsCount": 13,
+  "surfaceVerdicts": [
+    "PASS",
+    "PASS",
+    "PASS",
+    "PASS",
+    "PASS",
+    "PASS"
+  ],
+  "adversarialVerdicts": [
+    "PASS",
+    "PASS",
+    "PASS"
+  ],
+  "artifactIds": [
+    "qa-notepad",
+    "s001",
+    "s002",
+    "s003",
+    "s004",
+    "s005",
+    "s006",
+    "s007",
+    "s008",
+    "a001r",
+    "a002r",
+    "a002s",
+    "a003r"
+  ]
+}
+
+== raw matrix ==
+{
+  "manualQa": "clean",
+  "surfaceEvidence": [
+    {
+      "scenarioId": "S001",
+      "criterionRef": "artifactChecks",
+      "surface": "filesystem/data",
+      "exactInvocation": "find .omo/evidence/source-table-layout-promotion-20260705 -maxdepth 1 -type f -print0 | xargs -0 stat -f \"%z %N\"",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "s001"
+      ]
+    },
+    {
+      "scenarioId": "S002",
+      "criterionRef": "C001 source/PDF deltas",
+      "surface": "data transcript",
+      "exactInvocation": "python3 parser over .omo/evidence/source-table-layout-promotion-20260705/c001-source-and-pdf-sweep.txt",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "s002"
+      ]
+    },
+    {
+      "scenarioId": "S004",
+      "criterionRef": "C002 RED blocked-safe logic",
+      "surface": "data transcript",
+      "exactInvocation": "python3 parser over .omo/evidence/source-table-layout-promotion-20260705/c002-render-admission-or-blocker.txt",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "s004"
+      ]
+    },
+    {
+      "scenarioId": "S006",
+      "criterionRef": "C003 targeted regression safety",
+      "surface": "CLI",
+      "exactInvocation": "cd /Users/kimuj5090/Documents/rjtd/rjtd && cargo test -p rjtd-cli --test source_y_probe -- --nocapture",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "s006"
+      ]
+    },
+    {
+      "scenarioId": "S007",
+      "criterionRef": "C003 captured regression and cleanup evidence",
+      "surface": "data transcript",
+      "exactInvocation": "python3 parser over .omo/evidence/source-table-layout-promotion-20260705/c003-regression-safety.txt",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "s007"
+      ]
+    },
+    {
+      "scenarioId": "S008",
+      "criterionRef": "generated render artifacts remain non-promoted text output",
+      "surface": "CLI/data PDF+SVG",
+      "exactInvocation": "python3 pypdf/SVG parser plus pdfinfo over page01*.svg and page01*-rjtd.pdf",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "s008"
+      ]
+    }
+  ],
+  "adversarialCases": [
+    {
+      "scenarioId": "A001R",
+      "criterionRef": "no production hardcoding",
+      "adversarialClass": "sample/reference path hardcoding",
+      "expectedBehavior": "No added production diff lines hardcode PAGE 01, corpus paths, pdf-output, page01, or reference PDF names.",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "a001r"
+      ]
+    },
+    {
+      "scenarioId": "A002S",
+      "criterionRef": "no unsafe render promotion",
+      "adversarialClass": "source-only tableProjection admitted without source-Y transform",
+      "expectedBehavior": "Guard/blocker literals exist and PAGE01 artifacts show diagnosticProjection/renderPromoted=false/sourceDerivedLayoutRenderable=false.",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "a002s",
+        "s004",
+        "s008"
+      ]
+    },
+    {
+      "scenarioId": "A003R",
+      "criterionRef": "cleanup receipt",
+      "adversarialClass": "leftover QA process/session",
+      "expectedBehavior": "No leftover cargo/pdf/python QA processes; no tmux QA session remains or tmux unavailable.",
+      "verdict": "PASS",
+      "artifactRefs": [
+        "a003r"
+      ]
+    }
+  ],
+  "artifactRefs": [
+    {
+      "id": "qa-notepad",
+      "kind": "text",
+      "description": "Bootstrap/tier/skill notes",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/notepad.txt",
+      "bytes": 299
+    },
+    {
+      "id": "s001",
+      "kind": "text",
+      "description": "Required artifact inventory and non-zero size check",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s001-artifact-inventory.txt",
+      "bytes": 1421
+    },
+    {
+      "id": "s002",
+      "kind": "text",
+      "description": "C001 source/PDF delta parser check",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s002-c001-source-pdf-check.txt",
+      "bytes": 1484
+    },
+    {
+      "id": "s003",
+      "kind": "text",
+      "description": "Initial strict layer-tree blocker check; failed because layer JSON omits detailed readiness fields",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s003-c002-layer-tree-blocker-check.txt",
+      "bytes": 1206
+    },
+    {
+      "id": "s004",
+      "kind": "text",
+      "description": "C002 RED/blocker transcript parser check",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s004-c002-red-blocker-transcript-check.txt",
+      "bytes": 574
+    },
+    {
+      "id": "s005",
+      "kind": "text",
+      "description": "Initial PDF sanity using pdfplumber; failed because module unavailable",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s005-render-artifact-sanity.txt",
+      "bytes": 736
+    },
+    {
+      "id": "s006",
+      "kind": "text",
+      "description": "Targeted cargo source_y_probe regression rerun",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s006-targeted-regression-rerun.txt",
+      "bytes": 856
+    },
+    {
+      "id": "s007",
+      "kind": "text",
+      "description": "C003 regression and cleanup transcript check",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s007-c003-transcript-cleanup-check.txt",
+      "bytes": 353
+    },
+    {
+      "id": "s008",
+      "kind": "text",
+      "description": "Generated SVG/PDF sanity with pypdf/pdfinfo",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/s008-render-artifact-sanity-pypdf.txt",
+      "bytes": 1064
+    },
+    {
+      "id": "a001r",
+      "kind": "text",
+      "description": "Diff grep for forbidden PAGE01/reference hardcoding",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a001r-no-added-production-hardcoding-diff.txt",
+      "bytes": 423
+    },
+    {
+      "id": "a002r",
+      "kind": "text",
+      "description": "Diff-only render-promotion guard check; failed because guard strings were pre-existing infrastructure",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a002r-diff-render-promotion-guard.txt",
+      "bytes": 610
+    },
+    {
+      "id": "a002s",
+      "kind": "text",
+      "description": "Source/artifact render guard infrastructure check",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a002s-source-and-artifact-render-guard.txt",
+      "bytes": 20170
+    },
+    {
+      "id": "a003r",
+      "kind": "text",
+      "description": "Runtime/process cleanup receipt",
+      "path": "/Users/kimuj5090/Documents/rjtd/.omo/evidence/source-table-layout-promotion-20260705/final-manual-qa/a003r-cleanup-receipt.txt",
+      "bytes": 494
+    }
+  ],
+  "findings": [
+    "C001 independently validates a stable 3x2 table candidate across baseline/down/right samples with decoded=false and coherent source/PDF deltas.",
+    "C002 independently validates blocked-safe render admission: promotion RED assertion remains false and sourceDerivedLayoutRenderable/renderPromoted are false in the transcript.",
+    "Generated layer-tree JSON proves diagnosticProjection/decoded=false but omits the detailed readiness/blocker fields; C002 transcript is the detailed blocker artifact.",
+    "Initial pdfplumber-based PDF QA could not run in system python; rerun with pypdf plus pdfinfo passed.",
+    "Diff-only guard check did not show blocker strings as newly added; source/artifact check confirms guard infrastructure exists and is exercised by artifacts."
+  ],
+  "residualRisks": [
+    "No production source-only tableProjection is justified by this QA; page-Y/source transform remains the explicit blocker.",
+    "Some source guard strings are pre-existing infrastructure rather than newly added diff lines, so the strongest evidence is runtime/artifact behavior, not diff novelty.",
+    "PDF text sanity verifies labels and page count, not visual coordinate equivalence of rjtd PDFs to reference PDFs."
+  ],
+  "supersededFailures": [
+    {
+      "failedArtifact": "s003-c002-layer-tree-blocker-check.txt",
+      "reason": "Initial parser expected detailed readiness fields directly inside layer-tree JSON; those fields are carried by the C002 transcript artifact instead.",
+      "supersededBy": [
+        "s004-c002-red-blocker-transcript-check.txt",
+        "../c002-render-admission-or-blocker.txt"
+      ],
+      "resolution": "resolved-pass"
+    },
+    {
+      "failedArtifact": "s005-render-artifact-sanity.txt",
+      "reason": "Initial PDF sanity used unavailable pdfplumber in that QA environment.",
+      "supersededBy": [
+        "s008-render-artifact-sanity-pypdf.txt"
+      ],
+      "resolution": "resolved-pass"
+    },
+    {
+      "failedArtifact": "a001-no-production-hardcoding-grep.txt",
+      "reason": "Initial broad grep matched non-production evidence/probe paths. The production-diff hardcoding check is the admissible adversarial surface.",
+      "supersededBy": [
+        "a001r-no-added-production-hardcoding-diff.txt"
+      ],
+      "resolution": "resolved-pass"
+    },
+    {
+      "failedArtifact": "a002r-diff-render-promotion-guard.txt",
+      "reason": "Diff-only guard novelty was the wrong expectation because render-admission guard strings are pre-existing safety infrastructure.",
+      "supersededBy": [
+        "a002s-source-and-artifact-render-guard.txt",
+        "s004-c002-red-blocker-transcript-check.txt"
+      ],
+      "resolution": "resolved-pass"
+    },
+    {
+      "failedArtifact": "a003-cleanup-receipt.txt",
+      "reason": "Initial process grep matched its own running shell command.",
+      "supersededBy": [
+        "a003r-cleanup-receipt.txt"
+      ],
+      "resolution": "resolved-pass"
+    }
+  ],
+  "writtenAtEpoch": 1783257634
+}

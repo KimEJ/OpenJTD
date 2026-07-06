@@ -1,0 +1,75 @@
+Scope: source-y-probe-compare non-admissible table flow-y hypothesis
+Command cwd: /Users/kimuj5090/Documents/rjtd
+
+Purpose:
+
+Record the observed PAGE01 down-sample stride correlation as a named
+non-admissible hypothesis, without changing render behavior or relaxing the
+sourceOnlyPageYRenderAdmissionGate.
+
+RED:
+
+Command:
+
+cd /Users/kimuj5090/Documents/rjtd/rjtd
+cargo test -p rjtd-cli --test source_y_probe \
+  local_new_probe_compare_reports_table_flow_y_shift_when_available \
+  -- --ignored --nocapture
+
+Result:
+
+- FAILED before implementation.
+- Missing expected line:
+  `table-flow-y-hypothesis	strideCorrelationObserved=true	transformProven=false	renderAdmissible=false	hypothesis=line-mark-record-stride-correlates-with-flow-y	blockedReason=line-mark-rows-not-exact-source-boundaries`
+
+GREEN:
+
+Commands:
+
+cd /Users/kimuj5090/Documents/rjtd/rjtd
+cargo fmt --all --check
+cargo check -p rjtd-cli
+cargo test -p rjtd-cli --test source_y_probe \
+  local_new_probe_compare_reports_table_flow_y_shift_when_available \
+  -- --ignored --nocapture
+
+Results:
+
+- cargo fmt --all --check: PASS
+- cargo check -p rjtd-cli: PASS
+- ignored source_y_probe table-flow-y test: PASS, 1 passed
+
+CLI down-sample surface:
+
+CASE down_1
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=3,5	lineMarkRecordDelta=1	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=100	firstRowSourceStartDelta=1
+table-flow-y-admission-summary	baseLineMarkRecordStride=2	candidateLineMarkRecordStride=2	baseExactSourceRangeMatchCount=0	candidateExactSourceRangeMatchCount=0	baseRowsExactAndContiguous=false	candidateRowsExactAndContiguous=false	blocker=line-mark-rows-not-exact-source-boundaries
+table-flow-y-hypothesis	strideCorrelationObserved=true	transformProven=false	renderAdmissible=false	hypothesis=line-mark-record-stride-correlates-with-flow-y	blockedReason=line-mark-rows-not-exact-source-boundaries
+CASE down_2
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=4,6	lineMarkRecordDelta=2	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=101	firstRowSourceStartDelta=2
+table-flow-y-admission-summary	baseLineMarkRecordStride=2	candidateLineMarkRecordStride=2	baseExactSourceRangeMatchCount=0	candidateExactSourceRangeMatchCount=0	baseRowsExactAndContiguous=false	candidateRowsExactAndContiguous=false	blocker=line-mark-rows-not-exact-source-boundaries
+table-flow-y-hypothesis	strideCorrelationObserved=true	transformProven=false	renderAdmissible=false	hypothesis=line-mark-record-stride-correlates-with-flow-y	blockedReason=line-mark-rows-not-exact-source-boundaries
+CASE down_3
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=5,7	lineMarkRecordDelta=3	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=102	firstRowSourceStartDelta=3
+table-flow-y-admission-summary	baseLineMarkRecordStride=2	candidateLineMarkRecordStride=2	baseExactSourceRangeMatchCount=0	candidateExactSourceRangeMatchCount=0	baseRowsExactAndContiguous=false	candidateRowsExactAndContiguous=false	blocker=line-mark-rows-not-exact-source-boundaries
+table-flow-y-hypothesis	strideCorrelationObserved=true	transformProven=false	renderAdmissible=false	hypothesis=line-mark-record-stride-correlates-with-flow-y	blockedReason=line-mark-rows-not-exact-source-boundaries
+CASE down_4
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=6,8	lineMarkRecordDelta=4	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=103	firstRowSourceStartDelta=4
+table-flow-y-admission-summary	baseLineMarkRecordStride=2	candidateLineMarkRecordStride=2	baseExactSourceRangeMatchCount=0	candidateExactSourceRangeMatchCount=0	baseRowsExactAndContiguous=false	candidateRowsExactAndContiguous=false	blocker=line-mark-rows-not-exact-source-boundaries
+table-flow-y-hypothesis	strideCorrelationObserved=true	transformProven=false	renderAdmissible=false	hypothesis=line-mark-record-stride-correlates-with-flow-y	blockedReason=line-mark-rows-not-exact-source-boundaries
+
+CLI negative surface:
+
+CASE right_1
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=2,4	lineMarkRecordDelta=0	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=111	firstRowSourceStartDelta=12
+CASE right_4
+table-flow-y-summary	baseRows=2	candidateRows=2	baseLineMarkRecords=2,4	candidateLineMarkRecords=2,4	lineMarkRecordDelta=0	uniformLineMarkRecordDelta=true	baseFirstRowSourceStart=99	candidateFirstRowSourceStart=111	firstRowSourceStartDelta=12
+
+Conclusion:
+
+- The down samples now expose a named non-admissible stride-correlation
+  hypothesis.
+- The right samples do not emit the hypothesis because lineMarkRecordDelta is 0
+  while firstRowSourceStartDelta is 12.
+- This is CLI diagnostic plumbing only. It does not promote rendering or relax
+  the model gate.

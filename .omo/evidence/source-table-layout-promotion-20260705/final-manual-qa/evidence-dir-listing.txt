@@ -1,0 +1,17 @@
+total 768
+drwxr-xr-x@ 16 kimuj5090  staff    512 Jul  5 22:16 .
+drwxr-xr-x@  8 kimuj5090  staff    256 Jul  5 22:14 ..
+-rw-r--r--@  1 kimuj5090  staff   9385 Jul  5 22:06 c001-source-and-pdf-sweep.txt
+-rw-r--r--@  1 kimuj5090  staff  18724 Jul  5 22:12 c002-render-admission-blocker.txt
+-rw-r--r--@  1 kimuj5090  staff  19144 Jul  5 22:13 c002-render-admission-or-blocker.txt
+-rw-r--r--@  1 kimuj5090  staff   4608 Jul  5 22:13 c003-regression-safety.txt
+drwxr-xr-x@  4 kimuj5090  staff    128 Jul  5 22:16 final-manual-qa
+-rw-r--r--@  1 kimuj5090  staff  95174 Jul  5 22:08 page01-down4-layer-tree.json
+-rw-r--r--@  1 kimuj5090  staff   7950 Jul  5 22:10 page01-down4-rjtd.pdf
+-rw-r--r--@  1 kimuj5090  staff   2840 Jul  5 22:10 page01-down4.svg
+-rw-r--r--@  1 kimuj5090  staff  95156 Jul  5 22:08 page01-layer-tree.json
+-rw-r--r--@  1 kimuj5090  staff  95730 Jul  5 22:08 page01-right4-layer-tree.json
+-rw-r--r--@  1 kimuj5090  staff   7950 Jul  5 22:10 page01-right4-rjtd.pdf
+-rw-r--r--@  1 kimuj5090  staff   2840 Jul  5 22:10 page01-right4.svg
+-rw-r--r--@  1 kimuj5090  staff   7950 Jul  5 22:10 page01-rjtd.pdf
+-rw-r--r--@  1 kimuj5090  staff   2840 Jul  5 22:08 page01.svg

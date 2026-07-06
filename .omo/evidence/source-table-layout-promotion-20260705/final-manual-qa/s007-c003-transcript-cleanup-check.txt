@@ -1,0 +1,6 @@
+Scenario S007 surface=data transcript C003 cleanup/regression evidence
+Invocation: python3 parser over .omo/evidence/source-table-layout-promotion-20260705/c003-regression-safety.txt
+PASS observable: C003 captured fmt/check/two cargo test commands/git diff --check exit=0 plus cleanup receipt.
+missing_required_strings []
+exit_zero_count 5
+VERDICT PASS
