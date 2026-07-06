@@ -1,2 +1,0 @@
-Invocation: git diff -- rjtd/crates/rjtd-model/src/lib.rs rjtd/crates/rjtd-cli/src/main.rs | rg -n -i "tableProjection|renderPromoted|sourceDerivedLayoutRenderable|PAGE01|PAGE 01|pdf-output|ichitaro-source-y-probe"
-VERDICT PASS: no production diff hits for promotion/sample hardcoding terms

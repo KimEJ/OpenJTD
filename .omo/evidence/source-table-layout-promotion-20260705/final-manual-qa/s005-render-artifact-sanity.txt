@@ -1,8 +1,0 @@
-Scenario S005 surface=data generated SVG/PDF projection sanity
-Invocation: python3 checks page01*.svg text/line/rect counts and pdfplumber summary for page01*-rjtd.pdf
-PASS observable: SVG/PDF artifacts have text output but no table grid promotion markers/lines; PDFs contain 6 RxxCxx words.
-page01.svg {'bytes': 2840, '<text': 6, '<line': 0, 'tableGridCandidate': 0, 'rjtd-column-grid-candidate': 0} PASS
-page01-down4.svg {'bytes': 2840, '<text': 6, '<line': 0, 'tableGridCandidate': 0, 'rjtd-column-grid-candidate': 0} PASS
-page01-right4.svg {'bytes': 2840, '<text': 6, '<line': 0, 'tableGridCandidate': 0, 'rjtd-column-grid-candidate': 0} PASS
-pdfplumber_import_error ModuleNotFoundError("No module named 'pdfplumber'")
-VERDICT FAIL

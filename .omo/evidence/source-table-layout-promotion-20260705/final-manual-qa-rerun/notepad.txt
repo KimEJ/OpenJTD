@@ -1,8 +1,0 @@
-manual QA rerun: final-manual-qa-rerun
-Tier: LIGHT - read-only artifact/content verification, no product changes.
-Skill survey: ultrawork used for ULW-triggered evidence workflow; no code-editing, frontend, debugging, or git-history skills needed.
-Success criteria:
-1. Referenced artifact paths exist and are non-empty.
-2. Superseded manual QA failures are explicitly resolved.
-3. final-review-fixes covers code-quality blockers and reruns default + ignored local-corpus tests.
-4. User outcome remains blocked-safe no production promotion.

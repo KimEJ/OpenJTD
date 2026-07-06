@@ -1,8 +1,0 @@
-Scenario S004 surface=data transcript C002 render-admission blocker
-Invocation: python3 parser over .omo/evidence/source-table-layout-promotion-20260705/c002-render-admission-or-blocker.txt
-PASS observable: C002 records promotion_RED_assertion_passed=False and blocker fields sourceDerivedLayoutRenderable=false, renderPromoted=false, sourcePageYPromotionReady=false, projectionKind=diagnosticProjection, decodedSourcePlacementMatchCount=6.
-missing_required_strings []
-promotion_red_assertion_count 3
-diagnostic_projection_count 3
-render_promoted_false_count 3
-VERDICT PASS

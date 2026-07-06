@@ -1,6 +1,0 @@
-Adversarial A002R surface=source/diff render-promotion guard
-Invocation: git diff -- rjtd/crates/rjtd-model/src/lib.rs | rg "^\+.*(renderPromoted|sourceDerivedLayoutRenderable|tableProjection|source-page-y-transform-not-decoded|source-derived-layout-not-renderable)"
-PASS observable: added diff lines include blocker/not-renderable guard strings and do not add unconditional tableProjection/renderPromoted true promotion for the PAGE01 path.
-missing_required_added ['source-derived-layout-not-renderable', 'source-page-y-transform-not-decoded', 'sourceDerivedLayoutRenderable']
-forbidden_added []
-VERDICT FAIL
