@@ -2,6 +2,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Write};
 use std::path::Path;
 
+mod probe_compare;
+mod probe_corpus;
+mod probe_format;
+mod probe_line_diff;
+mod probe_manifest;
+mod probe_page_diff;
+mod probe_signals;
+mod probe_validation;
+
 use rjtd_core::Error;
 use rjtd_core::container::{
     CfbSectorChain, EntryKind, StreamStorage, inspect_cfb_directory, inspect_cfb_entries,
@@ -648,6 +657,26 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             let bytes = read_file(path)?;
             let stream = read_cfb_stream(&bytes, "/LineMark").map_err(|error| error.to_string())?;
             write_line_mark_intervals(&stream)
+        }
+        Some("source-y-probe-audit") => {
+            let path = required_path(args.next(), "source-y-probe-audit")?;
+            let lines = probe_corpus::source_y_probe_audit_lines(Path::new(&path))?;
+            for line in lines {
+                write_stdout_line(&line)?;
+            }
+            Ok(())
+        }
+        Some("source-y-probe-compare") => {
+            let base_path = required_path(args.next(), "source-y-probe-compare")?;
+            let candidate_path = required_path(args.next(), "source-y-probe-compare")?;
+            let lines = probe_compare::source_y_probe_compare_lines(
+                Path::new(&base_path),
+                Path::new(&candidate_path),
+            )?;
+            for line in lines {
+                write_stdout_line(&line)?;
+            }
+            Ok(())
         }
         Some("line-mark-text-context") => {
             let path = required_path(args.next(), "line-mark-text-context")?;
@@ -4593,6 +4622,8 @@ Usage:
   rjtd stream-word-frequencies <file.jtd> <stream-path>
   rjtd line-mark-tags <file.jtd>
   rjtd line-mark-intervals <file.jtd>
+  rjtd source-y-probe-audit <corpus-dir>
+  rjtd source-y-probe-compare <base.jtd> <candidate.jtd>
   rjtd line-mark-text-context <file.jtd>
   rjtd stream-dwords <file.jtd> <stream-path>
   rjtd stream-dword-frequencies <file.jtd> <stream-path>
