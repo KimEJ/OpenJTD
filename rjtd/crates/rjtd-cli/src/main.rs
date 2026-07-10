@@ -2,6 +2,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Write};
 use std::path::Path;
 
+mod probe_compare;
+mod probe_corpus;
+mod probe_format;
+mod probe_line_diff;
+mod probe_manifest;
+mod probe_page_diff;
+mod probe_signals;
+mod probe_validation;
+
 use rjtd_core::Error;
 use rjtd_core::container::{
     CfbSectorChain, EntryKind, StreamStorage, inspect_cfb_directory, inspect_cfb_entries,
@@ -51,6 +60,7 @@ const EMBEDDED_PRESS_SNAPSHOT_BODY_LENGTH_OFFSET: usize = 0x24;
 const EMBEDDED_PRESS_SNAPSHOT_OBJECT_COUNT_OFFSET: usize = 0x34;
 const EMBEDDED_PRESS_SNAPSHOT_WIDTH_OFFSET: usize = 0x48;
 const EMBEDDED_PRESS_SNAPSHOT_HEIGHT_OFFSET: usize = 0x4c;
+const JSFART2_CONTENTS_MAGIC_UTF16LE: &[u8; 22] = b"M\0S\0T\0U\0D\0I\0O\0.\0O\0C\0X\0";
 const JSEQ3_CONTENTS_MAGIC_UTF16LE: &[u8; 16] = b"M\0A\0T\0H\0.\0V\0A\0F\0";
 const JSEQ3_SO_TRAILER_BYTES: usize = 64;
 const JSEQ3_SO_FIELD_BYTES: usize = 4;
@@ -648,6 +658,26 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
             let stream = read_cfb_stream(&bytes, "/LineMark").map_err(|error| error.to_string())?;
             write_line_mark_intervals(&stream)
         }
+        Some("source-y-probe-audit") => {
+            let path = required_path(args.next(), "source-y-probe-audit")?;
+            let lines = probe_corpus::source_y_probe_audit_lines(Path::new(&path))?;
+            for line in lines {
+                write_stdout_line(&line)?;
+            }
+            Ok(())
+        }
+        Some("source-y-probe-compare") => {
+            let base_path = required_path(args.next(), "source-y-probe-compare")?;
+            let candidate_path = required_path(args.next(), "source-y-probe-compare")?;
+            let lines = probe_compare::source_y_probe_compare_lines(
+                Path::new(&base_path),
+                Path::new(&candidate_path),
+            )?;
+            for line in lines {
+                write_stdout_line(&line)?;
+            }
+            Ok(())
+        }
         Some("line-mark-text-context") => {
             let path = required_path(args.next(), "line-mark-text-context")?;
             let bytes = read_file(path)?;
@@ -906,8 +936,12 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 .iter()
                 .filter(|candidate| candidate.jseq3_formula.is_some())
                 .count();
+            let jsfart_stream_profile_count = candidates
+                .iter()
+                .filter(|candidate| candidate.jsfart_stream_profile.is_some())
+                .count();
             write_stdout_line(&format!(
-                "summary\tstreams={}\tcandidates={}\tunreadable={}\tobject-path={}\timage-path={}\tshape-path={}\ttable-path={}\tvisual-list-path={}\tvisual-list-raster={}\tfigure-link={}\tembedded-press-snapshot={}\tjseq3-formula={}\tso-marker={}\timage-signature={}\tsvg-signature={}\tdecoded=false",
+                "summary\tstreams={}\tcandidates={}\tunreadable={}\tobject-path={}\timage-path={}\tshape-path={}\ttable-path={}\tvisual-list-path={}\tvisual-list-raster={}\tfigure-link={}\tembedded-press-snapshot={}\tjseq3-formula={}\tjsfart-stream-profile={}\tso-marker={}\timage-signature={}\tsvg-signature={}\tdecoded=false",
                 stream_count,
                 candidates.len(),
                 unreadable_count,
@@ -920,6 +954,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                 object_stream_reason_count(&reason_counts, "figure-link"),
                 embedded_press_snapshot_count,
                 jseq3_formula_count,
+                jsfart_stream_profile_count,
                 object_stream_reason_count(&reason_counts, "so-marker"),
                 object_stream_reason_count(&reason_counts, "image-signature"),
                 object_stream_reason_count(&reason_counts, "svg-signature"),
@@ -927,7 +962,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
 
             for (index, candidate) in candidates.iter().enumerate() {
                 write_stdout_line(&format!(
-                    "object-stream-candidate\t{}\tstream={}\tsize={}\treasons={}\timage-signatures={}\tsvg-offsets={}\tso-offsets={}\tvisual-list={}\tembedded-press-snapshot={}\tjseq3-formula={}\tprefix={}\tdecoded=false",
+                    "object-stream-candidate\t{}\tstream={}\tsize={}\treasons={}\timage-signatures={}\tsvg-offsets={}\tso-offsets={}\tvisual-list={}\tembedded-press-snapshot={}\tjseq3-formula={}\tjsfart-stream-profile={}\tprefix={}\tdecoded=false",
                     index,
                     escaped_path(&candidate.path),
                     candidate.size,
@@ -940,6 +975,9 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                         candidate.embedded_press_snapshot.as_ref()
                     ),
                     format_jseq3_formula_candidate(candidate.jseq3_formula.as_ref()),
+                    format_jsfart_stream_profile_candidate(
+                        candidate.jsfart_stream_profile.as_ref()
+                    ),
                     candidate.prefix_hex,
                 ))?;
             }
@@ -1323,6 +1361,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     let bbox_height = normalized.3.saturating_sub(normalized.1);
                     let bbox_plausible = fdm_bbox_is_plausible(bbox);
                     let complete_payloads = fdm_entry_complete_payload_count(candidate, entry);
+                    let reason =
+                        fdm_image_candidate_render_blocked_reason(entry, complete_payloads);
                     candidate_count += 1;
                     image_hit_count += entry.segment_image_signature_hits().len();
                     complete_payload_count += complete_payloads;
@@ -1331,7 +1371,7 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     }
 
                     write_stdout_line(&format!(
-                        "object-fdm-image-candidate\tsource={}\tindex={}\trow={}\tvector-offset={}\tnext-vector-offset={}\tvector-length={}\tkind=0x{:04x}\tbbox={},{},{},{}\tnormalized-bbox={},{},{},{}\tbbox-size={}x{}\tbbox-order={}\tbbox-plausible={}\timage-hits={}\tcomplete-payloads={}\timage-signatures={}\tsegment-image-signatures={}\trenderable=false\treason=page-placement-unproven\tdecoded=false",
+                        "object-fdm-image-candidate\tsource={}\tindex={}\trow={}\tvector-offset={}\tnext-vector-offset={}\tvector-length={}\tkind=0x{:04x}\tbbox={},{},{},{}\tnormalized-bbox={},{},{},{}\tbbox-size={}x{}\tbbox-order={}\tbbox-plausible={}\timage-hits={}\tcomplete-payloads={}\timage-signatures={}\tsegment-image-signatures={}\trenderable=false\treason={}\tdecoded=false",
                         escaped_path(candidate.path()),
                         escaped_path(entry.index_path()),
                         entry.row_index(),
@@ -1354,7 +1394,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                         entry.segment_image_signature_hits().len(),
                         complete_payloads,
                         format_model_object_signature_hits(entry.image_signature_hits()),
-                        format_model_object_signature_hits(entry.segment_image_signature_hits())
+                        format_model_object_signature_hits(entry.segment_image_signature_hits()),
+                        reason
                     ))?;
                 }
             }
@@ -1406,9 +1447,14 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                     } else {
                         missing_frame_count += 1;
                     }
+                    let reason = fdm_frame_link_render_blocked_reason(
+                        frame_record,
+                        entry,
+                        &complete_payload_spans,
+                    );
 
                     write_stdout_line(&format!(
-                        "object-fdm-frame-link\tsource={}\tindex={}\trow={}\timage-hits={}\tcomplete-payloads={}\tframe-linked={}\tframe-source={}\tframe-row={}\tframe-start={}\tframe-object-id={}\tframe-kind={}\tframe-type={}\tframe-geometry={}\tframe-size={}\tpayload-dimensions={}\tdimensioned-payloads={}\tbest-aspect-delta-permille={}\tlink-basis=fdm-row-index-to-frame-object-id\trenderable=false\treason=page-placement-unproven\tdecoded=false",
+                        "object-fdm-frame-link\tsource={}\tindex={}\trow={}\timage-hits={}\tcomplete-payloads={}\tframe-linked={}\tframe-source={}\tframe-row={}\tframe-start={}\tframe-object-id={}\tframe-kind={}\tframe-type={}\tframe-geometry={}\tframe-size={}\tpayload-dimensions={}\tdimensioned-payloads={}\tbest-aspect-delta-permille={}\tlink-basis=fdm-row-index-to-frame-object-id\trenderable=false\treason={}\tdecoded=false",
                         escaped_path(candidate.path()),
                         escaped_path(entry.index_path()),
                         entry.row_index(),
@@ -1440,7 +1486,8 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), String> {
                         format_optional_u64(best_frame_payload_aspect_delta_permille(
                             frame_record,
                             &complete_payload_spans
-                        ))
+                        )),
+                        reason
                     ))?;
                 }
             }
@@ -4575,6 +4622,8 @@ Usage:
   rjtd stream-word-frequencies <file.jtd> <stream-path>
   rjtd line-mark-tags <file.jtd>
   rjtd line-mark-intervals <file.jtd>
+  rjtd source-y-probe-audit <corpus-dir>
+  rjtd source-y-probe-compare <base.jtd> <candidate.jtd>
   rjtd line-mark-text-context <file.jtd>
   rjtd stream-dwords <file.jtd> <stream-path>
   rjtd stream-dword-frequencies <file.jtd> <stream-path>
@@ -5259,6 +5308,7 @@ struct ObjectStreamCandidate {
     visual_list: Option<CliVisualListCandidate>,
     embedded_press_snapshot: Option<CliEmbeddedPressSnapshotCandidate>,
     jseq3_formula: Option<CliJseq3FormulaCandidate>,
+    jsfart_stream_profile: Option<CliJsfartStreamProfileCandidate>,
     prefix_hex: String,
 }
 
@@ -5287,6 +5337,14 @@ struct CliJseq3TextMarkerCandidate {
     offset: usize,
 }
 
+struct CliJsfartStreamProfileCandidate {
+    magic_family: &'static str,
+    magic_family_hex: String,
+    magic_ascii_or_utf16_preview: String,
+    structured_art_candidate_present: bool,
+    render_promotion_blocked_reason: &'static str,
+}
+
 struct ObjectSignatureHit {
     kind: &'static str,
     offset: usize,
@@ -5313,6 +5371,7 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
     let visual_list = visual_list_candidate_from_stream(path, stream);
     let embedded_press_snapshot = embedded_press_snapshot_candidate_from_stream(stream);
     let jseq3_formula = jseq3_formula_candidate_from_stream(path, stream);
+    let jsfart_stream_profile = jsfart_stream_profile_candidate_from_stream(path, stream);
     if figure_link_candidate_from_stream(path, stream) {
         push_unique_reason(&mut reasons, "figure-link");
     }
@@ -5337,6 +5396,7 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
         visual_list,
         embedded_press_snapshot,
         jseq3_formula,
+        jsfart_stream_profile,
         prefix_hex: format_hex_preview(stream, OBJECT_STREAM_PREFIX_PREVIEW_BYTES),
     })
 }
@@ -5436,6 +5496,62 @@ fn jseq3_text_marker_candidates(stream: &[u8]) -> Vec<CliJseq3TextMarkerCandidat
     candidates
 }
 
+fn jsfart_stream_profile_candidate_from_stream(
+    path: &str,
+    stream: &[u8],
+) -> Option<CliJsfartStreamProfileCandidate> {
+    if !path.ends_with("/JSFart2Contents") {
+        return None;
+    }
+    let header_prefix = &stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)];
+    let preview = utf16le_printable_preview(header_prefix);
+    let structured_art_candidate_present = stream.starts_with(JSFART2_CONTENTS_MAGIC_UTF16LE);
+    let render_promotion_blocked_reason = if structured_art_candidate_present {
+        "structured-jsfart-art-still-paint-authority-unproven"
+    } else {
+        "jsfart-variant-layout-undecoded"
+    };
+    Some(CliJsfartStreamProfileCandidate {
+        magic_family: jsfart_stream_magic_family(stream, &preview),
+        magic_family_hex: format_hex_preview(&stream[..stream.len().min(2)], 2),
+        magic_ascii_or_utf16_preview: preview,
+        structured_art_candidate_present,
+        render_promotion_blocked_reason,
+    })
+}
+
+fn jsfart_stream_magic_family(stream: &[u8], utf16le_preview: &str) -> &'static str {
+    if stream.starts_with(JSFART2_CONTENTS_MAGIC_UTF16LE) {
+        "mstudio-ocx-utf16le"
+    } else if utf16le_preview.starts_with("JSFART.") {
+        "jsfart-object-utf16le"
+    } else if stream.get(..2).is_some_and(|prefix| prefix == [0x00, 0x00]) {
+        "zero-prefix"
+    } else if !utf16le_preview.is_empty() {
+        "utf16le-text-prefix"
+    } else {
+        "binary-prefix"
+    }
+}
+
+fn utf16le_printable_preview(bytes: &[u8]) -> String {
+    let mut preview = String::new();
+    for chunk in bytes.chunks_exact(2) {
+        let value = u16::from_le_bytes([chunk[0], chunk[1]]);
+        if value == 0 {
+            break;
+        }
+        let Some(character) = char::from_u32(u32::from(value)) else {
+            break;
+        };
+        if character.is_control() {
+            break;
+        }
+        preview.push(character);
+    }
+    preview
+}
+
 fn utf16le_bytes(text: &str) -> Vec<u8> {
     let mut bytes = Vec::new();
     for unit in text.encode_utf16() {
@@ -5506,6 +5622,22 @@ fn format_jseq3_formula_candidate(candidate: Option<&CliJseq3FormulaCandidate>) 
         format_optional_usize(candidate.so_trailer_offset),
         fields,
         markers
+    )
+}
+
+fn format_jsfart_stream_profile_candidate(
+    candidate: Option<&CliJsfartStreamProfileCandidate>,
+) -> String {
+    let Some(candidate) = candidate else {
+        return "-".to_string();
+    };
+    format!(
+        "{},hex={},preview={},structured-art={},blocked={}",
+        candidate.magic_family,
+        candidate.magic_family_hex,
+        escaped_text(&candidate.magic_ascii_or_utf16_preview),
+        candidate.structured_art_candidate_present,
+        candidate.render_promotion_blocked_reason
     )
 }
 
@@ -6049,6 +6181,19 @@ fn fdm_entry_complete_payload_spans<'a>(
         .collect()
 }
 
+fn fdm_image_candidate_render_blocked_reason(
+    entry: &ObjectFdmIndexEntryCandidate,
+    complete_payload_count: usize,
+) -> &'static str {
+    if complete_payload_count > 0 {
+        "page-placement-unproven"
+    } else if entry.segment_image_signature_hits().is_empty() {
+        "fdm-frame-image-payload-absent"
+    } else {
+        "image-signature-without-complete-payload-role-unproven"
+    }
+}
+
 fn fdm_frame_record_for_entry(
     records: &[ObjectFrameRecordCandidate],
     row_index: usize,
@@ -6057,6 +6202,24 @@ fn fdm_frame_record_for_entry(
     records
         .iter()
         .find(|record| record.object_id() == object_id)
+}
+
+fn fdm_frame_link_render_blocked_reason(
+    frame_record: Option<&ObjectFrameRecordCandidate>,
+    entry: &ObjectFdmIndexEntryCandidate,
+    complete_payload_spans: &[&ObjectImagePayloadSpan],
+) -> &'static str {
+    if frame_record.is_none() {
+        "fdm-frame-record-missing"
+    } else if complete_payload_spans.is_empty() {
+        if entry.segment_image_signature_hits().is_empty() {
+            "fdm-frame-image-payload-absent"
+        } else {
+            "image-signature-without-complete-payload-role-unproven"
+        }
+    } else {
+        "fdm-frame-linked-image-payload-placement-and-paint-order-unproven"
+    }
 }
 
 fn normalize_fdm_bbox(bbox: ObjectFdmIndexBbox) -> (i32, i32, i32, i32) {
