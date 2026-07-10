@@ -131,7 +131,7 @@ fn object_stream_candidates_path() -> PathBuf {
         .unwrap();
     compound.create_storage("/EmbedItems").unwrap();
     compound.create_storage("/EmbedItems/Embedding 1").unwrap();
-    let mut embedded_object = b"object-prefix".to_vec();
+    let mut embedded_object = utf16le_fixture("JSFART.OBJECT");
     embedded_object.extend_from_slice(&[
         b'S', b'O', 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
     ]);
@@ -277,6 +277,14 @@ fn object_frame_row_link_path() -> PathBuf {
 }
 
 fn object_fdm_index_path() -> PathBuf {
+    object_fdm_index_with_vector_tail(tiny_png_payload())
+}
+
+fn object_fdm_signature_only_path() -> PathBuf {
+    object_fdm_index_with_vector_tail(b"\x89PNG\r\n\x1a\ntruncated")
+}
+
+fn object_fdm_index_with_vector_tail(vector_tail: &[u8]) -> PathBuf {
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
     compound
         .create_stream("/DocumentText")
@@ -303,7 +311,7 @@ fn object_fdm_index_path() -> PathBuf {
 
     let mut vector = vec![0x11; 32];
     vector.extend_from_slice(b"head");
-    vector.extend_from_slice(tiny_png_payload());
+    vector.extend_from_slice(vector_tail);
     compound
         .create_stream("/FigureData/main_data/FDMIndex")
         .unwrap()
@@ -1338,6 +1346,11 @@ fn document_view_style_ungrouped_path() -> PathBuf {
 
 fn paper_mark_path() -> PathBuf {
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    compound
+        .create_stream("/DocumentText")
+        .unwrap()
+        .write_all(&document_text_fixture())
+        .unwrap();
     let mut paper_mark = Vec::new();
     paper_mark.extend_from_slice(&2u32.to_be_bytes());
     paper_mark.extend_from_slice(&0x0cu32.to_be_bytes());
@@ -1809,6 +1822,37 @@ fn document_info_command_reports_document_view_styles_writing_mode_candidate() {
             "\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":\"0x1001\""
         )
     );
+}
+
+#[test]
+fn document_info_command_reports_paper_mark_bit_diagnostics() {
+    let path = paper_mark_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("document-info")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_json_brackets_balanced(&stdout);
+    assert!(stdout.contains("\"writingModeCandidateFromPaperMark\":\"vertical-rl\""));
+    assert!(stdout.contains("\"writingModeCandidateDecoded\":false"));
+    assert!(stdout.contains("\"paperMarkFlagBit0VerticalCandidate\":true"));
+    assert!(stdout.contains("\"paperMarkFlagBit17IndexStepCandidate\":false"));
+    assert!(stdout.contains(
+        "\"paperMarkWritingModeCandidateEvidence\":[\"paper-mark-flag-bit0-vertical-corpus-consistent\"]"
+    ));
+    assert!(stdout.contains(
+        "\"paperMarkWritingModeCandidateBlockers\":[\"paper-mark-writing-mode-flag-semantics-unproven\"]"
+    ));
 }
 
 #[test]
@@ -2422,6 +2466,7 @@ fn object_stream_candidates_command_reports_visual_object_inventory() {
         "visual-list-raster=0",
         "embedded-press-snapshot=1",
         "jseq3-formula=1",
+        "jsfart-stream-profile=1",
         "so-marker=3",
         "image-signature=1",
         "svg-signature=1",
@@ -2433,7 +2478,10 @@ fn object_stream_candidates_command_reports_visual_object_inventory() {
         );
     }
     assert!(stdout.contains(
-        "stream=/EmbedItems/Embedding 1/JSFart2Contents\tsize=25\treasons=object-path,so-marker\timage-signatures=-\tsvg-offsets=-\tso-offsets=13\t"
+        "stream=/EmbedItems/Embedding 1/JSFart2Contents\tsize=38\treasons=object-path,so-marker\timage-signatures=-\tsvg-offsets=-\tso-offsets=26\t"
+    ));
+    assert!(stdout.contains(
+        "jsfart-stream-profile=jsfart-object-utf16le,hex=4a00,preview=JSFART.O,structured-art=false,blocked=jsfart-variant-layout-undecoded"
     ));
     assert!(stdout.contains(
         "stream=/EmbedItems/Embedding 1/\\x03EmbeddedPress\tsize=128\treasons=object-path,embedded-press-snapshot\timage-signatures=-\tsvg-offsets=-\tso-offsets=-\tvisual-list=-\tembedded-press-snapshot=JSSnapShot32,2590x460,body=3656,objects=17\t"
@@ -2699,6 +2747,34 @@ fn object_fdm_image_candidates_command_reports_unplaced_image_segments() {
 }
 
 #[test]
+fn object_fdm_image_candidates_command_reports_signature_only_blocker() {
+    let path = object_fdm_signature_only_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("object-fdm-image-candidates")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains(
+        "object-fdm-image-candidate\tsource=/FigureData/main_data/FDMVector\tindex=/FigureData/main_data/FDMIndex\trow=1\tvector-offset=32\tnext-vector-offset=53\tvector-length=21\tkind=0x0b00"
+    ));
+    assert!(stdout.contains(
+        "image-hits=1\tcomplete-payloads=0\timage-signatures=png@36\tsegment-image-signatures=png@4\trenderable=false\treason=image-signature-without-complete-payload-role-unproven\tdecoded=false"
+    ));
+    assert!(stdout.contains(
+        "summary\tsources=1\tcandidates=1\timage-hits=1\tcomplete-payloads=0\tbbox-plausible=1\trenderable=0\tdecoded=false"
+    ));
+}
+
+#[test]
 fn object_fdm_frame_links_command_connects_fdm_rows_to_frame_records() {
     let path = object_fdm_frame_link_path();
     let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
@@ -2717,7 +2793,7 @@ fn object_fdm_frame_links_command_connects_fdm_rows_to_frame_records() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains(
-            "object-fdm-frame-link\tsource=/FigureData/main_data/FDMVector\tindex=/FigureData/main_data/FDMIndex\trow=1\timage-hits=1\tcomplete-payloads=1\tframe-linked=true\tframe-source=/Frame\tframe-row=1\tframe-start=76\tframe-object-id=1\tframe-kind=0x0102\tframe-type=0x0007\tframe-geometry=100,200,300,400\tframe-size=300x400\tpayload-dimensions=png@36:1x1\tdimensioned-payloads=1\tbest-aspect-delta-permille=250\tlink-basis=fdm-row-index-to-frame-object-id\trenderable=false\treason=page-placement-unproven\tdecoded=false"
+            "object-fdm-frame-link\tsource=/FigureData/main_data/FDMVector\tindex=/FigureData/main_data/FDMIndex\trow=1\timage-hits=1\tcomplete-payloads=1\tframe-linked=true\tframe-source=/Frame\tframe-row=1\tframe-start=76\tframe-object-id=1\tframe-kind=0x0102\tframe-type=0x0007\tframe-geometry=100,200,300,400\tframe-size=300x400\tpayload-dimensions=png@36:1x1\tdimensioned-payloads=1\tbest-aspect-delta-permille=250\tlink-basis=fdm-row-index-to-frame-object-id\trenderable=false\treason=fdm-frame-linked-image-payload-placement-and-paint-order-unproven\tdecoded=false"
         ),
         "stdout: {stdout}"
     );
