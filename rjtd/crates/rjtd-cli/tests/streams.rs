@@ -1346,6 +1346,11 @@ fn document_view_style_ungrouped_path() -> PathBuf {
 
 fn paper_mark_path() -> PathBuf {
     let mut compound = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    compound
+        .create_stream("/DocumentText")
+        .unwrap()
+        .write_all(&document_text_fixture())
+        .unwrap();
     let mut paper_mark = Vec::new();
     paper_mark.extend_from_slice(&2u32.to_be_bytes());
     paper_mark.extend_from_slice(&0x0cu32.to_be_bytes());
@@ -1817,6 +1822,37 @@ fn document_info_command_reports_document_view_styles_writing_mode_candidate() {
             "\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":\"0x1001\""
         )
     );
+}
+
+#[test]
+fn document_info_command_reports_paper_mark_bit_diagnostics() {
+    let path = paper_mark_path();
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("document-info")
+        .arg(&path)
+        .output()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_json_brackets_balanced(&stdout);
+    assert!(stdout.contains("\"writingModeCandidateFromPaperMark\":\"vertical-rl\""));
+    assert!(stdout.contains("\"writingModeCandidateDecoded\":false"));
+    assert!(stdout.contains("\"paperMarkFlagBit0VerticalCandidate\":true"));
+    assert!(stdout.contains("\"paperMarkFlagBit17IndexStepCandidate\":false"));
+    assert!(stdout.contains(
+        "\"paperMarkWritingModeCandidateEvidence\":[\"paper-mark-flag-bit0-vertical-corpus-consistent\"]"
+    ));
+    assert!(stdout.contains(
+        "\"paperMarkWritingModeCandidateBlockers\":[\"paper-mark-writing-mode-flag-semantics-unproven\"]"
+    ));
 }
 
 #[test]

@@ -1358,13 +1358,14 @@ impl DocumentCore {
             .as_ref()
             .map(|candidate| json_string(&format!("0x{:04x}", candidate.first_record_code)))
             .unwrap_or_else(|| "null".to_string());
-        let writing_mode_candidate =
-            writing_mode_candidate_from_paper_marks(self.document.paper_marks());
-        let writing_mode_candidate_str = writing_mode_candidate
+        let paper_mark_writing_mode_diagnostics =
+            paper_mark_writing_mode_diagnostics(self.document.paper_marks());
+        let writing_mode_candidate_str = paper_mark_writing_mode_diagnostics
+            .candidate
             .map(|m| format!("\"{}\"", m.as_str()))
             .unwrap_or_else(|| "null".to_string());
         format!(
-            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeDecision\":{},\"writingModeCandidateFromDocumentViewStyles\":{},\"writingModeCandidateFromDocumentViewStylesDecoded\":false,\"writingModeCandidateFromDocumentViewStylesSourceBacked\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":{},\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"fdmOpenStrokeCohortSummary\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
+            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeDecision\":{},\"writingModeCandidateFromDocumentViewStyles\":{},\"writingModeCandidateFromDocumentViewStylesDecoded\":false,\"writingModeCandidateFromDocumentViewStylesSourceBacked\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":{},\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"paperMarkFlagBit0VerticalCandidate\":{},\"paperMarkFlagBit17IndexStepCandidate\":{},\"paperMarkWritingModeCandidateEvidence\":{},\"paperMarkWritingModeCandidateBlockers\":{},\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"fdmOpenStrokeCohortSummary\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
             APP_SOURCE_FORMAT,
             json_string(&self.file_name),
             self.page_count(),
@@ -1381,6 +1382,10 @@ impl DocumentCore {
             document_view_writing_mode_first_code,
             document_view_writing_mode_first_code_hex,
             writing_mode_candidate_str,
+            paper_mark_writing_mode_diagnostics.flag_bit0_vertical_candidate,
+            paper_mark_writing_mode_diagnostics.flag_bit17_index_step_candidate,
+            string_slice_array_json(&paper_mark_writing_mode_diagnostics.evidence),
+            string_slice_array_json(&paper_mark_writing_mode_diagnostics.blockers),
             self.document.blocks().len(),
             self.document.raw_streams().len(),
             self.document.unknown_styles().len(),
@@ -20578,6 +20583,18 @@ fn string_array_json(values: &[String]) -> String {
     output
 }
 
+fn string_slice_array_json(values: &[&str]) -> String {
+    let mut output = String::from("[");
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        output.push_str(&json_string(value));
+    }
+    output.push(']');
+    output
+}
+
 fn font_table_json(fonts: &[DocumentFont]) -> String {
     let mut output = String::from("[");
     for (index, font) in fonts.iter().enumerate() {
@@ -20759,7 +20776,9 @@ fn writing_mode_decision_json(document: &Document, selected: WritingMode) -> Str
     let source_layout_hint = source_document_layout_hint(document, decoded_layout);
     let document_view_candidate =
         writing_mode_candidate_from_document_view_styles(document.unknown_styles());
-    let paper_mark_candidate = writing_mode_candidate_from_paper_marks(document.paper_marks());
+    let paper_mark_writing_mode_diagnostics =
+        paper_mark_writing_mode_diagnostics(document.paper_marks());
+    let paper_mark_candidate = paper_mark_writing_mode_diagnostics.candidate;
     let computed = source_layout_hint
         .as_ref()
         .map(|hint| hint.writing_mode)
@@ -20806,7 +20825,7 @@ fn writing_mode_decision_json(document: &Document, selected: WritingMode) -> Str
         .map(|mode| mode != selected)
         .unwrap_or(false);
     format!(
-        "{{\"selected\":\"{}\",\"source\":{},\"decoded\":false,\"sourceBacked\":{},\"computedBeforeRuntimeOverride\":\"{}\",\"documentViewStylesCandidate\":{},\"documentViewStylesFirstRecordCodeHex\":{},\"sourceDocumentLayoutHintCandidate\":{},\"sourceDocumentLayoutHintBasis\":{},\"sourceDocumentLayoutHintOverridesDecodedLayout\":{},\"sourceDocumentLayoutHintMarginOverridePx\":{},\"sourceDocumentLayoutHintVerticalWrapColumnsOverride\":{},\"paperMarkCandidate\":{},\"paperMarkCandidateDecoded\":false,\"documentViewStylesDisagreesWithSelected\":{},\"sourceDocumentLayoutHintDisagreesWithSelected\":{},\"paperMarkDisagreesWithSelected\":{}}}",
+        "{{\"selected\":\"{}\",\"source\":{},\"decoded\":false,\"sourceBacked\":{},\"computedBeforeRuntimeOverride\":\"{}\",\"documentViewStylesCandidate\":{},\"documentViewStylesFirstRecordCodeHex\":{},\"sourceDocumentLayoutHintCandidate\":{},\"sourceDocumentLayoutHintBasis\":{},\"sourceDocumentLayoutHintOverridesDecodedLayout\":{},\"sourceDocumentLayoutHintMarginOverridePx\":{},\"sourceDocumentLayoutHintVerticalWrapColumnsOverride\":{},\"paperMarkCandidate\":{},\"paperMarkCandidateDecoded\":false,\"paperMarkFlagBit0VerticalCandidate\":{},\"paperMarkFlagBit17IndexStepCandidate\":{},\"paperMarkWritingModeCandidateEvidence\":{},\"paperMarkWritingModeCandidateBlockers\":{},\"documentViewStylesDisagreesWithSelected\":{},\"sourceDocumentLayoutHintDisagreesWithSelected\":{},\"paperMarkDisagreesWithSelected\":{}}}",
         selected.as_str(),
         json_string(decision_source),
         decision_source_backed,
@@ -20819,6 +20838,10 @@ fn writing_mode_decision_json(document: &Document, selected: WritingMode) -> Str
         source_hint_margin,
         source_hint_wrap_columns,
         writing_mode_option_json(paper_mark_candidate),
+        paper_mark_writing_mode_diagnostics.flag_bit0_vertical_candidate,
+        paper_mark_writing_mode_diagnostics.flag_bit17_index_step_candidate,
+        string_slice_array_json(&paper_mark_writing_mode_diagnostics.evidence),
+        string_slice_array_json(&paper_mark_writing_mode_diagnostics.blockers),
         document_view_disagrees,
         source_hint_disagrees,
         paper_mark_disagrees
@@ -20864,18 +20887,50 @@ fn writing_mode_candidate_from_document_view_styles(
         })
 }
 
-fn writing_mode_candidate_from_paper_marks(
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PaperMarkWritingModeDiagnostics {
+    candidate: Option<WritingMode>,
+    flag_bit0_vertical_candidate: bool,
+    flag_bit17_index_step_candidate: bool,
+    evidence: Vec<&'static str>,
+    blockers: Vec<&'static str>,
+}
+
+fn paper_mark_writing_mode_diagnostics(
     paper_marks: &[DocumentPaperMark],
-) -> Option<WritingMode> {
-    let has_vertical_flag = paper_marks.iter().any(|mark| {
+) -> PaperMarkWritingModeDiagnostics {
+    let flag_bit0_vertical_candidate = paper_marks.iter().any(|mark| {
         mark.entries()
             .iter()
-            .any(|entry| entry.flags() == 0x0001_0011)
+            .any(|entry| entry.flags() & 0x0000_0001 != 0)
     });
-    if has_vertical_flag {
-        Some(WritingMode::VerticalRl)
+    let flag_bit17_index_step_candidate = paper_marks.iter().any(|mark| {
+        mark.entries()
+            .iter()
+            .any(|entry| entry.flags() & 0x0002_0000 != 0)
+    });
+
+    let mut evidence = Vec::new();
+    if flag_bit0_vertical_candidate {
+        evidence.push("paper-mark-flag-bit0-vertical-corpus-consistent");
+    }
+    if flag_bit17_index_step_candidate {
+        evidence.push("paper-mark-flag-bit17-index-step-corpus-consistent");
+        evidence.push("paper-mark-flag-bit17-landscape-negative-dousoukai-counterexample");
+    }
+
+    let blockers = if flag_bit0_vertical_candidate {
+        vec!["paper-mark-writing-mode-flag-semantics-unproven"]
     } else {
-        None
+        Vec::new()
+    };
+
+    PaperMarkWritingModeDiagnostics {
+        candidate: flag_bit0_vertical_candidate.then_some(WritingMode::VerticalRl),
+        flag_bit0_vertical_candidate,
+        flag_bit17_index_step_candidate,
+        evidence,
+        blockers,
     }
 }
 
@@ -31229,7 +31284,7 @@ fn push_table_grid_piecewise_record_family_gap_transition_json(
         output,
         selected_family_gap
             .zip(previous_family_gap)
-            .map(|(selected, previous)| selected - previous),
+            .map(|(selected, previous)| selected.saturating_sub(previous)),
     );
     output.push_str(",\"previousFamilyYGapPx\":");
     push_optional_f32_json(output, previous_family_y_gap);
@@ -31559,7 +31614,27 @@ fn push_page_mark_raw_subrecord_line_span_candidate_json(
 }
 
 fn max_abs_i32(values: &[i32]) -> Option<i32> {
-    values.iter().map(|value| value.abs()).max()
+    values.iter().map(|value| value.saturating_abs()).max()
+}
+
+fn source_range_gap_minus_page_line_gap_units(
+    source_range_gap_units: usize,
+    page_line_gap_units: i32,
+) -> i32 {
+    let Ok(source_range_gap_units) = i32::try_from(source_range_gap_units) else {
+        return i32::MAX;
+    };
+    source_range_gap_units.saturating_sub(page_line_gap_units)
+}
+
+fn row_source_start_gap_minus_source_range_gap_units(
+    row_source_start_gap_units: i32,
+    source_range_gap_units: usize,
+) -> i32 {
+    let Ok(source_range_gap_units) = i32::try_from(source_range_gap_units) else {
+        return i32::MIN;
+    };
+    row_source_start_gap_units.saturating_sub(source_range_gap_units)
 }
 
 fn single_i32_value(values: &[i32]) -> Option<i32> {
@@ -31631,7 +31706,7 @@ fn signed_usize_delta_i32(left: usize, right: usize) -> i32 {
     if left >= right {
         i32::try_from(left - right).unwrap_or(i32::MAX)
     } else {
-        -i32::try_from(right - left).unwrap_or(i32::MAX)
+        i32::try_from(right - left).map_or(i32::MIN, |delta| -delta)
     }
 }
 
@@ -40657,6 +40732,7 @@ struct TableGridSourceGapToPageLineGapReadinessHints {
     source_range_units_per_page_line_gap_spread: Option<f32>,
     row_source_start_units_per_page_line_gap_spread: Option<f32>,
     segment_offset_units_per_page_line_gap_spread: Option<f32>,
+    affine_row_source_start_gap_fit: Option<TableGridAffineRowSourceStartGapFit>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -40664,6 +40740,30 @@ struct TableGridSourceGapToPageLineGapTransformCandidateSummary {
     kind: &'static str,
     max_abs_delta_units: Option<i32>,
     units_per_page_line_gap_spread: Option<f32>,
+    affine_row_source_start_gap_fit: Option<TableGridAffineRowSourceStartGapFit>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct TableGridAffineRowSourceStartGapFit {
+    numerator_slope: i64,
+    denominator_slope: i64,
+    numerator_intercept: i64,
+    denominator_intercept: i64,
+    max_abs_residual: f64,
+    max_abs_residual_ceiling_units: i32,
+    sample_count: usize,
+    family_scoped: bool,
+    fit_stable: bool,
+}
+
+impl TableGridAffineRowSourceStartGapFit {
+    fn blocked_reason(&self) -> &'static str {
+        "affine-row-source-start-gap-family-transform-authority-unproven"
+    }
+
+    fn max_abs_residual_ceiling_units(&self) -> i32 {
+        self.max_abs_residual_ceiling_units
+    }
 }
 
 impl TableGridSourceGapToPageLineGapReadinessHints {
@@ -40695,38 +40795,56 @@ impl TableGridSourceGapToPageLineGapReadinessHints {
 
     fn transform_candidate_summaries(
         &self,
-    ) -> [TableGridSourceGapToPageLineGapTransformCandidateSummary; 3] {
-        [
+    ) -> Vec<TableGridSourceGapToPageLineGapTransformCandidateSummary> {
+        let mut summaries = vec![
             TableGridSourceGapToPageLineGapTransformCandidateSummary {
                 kind: "direct-source-range-gap",
                 max_abs_delta_units: self.source_range_gap_to_page_line_gap_max_abs_delta_units,
                 units_per_page_line_gap_spread: self.source_range_units_per_page_line_gap_spread,
+                affine_row_source_start_gap_fit: None,
             },
             TableGridSourceGapToPageLineGapTransformCandidateSummary {
                 kind: "direct-row-source-start-gap",
                 max_abs_delta_units: self.row_source_start_gap_to_page_line_gap_max_abs_delta_units,
                 units_per_page_line_gap_spread: self
                     .row_source_start_units_per_page_line_gap_spread,
+                affine_row_source_start_gap_fit: None,
             },
             TableGridSourceGapToPageLineGapTransformCandidateSummary {
                 kind: "segment-offset-gap",
                 max_abs_delta_units: self.segment_offset_gap_to_page_line_gap_max_abs_delta_units,
                 units_per_page_line_gap_spread: self.segment_offset_units_per_page_line_gap_spread,
+                affine_row_source_start_gap_fit: None,
             },
-        ]
+        ];
+        if let Some(fit) = self.affine_row_source_start_gap_fit {
+            summaries.push(TableGridSourceGapToPageLineGapTransformCandidateSummary {
+                kind: "affine-row-source-start-gap",
+                max_abs_delta_units: Some(fit.max_abs_residual_ceiling_units()),
+                units_per_page_line_gap_spread: None,
+                affine_row_source_start_gap_fit: Some(fit),
+            });
+        }
+        summaries
     }
 
     fn transform_candidate_count(&self) -> usize {
         self.transform_candidate_summaries()
             .iter()
-            .filter(|candidate| candidate.max_abs_delta_units.is_some())
+            .filter(|candidate| {
+                candidate.max_abs_delta_units.is_some()
+                    || candidate.affine_row_source_start_gap_fit.is_some()
+            })
             .count()
     }
 
     fn exact_transform_candidate_count(&self) -> usize {
         self.transform_candidate_summaries()
             .iter()
-            .filter(|candidate| candidate.max_abs_delta_units == Some(0))
+            .filter(|candidate| {
+                candidate.affine_row_source_start_gap_fit.is_none()
+                    && candidate.max_abs_delta_units == Some(0)
+            })
             .count()
     }
 
@@ -40757,6 +40875,172 @@ impl TableGridSourceGapToPageLineGapReadinessHints {
             })
             .min_by(|left, right| left.1.total_cmp(&right.1))
     }
+}
+
+fn affine_row_source_start_gap_fit(
+    page_line_gaps: &[i32],
+    row_source_start_gap_units: &[i32],
+    family_scoped: bool,
+) -> Option<TableGridAffineRowSourceStartGapFit> {
+    if !family_scoped {
+        return None;
+    }
+    if page_line_gaps.len() != row_source_start_gap_units.len() {
+        return None;
+    }
+    let sample_count = page_line_gaps.len();
+    if sample_count < 3 {
+        return None;
+    }
+    let n = i64::try_from(sample_count).ok()?;
+    let page_line_gaps = &page_line_gaps[..sample_count];
+    let row_source_start_gap_units = &row_source_start_gap_units[..sample_count];
+    let first_page_line_gap = *page_line_gaps.first()?;
+    if page_line_gaps
+        .iter()
+        .all(|page_line_gap| *page_line_gap == first_page_line_gap)
+    {
+        return None;
+    }
+
+    let sum_y = page_line_gaps
+        .iter()
+        .copied()
+        .map(i64::from)
+        .try_fold(0_i64, |accumulator, page_line_gap| {
+            accumulator.checked_add(page_line_gap)
+        })?;
+    let sum_x = row_source_start_gap_units
+        .iter()
+        .copied()
+        .map(i64::from)
+        .try_fold(0_i64, |accumulator, row_source_start_gap| {
+            accumulator.checked_add(row_source_start_gap)
+        })?;
+    let sum_xy = page_line_gaps
+        .iter()
+        .copied()
+        .zip(row_source_start_gap_units.iter().copied())
+        .try_fold(
+            0_i64,
+            |accumulator, (page_line_gap, row_source_start_gap)| {
+                let product =
+                    i64::from(page_line_gap).checked_mul(i64::from(row_source_start_gap))?;
+                accumulator.checked_add(product)
+            },
+        )?;
+    let sum_y_squared =
+        page_line_gaps
+            .iter()
+            .copied()
+            .try_fold(0_i64, |accumulator, page_line_gap| {
+                let page_line_gap = i64::from(page_line_gap);
+                let squared = page_line_gap.checked_mul(page_line_gap)?;
+                accumulator.checked_add(squared)
+            })?;
+
+    let slope_numerator = n
+        .checked_mul(sum_xy)?
+        .checked_sub(sum_y.checked_mul(sum_x)?)?;
+    let slope_denominator = n
+        .checked_mul(sum_y_squared)?
+        .checked_sub(sum_y.checked_mul(sum_y)?)?;
+    if slope_denominator == 0 {
+        return None;
+    }
+    let intercept_numerator = sum_x
+        .checked_mul(slope_denominator)?
+        .checked_sub(slope_numerator.checked_mul(sum_y)?)?;
+    let intercept_denominator = n.checked_mul(slope_denominator)?;
+    let common_denominator = intercept_denominator.checked_abs()?;
+    if common_denominator == 0 {
+        return None;
+    }
+
+    let max_abs_residual_numerator = page_line_gaps
+        .iter()
+        .copied()
+        .zip(row_source_start_gap_units.iter().copied())
+        .try_fold(
+            0_i64,
+            |max_residual, (page_line_gap, row_source_start_gap)| {
+                let predicted_numerator = slope_numerator
+                    .checked_mul(i64::from(page_line_gap))?
+                    .checked_mul(n)?
+                    .checked_add(intercept_numerator)?;
+                let observed_numerator =
+                    i64::from(row_source_start_gap).checked_mul(intercept_denominator)?;
+                let residual = observed_numerator
+                    .checked_sub(predicted_numerator)?
+                    .checked_abs()?;
+                Some(max_residual.max(residual))
+            },
+        )?;
+
+    if slope_numerator == i64::MIN
+        || slope_denominator == i64::MIN
+        || intercept_numerator == i64::MIN
+        || intercept_denominator == i64::MIN
+    {
+        return None;
+    }
+
+    let (numerator_slope, denominator_slope) =
+        reduce_i64_fraction(slope_numerator, slope_denominator);
+    let (numerator_intercept, denominator_intercept) =
+        reduce_i64_fraction(intercept_numerator, intercept_denominator);
+    let max_abs_residual = ratio_i64_to_f64(max_abs_residual_numerator, common_denominator)?;
+    let max_abs_residual_ceiling_units = i32::try_from(
+        max_abs_residual_numerator.checked_add(common_denominator.checked_sub(1)?)?
+            / common_denominator,
+    )
+    .ok()?;
+
+    Some(TableGridAffineRowSourceStartGapFit {
+        numerator_slope,
+        denominator_slope,
+        numerator_intercept,
+        denominator_intercept,
+        max_abs_residual,
+        max_abs_residual_ceiling_units,
+        sample_count,
+        family_scoped,
+        fit_stable: max_abs_residual_numerator <= common_denominator,
+    })
+}
+
+fn reduce_i64_fraction(numerator: i64, denominator: i64) -> (i64, i64) {
+    if denominator == 0 {
+        return (numerator, denominator);
+    }
+    let mut numerator = numerator;
+    let mut denominator = denominator;
+    if denominator < 0 {
+        numerator = -numerator;
+        denominator = -denominator;
+    }
+    let divisor = gcd_i64(numerator, denominator);
+    (numerator / divisor, denominator / divisor)
+}
+
+fn gcd_i64(left: i64, right: i64) -> i64 {
+    let mut left = left.abs();
+    let mut right = right.abs();
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left.max(1)
+}
+
+fn ratio_i64_to_f64(numerator: i64, denominator: i64) -> Option<f64> {
+    if denominator == 0 {
+        return None;
+    }
+    let numerator = i32::try_from(numerator).ok().map(f64::from)?;
+    let denominator = i32::try_from(denominator).ok().map(f64::from)?;
+    Some(numerator / denominator)
 }
 
 fn table_grid_source_gap_to_page_line_gap_readiness_hints(
@@ -40794,7 +41078,10 @@ fn table_grid_source_gap_to_page_line_gap_readiness_hints(
         .copied()
         .zip(source_range_gap_units.iter().copied())
         .map(|(row_source_start_gap, source_range_gap)| {
-            row_source_start_gap.saturating_sub(i32::try_from(source_range_gap).unwrap_or(i32::MAX))
+            row_source_start_gap_minus_source_range_gap_units(
+                row_source_start_gap,
+                source_range_gap,
+            )
         })
         .collect::<Vec<_>>();
     let source_range_gap_minus_page_line_gap_units = source_range_gap_units
@@ -40802,22 +41089,22 @@ fn table_grid_source_gap_to_page_line_gap_readiness_hints(
         .copied()
         .zip(previous_family_record_gaps.iter().copied())
         .map(|(source_range_gap, page_line_gap)| {
-            i32::try_from(source_range_gap)
-                .unwrap_or(i32::MAX)
-                .saturating_sub(page_line_gap)
+            source_range_gap_minus_page_line_gap_units(source_range_gap, page_line_gap)
         })
         .collect::<Vec<_>>();
     let row_source_start_gap_minus_page_line_gap_units = row_source_start_gap_units
         .iter()
         .copied()
         .zip(previous_family_record_gaps.iter().copied())
-        .map(|(row_source_start_gap, page_line_gap)| row_source_start_gap - page_line_gap)
+        .map(|(row_source_start_gap, page_line_gap)| {
+            row_source_start_gap.saturating_sub(page_line_gap)
+        })
         .collect::<Vec<_>>();
     let segment_offset_gap_minus_page_line_gap_units = segment_offset_gap_units
         .iter()
         .copied()
         .zip(previous_family_record_gaps.iter().copied())
-        .map(|(segment_offset_gap, page_line_gap)| segment_offset_gap - page_line_gap)
+        .map(|(segment_offset_gap, page_line_gap)| segment_offset_gap.saturating_sub(page_line_gap))
         .collect::<Vec<_>>();
     let source_range_units_per_page_line_gap =
         ratio_usize_by_i32(&source_range_gap_units, &previous_family_record_gaps);
@@ -40860,6 +41147,11 @@ fn table_grid_source_gap_to_page_line_gap_readiness_hints(
     .into_iter()
     .filter_map(|(kind, max_abs_delta)| max_abs_delta.map(|delta| (kind, delta)))
     .min_by_key(|(_, delta)| *delta);
+    let affine_row_source_start_gap_fit = affine_row_source_start_gap_fit(
+        &previous_family_record_gaps,
+        &row_source_start_gap_units,
+        all_transitions_same_page_mark_entry,
+    );
 
     TableGridSourceGapToPageLineGapReadinessHints {
         transition_count,
@@ -40879,6 +41171,7 @@ fn table_grid_source_gap_to_page_line_gap_readiness_hints(
         segment_offset_units_per_page_line_gap_spread: f32_value_spread(
             &segment_offset_units_per_page_line_gap,
         ),
+        affine_row_source_start_gap_fit,
     }
 }
 
@@ -40943,6 +41236,8 @@ fn push_table_grid_source_gap_to_page_line_gap_readiness_hints_json(
     push_table_grid_source_gap_to_page_line_gap_transform_candidate_summaries_json(output, hints);
     output.push_str(",\"declinedTransformCandidates\":");
     push_table_grid_source_gap_to_page_line_gap_declined_transform_candidates_json(output, hints);
+    output.push_str(",\"affineRowSourceStartGapFit\":");
+    push_affine_row_source_start_gap_fit_json(output, hints.affine_row_source_start_gap_fit);
     output.push_str(",\"sourceRangeUnitsPerPageLineGapSpread\":");
     push_optional_f32_json(output, hints.source_range_units_per_page_line_gap_spread);
     output.push_str(",\"rowSourceStartUnitsPerPageLineGapSpread\":");
@@ -41058,6 +41353,8 @@ fn push_table_grid_source_gap_to_page_line_gap_transform_admission_gate_json(
     push_optional_f32_json(output, lowest_spread_candidate.map(|(_, spread)| spread));
     output.push_str(",\"declinedTransformCandidates\":");
     push_table_grid_source_gap_to_page_line_gap_declined_transform_candidates_json(output, hints);
+    output.push_str(",\"affineRowSourceStartGapFit\":");
+    push_affine_row_source_start_gap_fit_json(output, hints.affine_row_source_start_gap_fit);
     output.push_str(",\"declaredBlockers\":");
     push_json_string_slice_array(output, &declared_blockers);
     output.push_str(
@@ -41121,16 +41418,16 @@ fn push_table_grid_source_gap_to_page_line_gap_transform_candidate_summary_json(
     candidate: &TableGridSourceGapToPageLineGapTransformCandidateSummary,
 ) {
     let selected = hints.best_candidate_transform_kind == Some(candidate.kind);
+    let stable = candidate
+        .affine_row_source_start_gap_fit
+        .map(|fit| fit.fit_stable)
+        .unwrap_or(candidate.max_abs_delta_units == Some(0));
     output.push_str("{\"transformKind\":");
     output.push_str(&json_string(candidate.kind));
     output.push_str(",\"selected\":");
     output.push_str(if selected { "true" } else { "false" });
     output.push_str(",\"stable\":");
-    output.push_str(if candidate.max_abs_delta_units == Some(0) {
-        "true"
-    } else {
-        "false"
-    });
+    output.push_str(if stable { "true" } else { "false" });
     output.push_str(",\"transitionCoverageCount\":");
     if candidate.max_abs_delta_units.is_some() {
         output.push_str(&hints.transition_count.to_string());
@@ -41141,6 +41438,10 @@ fn push_table_grid_source_gap_to_page_line_gap_transform_candidate_summary_json(
     push_optional_i32_json(output, candidate.max_abs_delta_units);
     output.push_str(",\"unitsPerPageLineGapSpread\":");
     push_optional_f32_json(output, candidate.units_per_page_line_gap_spread);
+    if let Some(fit) = candidate.affine_row_source_start_gap_fit {
+        output.push_str(",\"affineRowSourceStartGapFit\":");
+        push_affine_row_source_start_gap_fit_json(output, Some(fit));
+    }
     output.push_str(",\"declineReason\":");
     if let Some(reason) = table_grid_source_gap_to_page_line_gap_decline_reason(candidate, hints) {
         output.push_str(&json_string(reason));
@@ -41161,6 +41462,9 @@ fn table_grid_source_gap_to_page_line_gap_decline_reason(
     candidate: &TableGridSourceGapToPageLineGapTransformCandidateSummary,
     hints: &TableGridSourceGapToPageLineGapReadinessHints,
 ) -> Option<&'static str> {
+    if let Some(fit) = candidate.affine_row_source_start_gap_fit {
+        return Some(fit.blocked_reason());
+    }
     if hints.best_candidate_transform_kind == Some(candidate.kind) {
         return None;
     }
@@ -41182,13 +41486,52 @@ fn table_grid_source_gap_to_page_line_gap_decline_reason(
 fn table_grid_source_gap_to_page_line_gap_candidate_blocked_reason(
     candidate: &TableGridSourceGapToPageLineGapTransformCandidateSummary,
 ) -> Option<&'static str> {
-    if candidate.max_abs_delta_units.is_none() {
+    if let Some(fit) = candidate.affine_row_source_start_gap_fit {
+        Some(fit.blocked_reason())
+    } else if candidate.max_abs_delta_units.is_none() {
         Some("transform-candidate-evidence-absent")
     } else if candidate.max_abs_delta_units != Some(0) {
         Some("source-gap-to-page-line-gap-transform-not-stable")
     } else {
         None
     }
+}
+
+fn push_affine_row_source_start_gap_fit_json(
+    output: &mut String,
+    fit: Option<TableGridAffineRowSourceStartGapFit>,
+) {
+    let Some(fit) = fit else {
+        output.push_str("null");
+        return;
+    };
+
+    output.push_str("{\"source\":\"sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.affineRowSourceStartGapFit\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false");
+    output.push_str(",\"numeratorSlope\":");
+    output.push_str(&fit.numerator_slope.to_string());
+    output.push_str(",\"denominatorSlope\":");
+    output.push_str(&fit.denominator_slope.to_string());
+    output.push_str(",\"numeratorIntercept\":");
+    output.push_str(&fit.numerator_intercept.to_string());
+    output.push_str(",\"denominatorIntercept\":");
+    output.push_str(&fit.denominator_intercept.to_string());
+    output.push_str(",\"maxAbsResidual\":");
+    output.push_str(&format!("{:.3}", fit.max_abs_residual));
+    output.push_str(",\"sampleCount\":");
+    output.push_str(&fit.sample_count.to_string());
+    output.push_str(",\"familyScoped\":");
+    output.push_str(if fit.family_scoped { "true" } else { "false" });
+    output.push_str(",\"fitStable\":");
+    output.push_str(if fit.fit_stable { "true" } else { "false" });
+    output.push_str(",\"blockedReason\":");
+    output.push_str(&json_string(fit.blocked_reason()));
+    output.push_str(
+        ",\"renderPromotionContribution\":\"affine-row-source-start-gap-fit-diagnostic-only\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(fit.blocked_reason()));
+    output.push('}');
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -42414,7 +42757,7 @@ fn push_table_grid_source_only_page_y_transition_semantics_readiness_json(
         .iter()
         .copied()
         .zip(previous_family_record_gaps.iter().copied())
-        .map(|(selected, previous)| selected - previous)
+        .map(|(selected, previous)| selected.saturating_sub(previous))
         .collect::<Vec<_>>();
     let previous_family_y_gap_px = cross_table_row_boundary_offset_probe
         .map(|probe| {
@@ -42471,16 +42814,16 @@ fn push_table_grid_source_only_page_y_transition_semantics_readiness_json(
         .copied()
         .zip(previous_family_record_gaps.iter().copied())
         .map(|(source_range_gap, page_line_gap)| {
-            i32::try_from(source_range_gap)
-                .unwrap_or(i32::MAX)
-                .saturating_sub(page_line_gap)
+            source_range_gap_minus_page_line_gap_units(source_range_gap, page_line_gap)
         })
         .collect::<Vec<_>>();
     let row_source_start_gap_minus_page_line_gap_units = row_source_start_gap_units
         .iter()
         .copied()
         .zip(previous_family_record_gaps.iter().copied())
-        .map(|(row_source_start_gap, page_line_gap)| row_source_start_gap - page_line_gap)
+        .map(|(row_source_start_gap, page_line_gap)| {
+            row_source_start_gap.saturating_sub(page_line_gap)
+        })
         .collect::<Vec<_>>();
     let source_range_gap_equals_page_line_gap = source_range_gap_units
         .iter()
@@ -42513,14 +42856,17 @@ fn push_table_grid_source_only_page_y_transition_semantics_readiness_json(
         .copied()
         .zip(source_range_gap_units.iter().copied())
         .map(|(row_source_start_gap, source_range_gap)| {
-            row_source_start_gap.saturating_sub(i32::try_from(source_range_gap).unwrap_or(i32::MAX))
+            row_source_start_gap_minus_source_range_gap_units(
+                row_source_start_gap,
+                source_range_gap,
+            )
         })
         .collect::<Vec<_>>();
     let segment_offset_gap_minus_page_line_gap_units = segment_offset_gap_units
         .iter()
         .copied()
         .zip(previous_family_record_gaps.iter().copied())
-        .map(|(segment_offset_gap, page_line_gap)| segment_offset_gap - page_line_gap)
+        .map(|(segment_offset_gap, page_line_gap)| segment_offset_gap.saturating_sub(page_line_gap))
         .collect::<Vec<_>>();
     let segment_offset_gap_equals_page_line_gap = segment_offset_gap_units
         .iter()
@@ -77503,6 +77849,160 @@ mod tests {
         output
     }
 
+    fn test_table_grid_cross_table_row_boundary_offset_table(
+        table_candidate_index: usize,
+        source_start: usize,
+        source_end: usize,
+        line_mark_record_indexes: Vec<usize>,
+        selected_spacing_record_indexes: Vec<usize>,
+        row_source_start_units: Vec<usize>,
+    ) -> TableGridCrossTableRowBoundaryOffsetTable {
+        let row_count = row_source_start_units
+            .len()
+            .max(line_mark_record_indexes.len());
+        let line_mark_record_y_tops_px = line_mark_record_indexes
+            .iter()
+            .map(|value| *value as f32)
+            .collect::<Vec<_>>();
+        let selected_spacing_record_y_tops_px = selected_spacing_record_indexes
+            .iter()
+            .map(|value| *value as f32)
+            .collect::<Vec<_>>();
+
+        TableGridCrossTableRowBoundaryOffsetTable {
+            table_candidate_index,
+            source_start,
+            source_end,
+            row_count,
+            line_mark_record_indexes: line_mark_record_indexes.clone(),
+            page_mark_line_offsets_from_entry_start: vec![0; line_mark_record_indexes.len()],
+            page_mark_records_within_single_entry: true,
+            line_mark_record_y_tops_px,
+            selected_spacing_record_indexes: selected_spacing_record_indexes.clone(),
+            selected_spacing_page_mark_line_offsets_from_entry_start: vec![
+                0;
+                selected_spacing_record_indexes.len()
+            ],
+            selected_spacing_records_within_single_entry: true,
+            selected_spacing_record_y_tops_px,
+            selected_spacing_line_mark_start_units: row_source_start_units.clone(),
+            selected_spacing_line_mark_end_units: row_source_start_units.clone(),
+            selected_spacing_start_residual_units: vec![0; row_source_start_units.len()],
+            selected_spacing_end_residual_units: vec![0; row_source_start_units.len()],
+            selected_spacing_span_residual_units: vec![0; row_source_start_units.len()],
+            selected_minus_previous_record_index_gaps: selected_spacing_record_indexes
+                .iter()
+                .copied()
+                .zip(line_mark_record_indexes.iter().copied())
+                .map(|(selected, previous)| signed_usize_delta_i32(selected, previous))
+                .collect::<Vec<_>>(),
+            selected_minus_previous_record_y_delta_px: selected_spacing_record_indexes
+                .iter()
+                .copied()
+                .zip(line_mark_record_indexes.iter().copied())
+                .map(|(selected, previous)| selected as f32 - previous as f32)
+                .collect::<Vec<_>>(),
+            row_source_start_units: row_source_start_units.clone(),
+            row_source_end_units: row_source_start_units.clone(),
+            line_mark_start_units: row_source_start_units.clone(),
+            line_mark_end_units: row_source_start_units.clone(),
+            start_residual_units: vec![0; row_source_start_units.len()],
+            end_residual_units: vec![0; row_source_start_units.len()],
+            span_residual_units: vec![0; row_source_start_units.len()],
+            row_boundary_offset_candidate_units: None,
+            offset_normalized_start_residual_units: vec![0; row_source_start_units.len()],
+            offset_normalized_end_residual_units: vec![0; row_source_start_units.len()],
+            offset_normalized_exact_boundary_aligned: false,
+            exact_boundary_aligned: false,
+            span_only_match: false,
+        }
+    }
+
+    fn test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+        source_range_gap_units: usize,
+        row_source_start_gap_units: i32,
+        line_mark_record_gap: i32,
+    ) -> TableGridSourceUnitToPageLineIndexPiecewiseTransition {
+        TableGridSourceUnitToPageLineIndexPiecewiseTransition {
+            from_table_candidate_index: 0,
+            to_table_candidate_index: 1,
+            previous_last_source_unit: 0,
+            next_first_source_unit: 0,
+            source_range_gap_units,
+            row_source_start_gap_units,
+            previous_last_record_index: 0,
+            next_first_record_index: 0,
+            line_mark_record_gap,
+            same_page_mark_entry: true,
+        }
+    }
+
+    fn test_table_grid_cross_table_row_boundary_offset_probe(
+        tables: Vec<TableGridCrossTableRowBoundaryOffsetTable>,
+        transitions: Vec<TableGridSourceUnitToPageLineIndexPiecewiseTransition>,
+    ) -> TableGridCrossTableRowBoundaryOffsetProbe {
+        let related_table_candidate_indexes = tables
+            .iter()
+            .map(|table| table.table_candidate_index)
+            .collect::<Vec<_>>();
+        let combined_line_mark_record_indexes = tables
+            .iter()
+            .flat_map(|table| table.line_mark_record_indexes.iter().copied())
+            .collect::<Vec<_>>();
+        let combined_line_mark_record_y_tops_px = tables
+            .iter()
+            .flat_map(|table| table.line_mark_record_y_tops_px.iter().copied())
+            .collect::<Vec<_>>();
+        let source_unit_to_page_line_index_source_units = tables
+            .iter()
+            .flat_map(|table| table.row_source_start_units.iter().copied())
+            .collect::<Vec<_>>();
+
+        TableGridCrossTableRowBoundaryOffsetProbe {
+            current_table_candidate_index: related_table_candidate_indexes
+                .first()
+                .copied()
+                .unwrap_or(0),
+            sparse_table_candidate_index: 0,
+            related_table_candidate_indexes,
+            related_table_count: tables.len(),
+            table_count_with_previous_row_span_alignment: tables.len(),
+            row_boundary_offset_candidate_units: Vec::new(),
+            stable_row_boundary_offset_candidate_units: None,
+            all_related_tables_have_offset_candidate: false,
+            all_offsets_stable: false,
+            all_offsets_require_transform: false,
+            all_offset_normalized_boundaries_exact: false,
+            combined_line_mark_record_indexes,
+            page_mark_entry_index: Some(0),
+            page_index_candidate: Some(0),
+            page_line_start: Some(0),
+            page_line_end: Some(0),
+            page_mark_u16_field_count: 0,
+            page_mark_u16_field_preview: Vec::new(),
+            combined_line_offsets_from_page_start: Vec::new(),
+            combined_line_offsets_monotonic: true,
+            combined_line_mark_record_y_pitch_px: Some(23.298),
+            combined_line_mark_record_y_pitch_basis: Some("test"),
+            combined_line_mark_record_y_tops_px,
+            combined_line_mark_record_y_span_px: None,
+            source_unit_to_page_line_index_source_units,
+            source_unit_to_page_line_index_slope: None,
+            source_unit_to_page_line_index_intercept: None,
+            source_unit_to_page_line_index_fitted_indexes: Vec::new(),
+            source_unit_to_page_line_index_residual_indexes: Vec::new(),
+            source_unit_to_page_line_index_max_abs_residual: None,
+            source_unit_to_page_line_index_exact: false,
+            source_unit_to_page_line_index_rows: Vec::new(),
+            source_unit_to_page_line_index_piecewise_max_abs_residual: None,
+            source_unit_to_page_line_index_piecewise_all_tables_exact: false,
+            source_unit_to_page_line_index_piecewise_tables: Vec::new(),
+            source_unit_to_page_line_index_piecewise_transitions: transitions,
+            all_records_within_single_page_mark_entry: true,
+            tables,
+        }
+    }
+
     fn tail_after_occurrence<'a>(haystack: &'a str, marker: &str, occurrence: usize) -> &'a str {
         let mut tail = haystack;
         for index in 0..=occurrence {
@@ -78137,6 +78637,49 @@ mod tests {
     }
 
     #[test]
+    fn document_core_reports_paper_mark_flag_bit_diagnostics_without_render_promotion() {
+        let vertical_paper_mark = paper_mark_fixture(&[(0, 0x0001_0000), (1, 0x0001_0001)]);
+        let vertical_bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (PAPER_MARK_PATH, &vertical_paper_mark),
+        ]);
+        let vertical_core = DocumentCore::from_bytes(&vertical_bytes).unwrap();
+
+        assert_eq!(vertical_core.writing_mode(), WritingMode::Horizontal);
+        let vertical_info = vertical_core.get_document_info();
+        assert_json_brackets_balanced(&vertical_info);
+        assert!(vertical_info.contains("\"writingMode\":\"horizontal\""));
+        assert!(vertical_info.contains("\"writingModeCandidateFromPaperMark\":\"vertical-rl\""));
+        assert!(vertical_info.contains("\"writingModeCandidateDecoded\":false"));
+        assert!(vertical_info.contains("\"paperMarkFlagBit0VerticalCandidate\":true"));
+        assert!(vertical_info.contains("\"paperMarkFlagBit17IndexStepCandidate\":false"));
+        assert!(vertical_info.contains(
+            "\"paperMarkWritingModeCandidateEvidence\":[\"paper-mark-flag-bit0-vertical-corpus-consistent\"]"
+        ));
+        assert!(vertical_info.contains(
+            "\"paperMarkWritingModeCandidateBlockers\":[\"paper-mark-writing-mode-flag-semantics-unproven\"]"
+        ));
+
+        let index_step_paper_mark = paper_mark_fixture(&[(0, 0x0002_0000), (2, 0x0002_0010)]);
+        let index_step_bytes = cfb_with_streams(&[
+            ("/DocumentText", &document_text_fixture()),
+            (PAPER_MARK_PATH, &index_step_paper_mark),
+        ]);
+        let index_step_core = DocumentCore::from_bytes(&index_step_bytes).unwrap();
+        let index_step_info = index_step_core.get_document_info();
+        assert_json_brackets_balanced(&index_step_info);
+        assert!(index_step_info.contains("\"writingModeCandidateFromPaperMark\":null"));
+        assert!(index_step_info.contains("\"paperMarkFlagBit0VerticalCandidate\":false"));
+        assert!(index_step_info.contains("\"paperMarkFlagBit17IndexStepCandidate\":true"));
+        assert!(
+            index_step_core
+                .get_page_def(0)
+                .unwrap()
+                .contains("\"landscape\":false")
+        );
+    }
+
+    #[test]
     fn document_core_does_not_apply_layout_hints_from_filename_only() {
         for file_name in [
             "a5.jtd",
@@ -78682,6 +79225,14 @@ mod tests {
         assert!(document_info.contains("\"flagsHex\":\"0x00010010\""));
         assert!(document_info.contains("\"writingModeCandidateFromPaperMark\":\"vertical-rl\""));
         assert!(document_info.contains("\"writingModeCandidateDecoded\":false"));
+        assert!(document_info.contains("\"paperMarkFlagBit0VerticalCandidate\":true"));
+        assert!(document_info.contains("\"paperMarkFlagBit17IndexStepCandidate\":false"));
+        assert!(document_info.contains(
+            "\"paperMarkWritingModeCandidateEvidence\":[\"paper-mark-flag-bit0-vertical-corpus-consistent\"]"
+        ));
+        assert!(document_info.contains(
+            "\"paperMarkWritingModeCandidateBlockers\":[\"paper-mark-writing-mode-flag-semantics-unproven\"]"
+        ));
 
         let page_seven_layer_tree = core.get_page_layer_tree(6).unwrap();
         assert!(page_seven_layer_tree.contains("\"side\":\"right\""));
@@ -85283,11 +85834,72 @@ mod tests {
             source_range_units_per_page_line_gap_spread: Some(12.25),
             row_source_start_units_per_page_line_gap_spread: Some(42.125),
             segment_offset_units_per_page_line_gap_spread: Some(29.875),
+            affine_row_source_start_gap_fit: None,
         };
         assert_eq!(
             unstable_cross_table_hints.table_family_transform_blocked_reason(),
             Some("source-gap-to-page-line-gap-transform-unstable-across-table-family")
         );
+
+        let tsaiten_affine_fit =
+            affine_row_source_start_gap_fit(&[8, 2, 5], &[303, 160, 230], true)
+                .expect("tsaiten transition gaps should fit a scoped affine candidate");
+        assert_eq!(tsaiten_affine_fit.numerator_slope, 143);
+        assert_eq!(tsaiten_affine_fit.denominator_slope, 6);
+        assert_eq!(tsaiten_affine_fit.numerator_intercept, 671);
+        assert_eq!(tsaiten_affine_fit.denominator_intercept, 6);
+        assert!((tsaiten_affine_fit.max_abs_residual - 1.0).abs() < 0.001);
+        assert_eq!(tsaiten_affine_fit.sample_count, 3);
+        assert!(tsaiten_affine_fit.family_scoped);
+        assert!(tsaiten_affine_fit.fit_stable);
+        assert_eq!(
+            tsaiten_affine_fit.blocked_reason(),
+            "affine-row-source-start-gap-family-transform-authority-unproven"
+        );
+
+        assert_eq!(affine_row_source_start_gap_fit(&[], &[], true), None);
+        assert_eq!(affine_row_source_start_gap_fit(&[1], &[10], true), None);
+        assert_eq!(
+            affine_row_source_start_gap_fit(&[1, 2], &[10, 20], true),
+            None
+        );
+        assert_eq!(
+            affine_row_source_start_gap_fit(&[1, 2, 3], &[10, 20], true),
+            None
+        );
+        assert_eq!(
+            affine_row_source_start_gap_fit(&[1, 2, 3, 4], &[10, 20, 30], true),
+            None
+        );
+        assert_eq!(
+            affine_row_source_start_gap_fit(&[1, 2, 3], &[10, 20, 30, 40], true),
+            None
+        );
+        assert_eq!(
+            affine_row_source_start_gap_fit(&[8, 2, 5], &[303, 160, 230], false),
+            None
+        );
+        assert_eq!(
+            affine_row_source_start_gap_fit(
+                &[i32::MAX, i32::MAX - 1, i32::MAX - 2],
+                &[i32::MAX, i32::MAX - 1, i32::MAX - 2],
+                true
+            ),
+            None
+        );
+        assert_eq!(
+            affine_row_source_start_gap_fit(
+                &[i32::MIN, 0, i32::MAX],
+                &[i32::MAX, 0, i32::MIN],
+                true
+            ),
+            None
+        );
+
+        let contradicted_affine_fit =
+            affine_row_source_start_gap_fit(&[1, 2, 3], &[10, 20, 80], true)
+                .expect("contradicted points should still emit a diagnostic fit");
+        assert!(!contradicted_affine_fit.fit_stable);
 
         let absolute_y_slot_candidate = TableGridSourceOnlyPageMarkAbsoluteYSlotCandidate {
             source: "rawRecordHeaderTailU16Subrecord",
@@ -85317,6 +85929,451 @@ mod tests {
                 &absolute_y_slot_disagreement
             ),
             "line-domain-projection-disagrees-with-page-mark-absolute-y-slot"
+        );
+    }
+
+    #[test]
+    fn table_grid_source_gap_to_page_line_gap_readiness_hints_preserve_tsaiten_characterization() {
+        let hints = table_grid_source_gap_to_page_line_gap_readiness_hints(Some(
+            &test_table_grid_cross_table_row_boundary_offset_probe(
+                Vec::new(),
+                vec![
+                    test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+                        190, 303, 8,
+                    ),
+                    test_table_grid_source_unit_to_page_line_index_piecewise_transition(72, 160, 2),
+                    test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+                        138, 230, 5,
+                    ),
+                ],
+            ),
+        ));
+
+        assert_eq!(hints.transition_count, 3);
+        assert_eq!(hints.same_page_mark_entry_transition_count, 3);
+        assert!(hints.all_transitions_same_page_mark_entry);
+        assert_eq!(
+            hints.source_range_gap_to_page_line_gap_max_abs_delta_units,
+            Some(182)
+        );
+        assert_eq!(
+            hints.row_source_start_gap_to_page_line_gap_max_abs_delta_units,
+            Some(295)
+        );
+        assert_eq!(
+            hints.segment_offset_gap_to_page_line_gap_max_abs_delta_units,
+            Some(105)
+        );
+        assert_eq!(
+            hints.best_candidate_transform_kind,
+            Some("segment-offset-gap")
+        );
+        assert_eq!(hints.best_candidate_max_abs_delta_units, Some(105));
+        assert_eq!(
+            hints.source_range_units_per_page_line_gap_spread,
+            Some(12.25)
+        );
+        assert_eq!(
+            hints.row_source_start_units_per_page_line_gap_spread,
+            Some(42.125)
+        );
+        assert_eq!(
+            hints.segment_offset_units_per_page_line_gap_spread,
+            Some(29.875)
+        );
+
+        let affine_fit = hints
+            .affine_row_source_start_gap_fit
+            .expect("tsaiten transition gaps should preserve the affine diagnostic fit");
+        assert_eq!(affine_fit.numerator_slope, 143);
+        assert_eq!(affine_fit.denominator_slope, 6);
+        assert_eq!(affine_fit.numerator_intercept, 671);
+        assert_eq!(affine_fit.denominator_intercept, 6);
+        assert_eq!(affine_fit.max_abs_residual_ceiling_units(), 1);
+        assert!((affine_fit.max_abs_residual - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn max_abs_i32_handles_i32_min_conservatively() {
+        assert_eq!(max_abs_i32(&[i32::MIN]), Some(i32::MAX));
+        assert_eq!(max_abs_i32(&[i32::MIN, -4, 6]), Some(i32::MAX));
+    }
+
+    #[test]
+    fn table_grid_source_gap_to_page_line_gap_readiness_hints_handles_extreme_overflow_inputs() {
+        let positive_overflow_hints = table_grid_source_gap_to_page_line_gap_readiness_hints(Some(
+            &test_table_grid_cross_table_row_boundary_offset_probe(
+                Vec::new(),
+                vec![
+                    test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+                        0,
+                        i32::MAX,
+                        -1,
+                    ),
+                ],
+            ),
+        ));
+        let negative_overflow_hints = table_grid_source_gap_to_page_line_gap_readiness_hints(Some(
+            &test_table_grid_cross_table_row_boundary_offset_probe(
+                Vec::new(),
+                vec![
+                    test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+                        0,
+                        i32::MIN,
+                        i32::MAX,
+                    ),
+                ],
+            ),
+        ));
+
+        assert_eq!(
+            positive_overflow_hints.row_source_start_gap_to_page_line_gap_max_abs_delta_units,
+            Some(i32::MAX)
+        );
+        assert_eq!(
+            positive_overflow_hints.segment_offset_gap_to_page_line_gap_max_abs_delta_units,
+            Some(i32::MAX)
+        );
+        assert_eq!(
+            negative_overflow_hints.row_source_start_gap_to_page_line_gap_max_abs_delta_units,
+            Some(i32::MAX)
+        );
+        assert_eq!(
+            negative_overflow_hints.segment_offset_gap_to_page_line_gap_max_abs_delta_units,
+            Some(i32::MAX)
+        );
+    }
+
+    #[test]
+    fn signed_usize_delta_i32_saturates_at_signed_bounds() {
+        let signed_max = i32::MAX as usize;
+        let signed_overflow = signed_max + 1;
+
+        assert_eq!(signed_usize_delta_i32(0, 0), 0);
+        assert_eq!(signed_usize_delta_i32(signed_max, 0), i32::MAX);
+        assert_eq!(signed_usize_delta_i32(0, signed_max), -i32::MAX);
+        assert_eq!(signed_usize_delta_i32(signed_overflow, 0), i32::MAX);
+        assert_eq!(signed_usize_delta_i32(0, signed_overflow), i32::MIN);
+        assert_eq!(signed_usize_delta_i32(usize::MAX, 0), i32::MAX);
+        assert_eq!(signed_usize_delta_i32(0, usize::MAX), i32::MIN);
+    }
+
+    #[test]
+    fn push_table_grid_piecewise_record_family_gap_transition_json_saturates_opposite_signed_family_gap_delta_overflow()
+     {
+        let positive_previous = test_table_grid_cross_table_row_boundary_offset_table(
+            0,
+            0,
+            0,
+            vec![usize::MAX],
+            vec![0],
+            vec![0],
+        );
+        let positive_next = test_table_grid_cross_table_row_boundary_offset_table(
+            1,
+            0,
+            0,
+            vec![0],
+            vec![usize::MAX],
+            vec![0],
+        );
+        let negative_previous = test_table_grid_cross_table_row_boundary_offset_table(
+            0,
+            0,
+            0,
+            vec![0],
+            vec![usize::MAX],
+            vec![0],
+        );
+        let negative_next = test_table_grid_cross_table_row_boundary_offset_table(
+            1,
+            0,
+            0,
+            vec![usize::MAX],
+            vec![0],
+            vec![0],
+        );
+
+        let mut positive_output = String::new();
+        push_table_grid_piecewise_record_family_gap_transition_json(
+            &mut positive_output,
+            &positive_previous,
+            &positive_next,
+        );
+        let mut negative_output = String::new();
+        push_table_grid_piecewise_record_family_gap_transition_json(
+            &mut negative_output,
+            &negative_previous,
+            &negative_next,
+        );
+
+        assert!(
+            positive_output.contains("\"previousFamilyRecordGap\":-2147483648"),
+            "{positive_output}"
+        );
+        assert!(
+            positive_output.contains("\"selectedFamilyRecordGap\":2147483647"),
+            "{positive_output}"
+        );
+        assert!(
+            positive_output.contains("\"selectedMinusPreviousFamilyRecordGapDelta\":2147483647"),
+            "{positive_output}"
+        );
+        assert!(
+            negative_output.contains("\"previousFamilyRecordGap\":2147483647"),
+            "{negative_output}"
+        );
+        assert!(
+            negative_output.contains("\"selectedFamilyRecordGap\":-2147483648"),
+            "{negative_output}"
+        );
+        assert!(
+            negative_output.contains("\"selectedMinusPreviousFamilyRecordGapDelta\":-2147483648"),
+            "{negative_output}"
+        );
+    }
+
+    #[test]
+    fn source_gap_readiness_rejects_oversized_source_range_false_zero_transform_authority() {
+        let oversized_source_range_gap = i32::MAX as usize + 1;
+        let probe = test_table_grid_cross_table_row_boundary_offset_probe(
+            vec![
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    0,
+                    0,
+                    0,
+                    vec![0],
+                    vec![0],
+                    vec![0],
+                ),
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    1,
+                    oversized_source_range_gap,
+                    oversized_source_range_gap,
+                    vec![i32::MAX as usize],
+                    vec![i32::MAX as usize],
+                    vec![0],
+                ),
+            ],
+            vec![
+                test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+                    oversized_source_range_gap,
+                    0,
+                    i32::MAX,
+                ),
+            ],
+        );
+
+        let hints = table_grid_source_gap_to_page_line_gap_readiness_hints(Some(&probe));
+
+        let mut output = String::new();
+        push_table_grid_source_only_page_y_transition_semantics_readiness_json(
+            &mut output,
+            Some(&probe),
+            1,
+        );
+        let mut admission_output = String::new();
+        push_table_grid_source_gap_to_page_line_gap_transform_admission_gate_json(
+            &mut admission_output,
+            "test",
+            &hints,
+        );
+
+        assert_eq!(
+            (
+                hints.source_range_gap_to_page_line_gap_max_abs_delta_units,
+                hints.source_gap_to_page_line_gap_transform_stable(),
+                hints.table_family_source_gap_to_page_line_gap_transform_stable(),
+                output.contains("\"sourceGapToPageLineGapTransformStable\":true"),
+                output.contains("\"tableFamilySourceGapToPageLineGapTransformStable\":true"),
+                admission_output.contains("\"canDecodeSourceTransform\":true"),
+            ),
+            (Some(i32::MAX), false, false, false, false, false)
+        );
+        assert!(output.contains("\"sourceRangeGapMinusPageLineGapUnits\":[2147483647]"));
+        assert!(output.contains("\"segmentOffsetGapUnits\":[-2147483648]"));
+        assert!(output.contains("\"segmentOffsetGapMinusPageLineGapUnits\":[-2147483648]"));
+        assert!(output.contains("\"sourceGapToPageLineGapTransformStable\":false"));
+        assert!(output.contains("\"tableFamilySourceGapToPageLineGapTransformStable\":false"));
+        assert!(!output.contains("\"canDecodeSourceTransform\":true"));
+    }
+
+    #[test]
+    fn push_table_grid_source_only_page_y_transition_semantics_readiness_json_preserves_tsaiten_characterization()
+     {
+        let probe = test_table_grid_cross_table_row_boundary_offset_probe(
+            vec![
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    0,
+                    0,
+                    0,
+                    vec![0],
+                    vec![0],
+                    vec![0],
+                ),
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    1,
+                    190,
+                    190,
+                    vec![8],
+                    vec![8],
+                    vec![303],
+                ),
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    2,
+                    262,
+                    262,
+                    vec![10],
+                    vec![10],
+                    vec![463],
+                ),
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    3,
+                    400,
+                    400,
+                    vec![15],
+                    vec![15],
+                    vec![693],
+                ),
+            ],
+            vec![
+                test_table_grid_source_unit_to_page_line_index_piecewise_transition(190, 303, 8),
+                test_table_grid_source_unit_to_page_line_index_piecewise_transition(72, 160, 2),
+                test_table_grid_source_unit_to_page_line_index_piecewise_transition(138, 230, 5),
+            ],
+        );
+        let mut output = String::new();
+
+        push_table_grid_source_only_page_y_transition_semantics_readiness_json(
+            &mut output,
+            Some(&probe),
+            3,
+        );
+
+        assert!(output.contains("\"selectedMinusPreviousFamilyRecordGapDeltas\":[0,0,0]"));
+        assert!(output.contains("\"sourceRangeGapMinusPageLineGapUnits\":[182,70,133]"));
+        assert!(output.contains("\"rowSourceStartGapMinusPageLineGapUnits\":[295,158,225]"));
+        assert!(output.contains("\"segmentOffsetGapMinusPageLineGapUnits\":[105,86,87]"));
+        assert!(output.contains("\"bestCandidateTransformKind\":\"segment-offset-gap\""));
+        assert!(output.contains("\"bestCandidateMaxAbsDeltaUnits\":105"));
+        assert!(output.contains("\"numeratorSlope\":143"));
+        assert!(output.contains("\"denominatorSlope\":6"));
+        assert!(output.contains("\"numeratorIntercept\":671"));
+        assert!(output.contains("\"denominatorIntercept\":6"));
+        assert!(output.contains("\"maxAbsResidual\":1.000"));
+    }
+
+    #[test]
+    fn push_table_grid_source_only_page_y_transition_semantics_readiness_json_handles_selected_minus_previous_family_gap_overflow()
+     {
+        let probe = test_table_grid_cross_table_row_boundary_offset_probe(
+            vec![
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    0,
+                    0,
+                    0,
+                    vec![0],
+                    vec![0],
+                    vec![0],
+                ),
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    1,
+                    0,
+                    0,
+                    vec![0],
+                    vec![usize::MAX],
+                    vec![0],
+                ),
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    2,
+                    0,
+                    0,
+                    vec![0],
+                    vec![0],
+                    vec![0],
+                ),
+            ],
+            vec![
+                test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+                    0,
+                    0,
+                    -i32::MAX,
+                ),
+                test_table_grid_source_unit_to_page_line_index_piecewise_transition(0, 0, i32::MAX),
+            ],
+        );
+        let mut output = String::new();
+
+        push_table_grid_source_only_page_y_transition_semantics_readiness_json(
+            &mut output,
+            Some(&probe),
+            2,
+        );
+
+        assert!(
+            output.contains("\"previousFamilyRecordGaps\":[-2147483647,2147483647]"),
+            "{output}"
+        );
+        assert!(
+            output.contains("\"selectedFamilyRecordGaps\":[2147483647,-2147483648]"),
+            "{output}"
+        );
+        assert!(
+            output.contains(
+                "\"selectedMinusPreviousFamilyRecordGapDeltas\":[2147483647,-2147483648]"
+            ),
+            "{output}"
+        );
+    }
+
+    #[test]
+    fn push_table_grid_source_only_page_y_transition_semantics_readiness_json_handles_direct_gap_overflow()
+     {
+        let probe = test_table_grid_cross_table_row_boundary_offset_probe(
+            vec![
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    0,
+                    0,
+                    0,
+                    vec![0],
+                    vec![0],
+                    vec![0],
+                ),
+                test_table_grid_cross_table_row_boundary_offset_table(
+                    1,
+                    0,
+                    0,
+                    vec![0],
+                    vec![0],
+                    vec![0],
+                ),
+            ],
+            vec![
+                test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+                    0,
+                    i32::MAX,
+                    -1,
+                ),
+                test_table_grid_source_unit_to_page_line_index_piecewise_transition(
+                    0,
+                    i32::MIN,
+                    i32::MAX,
+                ),
+            ],
+        );
+        let mut output = String::new();
+
+        push_table_grid_source_only_page_y_transition_semantics_readiness_json(
+            &mut output,
+            Some(&probe),
+            2,
+        );
+
+        assert!(
+            output.contains("\"rowSourceStartGapMinusPageLineGapUnits\":[2147483647,-2147483648]")
+        );
+        assert!(
+            output.contains("\"segmentOffsetGapMinusPageLineGapUnits\":[2147483647,-2147483648]")
         );
     }
 
@@ -85530,7 +86587,7 @@ mod tests {
             "\"sourceGapToPageLineGapReadinessHints\":{\"source\":\"sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.sourceGapToPageLineGapReadinessHints\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transitionCount\":3,\"samePageMarkEntryTransitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"sourceRangeGapToPageLineGapMaxAbsDeltaUnits\":182,\"rowSourceStartGapToPageLineGapMaxAbsDeltaUnits\":295,\"segmentOffsetGapToPageLineGapMaxAbsDeltaUnits\":105,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105"
         ));
         assert!(layer_tree.contains(
-            "\"transformCandidateCount\":3,\"exactTransformCandidateCount\":0,\"bestCandidateTransitionCoverageCount\":3,\"bestCandidateUnitsPerPageLineGapSpread\":29.875,\"lowestSpreadCandidateTransformKind\":\"direct-source-range-gap\",\"lowestSpreadUnitsPerPageLineGapSpread\":12.250"
+            "\"transformCandidateCount\":4,\"exactTransformCandidateCount\":0,\"bestCandidateTransitionCoverageCount\":3,\"bestCandidateUnitsPerPageLineGapSpread\":29.875,\"lowestSpreadCandidateTransformKind\":\"direct-source-range-gap\",\"lowestSpreadUnitsPerPageLineGapSpread\":12.250"
         ));
         assert!(layer_tree.contains(
             "\"transformCandidateSummaries\":[{\"transformKind\":\"direct-source-range-gap\",\"selected\":false,\"stable\":false,\"transitionCoverageCount\":3,\"maxAbsDeltaUnits\":182,\"unitsPerPageLineGapSpread\":12.250,\"declineReason\":\"higher-max-delta-than-selected-transform\",\"renderPromotionBlockedReason\":\"source-gap-to-page-line-gap-transform-not-stable\"}"
@@ -85626,7 +86683,16 @@ mod tests {
             "\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyPageYOriginDomainGate.sourceGapToPageLineGapTransformAdmissionGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transformDomain\":\"source-unit-gap-to-page-mark-line-index-gap\",\"canDecodeSourceTransform\":false,\"tableFamilyTransformStable\":false,\"tableFamilyTransformBlockedReason\":\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"transitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105"
         ));
         assert!(layer_tree.contains(
-            "\"bestCandidateMaxAbsDeltaUnits\":105,\"transformCandidateCount\":3,\"exactTransformCandidateCount\":0,\"bestCandidateTransitionCoverageCount\":3,\"bestCandidateUnitsPerPageLineGapSpread\":29.875,\"lowestSpreadCandidateTransformKind\":\"direct-source-range-gap\",\"lowestSpreadUnitsPerPageLineGapSpread\":12.250,\"declinedTransformCandidates\":[{\"transformKind\":\"direct-source-range-gap\",\"selected\":false,\"stable\":false,\"transitionCoverageCount\":3,\"maxAbsDeltaUnits\":182"
+            "\"affineRowSourceStartGapFit\":{\"source\":\"sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.affineRowSourceStartGapFit\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"numeratorSlope\":143,\"denominatorSlope\":6,\"numeratorIntercept\":671,\"denominatorIntercept\":6,\"maxAbsResidual\":1.000,\"sampleCount\":3,\"familyScoped\":true,\"fitStable\":true,\"blockedReason\":\"affine-row-source-start-gap-family-transform-authority-unproven\""
+        ));
+        assert!(layer_tree.contains(
+            "\"bestCandidateMaxAbsDeltaUnits\":105,\"transformCandidateCount\":4,\"exactTransformCandidateCount\":0,\"bestCandidateTransitionCoverageCount\":3,\"bestCandidateUnitsPerPageLineGapSpread\":29.875,\"lowestSpreadCandidateTransformKind\":\"direct-source-range-gap\",\"lowestSpreadUnitsPerPageLineGapSpread\":12.250,\"declinedTransformCandidates\":[{\"transformKind\":\"direct-source-range-gap\",\"selected\":false,\"stable\":false,\"transitionCoverageCount\":3,\"maxAbsDeltaUnits\":182"
+        ));
+        assert!(layer_tree.contains(
+            "\"transformKind\":\"affine-row-source-start-gap\",\"selected\":false,\"stable\":true,\"transitionCoverageCount\":3,\"maxAbsDeltaUnits\":1,\"unitsPerPageLineGapSpread\":null,\"affineRowSourceStartGapFit\":{\"source\":\"sourceOnlyPageYOriginDomainGate.transitionSemanticsReadiness.affineRowSourceStartGapFit\""
+        ));
+        assert!(layer_tree.contains(
+            "\"declineReason\":\"affine-row-source-start-gap-family-transform-authority-unproven\",\"renderPromotionBlockedReason\":\"affine-row-source-start-gap-family-transform-authority-unproven\""
         ));
         assert!(layer_tree.contains(
             "\"declaredBlockers\":[\"source-gap-to-page-line-gap-transform-not-stable\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"source-gap-to-page-line-gap-transform-undecoded\"],\"renderPromotionContribution\":\"source-gap-to-page-line-gap-transform-admission-gate\",\"renderPromotionBlockedReason\":\"source-gap-to-page-line-gap-transform-not-stable\"},\"lineDomainRequiresOffsetTransform\":true,\"pageSpaceOriginDecoded\":false"
@@ -86115,7 +87181,7 @@ mod tests {
             "\"horizontalBestSupportedFrameBases\":[\"page-mark-word14-word21-first-slot-adjusted\",\"page-mark-word14-first-slot-word21-half-slot\",\"page-mark-word14-first-slot-word21-half-slot\"],\"yAxisReady\":false,\"ySelectorCandidatePresent\":true,\"ySelectorSingleSupportFallback\":true,\"ySelectorSupportFragmentedByTable\":false,\"ySelectorSupportCount\":1,\"ySelectorCrossTableSupportPresent\":false,\"ySelectorAgreementAdmissible\":false,\"ySelectorAdmissionBlockedReason\":\"source-y-origin-selector-single-support-fallback-not-render-admissible\",\"ySelectorSupportBlockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-semantics-unproven\"],\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\""
         ));
         assert!(layer_tree.contains(
-            "\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transformDomain\":\"source-unit-gap-to-page-mark-line-index-gap\",\"canDecodeSourceTransform\":false,\"tableFamilyTransformStable\":false,\"tableFamilyTransformBlockedReason\":\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"transitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105,\"transformCandidateCount\":3,\"exactTransformCandidateCount\":0"
+            "\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transformDomain\":\"source-unit-gap-to-page-mark-line-index-gap\",\"canDecodeSourceTransform\":false,\"tableFamilyTransformStable\":false,\"tableFamilyTransformBlockedReason\":\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"transitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105,\"transformCandidateCount\":4,\"exactTransformCandidateCount\":0"
         ));
         assert!(layer_tree.contains(
             "\"pageMarkAbsoluteYSlotSemanticsReady\":false,\"pageMarkAbsoluteYSlotBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"pageMarkAbsoluteYSlotResidualPx\":107.539,\"yCandidateCount\":12,\"yAgreementGroupCount\":11,\"yBestSupportCount\":2,\"yUniqueBestSupported\":true,\"ySelectedOriginBasis\":\"page-mark-absolute-y-slot-field2-tail-block16-word11\",\"ySelectedY\":768.000,\"ySelectedRowHeight\":null,\"ySelectorTableCandidateIndexes\":[3]"
@@ -88326,6 +89392,24 @@ mod tests {
         bytes.extend_from_slice(&[0x00, 0x1f]);
         for unit in text.encode_utf16() {
             bytes.extend_from_slice(&unit.to_be_bytes());
+        }
+        bytes
+    }
+
+    fn paper_mark_fixture(entries: &[(u32, u32)]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&u32::try_from(entries.len()).unwrap().to_be_bytes());
+        bytes.extend_from_slice(&0x0cu32.to_be_bytes());
+        bytes.extend_from_slice(
+            &entries
+                .last()
+                .map(|(index, _)| *index)
+                .unwrap_or(0)
+                .to_be_bytes(),
+        );
+        for (index, flags) in entries {
+            bytes.extend_from_slice(&index.to_be_bytes());
+            bytes.extend_from_slice(&flags.to_be_bytes());
         }
         bytes
     }
