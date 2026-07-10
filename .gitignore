@@ -1,9 +1,18 @@
+# Local agent and analysis state
 /.omx/
 /.omo/
+/.omc/
+/.codegraph
+/.debug-journal.md
+**/AGENTS.md
+
 /.cargo-home/
 /.DS_Store
 **/.DS_Store
 /tmp/
+/rjtd/tmp/
+/tmp-ql/
+/tmp-preview-check-*.png
 /rhwp/
 /third-party/
 /target/
@@ -14,6 +23,7 @@
 /rjtd-testdata/local-samples/**/*.jtd
 /rjtd-testdata/local-samples/**/*.jtt
 /rjtd-testdata/local-samples/**/*.jttc
+/rjtd-testdata/local-samples/*.pdf
 /rjtd-testdata/local-samples/**/*.pdf
 /rjtd-testdata/local-samples/**/*.png
 /rjtd-testdata/local-samples/**/*.$td
