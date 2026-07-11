@@ -319,6 +319,46 @@ No change to the parser is warranted until paragraph-record semantics (indent
 levels, style references, column/cell geometry) are proven. The `decoded:false`
 principle applies.
 
+## Trailing TextV.01 Style Event Section
+
+`/DocumentText` carries a second, byte-oriented event stream after its UTF-16BE
+content. The big-endian `u32` at byte offset 28 is the content-unit count, and
+the observed style section begins at `32 + content_unit_count * 2`. Its event
+cursor starts at source unit 16, matching the 32-byte `/DocumentText` header.
+
+The observed event grammar is:
+
+- `00 <u32-be length>`: a run covering `length` source units;
+- `fe (<property-id> <value-length> <value-bytes>)* ff 00`: a property-change
+  event covering one source unit;
+- `ff`: terminal marker, with any remaining bytes preserved as trailing data.
+
+Property changes form persistent state: values apply to the change unit and
+remain active across following run events until another change replaces them.
+The currently observed typed widths are 1 byte for property IDs 4–7 and 9–12,
+2 bytes for IDs 1–3, 8, 13, 14, 18, and 19, and 4 bytes for IDs 15–17 and 20.
+Unknown IDs and width mismatches remain raw evidence. This event stream is
+separate from, and must not be confused with, the `0x001c/0x0010 w4=0x008f`
+table-row header family described above.
+
+In `shanai_lan`, property 15 has a source-range correlation with label color.
+When one value covers a label fragment's complete source range, the observed
+`0x00BBGGRR` values map as follows:
+
+| Property 15 value | CSS color | Observed use |
+|------------------:|-----------|--------------|
+| `0x00008000` | `#008000` | diagram title |
+| `0x00800000` | `#000080` | blue device and server labels |
+| `0x00660000` | `#000066` | dark-blue NAS label |
+| `0xffffffff` | default | automatic/default color sentinel |
+
+This proves the packed-color encoding for those ranges, but not a universal
+property role. In the cross-sample `hyo` fixture, property 15 also occurs over
+non-text/control ranges associated with table state. Therefore the renderer
+uses it only as a decoded-false color candidate for uniform, exact text ranges
+inside the `shanai_lan` projection. It does not apply property 15 globally, and
+a fragment that crosses a property-state boundary keeps the default fill.
+
 ## 0x000e and 0x000a Control Codes
 
 ### 0x000e Row Delimiter
