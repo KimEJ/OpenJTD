@@ -532,15 +532,15 @@ export interface InitOutput {
     readonly hwpdocument_updateConnectorsInSection: (a: number, b: number) => void;
     readonly hwpdocument_updateStyle: (a: number, b: number, c: number, d: number) => number;
     readonly hwpdocument_updateStyleShapes: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
+    readonly hwpdocument_findOrCreateFontId: (a: number, b: number, c: number) => number;
+    readonly hwpdocument_exportHwpx: (a: number) => [number, number];
     readonly hwpdocument_renderPageToCanvasLegacy: (a: number, b: number, c: any, d: number) => [number, number];
+    readonly hwpdocument_createStyle: (a: number, b: number, c: number) => number;
     readonly hwpdocument_hitTestFootnote: (a: number, b: number, c: number, d: number) => [number, number];
     readonly hwpdocument_hitTestHeaderFooter: (a: number, b: number, c: number, d: number) => [number, number];
     readonly hwpdocument_hitTestInFootnote: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly hwpdocument_exportHwpx: (a: number) => [number, number];
     readonly hwpdocument_ensureDefaultNumbering: (a: number) => number;
     readonly hwpdocument_ensureParagraphStableIds: (a: number) => void;
-    readonly hwpdocument_findOrCreateFontId: (a: number, b: number, c: number) => number;
-    readonly hwpdocument_createStyle: (a: number, b: number, c: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;

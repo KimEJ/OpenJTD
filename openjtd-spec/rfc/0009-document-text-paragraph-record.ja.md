@@ -225,6 +225,29 @@ law-document draft サンプル `sample-draft.jtd`（解析済み LineMark レ�
 
 段落レコードの意味（インデントレベル、スタイル参照、列/セルのジオメトリ）が証明されるまで、パーサーの変更は不要。`decoded:false` の原則を適用する。
 
+## 末尾の TextV.01 スタイルイベントセクション
+
+`/DocumentText` には UTF-16BE content の後ろに byte-oriented event stream が存在する。byte offset 28 の big-endian `u32` は content-unit count であり、観測された style section は `32 + content_unit_count * 2` から始まる。event cursor の source unit は 16 から始まり、32-byte の `/DocumentText` header と一致する。
+
+観測された event grammar：
+
+- `00 <u32-be length>`：`length` source units を cover する run。
+- `fe (<property-id> <value-length> <value-bytes>)* ff 00`：1 source unit を cover する property-change event。
+- `ff`：terminal marker。残りの bytes は trailing data として保存する。
+
+property changes は persistent state を構成する。value は change unit 自体に適用され、別の change で置き換えられるまで後続 run events に引き継がれる。現在観測済みの typed widths は property IDs 4〜7/9〜12 が 1 byte、1〜3/8/13/14/18/19 が 2 bytes、15〜17/20 が 4 bytes である。unknown IDs と width mismatch は raw evidence のまま保存する。この event stream は前述の `0x001c/0x0010 w4=0x008f` table-row header family とは別構造であり、混同してはならない。
+
+`shanai_lan` では property 15 と label color の source-range correlation が確認された。単一 value が label fragment の exact source range 全体を cover する場合、観測された `0x00BBGGRR` values は次のように対応する。
+
+| Property 15 value | CSS color | 観測された用途 |
+|------------------:|-----------|----------------|
+| `0x00008000` | `#008000` | diagram title |
+| `0x00800000` | `#000080` | blue device/server labels |
+| `0x00660000` | `#000066` | dark-blue NAS label |
+| `0xffffffff` | default | automatic/default color sentinel |
+
+これは該当 ranges の packed-color encoding を証明するが、property role の universal semantics は証明しない。cross-sample `hyo` では property 15 が table state に関連する non-text/control ranges にも現れる。そのため renderer は `shanai_lan` projection 内の uniform exact text ranges に限り decoded-false color candidate として使用する。property 15 を global に適用せず、property-state boundary をまたぐ fragment は default fill のままにする。
+
 ## 0x000e と 0x000a 制御コード
 
 ### 0x000e 行区切り
