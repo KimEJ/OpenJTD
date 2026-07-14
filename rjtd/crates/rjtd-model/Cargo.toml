@@ -2,13 +2,22 @@
 name = "rjtd-model"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Experimental document model and parser integration for Ichitaro JTD files."
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/rjtd-model"
+readme = "README.md"
+keywords = ["ichitaro", "jtd", "document", "document-model", "parser"]
+categories = ["data-structures", "text-processing", "parser-implementations"]
+publish = ["crates-io"]
+include = ["src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
 
 [dependencies]
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png"], optional = true }
-rjtd-core = { path = "../rjtd-core" }
+rjtd-core = { version = "0.0.1", path = "../rjtd-core" }
 
 [features]
 default = ["bitmap-images"]

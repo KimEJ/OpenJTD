@@ -82,3 +82,27 @@ output, not native layout reproduction.
 
 English is the default documentation language. Japanese translations use
 `*.ja.md`.
+
+## Contributing and Security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the Apache-2.0 and DCO contribution
+terms, clean-room research rules, pull request flow, and sample provenance
+requirements. Report possible vulnerabilities privately by following
+[SECURITY.md](SECURITY.md); do not disclose vulnerability details in a public
+issue or pull request.
+
+## License
+
+OpenJTD-authored source code and documentation are licensed under the
+[Apache License, Version 2.0](LICENSE).
+
+Bundled sample and test-input documents, and other third-party materials, may
+be subject to separate rights or terms. This license notice does not grant
+rights to those materials.
+
+Generated output may be distributed only when the rights in its input material
+allow it; Apache-2.0 does not grant rights in input content represented by that
+output. “Ichitaro”, “一太郎”, “JustSystems”, and other third-party names are
+used descriptively to identify the document format or compatibility target, not
+to imply affiliation with or endorsement by their respective owners. See
+[THIRD_PARTY.md](THIRD_PARTY.md) for the boundary for local reference material.

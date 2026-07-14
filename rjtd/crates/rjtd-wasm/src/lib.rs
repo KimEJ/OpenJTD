@@ -1,12 +1,13 @@
-//! WebAssembly-facing entry points for browser integrations.
-//!
-//! The public wrapper intentionally mirrors rhwp's `HwpDocument` surface where
-//! rjtd already has equivalent core behavior. This lets application code share
-//! the same load/page-info/SVG-render path while JTD-specific layout support
-//! matures.
+#![doc = include_str!("../README.md")]
 
 use rjtd_model::{Document, DocumentCore};
 use wasm_bindgen::prelude::*;
+
+#[cfg(any(test, target_arch = "wasm32"))]
+mod canvas;
+
+#[cfg(target_arch = "wasm32")]
+use canvas::canvas_layout;
 
 pub fn engine_name() -> &'static str {
     "rjtd"
@@ -3340,16 +3341,17 @@ fn render_core_page_to_canvas(
     use web_sys::CanvasRenderingContext2d;
 
     let lines = core.page_text_lines(page_num).map_err(js_error)?;
-    let scale = normalize_canvas_scale(scale);
-    canvas.set_width(scaled_canvas_extent(core.page_width_px(), scale));
-    canvas.set_height(scaled_canvas_extent(core.page_height_px(), scale));
+    let layout =
+        canvas_layout(core.page_width_px(), core.page_height_px(), scale).map_err(js_error)?;
+    canvas.set_width(layout.width());
+    canvas.set_height(layout.height());
 
     let context = canvas
         .get_context("2d")?
         .ok_or_else(|| JsValue::from_str("2d canvas context is unavailable"))?
         .dyn_into::<CanvasRenderingContext2d>()?;
 
-    context.set_transform(scale, 0.0, 0.0, scale, 0.0, 0.0)?;
+    context.set_transform(layout.scale(), 0.0, 0.0, layout.scale(), 0.0, 0.0)?;
     context.set_fill_style_str("#ffffff");
     context.fill_rect(0.0, 0.0, core.page_width_px(), core.page_height_px());
 
@@ -3365,25 +3367,6 @@ fn render_core_page_to_canvas(
     }
 
     Ok(())
-}
-
-#[cfg(target_arch = "wasm32")]
-fn normalize_canvas_scale(scale: f64) -> f64 {
-    if scale.is_finite() && scale > 0.0 {
-        scale
-    } else {
-        1.0
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn scaled_canvas_extent(extent: f64, scale: f64) -> u32 {
-    let scaled = (extent * scale).ceil();
-    if scaled.is_finite() && scaled > 0.0 {
-        scaled.min(u32::MAX as f64) as u32
-    } else {
-        1
-    }
 }
 
 fn hit_false_json(page_num: u32, x: f64, y: f64) -> String {

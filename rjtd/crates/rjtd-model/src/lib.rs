@@ -11,30 +11,35 @@ use rjtd_core::document_text::{
     DocumentTextControl, DocumentTextElement, DocumentTextMap, DocumentTextMapEntry,
     DocumentTextMapKind, DocumentTextPayload, DocumentTextStyleResolver, InlineTextSegment,
     ParsedDocumentText, SkippedInlineTextSegment, map_document_text,
-    parse_document_text_row_headers, read_document_text_payload,
+    parse_document_text_row_headers, read_document_text_payload_with_budget,
 };
 use rjtd_core::document_text_position::{
     DocumentTextCountEntry, read_document_text_position_tables,
 };
-use rjtd_core::font_stream::{FontEntry, read_font_stream};
+use rjtd_core::font_stream::{FontEntry, read_font_stream_with_budget};
 use rjtd_core::layout_mark::{
     PAGE_MARK_PATH, PAPER_MARK_PATH, PageMark, PaperMark, read_page_mark, read_paper_mark,
 };
 use rjtd_core::record::UnknownRecordKind;
 use rjtd_core::style_stream::{
     DOCUMENT_VIEW_STYLES_PATH, PAGE_LAYOUT_STYLE_PATH, StyleStreamRecordSummary,
-    StyleStreamSubrecordSummary, TEXT_LAYOUT_STYLE_PATH, read_style_streams,
+    StyleStreamSubrecordSummary, TEXT_LAYOUT_STYLE_PATH, read_style_streams_with_budget,
     summarize_style_stream,
 };
-use rjtd_core::{Error, Result};
+use rjtd_core::{DecompressionBudget, Error, ParseLimits, Result};
 
 mod document_text_text_style;
+mod parse;
 mod shanai_lan_sparse_borders;
+
+pub use parse::{parse_document, parse_document_with_limits};
 
 use document_text_text_style::{
     DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS, DocumentTextProperty15ColorCandidate,
     document_text_property_15_color_candidate,
 };
+#[cfg(test)]
+use rjtd_core::document_text::read_document_text_payload;
 #[cfg(test)]
 use shanai_lan_sparse_borders::shanai_lan_source_page_transform_candidate_from_raw_fields;
 use shanai_lan_sparse_borders::{
@@ -522,9 +527,9 @@ pub trait DocumentParser {
 
 pub struct IchitaroParser;
 
-impl DocumentParser for IchitaroParser {
-    fn parse(&self, data: &[u8]) -> Result<Document> {
-        let payload = read_document_text_payload(data)?;
+impl IchitaroParser {
+    fn parse_with_budget(&self, data: &[u8], budget: &mut DecompressionBudget) -> Result<Document> {
+        let payload = read_document_text_payload_with_budget(data, budget)?;
         let map = map_document_text(payload.bytes());
         let mut document = Document::from_document_text_payload(&payload);
         for entry in document_text_toc_entries(map.entries()) {
@@ -548,7 +553,9 @@ impl DocumentParser for IchitaroParser {
                 document.push_raw_stream(RawStream::new(stream_name, stream));
             }
         }
-        if let Ok(style_streams) = read_style_streams(data) {
+        if let Some(style_streams) =
+            parse::optional_stream(read_style_streams_with_budget(data, budget))?
+        {
             for stream in style_streams {
                 document.push_unknown_style(UnknownStyle::from_stream(
                     stream.name(),
@@ -556,7 +563,9 @@ impl DocumentParser for IchitaroParser {
                 ));
             }
         }
-        if let Ok(font_stream) = read_font_stream(data) {
+        if let Some(font_stream) =
+            parse::optional_stream(read_font_stream_with_budget(data, budget))?
+        {
             for entry in font_stream.entries() {
                 document.push_font(DocumentFont::from_font_stream_entry(
                     font_stream.name(),
@@ -629,8 +638,11 @@ impl DocumentParser for IchitaroParser {
     }
 }
 
-pub fn parse_document(data: &[u8]) -> Result<Document> {
-    IchitaroParser.parse(data)
+impl DocumentParser for IchitaroParser {
+    fn parse(&self, data: &[u8]) -> Result<Document> {
+        let mut budget = ParseLimits::DEFAULT.decompression_budget();
+        self.parse_with_budget(data, &mut budget)
+    }
 }
 
 const APP_PAGE_WIDTH_PX: f32 = 794.0;
@@ -647,6 +659,7 @@ const APP_IMAGE_DIAGNOSTIC_GAP_PX: f32 = 8.0;
 const APP_IMAGE_DIAGNOSTIC_MAX_OVERLAYS: usize = 8;
 const APP_PAGE_DECORATION_FONT_SIZE_PX: f32 = 13.0;
 const APP_WRAP_COLUMNS: usize = 82;
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_SOURCE_FORMAT: &str = "jtd";
 const APP_DEFAULT_DPI: f64 = 96.0;
 const APP_TAB_COLUMNS: usize = 4;
@@ -1285,7 +1298,15 @@ impl DocumentSnapshot {
 
 impl DocumentCore {
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
-        parse_document(data).map(Self::from_document)
+        Self::from_bytes_with_limits(data, ParseLimits::DEFAULT)
+    }
+
+    /// Creates a document core from already allocated input with explicit resource limits.
+    ///
+    /// Per-member and total LH5 output are bounded by `limits`; the input limit checks this
+    /// `&[u8]` after the caller has allocated it, so it cannot reduce the caller's allocation.
+    pub fn from_bytes_with_limits(data: &[u8], limits: ParseLimits) -> Result<Self> {
+        parse_document_with_limits(data, limits).map(Self::from_document)
     }
 
     pub fn from_document(document: Document) -> Self {
@@ -1382,7 +1403,7 @@ impl DocumentCore {
             .map(|m| format!("\"{}\"", m.as_str()))
             .unwrap_or_else(|| "null".to_string());
         format!(
-            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeDecision\":{},\"writingModeCandidateFromDocumentViewStyles\":{},\"writingModeCandidateFromDocumentViewStylesDecoded\":false,\"writingModeCandidateFromDocumentViewStylesSourceBacked\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":{},\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"paperMarkFlagBit0VerticalCandidate\":{},\"paperMarkFlagBit17IndexStepCandidate\":{},\"paperMarkWritingModeCandidateEvidence\":{},\"paperMarkWritingModeCandidateBlockers\":{},\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"fdmTextMirrorAnchorAgreementCount\":{},\"fdmTextMirrorAnchorAgreements\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"fdmOpenStrokeCohortSummary\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
+            "{{\"version\":\"{APP_VERSION}\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeDecision\":{},\"writingModeCandidateFromDocumentViewStyles\":{},\"writingModeCandidateFromDocumentViewStylesDecoded\":false,\"writingModeCandidateFromDocumentViewStylesSourceBacked\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":{},\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"paperMarkFlagBit0VerticalCandidate\":{},\"paperMarkFlagBit17IndexStepCandidate\":{},\"paperMarkWritingModeCandidateEvidence\":{},\"paperMarkWritingModeCandidateBlockers\":{},\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"fdmTextMirrorAnchorAgreementCount\":{},\"fdmTextMirrorAnchorAgreements\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"fdmOpenStrokeCohortSummary\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
             APP_SOURCE_FORMAT,
             json_string(&self.file_name),
             self.page_count(),

@@ -2,8 +2,17 @@
 name = "rjtd-cli"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Command-line inspection and export tools for Ichitaro JTD documents."
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://github.com/KimEJ/OpenJTD/tree/main/rjtd/crates/rjtd-cli"
+readme = "README.md"
+keywords = ["ichitaro", "jtd", "document", "cli", "forensics"]
+categories = ["command-line-utilities", "text-processing", "parser-implementations"]
+publish = ["crates-io"]
+include = ["src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
 
 [[bin]]
 name = "rjtd"
@@ -11,9 +20,9 @@ path = "src/main.rs"
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png"] }
-rjtd-core = { path = "../rjtd-core" }
-rjtd-export = { path = "../rjtd-export" }
-rjtd-model = { path = "../rjtd-model" }
+rjtd-core = { version = "0.0.1", path = "../rjtd-core" }
+rjtd-export = { version = "0.0.1", path = "../rjtd-export" }
+rjtd-model = { version = "0.0.1", path = "../rjtd-model" }
 
 [dev-dependencies]
 cfb = "0.14"

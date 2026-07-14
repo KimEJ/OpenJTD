@@ -5,6 +5,13 @@ JTD public specification と RFC 形式の reverse engineering records を管理
 `openjtd-spec` は OpenJTD の project-level specification space である。公開形式の知見を
 単一実装に閉じ込めないため、`rjtd` Rust ツール群と同格に扱う。
 
+## ライセンス境界
+
+別の条件が明記されない限り、このディレクトリ内で OpenJTD が著作した文章は、root の
+[Apache License, Version 2.0](../LICENSE) の対象です。参照するソフトウェア、文書、
+引用物、製品名は、それぞれの権利および条件に従います。このドキュメントはそれらを
+ライセンスするものではありません。
+
 ## RFCs
 
 English original と Japanese translation を管理する。

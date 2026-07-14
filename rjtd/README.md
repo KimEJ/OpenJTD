@@ -14,6 +14,21 @@ project.
 
 The overall project charter and ecosystem plan follow the top-level [docs/CHARTER.md](../docs/CHARTER.md).
 
+## 0.0.1 Developer Preview
+
+The first crates.io release is an experimental developer preview. OpenJTD is
+publishing `rjtd-core`, `rjtd-model`, `rjtd-export`, `rjtd-cli`, and
+`rjtd-wasm`; `rjtd-testkit` remains an internal workspace crate. See
+[CHANGELOG.md](CHANGELOG.md) for the release scope and
+[RELEASING.md](RELEASING.md) for the required publication order.
+
+Observed `.jtd`, `.jtt`, and `.jttc` files are supported to different degrees.
+The implementation is not a complete Ichitaro format specification. Values
+named `Candidate`, `Unknown`, or `Diagnostic`, and JSON fields marked
+`decoded: false`, retain reverse-engineering evidence without claiming final
+semantics. All public APIs and command output schemas may change in later
+0.0.x releases.
+
 ## Foundational Principle: Follow rhwp
 
 The `rjtd` engine takes inspiration from the structure and philosophy of the
@@ -71,6 +86,18 @@ UnknownObject
 ```
 
 This prevents data loss during reverse engineering.
+
+## Default Resource Limits
+
+The public parser surfaces reject source input larger than 64 MiB. LH5 members
+reject declared output larger than 256 MiB; above a 1 MiB allowance, output must
+also remain within 256 times the packed member size. Browser canvas rendering is
+limited to 16,384 pixels per dimension and 64 MiPixels in total.
+
+These are pre-stable safety ceilings, not compatibility guarantees. Stream,
+record, embedded-image, and page-level budgets are still being hardened, so
+process untrusted documents in an appropriately constrained environment and
+report possible bypasses through the root [security policy](../SECURITY.md).
 
 ## Workspace Layout
 
