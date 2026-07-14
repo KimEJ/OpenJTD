@@ -13266,11 +13266,7 @@ fn fdm_bbox_intersects(left: (i32, i32, i32, i32), right: (i32, i32, i32, i32)) 
 }
 
 fn permille(numerator: usize, denominator: usize) -> Option<usize> {
-    if denominator == 0 {
-        None
-    } else {
-        Some(numerator.saturating_mul(1000) / denominator)
-    }
+    numerator.saturating_mul(1000).checked_div(denominator)
 }
 
 fn fdm_bbox_area(bbox: (i32, i32, i32, i32)) -> i64 {
@@ -27393,7 +27389,7 @@ fn table_grid_related_horizontal_source_layout_summaries(
         ));
     }
 
-    summaries.sort_by(|left, right| left.table_candidate_index.cmp(&right.table_candidate_index));
+    summaries.sort_by_key(|summary| summary.table_candidate_index);
     summaries.dedup_by_key(|summary| summary.table_candidate_index);
     summaries
 }
@@ -65965,10 +65961,9 @@ fn embedded_press_title_art_source_paint_candidate(
     let (paint_color, paint_source) =
         if let Some(color) = source_paint_candidate.and_then(jsfart_paint_candidate_color_hex) {
             (color, "JSFart2Contents.paintColorCandidate")
-        } else if let Some(color) = embedded_press_title_art_path_paint_state_color_hex(paths) {
-            (color, "EmbeddedPress.0x82.word3")
         } else {
-            return None;
+            let color = embedded_press_title_art_path_paint_state_color_hex(paths)?;
+            (color, "EmbeddedPress.0x82.word3")
         };
     let active_fill =
         if let Some((opacity, _)) = embedded_press_title_art_front_erase_texture_opacity(paths) {
