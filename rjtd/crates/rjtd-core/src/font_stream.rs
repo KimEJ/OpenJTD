@@ -1,9 +1,9 @@
 use crate::compressed_document::{
-    decompress_just_compressed_document, is_just_compressed_document,
+    decompress_just_compressed_document_with_budget, is_just_compressed_document,
 };
 use crate::container::read_cfb_stream;
 use crate::document_text::COMPRESSED_DOCUMENT_PATH;
-use crate::{Error, Result};
+use crate::{DecompressionBudget, Error, ParseLimits, Result};
 
 pub const FONT_STREAM_PATH: &str = "/Font";
 
@@ -86,7 +86,28 @@ impl FontEntry {
 }
 
 pub fn read_font_stream(data: &[u8]) -> Result<FontStream> {
-    if let Some(inner_document) = maybe_decompressed_inner_document(data)? {
+    read_font_stream_with_limits(data, ParseLimits::DEFAULT)
+}
+
+/// Reads a font stream from already allocated input with explicit resource limits.
+///
+/// Each LH5 member and the combined output of every member reached by this call are limited. The
+/// input check occurs after the caller has allocated `data`.
+pub fn read_font_stream_with_limits(data: &[u8], limits: ParseLimits) -> Result<FontStream> {
+    let mut budget = limits.decompression_budget();
+    read_font_stream_with_budget(data, &mut budget)
+}
+
+/// Reads a font stream while sharing a cumulative LH5 output budget with other readers.
+///
+/// This is public only for composition between rjtd crates; downstream callers should prefer
+/// [`read_font_stream_with_limits`]. It is not a stable downstream API.
+pub fn read_font_stream_with_budget(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<FontStream> {
+    budget.check_input_size(data.len())?;
+    if let Some(inner_document) = maybe_decompressed_inner_document(data, budget)? {
         return read_font_stream_from_cfb(&inner_document);
     }
 
@@ -102,7 +123,10 @@ fn read_font_stream_from_cfb(data: &[u8]) -> Result<FontStream> {
     Ok(FontStream::new(FONT_STREAM_PATH, bytes))
 }
 
-fn maybe_decompressed_inner_document(data: &[u8]) -> Result<Option<Vec<u8>>> {
+fn maybe_decompressed_inner_document(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<Option<Vec<u8>>> {
     let compressed = match read_cfb_stream(data, COMPRESSED_DOCUMENT_PATH) {
         Ok(stream) => stream,
         Err(Error::NotFound(_)) => return Ok(None),
@@ -110,7 +134,10 @@ fn maybe_decompressed_inner_document(data: &[u8]) -> Result<Option<Vec<u8>>> {
     };
 
     if is_just_compressed_document(&compressed) {
-        Ok(Some(decompress_just_compressed_document(&compressed)?))
+        Ok(Some(decompress_just_compressed_document_with_budget(
+            &compressed,
+            budget,
+        )?))
     } else {
         Ok(None)
     }

@@ -170,6 +170,16 @@
     font-size: var(--font-size-sm);
     color: var(--color-gray-536);
   }
+  .drop-zone__error {
+    max-width: min(560px, calc(100% - var(--sp-4)));
+    margin: 0;
+    color: var(--color-brand-800);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+  .drop-zone__error:empty { display: none; }
   #file-input { display: none; }
 
   /* ビューア */
@@ -334,6 +344,7 @@
   <p class="drop-zone__secondary">またはボタンからファイルを選択してください</p>
   <button class="drop-zone__btn" onclick="document.getElementById('file-input').click()">ファイルを選択</button>
   <p class="drop-zone__note">ファイルはブラウザ内のみで処理されます</p>
+  <p id="drop-error" class="drop-zone__error" role="alert"></p>
   <input type="file" id="file-input" accept=".jtd,.jtt,.jttc">
 </div>
 
@@ -370,6 +381,7 @@ async function loadWasm() {
 
 function setStatus(msg) {
   document.getElementById('status').textContent = msg;
+  document.getElementById('drop-error').textContent = msg.startsWith('エラー:') ? msg : '';
 }
 
 function renderPage() {
@@ -410,6 +422,7 @@ async function openFile(file) {
   try {
     if (doc) { doc.free(); doc = null; }
     doc = new HwpDocument(bytes);
+    doc.setFileName(file.name);
     totalPages = doc.pageCount();
     currentPage = 0;
     document.getElementById('filename').textContent = file.name;
@@ -418,17 +431,21 @@ async function openFile(file) {
     setStatus('');
     switchTab('svg');
   } catch (e) {
-    setStatus(`エラー: ${e}`);
+    resetViewer(`エラー: ${e}`);
   }
 }
 
-function closeViewer() {
+function resetViewer(status = '') {
   if (doc) { doc.free(); doc = null; }
   document.getElementById('viewer').style.display = 'none';
   document.getElementById('drop-zone').style.display = 'flex';
   document.getElementById('svg-container').innerHTML = '';
   document.getElementById('text-container').textContent = '';
-  setStatus('');
+  setStatus(status);
+}
+
+function closeViewer() {
+  resetViewer();
 }
 
 // イベント

@@ -9,23 +9,43 @@ use rjtd_core::auto_text_info::{AutoTextEntry, read_auto_text_info};
 use rjtd_core::container::{EntryKind, inspect_cfb_entries, read_cfb_stream};
 use rjtd_core::document_text::{
     DocumentTextControl, DocumentTextElement, DocumentTextMap, DocumentTextMapEntry,
-    DocumentTextMapKind, DocumentTextPayload, InlineTextSegment, ParsedDocumentText,
-    SkippedInlineTextSegment, map_document_text, read_document_text_payload,
+    DocumentTextMapKind, DocumentTextPayload, DocumentTextStyleResolver, InlineTextSegment,
+    ParsedDocumentText, SkippedInlineTextSegment, map_document_text,
+    parse_document_text_row_headers, read_document_text_payload_with_budget,
 };
 use rjtd_core::document_text_position::{
     DocumentTextCountEntry, read_document_text_position_tables,
 };
-use rjtd_core::font_stream::{FontEntry, read_font_stream};
+use rjtd_core::font_stream::{FontEntry, read_font_stream_with_budget};
 use rjtd_core::layout_mark::{
     PAGE_MARK_PATH, PAPER_MARK_PATH, PageMark, PaperMark, read_page_mark, read_paper_mark,
 };
 use rjtd_core::record::UnknownRecordKind;
 use rjtd_core::style_stream::{
     DOCUMENT_VIEW_STYLES_PATH, PAGE_LAYOUT_STYLE_PATH, StyleStreamRecordSummary,
-    StyleStreamSubrecordSummary, TEXT_LAYOUT_STYLE_PATH, read_style_streams,
+    StyleStreamSubrecordSummary, TEXT_LAYOUT_STYLE_PATH, read_style_streams_with_budget,
     summarize_style_stream,
 };
-use rjtd_core::{Error, Result};
+use rjtd_core::{DecompressionBudget, Error, ParseLimits, Result};
+
+mod document_text_text_style;
+mod parse;
+mod shanai_lan_sparse_borders;
+
+pub use parse::{parse_document, parse_document_with_limits};
+
+use document_text_text_style::{
+    DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS, DocumentTextProperty15ColorCandidate,
+    document_text_property_15_color_candidate,
+};
+#[cfg(test)]
+use rjtd_core::document_text::read_document_text_payload;
+#[cfg(test)]
+use shanai_lan_sparse_borders::shanai_lan_source_page_transform_candidate_from_raw_fields;
+use shanai_lan_sparse_borders::{
+    push_page_layer_shanai_lan_sparse_table_border_topology_diagnostic_json,
+    push_shanai_lan_sparse_table_borders_svg, shanai_lan_sparse_table_border_topology_diagnostic,
+};
 
 const DOCUMENT_TEXT_INLINE_START_TAG: u32 = 0x001d;
 const DOCUMENT_TEXT_TEXT_RUN_MARKER: u16 = 0x001f;
@@ -507,9 +527,9 @@ pub trait DocumentParser {
 
 pub struct IchitaroParser;
 
-impl DocumentParser for IchitaroParser {
-    fn parse(&self, data: &[u8]) -> Result<Document> {
-        let payload = read_document_text_payload(data)?;
+impl IchitaroParser {
+    fn parse_with_budget(&self, data: &[u8], budget: &mut DecompressionBudget) -> Result<Document> {
+        let payload = read_document_text_payload_with_budget(data, budget)?;
         let map = map_document_text(payload.bytes());
         let mut document = Document::from_document_text_payload(&payload);
         for entry in document_text_toc_entries(map.entries()) {
@@ -533,7 +553,9 @@ impl DocumentParser for IchitaroParser {
                 document.push_raw_stream(RawStream::new(stream_name, stream));
             }
         }
-        if let Ok(style_streams) = read_style_streams(data) {
+        if let Some(style_streams) =
+            parse::optional_stream(read_style_streams_with_budget(data, budget))?
+        {
             for stream in style_streams {
                 document.push_unknown_style(UnknownStyle::from_stream(
                     stream.name(),
@@ -541,7 +563,9 @@ impl DocumentParser for IchitaroParser {
                 ));
             }
         }
-        if let Ok(font_stream) = read_font_stream(data) {
+        if let Some(font_stream) =
+            parse::optional_stream(read_font_stream_with_budget(data, budget))?
+        {
             for entry in font_stream.entries() {
                 document.push_font(DocumentFont::from_font_stream_entry(
                     font_stream.name(),
@@ -614,8 +638,11 @@ impl DocumentParser for IchitaroParser {
     }
 }
 
-pub fn parse_document(data: &[u8]) -> Result<Document> {
-    IchitaroParser.parse(data)
+impl DocumentParser for IchitaroParser {
+    fn parse(&self, data: &[u8]) -> Result<Document> {
+        let mut budget = ParseLimits::DEFAULT.decompression_budget();
+        self.parse_with_budget(data, &mut budget)
+    }
 }
 
 const APP_PAGE_WIDTH_PX: f32 = 794.0;
@@ -632,6 +659,7 @@ const APP_IMAGE_DIAGNOSTIC_GAP_PX: f32 = 8.0;
 const APP_IMAGE_DIAGNOSTIC_MAX_OVERLAYS: usize = 8;
 const APP_PAGE_DECORATION_FONT_SIZE_PX: f32 = 13.0;
 const APP_WRAP_COLUMNS: usize = 82;
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_SOURCE_FORMAT: &str = "jtd";
 const APP_DEFAULT_DPI: f64 = 96.0;
 const APP_TAB_COLUMNS: usize = 4;
@@ -1270,7 +1298,15 @@ impl DocumentSnapshot {
 
 impl DocumentCore {
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
-        parse_document(data).map(Self::from_document)
+        Self::from_bytes_with_limits(data, ParseLimits::DEFAULT)
+    }
+
+    /// Creates a document core from already allocated input with explicit resource limits.
+    ///
+    /// Per-member and total LH5 output are bounded by `limits`; the input limit checks this
+    /// `&[u8]` after the caller has allocated it, so it cannot reduce the caller's allocation.
+    pub fn from_bytes_with_limits(data: &[u8], limits: ParseLimits) -> Result<Self> {
+        parse_document_with_limits(data, limits).map(Self::from_document)
     }
 
     pub fn from_document(document: Document) -> Self {
@@ -1360,12 +1396,14 @@ impl DocumentCore {
             .unwrap_or_else(|| "null".to_string());
         let paper_mark_writing_mode_diagnostics =
             paper_mark_writing_mode_diagnostics(self.document.paper_marks());
+        let fdm_text_mirror_anchor_agreements =
+            fdm_text_mirror_anchor_agreements(self.document.object_stream_candidates());
         let writing_mode_candidate_str = paper_mark_writing_mode_diagnostics
             .candidate
             .map(|m| format!("\"{}\"", m.as_str()))
             .unwrap_or_else(|| "null".to_string());
         format!(
-            "{{\"version\":\"0.0.0\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeDecision\":{},\"writingModeCandidateFromDocumentViewStyles\":{},\"writingModeCandidateFromDocumentViewStylesDecoded\":false,\"writingModeCandidateFromDocumentViewStylesSourceBacked\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":{},\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"paperMarkFlagBit0VerticalCandidate\":{},\"paperMarkFlagBit17IndexStepCandidate\":{},\"paperMarkWritingModeCandidateEvidence\":{},\"paperMarkWritingModeCandidateBlockers\":{},\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"fdmOpenStrokeCohortSummary\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
+            "{{\"version\":\"{APP_VERSION}\",\"format\":\"JTD\",\"engine\":\"rjtd\",\"sourceFormat\":\"{}\",\"fileName\":{},\"sectionCount\":1,\"pageCount\":{},\"encrypted\":false,\"hwp3Variant\":false,\"fallbackFont\":{},\"fontsUsed\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"writingModeDecision\":{},\"writingModeCandidateFromDocumentViewStyles\":{},\"writingModeCandidateFromDocumentViewStylesDecoded\":false,\"writingModeCandidateFromDocumentViewStylesSourceBacked\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCode\":{},\"writingModeCandidateFromDocumentViewStylesFirstRecordCodeHex\":{},\"writingModeCandidateFromPaperMark\":{},\"writingModeCandidateDecoded\":false,\"paperMarkFlagBit0VerticalCandidate\":{},\"paperMarkFlagBit17IndexStepCandidate\":{},\"paperMarkWritingModeCandidateEvidence\":{},\"paperMarkWritingModeCandidateBlockers\":{},\"blockCount\":{},\"rawStreamCount\":{},\"styleStreamCount\":{},\"styleCandidateCount\":{},\"styleCandidateNames\":{},\"styleStreams\":{},\"fontCount\":{},\"fontTable\":{},\"autoTextCount\":{},\"autoTextCandidates\":{},\"tocEntryCount\":{},\"tocEntries\":{},\"pageMarkCount\":{},\"pageMarks\":{},\"paperMarkCount\":{},\"paperMarks\":{},\"objectStreamCandidateCount\":{},\"objectStreamCandidates\":{},\"fdmTextMirrorAnchorAgreementCount\":{},\"fdmTextMirrorAnchorAgreements\":{},\"objectFrameRecordCount\":{},\"objectFrameRecords\":{},\"objectEmbeddingFrameCount\":{},\"objectEmbeddingFrames\":{},\"textCountRangeCount\":{},\"textCountRanges\":{},\"textControlBoundaryCount\":{},\"textControlBoundaries\":{},\"textBoundaryCandidateCount\":{},\"textBoundaryCandidates\":{},\"textParagraphBoundaryCandidateCount\":{},\"textParagraphBoundaryCandidates\":{},\"fdmOpenStrokeCohortSummary\":{},\"tableCandidateCount\":{},\"tableCandidates\":{}}}",
             APP_SOURCE_FORMAT,
             json_string(&self.file_name),
             self.page_count(),
@@ -1404,6 +1442,8 @@ impl DocumentCore {
             paper_marks_json(self.document.paper_marks()),
             self.document.object_stream_candidates().len(),
             object_stream_candidates_json(self.document.object_stream_candidates()),
+            fdm_text_mirror_anchor_agreements.len(),
+            fdm_text_mirror_anchor_agreements_json(&fdm_text_mirror_anchor_agreements),
             self.document.object_frame_records().len(),
             object_frame_records_json(self.document.object_frame_records()),
             self.document.object_embedding_frames().len(),
@@ -8780,6 +8820,113 @@ impl ObjectFdmTextIndexEntryCandidate {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FdmIndexSegmentBboxAxisPairGate {
+    valid_index_row_count: usize,
+    linked_row_count: usize,
+    axis_pair_order_agreement_row_count: usize,
+}
+
+impl FdmIndexSegmentBboxAxisPairGate {
+    fn new(
+        valid_index_row_count: usize,
+        linked_row_count: usize,
+        axis_pair_order_agreement_row_count: usize,
+    ) -> Self {
+        Self {
+            valid_index_row_count,
+            linked_row_count,
+            axis_pair_order_agreement_row_count,
+        }
+    }
+
+    fn valid_index_row_count(self) -> usize {
+        self.valid_index_row_count
+    }
+
+    fn linked_row_count(self) -> usize {
+        self.linked_row_count
+    }
+
+    fn axis_pair_order_agreement_row_count(self) -> usize {
+        self.axis_pair_order_agreement_row_count
+    }
+
+    fn axis_pair_order_agreement_complete(self) -> bool {
+        self.valid_index_row_count > 0
+            && self.valid_index_row_count == self.linked_row_count
+            && self.linked_row_count == self.axis_pair_order_agreement_row_count
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FdmTextMirrorAnchorAgreement {
+    indexed_text_path: String,
+    mirrored_text_path: String,
+    text_record_count: usize,
+    ordered_text_agreement: bool,
+    ordered_record_bbox_agreement: bool,
+    indexed_record_offset_agreement: bool,
+    indexed_record_bbox_agreement: bool,
+}
+
+impl FdmTextMirrorAnchorAgreement {
+    fn new(
+        indexed_text_path: impl Into<String>,
+        mirrored_text_path: impl Into<String>,
+        text_record_count: usize,
+        ordered_text_agreement: bool,
+        ordered_record_bbox_agreement: bool,
+        indexed_record_offset_agreement: bool,
+        indexed_record_bbox_agreement: bool,
+    ) -> Self {
+        Self {
+            indexed_text_path: indexed_text_path.into(),
+            mirrored_text_path: mirrored_text_path.into(),
+            text_record_count,
+            ordered_text_agreement,
+            ordered_record_bbox_agreement,
+            indexed_record_offset_agreement,
+            indexed_record_bbox_agreement,
+        }
+    }
+
+    fn indexed_text_path(&self) -> &str {
+        &self.indexed_text_path
+    }
+
+    fn mirrored_text_path(&self) -> &str {
+        &self.mirrored_text_path
+    }
+
+    fn text_record_count(&self) -> usize {
+        self.text_record_count
+    }
+
+    fn ordered_text_agreement(&self) -> bool {
+        self.ordered_text_agreement
+    }
+
+    fn ordered_record_bbox_agreement(&self) -> bool {
+        self.ordered_record_bbox_agreement
+    }
+
+    fn indexed_record_offset_agreement(&self) -> bool {
+        self.indexed_record_offset_agreement
+    }
+
+    fn indexed_record_bbox_agreement(&self) -> bool {
+        self.indexed_record_bbox_agreement
+    }
+
+    fn source_anchor_trace_ready(&self) -> bool {
+        self.ordered_text_agreement
+            && self.ordered_record_bbox_agreement
+            && self.indexed_record_offset_agreement
+            && self.indexed_record_bbox_agreement
+    }
+}
+
 impl ObjectFdmIndexEntryCandidate {
     pub fn index_path(&self) -> &str {
         &self.index_path
@@ -9031,6 +9178,7 @@ pub struct ObjectFdmVectorCommandCandidate {
     curve_segments: Vec<ObjectFdmVectorCurveSegment>,
     ellipse: Option<ObjectFdmVectorEllipse>,
     compound_child_offsets: Vec<u16>,
+    compound_child_layout: Option<FdmCompoundChildLayout>,
     gradient_colors: Option<FdmVectorGradientContext>,
     fill_color: Option<u32>,
     stroke_color: Option<u32>,
@@ -9054,6 +9202,7 @@ impl ObjectFdmVectorCommandCandidate {
         let path_points = fdm_vector_command_path_points(record, marker);
         let curve_segments = fdm_vector_command_curve_segments(record, marker, &path_points);
         let ellipse = fdm_vector_command_ellipse(record, marker);
+        let compound_child_layout = fdm_vector_compound_child_layout(record);
         let compound_child_offsets = fdm_vector_compound_child_offsets(record);
         let gradient_colors = style_context.and_then(|style| style.gradient_colors);
         Some(Self {
@@ -9070,6 +9219,7 @@ impl ObjectFdmVectorCommandCandidate {
             curve_segments,
             ellipse,
             compound_child_offsets,
+            compound_child_layout,
             gradient_colors,
             fill_color: style_context.and_then(|style| style.fill_color),
             stroke_color: style_context.and_then(|style| style.stroke_color),
@@ -9136,6 +9286,10 @@ impl ObjectFdmVectorCommandCandidate {
 
     pub fn compound_child_offsets(&self) -> &[u16] {
         &self.compound_child_offsets
+    }
+
+    fn compound_child_layout(&self) -> Option<&FdmCompoundChildLayout> {
+        self.compound_child_layout.as_ref()
     }
 
     fn gradient_colors(&self) -> Option<FdmVectorGradientContext> {
@@ -12347,6 +12501,98 @@ fn fdm_vector_compound_gradient_context(
     Some(FdmVectorGradientContext::new(stroke_color, fill_color))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FdmCompoundChildLayout {
+    child_offsets: Vec<u16>,
+    first_child_matches_prefix_end: bool,
+    child_offsets_strictly_increasing: bool,
+    child_records_fit_parent: bool,
+    child_records_do_not_overlap: bool,
+}
+
+impl FdmCompoundChildLayout {
+    fn child_offsets(&self) -> &[u16] {
+        &self.child_offsets
+    }
+
+    fn first_child_matches_prefix_end(&self) -> bool {
+        self.first_child_matches_prefix_end
+    }
+
+    fn child_offsets_strictly_increasing(&self) -> bool {
+        self.child_offsets_strictly_increasing
+    }
+
+    fn child_records_fit_parent(&self) -> bool {
+        self.child_records_fit_parent
+    }
+
+    fn child_records_do_not_overlap(&self) -> bool {
+        self.child_records_do_not_overlap
+    }
+
+    fn is_valid_for_nested_projection(&self) -> bool {
+        self.first_child_matches_prefix_end
+            && self.child_offsets_strictly_increasing
+            && self.child_records_fit_parent
+            && self.child_records_do_not_overlap
+    }
+}
+
+fn fdm_vector_compound_child_layout(record: &[u8]) -> Option<FdmCompoundChildLayout> {
+    let prefix = fdm_vector_compound_prefix(record)?;
+    if prefix.len() < 10 || prefix.len() % 2 != 0 {
+        return None;
+    }
+    let child_offsets = prefix[8..]
+        .chunks_exact(2)
+        .filter_map(|chunk| read_be16_at(chunk, 0))
+        .collect::<Vec<_>>();
+    if child_offsets.is_empty() {
+        return None;
+    }
+    let first_child_offset = FDM_VECTOR_COMMAND_BBOX_OFFSET + 16 + prefix.len();
+    let first_child_matches_prefix_end = child_offsets
+        .first()
+        .is_some_and(|offset| usize::from(*offset) == first_child_offset);
+    let child_offsets_strictly_increasing = child_offsets.windows(2).all(|pair| pair[0] < pair[1]);
+    let child_records = child_offsets
+        .iter()
+        .map(|offset| {
+            let offset = usize::from(*offset);
+            let marker_valid = offset < record.len()
+                && FDM_VECTOR_NESTED_PRIMITIVE_MARKERS
+                    .iter()
+                    .any(|marker| record[offset..].starts_with(marker));
+            let declared_end = marker_valid
+                .then(|| {
+                    read_be16_at(record, offset + FDM_VECTOR_COMMAND_DECLARED_LEN_OFFSET)
+                        .map(usize::from)
+                        .and_then(|length| {
+                            (length >= FDM_VECTOR_COMMAND_DECLARED_LEN_OFFSET + 2)
+                                .then_some(offset.saturating_add(length))
+                        })
+                })
+                .flatten();
+            (offset, declared_end)
+        })
+        .collect::<Vec<_>>();
+    let child_records_fit_parent = child_records
+        .iter()
+        .all(|(_, end)| end.is_some_and(|end| end <= record.len()));
+    let child_records_do_not_overlap = child_records
+        .windows(2)
+        .all(|pair| pair[0].1.is_some_and(|first_end| first_end <= pair[1].0));
+
+    Some(FdmCompoundChildLayout {
+        child_offsets,
+        first_child_matches_prefix_end,
+        child_offsets_strictly_increasing,
+        child_records_fit_parent,
+        child_records_do_not_overlap,
+    })
+}
+
 fn fdm_vector_compound_child_offsets(record: &[u8]) -> Vec<u16> {
     let Some(prefix) = fdm_vector_compound_prefix(record) else {
         return Vec::new();
@@ -13020,11 +13266,7 @@ fn fdm_bbox_intersects(left: (i32, i32, i32, i32), right: (i32, i32, i32, i32)) 
 }
 
 fn permille(numerator: usize, denominator: usize) -> Option<usize> {
-    if denominator == 0 {
-        None
-    } else {
-        Some(numerator.saturating_mul(1000) / denominator)
-    }
+    numerator.saturating_mul(1000).checked_div(denominator)
 }
 
 fn fdm_bbox_area(bbox: (i32, i32, i32, i32)) -> i64 {
@@ -13642,6 +13884,74 @@ fn fdm_text_candidates_from_stream(path: &str, stream: &[u8]) -> Vec<ObjectFdmTe
         ));
     }
     candidates
+}
+
+fn fdm_text_mirror_anchor_agreements(
+    candidates: &[ObjectStreamCandidate],
+) -> Vec<FdmTextMirrorAnchorAgreement> {
+    let mut agreements = Vec::new();
+    for indexed in candidates {
+        let indexed_texts = indexed.fdm_text_candidates();
+        if indexed_texts.is_empty()
+            || indexed.fdm_text_index_entry_candidates().len() != indexed_texts.len()
+            || indexed_texts.iter().any(|text| text.bbox().is_none())
+        {
+            continue;
+        }
+
+        let indexed_record_offset_agreement = indexed
+            .fdm_text_index_entry_candidates()
+            .iter()
+            .zip(indexed_texts)
+            .all(|(entry, text)| {
+                entry.valid_text_record_offset()
+                    && entry.text_path() == indexed.path()
+                    && entry.text_record_offset() == text.marker_offset()
+            });
+        let indexed_record_bbox_agreement = indexed
+            .fdm_text_index_entry_candidates()
+            .iter()
+            .zip(indexed_texts)
+            .all(|(entry, text)| text.bbox().is_some() && entry.text_record_bbox() == text.bbox());
+        if !indexed_record_offset_agreement || !indexed_record_bbox_agreement {
+            continue;
+        }
+
+        for mirrored in candidates {
+            if indexed.path() == mirrored.path() {
+                continue;
+            }
+            let mirrored_texts = mirrored.fdm_text_candidates();
+            let ordered_text_agreement = indexed_texts.len() == mirrored_texts.len()
+                && indexed_texts
+                    .iter()
+                    .zip(mirrored_texts)
+                    .all(|(left, right)| left.text() == right.text());
+            let ordered_record_bbox_agreement = indexed_texts.len() == mirrored_texts.len()
+                && indexed_texts
+                    .iter()
+                    .zip(mirrored_texts)
+                    .all(|(left, right)| {
+                        left.bbox().is_some()
+                            && right.bbox().is_some()
+                            && left.bbox() == right.bbox()
+                    });
+            if !ordered_text_agreement || !ordered_record_bbox_agreement {
+                continue;
+            }
+
+            agreements.push(FdmTextMirrorAnchorAgreement::new(
+                indexed.path(),
+                mirrored.path(),
+                indexed_texts.len(),
+                ordered_text_agreement,
+                ordered_record_bbox_agreement,
+                indexed_record_offset_agreement,
+                indexed_record_bbox_agreement,
+            ));
+        }
+    }
+    agreements
 }
 
 fn fdm_text_record_marker_offsets(stream: &[u8]) -> Vec<usize> {
@@ -18511,6 +18821,81 @@ fn table_candidates_json(candidates: &[TableCandidate]) -> String {
     output
 }
 
+fn fdm_text_mirror_anchor_agreements_json(agreements: &[FdmTextMirrorAnchorAgreement]) -> String {
+    let mut output = String::from("[");
+    for (index, agreement) in agreements.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        push_fdm_text_mirror_anchor_agreement_json(&mut output, agreement);
+    }
+    output.push(']');
+    output
+}
+
+fn push_fdm_text_mirror_anchor_agreement_json(
+    output: &mut String,
+    agreement: &FdmTextMirrorAnchorAgreement,
+) {
+    output.push_str(
+        "{\"source\":\"FDMText mirrored record sequence+FDMTextIndex row-to-record links\"",
+    );
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false");
+    output.push_str(",\"diagnosticOnly\":true,\"renderable\":false,\"placementProven\":false");
+    output.push_str(",\"indexedTextPath\":");
+    output.push_str(&json_string(agreement.indexed_text_path()));
+    output.push_str(",\"mirroredTextPath\":");
+    output.push_str(&json_string(agreement.mirrored_text_path()));
+    output.push_str(",\"textRecordCount\":");
+    output.push_str(&agreement.text_record_count().to_string());
+    output.push_str(",\"orderedTextAgreement\":");
+    output.push_str(&agreement.ordered_text_agreement().to_string());
+    output.push_str(",\"orderedRecordBboxAgreement\":");
+    output.push_str(&agreement.ordered_record_bbox_agreement().to_string());
+    output.push_str(",\"indexedRecordOffsetAgreement\":");
+    output.push_str(&agreement.indexed_record_offset_agreement().to_string());
+    output.push_str(",\"indexedRecordBboxAgreement\":");
+    output.push_str(&agreement.indexed_record_bbox_agreement().to_string());
+    output.push_str(",\"sourceAnchorTraceReady\":");
+    output.push_str(&agreement.source_anchor_trace_ready().to_string());
+    output.push_str(
+        ",\"sourceToPageTransformDecoded\":false,\"roleDecoded\":false,\"paintOrderDecoded\":false",
+    );
+    output.push_str(
+        ",\"renderPromotionBlockedReason\":\"fdmtext-source-to-page-transform-undecoded\"}",
+    );
+}
+
+fn push_fdm_index_segment_bbox_axis_pair_gate_json(
+    output: &mut String,
+    gate: FdmIndexSegmentBboxAxisPairGate,
+) {
+    output.push_str("{\"source\":\"FDMIndex raw bbox fields+FDMVector segment header bbox\"");
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false");
+    output.push_str(",\"diagnosticOnly\":true,\"renderable\":false,\"placementProven\":false");
+    output.push_str(",\"validIndexRowCount\":");
+    output.push_str(&gate.valid_index_row_count().to_string());
+    output.push_str(",\"linkedRowCount\":");
+    output.push_str(&gate.linked_row_count().to_string());
+    output.push_str(",\"axisPairOrderAgreementRowCount\":");
+    output.push_str(&gate.axis_pair_order_agreement_row_count().to_string());
+    output.push_str(",\"axisPairOrderAgreementComplete\":");
+    output.push_str(&gate.axis_pair_order_agreement_complete().to_string());
+    output.push_str(",\"normalizationInputSourceBacked\":");
+    output.push_str(&gate.axis_pair_order_agreement_complete().to_string());
+    output.push_str(
+        ",\"fieldOrderDecoded\":false,\"pageTransformDecoded\":false,\"objectRoleDecoded\":false",
+    );
+    let blocked_reason = if gate.axis_pair_order_agreement_complete() {
+        "fdm-index-axis-pair-does-not-decode-page-transform-or-object-role"
+    } else {
+        "fdm-index-axis-pair-order-incomplete"
+    };
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(blocked_reason));
+    output.push('}');
+}
+
 fn object_stream_candidates_json(candidates: &[ObjectStreamCandidate]) -> String {
     let mut output = String::from("[");
     for (index, candidate) in candidates.iter().enumerate() {
@@ -18668,7 +19053,13 @@ fn push_object_stream_candidate_json(output: &mut String, candidate: &ObjectStre
             candidate.fdm_raw_vector_commands(),
         );
     }
-    output.push_str("],\"fdmTextIndexEntries\":[");
+    output.push_str("],\"fdmIndexSegmentBboxAxisPairGate\":");
+    if let Some(gate) = fdm_index_segment_bbox_axis_pair_gate(candidate) {
+        push_fdm_index_segment_bbox_axis_pair_gate_json(output, gate);
+    } else {
+        output.push_str("null");
+    }
+    output.push_str(",\"fdmTextIndexEntries\":[");
     for (index, entry) in candidate
         .fdm_text_index_entry_candidates()
         .iter()
@@ -19649,7 +20040,37 @@ fn push_object_fdm_vector_command_candidate_json(
     } else {
         output.push_str("null");
     }
+    output.push_str(",\"compoundChildLayoutGate\":");
+    push_fdm_compound_child_layout_gate_json(output, command);
     output.push_str(",\"decoded\":false}");
+}
+
+fn push_fdm_compound_child_layout_gate_json(
+    output: &mut String,
+    command: &ObjectFdmVectorCommandCandidate,
+) {
+    let Some(layout) = command.compound_child_layout() else {
+        output.push_str("null");
+        return;
+    };
+    output.push_str(
+        "{\"source\":\"FDMVector compound prefix child-offset table+child declared lengths\"",
+    );
+    output.push_str(",\"sourceBacked\":true,\"referenceBacked\":false");
+    output.push_str(",\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false");
+    output.push_str(",\"childOffsets\":");
+    push_u16_array_json(output, layout.child_offsets());
+    output.push_str(",\"firstChildMatchesPrefixEnd\":");
+    output.push_str(&layout.first_child_matches_prefix_end().to_string());
+    output.push_str(",\"childOffsetsStrictlyIncreasing\":");
+    output.push_str(&layout.child_offsets_strictly_increasing().to_string());
+    output.push_str(",\"childRecordsFitParent\":");
+    output.push_str(&layout.child_records_fit_parent().to_string());
+    output.push_str(",\"childRecordsDoNotOverlap\":");
+    output.push_str(&layout.child_records_do_not_overlap().to_string());
+    output.push_str(",\"nestedProjectionInputValid\":");
+    output.push_str(&layout.is_valid_for_nested_projection().to_string());
+    output.push_str(",\"renderPromotionBlockedReason\":\"compound-child-boundaries-do-not-prove-connector-ownership-or-paint-order\"}");
 }
 
 fn push_object_fdm_vector_command_source_segment_json(
@@ -22645,6 +23066,7 @@ struct ShanaiLanTextSlot {
     font_size: f32,
     fill: &'static str,
     fill_basis: &'static str,
+    document_text_property_15_color_candidate: Option<DocumentTextProperty15ColorCandidate>,
     style_link_evidence: ShanaiLanTextStyleLinkEvidence,
     source_span: TextSourceSpan,
     fragment_context: ShanaiLanTextRunFragmentContext,
@@ -23588,6 +24010,51 @@ fn fdm_entry_frame_render_blocked_reason(
     }
 }
 
+fn fdm_index_segment_bbox_axis_pair_gate(
+    candidate: &ObjectStreamCandidate,
+) -> Option<FdmIndexSegmentBboxAxisPairGate> {
+    let valid_index_row_count = candidate
+        .fdm_index_entry_candidates()
+        .iter()
+        .filter(|entry| entry.valid_vector_offset())
+        .count();
+    if valid_index_row_count == 0 {
+        return None;
+    }
+
+    let mut linked_row_count = 0usize;
+    let mut axis_pair_order_agreement_row_count = 0usize;
+    for entry in candidate
+        .fdm_index_entry_candidates()
+        .iter()
+        .filter(|entry| entry.valid_vector_offset())
+    {
+        let Some(segment_bbox) = candidate
+            .fdm_raw_vector_segments()
+            .iter()
+            .find(|segment| segment.relative_offset() == entry.vector_offset())
+            .and_then(ObjectFdmVectorSegmentCandidate::bbox)
+        else {
+            continue;
+        };
+        linked_row_count += 1;
+        let index_bbox = entry.bbox();
+        if index_bbox.left() == segment_bbox.left()
+            && index_bbox.top() == segment_bbox.right()
+            && index_bbox.right() == segment_bbox.top()
+            && index_bbox.bottom() == segment_bbox.bottom()
+        {
+            axis_pair_order_agreement_row_count += 1;
+        }
+    }
+
+    (linked_row_count > 0).then_some(FdmIndexSegmentBboxAxisPairGate::new(
+        valid_index_row_count,
+        linked_row_count,
+        axis_pair_order_agreement_row_count,
+    ))
+}
+
 fn normalize_fdm_bbox(bbox: ObjectFdmIndexBbox) -> (i32, i32, i32, i32) {
     (
         bbox.left().min(bbox.right()),
@@ -23714,7 +24181,20 @@ fn page_layer_tree_json(
     } else {
         None
     };
+    let shanai_lan_sparse_table_border_topology =
+        (page_num == 0).then(|| shanai_lan_sparse_table_border_topology_diagnostic(&core.document));
     if page_num == 0 {
+        if let Some(diagnostic) = shanai_lan_sparse_table_border_topology
+            .as_ref()
+            .and_then(|diagnostic| diagnostic.as_ref())
+        {
+            output.push(',');
+            push_page_layer_shanai_lan_sparse_table_border_topology_diagnostic_json(
+                &mut output,
+                layout,
+                diagnostic,
+            );
+        }
         if let Some(projection) = &shanai_lan_line_rule_projection {
             output.push(',');
             push_page_layer_shanai_lan_line_rule_projection_summary_json(
@@ -24147,7 +24627,7 @@ fn page_layer_tree_json(
                     output.push(',');
                 }
                 first_op = false;
-                let fill_color = fallback_text_fill_color(&core.document, &fragment.text);
+                let fill_color = fallback_text_fill_color();
                 push_page_layer_text_run_json(
                     &mut output,
                     source_id,
@@ -26909,7 +27389,7 @@ fn table_grid_related_horizontal_source_layout_summaries(
         ));
     }
 
-    summaries.sort_by(|left, right| left.table_candidate_index.cmp(&right.table_candidate_index));
+    summaries.sort_by_key(|summary| summary.table_candidate_index);
     summaries.dedup_by_key(|summary| summary.table_candidate_index);
     summaries
 }
@@ -47722,6 +48202,8 @@ fn push_page_layer_fdm_command_diagnostic_json(
     output.push_str(&diagnostic.command.declared_record_len().to_string());
     output.push_str(",\"compoundChildOffsets\":");
     push_u16_array_json(output, diagnostic.command.compound_child_offsets());
+    output.push_str(",\"compoundChildLayoutGate\":");
+    push_fdm_compound_child_layout_gate_json(output, diagnostic.command);
     output.push_str(",\"markerHex\":");
     output.push_str(&json_string(&hex_bytes(diagnostic.command.marker())));
     output.push_str(",\"sourceBbox\":");
@@ -55952,6 +56434,11 @@ fn push_page_layer_shanai_lan_text_slot_json(
     push_page_layer_source_span_json(output, source_id, &fragment);
     output.push_str(",\"fillColorBasis\":");
     output.push_str(&json_string(slot.fill_basis));
+    output.push_str(",\"documentTextProperty15ColorCandidate\":");
+    match slot.document_text_property_15_color_candidate.as_ref() {
+        Some(candidate) => push_document_text_property_15_color_candidate_json(output, candidate),
+        None => output.push_str("null"),
+    }
     output.push_str(",\"textStyleLinkEvidence\":");
     push_shanai_lan_text_style_link_evidence_json(output, &slot.style_link_evidence);
     output.push_str(",\"positions\":");
@@ -56099,7 +56586,7 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
     let mut document_view_style_group_candidate_slot_count = 0usize;
     let mut document_text_group_header_candidate_slot_count = 0usize;
     let mut document_text_inline_style_candidate_slot_count = 0usize;
-    let mut fallback_fill_color_slot_count = 0usize;
+    let mut source_property_fill_color_slot_count = 0usize;
     let mut fill_color_promotion_blocked_slot_count = 0usize;
     let mut split_from_text_run_slot_count = 0usize;
     let mut multi_fragment_parent_text_run_slot_count = 0usize;
@@ -56122,8 +56609,8 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
             );
             let mix = fragment_parent_run_fill_mix_counts.entry(key).or_default();
             mix.slot_count += 1;
-            if slot.fill_basis == "shanai-lan-text-match-fallback" {
-                mix.fallback_fill_color_slot_count += 1;
+            if slot.fill_basis == DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS {
+                mix.source_property_fill_color_slot_count += 1;
             }
             if slot.fill_basis == "default-text-fill" {
                 mix.default_fill_color_slot_count += 1;
@@ -56136,8 +56623,8 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
         }
         max_parent_text_run_fragment_count =
             max_parent_text_run_fragment_count.max(slot.fragment_context.fragment_count);
-        if slot.fill_basis == "shanai-lan-text-match-fallback" {
-            fallback_fill_color_slot_count += 1;
+        if slot.fill_basis == DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS {
+            source_property_fill_color_slot_count += 1;
         }
         let evidence = &slot.style_link_evidence;
         if let Some(group_id) = evidence.document_view_style_group_candidate {
@@ -56204,8 +56691,8 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
     output.push_str(&document_text_group_header_candidate_slot_count.to_string());
     output.push_str(",\"documentTextInlineStyleCandidateSlotCount\":");
     output.push_str(&document_text_inline_style_candidate_slot_count.to_string());
-    output.push_str(",\"fallbackFillColorSlotCount\":");
-    output.push_str(&fallback_fill_color_slot_count.to_string());
+    output.push_str(",\"sourcePropertyFillColorSlotCount\":");
+    output.push_str(&source_property_fill_color_slot_count.to_string());
     output.push_str(",\"fillColorPromotionBlockedSlotCount\":");
     output.push_str(&fill_color_promotion_blocked_slot_count.to_string());
     output.push_str(",\"splitFromTextRunSlotCount\":");
@@ -56223,8 +56710,7 @@ fn push_page_layer_shanai_lan_text_style_evidence_summary_json(
     output.push_str(
         ",\"styleLinkPromotionBlockedReason\":\"document-view-style-group-link-unproven\"",
     );
-    output
-        .push_str(",\"fillColorPromotionBlockedReason\":\"text-match-fallback-not-decoded-style\"");
+    output.push_str(",\"property15ContextGeneralizationBlockedReason\":\"text-v-property-15-role-varies-outside-shanai-lan-text-runs\"");
     output.push_str(
         ",\"groupHeaderPromotionBlockedReason\":\"document-text-group-header-semantics-unproven\"",
     );
@@ -56366,7 +56852,7 @@ fn push_shanai_lan_group_header_signature_counts_json(
 #[derive(Default)]
 struct ShanaiLanFragmentParentRunFillMix {
     slot_count: usize,
-    fallback_fill_color_slot_count: usize,
+    source_property_fill_color_slot_count: usize,
     default_fill_color_slot_count: usize,
     fill_color_basis: BTreeSet<&'static str>,
     fill_colors: BTreeSet<&'static str>,
@@ -56393,8 +56879,8 @@ fn push_shanai_lan_fragment_parent_run_fill_mix_counts_json(
         output.push_str(&mix.fill_color_basis.len().to_string());
         output.push_str(",\"fillColorCount\":");
         output.push_str(&mix.fill_colors.len().to_string());
-        output.push_str(",\"fallbackFillColorSlotCount\":");
-        output.push_str(&mix.fallback_fill_color_slot_count.to_string());
+        output.push_str(",\"sourcePropertyFillColorSlotCount\":");
+        output.push_str(&mix.source_property_fill_color_slot_count.to_string());
         output.push_str(",\"defaultFillColorSlotCount\":");
         output.push_str(&mix.default_fill_color_slot_count.to_string());
         output.push_str(",\"fillColorBases\":");
@@ -56423,6 +56909,20 @@ fn push_json_string_array(output: &mut String, values: &[String]) {
         output.push_str(&json_string(value));
     }
     output.push(']');
+}
+
+fn push_document_text_property_15_color_candidate_json(
+    output: &mut String,
+    candidate: &DocumentTextProperty15ColorCandidate,
+) {
+    output.push_str("{\"source\":\"/DocumentText style section\",\"propertyId\":15");
+    output.push_str(",\"packedBgrHex\":");
+    output.push_str(&json_string(&format!("0x{:08x}", candidate.packed_bgr)));
+    output.push_str(",\"cssColor\":");
+    output.push_str(&json_string(candidate.css_color));
+    output.push_str(",\"sourceBacked\":true,\"colorEncodingDecoded\":true");
+    output.push_str(",\"propertyRoleDecoded\":false");
+    output.push_str(",\"contextGate\":\"shanai-lan-text-projection\",\"renderPromoted\":true}");
 }
 
 fn push_shanai_lan_text_style_link_evidence_json(
@@ -59998,45 +60498,14 @@ fn push_f64_array_json(output: &mut String, values: &[f64]) {
     output.push(']');
 }
 
-fn fallback_text_fill_color(document: &Document, text: &str) -> &'static str {
-    if document_has_shanai_lan_fdm_command_evidence(document) {
-        shanai_lan_text_fill_color(text).unwrap_or("#111111")
-    } else {
-        "#111111"
-    }
-}
-
-fn shanai_lan_text_fill_color(text: &str) -> Option<&'static str> {
-    let trimmed = text.trim_matches(|character| character == ' ' || character == '\u{3000}');
-    if trimmed.is_empty() {
-        return None;
-    }
-    if trimmed.contains("社内LAN構成図") {
-        return Some("#008000");
-    }
-    if trimmed.contains("ファイルサーバ") || trimmed.contains("ｶﾗｰｼﾞｪｯﾄﾌﾟﾘﾝﾀｰ")
-    {
-        return Some("#000080");
-    }
-    None
-}
-
-fn shanai_lan_text_fill_basis(document: &Document, text: &str) -> &'static str {
-    if !document_has_shanai_lan_fdm_command_evidence(document) {
-        return "default-text-fill";
-    }
-    if shanai_lan_text_fill_color(text).is_some() {
-        "shanai-lan-text-match-fallback"
-    } else {
-        "default-text-fill"
-    }
+fn fallback_text_fill_color() -> &'static str {
+    "#111111"
 }
 
 fn shanai_lan_text_style_link_evidence(
     document: &Document,
     document_text_bytes: &[u8],
     text_entry: &DocumentTextMapEntry,
-    fill_basis: &'static str,
     text_count_range_evidence: &[ShanaiLanTextCountRangeEvidence],
 ) -> ShanaiLanTextStyleLinkEvidence {
     let text_layout_style_record_count =
@@ -60050,9 +60519,6 @@ fn shanai_lan_text_style_link_evidence(
         shanai_lan_document_text_group_header_candidate(document_text_bytes, text_entry);
     let document_text_inline_style_candidate =
         shanai_lan_document_text_inline_style_candidate(document_text_bytes, text_entry);
-    let fill_color_promotion_blocked_reason = (fill_basis == "shanai-lan-text-match-fallback")
-        .then_some("text-match-fallback-not-decoded-style");
-
     ShanaiLanTextStyleLinkEvidence {
         source: "DocumentText+DocumentTextPositionTables+DocumentViewStyles",
         style_link_proven: false,
@@ -60063,7 +60529,7 @@ fn shanai_lan_text_style_link_evidence(
         document_text_group_header_candidate,
         document_text_inline_style_candidate,
         style_link_promotion_blocked_reason: "document-view-style-group-link-unproven",
-        fill_color_promotion_blocked_reason,
+        fill_color_promotion_blocked_reason: None,
     }
 }
 
@@ -60284,6 +60750,7 @@ fn shanai_lan_document_text_projection(
     }
 
     let bytes = document_text_raw_stream(document)?;
+    let style_resolver = DocumentTextStyleResolver::from_document_text_bytes(bytes);
     let map = map_document_text(bytes);
     let group_offsets = shanai_lan_text_group_offsets(bytes);
     let line_headers = shanai_lan_line_headers_in_groups(bytes, &group_offsets);
@@ -60352,10 +60819,18 @@ fn shanai_lan_document_text_projection(
                     + leading_units.saturating_mul(2) as f32
                     + fragment_grid_units as f32)
                     * grid_unit_px;
-            let fill = fallback_text_fill_color(document, &fragment.text);
-            let fill_basis = shanai_lan_text_fill_basis(document, &fragment.text);
             let fragment_source_span = source_span
                 .subspan_by_units(fragment.source_start_units, fragment.source_end_units);
+            let property_15_color_candidate =
+                document_text_property_15_color_candidate(&style_resolver, &fragment_source_span);
+            let fill = property_15_color_candidate
+                .as_ref()
+                .map(|candidate| candidate.css_color)
+                .unwrap_or_else(fallback_text_fill_color);
+            let fill_basis = property_15_color_candidate
+                .as_ref()
+                .map(|_| DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS)
+                .unwrap_or("default-text-fill");
             let previous_gap_units = (fragment_index > 0).then(|| {
                 fragment
                     .source_start_units
@@ -60372,7 +60847,6 @@ fn shanai_lan_document_text_projection(
                 document,
                 bytes,
                 entry,
-                fill_basis,
                 &text_count_range_evidence,
             );
             slots.push(ShanaiLanTextSlot {
@@ -60382,6 +60856,7 @@ fn shanai_lan_document_text_projection(
                 font_size,
                 fill,
                 fill_basis,
+                document_text_property_15_color_candidate: property_15_color_candidate,
                 style_link_evidence,
                 source_span: fragment_source_span,
                 fragment_context: ShanaiLanTextRunFragmentContext {
@@ -60851,6 +61326,10 @@ fn raw_stream_bytes<'a>(document: &'a Document, name: &str) -> Option<&'a [u8]> 
         .iter()
         .find(|stream| stream.name() == name)
         .map(RawStream::bytes)
+}
+
+fn text_source_span_from_document_text_units(start: usize, end: usize) -> TextSourceSpan {
+    TextSourceSpan::new(start * 2, end * 2, start, end)
 }
 
 fn page_frame_projection(
@@ -61979,8 +62458,13 @@ fn push_shanai_lan_text_projection_svg(
         } else {
             "line-header-y-run-transform-undecoded"
         };
+        let property_15_color_candidate = slot.document_text_property_15_color_candidate.as_ref();
+        let property_15_color_candidate_present = property_15_color_candidate.is_some();
+        let property_15_packed_bgr = property_15_color_candidate
+            .map(|candidate| format!("0x{:08x}", candidate.packed_bgr))
+            .unwrap_or_else(|| "-".to_string());
         svg.push_str(&format!(
-            "<text class=\"rjtd-text rjtd-shanai-lan-text\" data-source=\"{}\" data-projection-kind=\"{}\" data-group-index=\"{}\" data-line-offset-units=\"{}\" data-leading-units=\"{}\" data-fragment-start-units=\"{}\" data-split-from-text-run=\"{}\" data-parent-text-run-byte-range=\"{}\" data-parent-text-run-unit-range=\"{}\" data-parent-text-run-unit-count=\"{}\" data-fragment-index=\"{}\" data-fragment-count=\"{}\" data-fragment-source-unit-range=\"{}\" data-previous-gap-units=\"{}\" data-next-gap-units=\"{}\" data-fragment-style-boundary-proven=\"{}\" data-fragment-style-blocked-reason=\"{}\" data-line-header-hex=\"{}\" data-line-header-raw-words-hex=\"{}\" data-line-header-same-segment-run-present=\"{}\" data-line-header-same-segment-run-start-group=\"{}\" data-line-header-same-segment-run-end-group=\"{}\" data-line-header-same-segment-run-group-count=\"{}\" data-line-header-same-segment-run-position=\"{}\" data-line-header-same-segment-run-text-slot-count=\"{}\" data-line-header-same-segment-run-distinct-text-group-count=\"{}\" data-line-header-same-segment-run-ambiguous-row-anchor=\"{}\" data-line-header-y-placement-blocked-detail=\"{}\" data-line-header-y-placement-blocked-reason=\"line-header-y-run-placement-semantics-unproven\" data-fill-color-basis=\"{}\" data-style-link-proven=\"{}\" data-style-link-blocked-reason=\"{}\" data-text-layout-style-record-count=\"{}\" data-document-view-style-group-count=\"{}\" data-document-view-style-group-candidate=\"{}\" data-document-view-style-group-candidate-basis=\"{}\" data-document-text-group-header-candidate=\"{}\" data-document-text-group-header-raw-words-hex=\"{}\" data-document-text-group-header-blocked-reason=\"{}\" data-document-text-inline-style-candidate=\"{}\" data-document-text-inline-style-selector=\"{}\" data-document-text-inline-style-raw-words-hex=\"{}\" data-document-text-inline-style-blocked-reason=\"{}\" data-fill-color-promotion-blocked-reason=\"{}\" data-text-count-range-evidence-count=\"{}\" data-text-count-range-indexes=\"{}\" data-text-count-range-bases=\"{}\" x=\"{:.1}\" y=\"{:.1}\" font-family=\"{}\" font-size=\"{:.1}\" fill=\"{}\" letter-spacing=\"0\" xml:space=\"preserve\">{}</text>",
+            "<text class=\"rjtd-text rjtd-shanai-lan-text\" data-source=\"{}\" data-projection-kind=\"{}\" data-group-index=\"{}\" data-line-offset-units=\"{}\" data-leading-units=\"{}\" data-fragment-start-units=\"{}\" data-split-from-text-run=\"{}\" data-parent-text-run-byte-range=\"{}\" data-parent-text-run-unit-range=\"{}\" data-parent-text-run-unit-count=\"{}\" data-fragment-index=\"{}\" data-fragment-count=\"{}\" data-fragment-source-unit-range=\"{}\" data-previous-gap-units=\"{}\" data-next-gap-units=\"{}\" data-fragment-style-boundary-proven=\"{}\" data-fragment-style-blocked-reason=\"{}\" data-line-header-hex=\"{}\" data-line-header-raw-words-hex=\"{}\" data-line-header-same-segment-run-present=\"{}\" data-line-header-same-segment-run-start-group=\"{}\" data-line-header-same-segment-run-end-group=\"{}\" data-line-header-same-segment-run-group-count=\"{}\" data-line-header-same-segment-run-position=\"{}\" data-line-header-same-segment-run-text-slot-count=\"{}\" data-line-header-same-segment-run-distinct-text-group-count=\"{}\" data-line-header-same-segment-run-ambiguous-row-anchor=\"{}\" data-line-header-y-placement-blocked-detail=\"{}\" data-line-header-y-placement-blocked-reason=\"line-header-y-run-placement-semantics-unproven\" data-document-text-property-15-color-candidate=\"{}\" data-document-text-property-15-packed-bgr=\"{}\" data-document-text-property-15-role-decoded=\"false\" data-fill-color-basis=\"{}\" data-style-link-proven=\"{}\" data-style-link-blocked-reason=\"{}\" data-text-layout-style-record-count=\"{}\" data-document-view-style-group-count=\"{}\" data-document-view-style-group-candidate=\"{}\" data-document-view-style-group-candidate-basis=\"{}\" data-document-text-group-header-candidate=\"{}\" data-document-text-group-header-raw-words-hex=\"{}\" data-document-text-group-header-blocked-reason=\"{}\" data-document-text-inline-style-candidate=\"{}\" data-document-text-inline-style-selector=\"{}\" data-document-text-inline-style-raw-words-hex=\"{}\" data-document-text-inline-style-blocked-reason=\"{}\" data-fill-color-promotion-blocked-reason=\"{}\" data-text-count-range-evidence-count=\"{}\" data-text-count-range-indexes=\"{}\" data-text-count-range-bases=\"{}\" x=\"{:.1}\" y=\"{:.1}\" font-family=\"{}\" font-size=\"{:.1}\" fill=\"{}\" letter-spacing=\"0\" xml:space=\"preserve\">{}</text>",
             escape_xml(projection.source),
             escape_xml(projection.projection_kind),
             escape_xml(&group_index),
@@ -62009,6 +62493,8 @@ fn push_shanai_lan_text_projection_svg(
             escape_xml(&same_segment_run_distinct_text_group_count),
             same_segment_run_ambiguous_as_row_anchor,
             escape_xml(line_header_y_placement_blocked_detail),
+            property_15_color_candidate_present,
+            escape_xml(&property_15_packed_bgr),
             escape_xml(slot.fill_basis),
             slot.style_link_evidence.style_link_proven,
             escape_xml(
@@ -62096,6 +62582,7 @@ fn render_text_page_svg(
     let font_family = document_font_family_css(document);
     push_page_frame_projection_svg(&mut svg, layout, document, page_number);
     push_page_mark_section_separator_svg(&mut svg, layout, document, page_number);
+    push_shanai_lan_sparse_table_borders_svg(&mut svg, layout, document, page_number);
     push_visual_list_diagnostic_svg(&mut svg, layout, document, page_number);
     push_embedding_frame_diagnostic_svg(&mut svg, layout, document, lines, page_number);
     push_success_data_test_title_art_projection_svg(&mut svg, layout, document, lines, page_number);
@@ -62138,7 +62625,7 @@ fn render_text_page_svg(
                 if fragment.text.is_empty() {
                     continue;
                 }
-                let fill_color = fallback_text_fill_color(document, &fragment.text);
+                let fill_color = fallback_text_fill_color();
 
                 push_svg_text_run(
                     &mut svg,
@@ -62218,7 +62705,7 @@ fn render_text_page_svg(
                     continue;
                 }
                 let width = text_width_px(layout, &fragment.text) as f32;
-                let fill_color = fallback_text_fill_color(document, &fragment.text);
+                let fill_color = fallback_text_fill_color();
                 push_svg_text_run(
                     &mut svg,
                     "rjtd-text",
@@ -65474,10 +65961,9 @@ fn embedded_press_title_art_source_paint_candidate(
     let (paint_color, paint_source) =
         if let Some(color) = source_paint_candidate.and_then(jsfart_paint_candidate_color_hex) {
             (color, "JSFart2Contents.paintColorCandidate")
-        } else if let Some(color) = embedded_press_title_art_path_paint_state_color_hex(paths) {
-            (color, "EmbeddedPress.0x82.word3")
         } else {
-            return None;
+            let color = embedded_press_title_art_path_paint_state_color_hex(paths)?;
+            (color, "EmbeddedPress.0x82.word3")
         };
     let active_fill =
         if let Some((opacity, _)) = embedded_press_title_art_front_erase_texture_opacity(paths) {
@@ -77721,6 +78207,7 @@ fn visual_list_background_pixel(pixels: &[u8]) -> u8 {
         .unwrap_or(0xff)
 }
 
+#[cfg(feature = "bitmap-images")]
 fn visual_list_dark_foreground_pixel(pixels: &[u8], background: u8) -> Option<u8> {
     pixels
         .iter()
@@ -83346,6 +83833,34 @@ mod tests {
     }
 
     #[test]
+    fn local_success_data_test_reports_source_backed_fdm_text_mirror_anchor_agreement() {
+        let sample_path =
+            local_samples_dir().join("ichitaro-20030228030923-success-002-success_data-test.jtd");
+        if !sample_path.exists() {
+            return;
+        }
+
+        let document = parse_document(&fs::read(sample_path).unwrap()).unwrap();
+        let document_info = DocumentCore::from_document(document).get_document_info();
+
+        assert!(document_info.contains("\"fdmTextMirrorAnchorAgreements\":[{"));
+        assert!(
+            document_info
+                .contains("\"indexedTextPath\":\"/FigureData/ExpandData/main_data/Data/FDMText\"")
+        );
+        assert!(document_info.contains("\"mirroredTextPath\":\"/FigureData/main_data/FDMText\""));
+        assert!(document_info.contains("\"textRecordCount\":15"));
+        assert!(document_info.contains("\"orderedTextAgreement\":true"));
+        assert!(document_info.contains("\"orderedRecordBboxAgreement\":true"));
+        assert!(document_info.contains("\"indexedRecordOffsetAgreement\":true"));
+        assert!(document_info.contains("\"indexedRecordBboxAgreement\":true"));
+        assert!(document_info.contains("\"sourceToPageTransformDecoded\":false"));
+        assert!(document_info.contains(
+            "\"renderPromotionBlockedReason\":\"fdmtext-source-to-page-transform-undecoded\""
+        ));
+    }
+
+    #[test]
     fn parser_links_fdm_index_rows_to_fdm_vector_segments() {
         let mut index_payload = vec![0; FDM_INDEX_HEADER_BYTES];
         index_payload[..4].copy_from_slice(&[0x03, 0x0b, 0x00, 0x01]);
@@ -84681,6 +85196,16 @@ mod tests {
         ));
         assert!(layer_tree.contains("\"styleWordHex\":\"0x0088\""));
         assert!(layer_tree.contains("\"compoundChildOffsets\":[72,194,316"));
+        assert!(layer_tree.contains(
+            "\"compoundChildLayoutGate\":{\"source\":\"FDMVector compound prefix child-offset table+child declared lengths\",\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"diagnosticOnly\":true,\"renderable\":false"
+        ));
+        assert!(layer_tree.contains("\"firstChildMatchesPrefixEnd\":true"));
+        assert!(layer_tree.contains("\"childOffsetsStrictlyIncreasing\":true"));
+        assert!(layer_tree.contains("\"childRecordsFitParent\":true"));
+        assert!(layer_tree.contains("\"childRecordsDoNotOverlap\":true"));
+        assert!(layer_tree.contains(
+            "\"renderPromotionBlockedReason\":\"compound-child-boundaries-do-not-prove-connector-ownership-or-paint-order\""
+        ));
         assert!(layer_tree.contains("\"fillColor\":\"#000000\""));
         assert!(layer_tree.contains("\"fillColor\":\"#ffffff\""));
         assert!(layer_tree.contains("\"commandIndex\":2007,\"markerHex\":\"00000960\""));
@@ -84821,7 +85346,11 @@ mod tests {
         assert!(layer_tree.contains(
             "\"lineHeaderSameSegmentGroupRun\":{\"basis\":\"same-offset-extent-contiguous-groups\",\"offsetUnits\":0,\"extentUnits\":84,\"startGroupIndex\":27,\"endGroupIndex\":31,\"groupCount\":5,\"positionInRun\":2}"
         ));
-        assert!(layer_tree.contains("\"fillColorBasis\":\"shanai-lan-text-match-fallback\""));
+        assert!(
+            layer_tree.contains(
+                "\"fillColorBasis\":\"document-text-style-property-15-text-run-candidate\""
+            )
+        );
         assert!(layer_tree.contains("\"type\":\"shanaiLanTextStyleEvidenceSummary\""));
         assert!(layer_tree.contains("\"projectionKind\":\"shanaiLanTextStyleEvidenceSummary\""));
         assert!(layer_tree.contains("\"slotCount\":38"));
@@ -84829,13 +85358,13 @@ mod tests {
         assert!(layer_tree.contains("\"documentViewStyleGroupCandidateSlotCount\":8"));
         assert!(layer_tree.contains("\"documentTextGroupHeaderCandidateSlotCount\":35"));
         assert!(layer_tree.contains("\"documentTextInlineStyleCandidateSlotCount\":1"));
-        assert!(layer_tree.contains("\"fallbackFillColorSlotCount\":3"));
-        assert!(layer_tree.contains("\"fillColorPromotionBlockedSlotCount\":3"));
+        assert!(layer_tree.contains("\"sourcePropertyFillColorSlotCount\":16"));
+        assert!(layer_tree.contains("\"fillColorPromotionBlockedSlotCount\":0"));
         assert!(layer_tree.contains("\"splitFromTextRunSlotCount\":14"));
         assert!(layer_tree.contains("\"multiFragmentParentTextRunSlotCount\":14"));
         assert!(layer_tree.contains("\"maxParentTextRunFragmentCount\":5"));
-        assert!(layer_tree.contains("\"mixedFillMultiFragmentParentRunCount\":0"));
-        assert!(layer_tree.contains("\"fillColorBasisCounts\":[{\"fillColorBasis\":\"default-text-fill\",\"fillColor\":\"#111111\",\"count\":35},{\"fillColorBasis\":\"shanai-lan-text-match-fallback\",\"fillColor\":\"#000080\",\"count\":2},{\"fillColorBasis\":\"shanai-lan-text-match-fallback\",\"fillColor\":\"#008000\",\"count\":1}]"));
+        assert!(layer_tree.contains("\"mixedFillMultiFragmentParentRunCount\":2"));
+        assert!(layer_tree.contains("\"fillColorBasisCounts\":[{\"fillColorBasis\":\"default-text-fill\",\"fillColor\":\"#111111\",\"count\":22},{\"fillColorBasis\":\"document-text-style-property-15-text-run-candidate\",\"fillColor\":\"#000066\",\"count\":1},{\"fillColorBasis\":\"document-text-style-property-15-text-run-candidate\",\"fillColor\":\"#000080\",\"count\":14},{\"fillColorBasis\":\"document-text-style-property-15-text-run-candidate\",\"fillColor\":\"#008000\",\"count\":1}]"));
         assert!(layer_tree.contains(
             "\"documentViewStyleGroupCandidateCounts\":[{\"documentViewStyleGroupCandidate\":3,\"count\":8}]"
         ));
@@ -84843,13 +85372,13 @@ mod tests {
             "\"groupHeaderPromotionBlockedReason\":\"document-text-group-header-semantics-unproven\""
         ));
         assert!(layer_tree.contains(
-            "\"controlKindHex\":\"0x0010\",\"firstFieldWordHex\":\"0x0017\",\"fillColorBasis\":\"default-text-fill\",\"fillColor\":\"#111111\",\"count\":4"
+            "\"controlKindHex\":\"0x0010\",\"firstFieldWordHex\":\"0x0017\",\"fillColorBasis\":\"default-text-fill\",\"fillColor\":\"#111111\",\"count\":3"
         ));
         assert!(layer_tree.contains(
-            "\"controlKindHex\":\"0x0010\",\"firstFieldWordHex\":\"0x0017\",\"fillColorBasis\":\"shanai-lan-text-match-fallback\",\"fillColor\":\"#000080\",\"count\":1"
+            "\"controlKindHex\":\"0x0010\",\"firstFieldWordHex\":\"0x0017\",\"fillColorBasis\":\"document-text-style-property-15-text-run-candidate\",\"fillColor\":\"#000080\",\"count\":2"
         ));
         assert!(layer_tree.contains(
-            "\"parentTextRunSourceSpan\":{\"byteStart\":12060,\"byteEnd\":12384,\"unitStart\":6030,\"unitEnd\":6192},\"slotCount\":5,\"fillColorBasisCount\":1,\"fillColorCount\":1,\"fallbackFillColorSlotCount\":0,\"defaultFillColorSlotCount\":5"
+            "\"parentTextRunSourceSpan\":{\"byteStart\":12060,\"byteEnd\":12384,\"unitStart\":6030,\"unitEnd\":6192},\"slotCount\":5,\"fillColorBasisCount\":1,\"fillColorCount\":1,\"sourcePropertyFillColorSlotCount\":5,\"defaultFillColorSlotCount\":0"
         ));
         assert!(layer_tree.contains(
             "\"fillColorBases\":[\"default-text-fill\"],\"fillColors\":[\"#111111\"],\"styleBoundaryProven\":false,\"renderPromotionBlockedReason\":\"document-text-fragment-style-boundary-unproven\""
@@ -84875,9 +85404,7 @@ mod tests {
         assert!(layer_tree.contains(
             "\"styleLinkPromotionBlockedReason\":\"document-view-style-group-link-unproven\""
         ));
-        assert!(layer_tree.contains(
-            "\"fillColorPromotionBlockedReason\":\"text-match-fallback-not-decoded-style\""
-        ));
+        assert!(layer_tree.contains("\"documentTextProperty15ColorCandidate\":{\"source\":\"/DocumentText style section\",\"propertyId\":15,\"packedBgrHex\":\"0x00008000\",\"cssColor\":\"#008000\",\"sourceBacked\":true,\"colorEncodingDecoded\":true,\"propertyRoleDecoded\":false,\"contextGate\":\"shanai-lan-text-projection\",\"renderPromoted\":true}"));
         assert!(layer_tree.contains("\"textCountRangeEvidenceCount\":3"));
         assert!(layer_tree.contains(
             "\"basis\":\"byte\",\"rangeStart\":3603,\"rangeEnd\":4078,\"overlapStart\":3986,\"overlapEnd\":3996"
@@ -85011,7 +85538,11 @@ mod tests {
         assert!(svg.contains(
             "data-line-header-same-segment-run-start-group=\"27\" data-line-header-same-segment-run-end-group=\"31\" data-line-header-same-segment-run-group-count=\"5\" data-line-header-same-segment-run-position=\"2\" data-line-header-same-segment-run-text-slot-count=\"4\" data-line-header-same-segment-run-distinct-text-group-count=\"2\""
         ));
-        assert!(svg.contains("data-fill-color-basis=\"shanai-lan-text-match-fallback\""));
+        assert!(svg.contains(
+            "data-fill-color-basis=\"document-text-style-property-15-text-run-candidate\""
+        ));
+        assert!(svg.contains("data-document-text-property-15-color-candidate=\"true\""));
+        assert!(svg.contains("data-document-text-property-15-packed-bgr=\"0x00008000\""));
         assert!(svg.contains("data-style-link-proven=\"false\""));
         assert!(svg.contains(
             "data-style-link-blocked-reason=\"document-view-style-group-link-unproven\""
@@ -85031,9 +85562,7 @@ mod tests {
         assert!(svg.contains("data-document-text-inline-style-selector=\"0x0001\""));
         assert!(svg.contains("data-document-text-inline-style-raw-words-hex=\"0x001c,0x0001,0x0007,0x0000,0x0000,0x0001,0x001d,0x0002,0x001e,0x0005,0x0000,0x0001,0x001f\""));
         assert!(svg.contains("data-document-text-inline-style-blocked-reason=\"document-text-inline-control-semantics-unproven\""));
-        assert!(svg.contains(
-            "data-fill-color-promotion-blocked-reason=\"text-match-fallback-not-decoded-style\""
-        ));
+        assert!(svg.contains("data-document-text-property-15-role-decoded=\"false\""));
         assert!(svg.contains("data-text-count-range-evidence-count=\"3\""));
         assert!(svg.contains("data-text-count-range-indexes=\"0,1,2\""));
         assert!(svg.contains("data-text-count-range-bases=\"unit,unit,unit\""));
@@ -85048,6 +85577,29 @@ mod tests {
         assert!(svg.contains("data-row-index=\"33\""));
         assert!(!svg.contains("class=\"rjtd-fdm-command-diagnostics\""));
         assert!(!svg.contains("class=\"rjtd-fdm-frame-diagnostics\""));
+    }
+
+    #[test]
+    fn local_shanai_lan_reports_fdm_index_segment_axis_pair_gate_when_available() {
+        let sample_path = local_samples_dir()
+            .join("ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd");
+        if !sample_path.exists() {
+            return;
+        }
+
+        let document = parse_document(&fs::read(sample_path).unwrap()).unwrap();
+        let document_info = DocumentCore::from_document(document).get_document_info();
+
+        assert!(document_info.contains("\"fdmIndexSegmentBboxAxisPairGate\":{\"source\":"));
+        assert!(document_info.contains("\"linkedRowCount\":39"));
+        assert!(document_info.contains("\"axisPairOrderAgreementRowCount\":39"));
+        assert!(document_info.contains("\"axisPairOrderAgreementComplete\":true"));
+        assert!(document_info.contains("\"decoded\":false"));
+        assert!(document_info.contains("\"diagnosticOnly\":true"));
+        assert!(document_info.contains("\"renderable\":false"));
+        assert!(document_info.contains(
+            "\"renderPromotionBlockedReason\":\"fdm-index-axis-pair-does-not-decode-page-transform-or-object-role\""
+        ));
     }
 
     #[test]
@@ -85072,6 +85624,38 @@ mod tests {
         assert_eq!(matches[0].3, "tight");
         assert!((matches[0].2.axis_delta - 0.75).abs() < 0.001);
         assert_eq!(matches[0].2.inline_delta, 0.0);
+    }
+
+    #[test]
+    fn fdm_compound_child_layout_requires_ordered_non_overlapping_declared_records() {
+        let mut record = vec![0_u8; 80];
+        record[..4].copy_from_slice(FDM_VECTOR_COMMAND_BBOX_MARKER);
+        record[4..6].copy_from_slice(&80_u16.to_be_bytes());
+        record[36..40].copy_from_slice(&0_u32.to_be_bytes());
+        record[40..44].copy_from_slice(&0_u32.to_be_bytes());
+        record[44..46].copy_from_slice(&48_u16.to_be_bytes());
+        record[46..48].copy_from_slice(&64_u16.to_be_bytes());
+        record[48..52].copy_from_slice(FDM_VECTOR_COMMAND_NESTED_LINE_MARKER);
+        record[52..54].copy_from_slice(&16_u16.to_be_bytes());
+        record[64..68].copy_from_slice(FDM_VECTOR_COMMAND_NESTED_LINE_MARKER);
+        record[68..70].copy_from_slice(&16_u16.to_be_bytes());
+
+        let layout = fdm_vector_compound_child_layout(&record).expect("valid compound layout");
+
+        assert_eq!(layout.child_offsets(), &[48, 64]);
+        assert!(layout.first_child_matches_prefix_end());
+        assert!(layout.child_offsets_strictly_increasing());
+        assert!(layout.child_records_fit_parent());
+        assert!(layout.child_records_do_not_overlap());
+
+        record[46..48].copy_from_slice(&60_u16.to_be_bytes());
+        record[60..64].copy_from_slice(FDM_VECTOR_COMMAND_NESTED_LINE_MARKER);
+        record[64..66].copy_from_slice(&16_u16.to_be_bytes());
+        let overlapping_layout =
+            fdm_vector_compound_child_layout(&record).expect("overlapping child table");
+
+        assert!(!overlapping_layout.child_records_do_not_overlap());
+        assert!(!overlapping_layout.is_valid_for_nested_projection());
     }
 
     #[test]
@@ -85328,6 +85912,208 @@ mod tests {
             mixed.axis_rule_source_order_gate_blocked_reason(),
             "mixed-connector-axis-rule-parent-span-paint-order-unproven"
         );
+    }
+
+    #[test]
+    fn shanai_lan_table_candidate_exposes_sparse_border_diagnostics() {
+        let sample_path = local_samples_dir()
+            .join("ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd");
+        if !sample_path.exists() {
+            return;
+        }
+
+        let bytes = fs::read(&sample_path).unwrap();
+        let mut core = DocumentCore::from_bytes(&bytes).unwrap();
+        core.set_file_name(sample_path.to_string_lossy());
+
+        let layer_tree = core.get_page_layer_tree(0).unwrap();
+
+        assert!(
+            layer_tree.contains("\"type\":\"documentTextSparseTableBorderTopologyDiagnostic\"")
+        );
+        assert!(layer_tree.contains(
+            "\"diagnosticOnly\":false,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":true,\"geometryDecoded\":true,\"placementDerived\":true"
+        ));
+        assert!(layer_tree.contains("\"renderable\":true"));
+        assert!(layer_tree.contains("\"blockers\":[]"));
+        assert!(layer_tree.contains(
+            "\"styleSectionCoverage\":{\"sectionPresent\":true,\"contentUnitCount\":6176"
+        ));
+        assert!(layer_tree.contains(
+            "\"rowIndex\":0,\"groupIndex\":0,\"pairIndex\":0,\"edgeKind\":\"bottom\",\"stateCode\":8,\"stateCodeHex\":\"0x0008\",\"edgeStyleCode\":4"
+        ));
+        assert!(layer_tree.contains(
+            "\"rowIndex\":2,\"groupIndex\":2,\"pairIndex\":0,\"edgeKind\":\"bottom\",\"stateCode\":8,\"stateCodeHex\":\"0x0008\",\"edgeStyleCode\":6"
+        ));
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(svg.contains("class=\"rjtd-document-text-sparse-table-borders\""));
+        assert!(svg.contains("data-style-code=\"3\""));
+        assert!(svg.contains("data-style-code=\"4\""));
+        assert!(svg.contains("data-style-code=\"6\""));
+        assert!(svg.contains("stroke-width=\"0.80\""));
+        assert!(svg.contains("stroke-width=\"2.56\""));
+        assert!(svg.contains("stroke-dasharray=\"3.2 3.2\""));
+        for junction_x in [68, 83, 129, 134, 157, 182] {
+            assert!(
+                layer_tree.contains(&format!("\"xUnit\":{junction_x}")),
+                "missing sparse vertical junction x={junction_x}: {layer_tree}"
+            );
+        }
+        for midpoint_x in [68, 90, 129, 134, 157] {
+            assert!(
+                layer_tree.contains(&format!("\"midpointUnit\":{midpoint_x}")),
+                "missing supporting cell-gap midpoint x={midpoint_x}: {layer_tree}"
+            );
+        }
+    }
+
+    #[test]
+    fn shanai_lan_border_probe_aligns_line_mark_record_with_group_index() {
+        let sample_paths = [
+            local_samples_dir()
+                .join("ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd"),
+            local_samples_dir()
+                .join("ichitaro-20030706232827-success-001-success_data-shanai_lan.jtd"),
+        ];
+
+        for (sample_index, sample_path) in sample_paths.into_iter().enumerate() {
+            if !sample_path.exists() {
+                return;
+            }
+
+            let bytes = fs::read(&sample_path).unwrap();
+            let mut core = DocumentCore::from_bytes(&bytes).unwrap();
+            core.set_file_name(sample_path.to_string_lossy());
+
+            let layer_tree = core.get_page_layer_tree(0).unwrap();
+
+            assert!(
+                layer_tree.contains("\"type\":\"documentTextSparseTableBorderTopologyDiagnostic\"")
+            );
+            assert!(layer_tree.contains("\"rowIndex\":21,\"groupIndex\":21"));
+            assert!(
+                layer_tree.contains("\"lineMarkRecordIndex\":22,\"lineMarkRecordIndexDelta\":1")
+                    || layer_tree
+                        .contains("\"lineMarkRecordIndex\":null,\"lineMarkRecordIndexDelta\":null")
+            );
+            if sample_index == 0 {
+                assert!(layer_tree.contains("\"pageOriginAuthority\":\"source-backed\""));
+                assert!(layer_tree.contains("\"renderable\":true"));
+                assert!(layer_tree.contains("\"blockers\":[]"));
+            } else {
+                assert!(layer_tree.contains("\"pageOriginAuthority\":\"blocked\""));
+                assert!(layer_tree.contains("\"renderable\":false"));
+                assert!(layer_tree.contains("\"blockers\":[\"style-section-truncated\",\"source-page-transform-candidate-absent\"]"));
+            }
+            assert!(layer_tree.contains("\"stableGridExtentUnits\":280"));
+            assert!(layer_tree.contains("\"rowIndex\":0,\"groupIndex\":0,\"pairIndex\":0,\"edgeKind\":\"bottom\",\"stateCode\":8,\"stateCodeHex\":\"0x0008\""));
+            assert!(layer_tree.contains("\"rowIndex\":2,\"groupIndex\":2,\"pairIndex\":0,\"edgeKind\":\"bottom\",\"stateCode\":8,\"stateCodeHex\":\"0x0008\""));
+            assert!(layer_tree.contains("\"rowIndex\":21,\"groupIndex\":21,\"pairIndex\":7,\"edgeKind\":\"bottom\",\"stateCode\":8,\"stateCodeHex\":\"0x0008\""));
+        }
+    }
+
+    #[test]
+    fn shanai_lan_sparse_border_diagnostic_omits_truncated_row_tails_without_panicking() {
+        let mut document_text = row_header_record_bytes(
+            [0x0000, 0x008f, 0x0011, 0x0118, 0x0000, 0x0050],
+            &[
+                0x0008, 0x0003, 0x0013, 0x0000, 0x0000, 0x0046, 0x0013, 0x0000, 0x0000, 0x0017,
+                0x0021, 0x0000, 0x0000, 0x0060, 0xffff, 0x0000,
+            ],
+        );
+        document_text.extend_from_slice(&row_header_record_bytes(
+            [0x0000, 0x008f, 0x000f, 0x0118, 0x0000, 0x0020],
+            &[0x0023, 0x0000, 0x0000, 0x0020, 0x7777],
+        ));
+        let bytes = cfb_with_streams(&[(DOCUMENT_TEXT_PATH, &document_text)]);
+        let document = parse_document(&bytes).unwrap();
+
+        let diagnostic = shanai_lan_sparse_table_border_topology_diagnostic(&document).unwrap();
+
+        assert_eq!(diagnostic.rows.len(), 1);
+        assert_eq!(diagnostic.rows[0].group_index, 0);
+        assert_eq!(diagnostic.rows[0].pairs[0].state_code, 0x0008);
+        assert_eq!(diagnostic.rows[0].pairs[0].start_unit, 81);
+        assert_eq!(diagnostic.rows[0].pairs[0].end_unit, 84);
+    }
+
+    #[test]
+    fn page_01_row_headers_preserve_proven_sparse_topology_state_families() {
+        let sample_path =
+            local_samples_dir().join("ichitaro-source-y-probe/corpus/page01-grid/PAGE 01.jtd");
+        if !sample_path.exists() {
+            return;
+        }
+
+        let bytes = fs::read(&sample_path).unwrap();
+        let payload = read_document_text_payload(&bytes).unwrap();
+        let records = parse_document_text_row_headers(payload.bytes());
+        let pair_shapes = records
+            .iter()
+            .filter(|record| {
+                record.fixed_fields().subtype() == 0x008f && record.geometry_complete()
+            })
+            .map(|record| {
+                record
+                    .pairs()
+                    .iter()
+                    .map(|pair| (pair.state_code(), pair.run_length()))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        assert!(
+            pair_shapes
+                .iter()
+                .any(|shape| shape.starts_with(&[(0x0016, 0), (0x0014, 22)]))
+        );
+        assert!(
+            pair_shapes
+                .iter()
+                .any(|shape| shape.starts_with(&[(0x0017, 0), (0x0014, 22)]))
+        );
+        assert!(
+            pair_shapes
+                .iter()
+                .any(|shape| shape.starts_with(&[(0x0015, 0), (0x0014, 22)]))
+        );
+        assert!(
+            pair_shapes
+                .iter()
+                .any(|shape| shape.starts_with(&[(0x0013, 0), (0x0000, 22)]))
+        );
+
+        let mut core = DocumentCore::from_bytes(&bytes).unwrap();
+        core.set_file_name(sample_path.to_string_lossy());
+        let svg = core.render_page_svg(0).unwrap();
+        assert!(!svg.contains("rjtd-document-text-sparse-table-borders"));
+    }
+
+    #[test]
+    fn source_page_transform_candidate_accepts_guarded_synthetic_old_format_fields() {
+        let fields = [
+            0u16, 0, 0, 0, 0, 0, 0, 39, 0, 0, 0, 0, 0, 370, 105, 0, 0, 0, 0, 0, 0, 475,
+        ];
+
+        let candidate = shanai_lan_source_page_transform_candidate_from_raw_fields(
+            0,
+            29700,
+            21000,
+            1140 << 8,
+            2130 << 8,
+            1140 << 8,
+            &fields,
+        )
+        .unwrap();
+
+        assert_eq!(candidate.page_mark_entry_index, 0);
+        assert_eq!(candidate.x_origin_left_mm100, 1140);
+        assert_eq!(candidate.x_origin_right_mm100, 1140);
+        assert_eq!(candidate.y_origin_mm100, 2130);
+        assert_eq!(candidate.row_pitch_addend_a_mm100, 370);
+        assert_eq!(candidate.row_pitch_addend_b_mm100, 105);
+        assert_eq!(candidate.row_pitch_mm100, 475);
+        assert_eq!(candidate.page_mark_w21_mm100, Some(475));
     }
 
     fn shanai_lan_line_rule_projection_fixture(
@@ -89952,6 +90738,17 @@ mod tests {
             Inline::Text(_) => panic!("expected ruby inline"),
             Inline::Unknown(_) => panic!("expected ruby inline"),
         }
+    }
+
+    fn row_header_record_bytes(fixed_words: [u16; 6], payload_words: &[u16]) -> Vec<u8> {
+        let total_len_words = (3 + fixed_words.len() + payload_words.len() + 4) as u16;
+        let mut words = vec![0x001c, 0x0010, total_len_words];
+        words.extend_from_slice(&fixed_words);
+        words.extend_from_slice(payload_words);
+        words.extend_from_slice(&[total_len_words, 0x0000, 0x0010, 0x001f]);
+        let mut bytes = Vec::new();
+        extend_units(&mut bytes, &words);
+        bytes
     }
 
     fn extend_units(bytes: &mut Vec<u8>, units: &[u16]) {

@@ -1,4 +1,4 @@
-//! Exporters that consume the document model.
+#![doc = include_str!("../README.md")]
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -5878,12 +5878,9 @@ mod tests {
         ObjectStreamCandidateReason, Paragraph, RawStream, RubyAnnotation, StyleRef,
         TextControlBoundary, TextRun, UnknownBlock, UnknownObject, UnknownStyle, parse_document,
     };
-    use std::{
-        collections::BTreeSet,
-        fs,
-        path::{Path, PathBuf},
-        process::Command,
-    };
+    use std::{collections::BTreeSet, fs, path::PathBuf};
+    #[cfg(target_os = "macos")]
+    use std::{path::Path, process::Command};
 
     #[cfg(not(target_arch = "wasm32"))]
     fn count_pdf_eof_markers(pdf: &[u8]) -> usize {
@@ -5960,7 +5957,7 @@ mod tests {
     const LOCAL_REFERENCE_PAPER_ORIENTATION_SOURCE_DECODE_UNPROVEN: &str =
         "paper-orientation-source-decode-unproven";
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
     #[derive(Debug, Clone, Copy)]
     struct PngRatioRegionCheck {
         label: &'static str,
@@ -5971,7 +5968,7 @@ mod tests {
         min_non_white: usize,
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
     #[derive(Debug, Clone, Copy)]
     struct LocalPdfSmokeFixture {
         source_name: &'static str,
@@ -5980,7 +5977,7 @@ mod tests {
         sips_region_check: Option<PngRatioRegionCheck>,
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
     impl LocalPdfSmokeFixture {
         fn source_path(self, sample_dir: &Path) -> PathBuf {
             sample_dir.join(self.source_name)
@@ -5996,16 +5993,16 @@ mod tests {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
     const SUCCESS_DATA_TEST_PAGE_CHECKS: &[&str] = &["1:10000", "2:500"];
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
     const SHANAI_LAN_PAGE_CHECKS: &[&str] = &["1:5000"];
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
     const A5_PAGE_CHECKS: &[&str] = &["1:300", "6:3000"];
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
     const FAX02_PAGE_CHECKS: &[&str] = &["1:10000"];
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
     const LOCAL_PDF_SMOKE_FIXTURES: &[LocalPdfSmokeFixture] = &[
         LocalPdfSmokeFixture {
             source_name: "ichitaro-20030228030923-success-002-success_data-test.jtd",

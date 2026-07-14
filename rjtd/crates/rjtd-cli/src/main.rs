@@ -1,7 +1,10 @@
+#![doc = include_str!("../README.md")]
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Write};
 use std::path::Path;
 
+mod input;
 mod probe_compare;
 mod probe_corpus;
 mod probe_format;
@@ -39,6 +42,8 @@ use rjtd_model::{
     ObjectStreamCandidate as ModelObjectStreamCandidate, TableCandidate, TextBoundaryCandidate,
     TextCountRange, TextLayoutExactEvidence, page_mark_u16_geometry_profile, parse_document,
 };
+
+use input::read_file;
 
 const BROKEN_PIPE_EXIT: &str = "__rjtd_broken_pipe__";
 const MARK_VISIBLE_TEXT_PROBE_DELTA_UNITS: usize = 29;
@@ -4543,11 +4548,6 @@ fn export_options(args: impl Iterator<Item = String>) -> Result<ExportOptions, S
         })?,
         output,
     })
-}
-
-fn read_file(path: impl AsRef<Path>) -> Result<Vec<u8>, String> {
-    let path = path.as_ref();
-    std::fs::read(path).map_err(|error| format!("cannot read `{}`: {error}", path.display()))
 }
 
 fn write_file(path: impl AsRef<Path>, bytes: &[u8]) -> Result<(), String> {

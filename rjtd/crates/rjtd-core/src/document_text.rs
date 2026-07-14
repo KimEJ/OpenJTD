@@ -1,8 +1,24 @@
 use crate::compressed_document::{
-    decompress_just_compressed_document, is_just_compressed_document,
+    decompress_just_compressed_document_with_budget, is_just_compressed_document,
 };
 use crate::container::read_cfb_stream;
-use crate::{Error, Result};
+use crate::{DecompressionBudget, Error, ParseLimits, Result};
+
+mod row_headers;
+mod style_runs;
+
+pub use row_headers::{
+    DocumentTextRowHeaderFixedFields, DocumentTextRowHeaderPair,
+    DocumentTextRowHeaderPairClassification, DocumentTextRowHeaderRecord,
+    parse_document_text_row_headers,
+};
+
+pub use style_runs::{
+    DocumentTextResolvedStyle, DocumentTextStyleDiagnostic, DocumentTextStyleDiagnosticKind,
+    DocumentTextStyleEvent, DocumentTextStyleProperty, DocumentTextStylePropertyChangeEvent,
+    DocumentTextStyleResolver, DocumentTextStyleRunEvent, DocumentTextStyleSection,
+    DocumentTextStyleTypedValue, document_text_style_code_name, parse_document_text_style_section,
+};
 
 pub const DOCUMENT_TEXT_PATH: &str = "/DocumentText";
 pub const COMPRESSED_DOCUMENT_PATH: &str = "/JSCompDocument";
@@ -245,6 +261,41 @@ impl DocumentTextControl {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DocumentTextSourceSpan {
+    byte_start: usize,
+    byte_end: usize,
+    unit_start: usize,
+    unit_end: usize,
+}
+
+impl DocumentTextSourceSpan {
+    fn new(unit_start: usize, unit_end: usize) -> Self {
+        Self {
+            byte_start: unit_start * 2,
+            byte_end: unit_end * 2,
+            unit_start,
+            unit_end,
+        }
+    }
+
+    pub fn byte_start(&self) -> usize {
+        self.byte_start
+    }
+
+    pub fn byte_end(&self) -> usize {
+        self.byte_end
+    }
+
+    pub fn unit_start(&self) -> usize {
+        self.unit_start
+    }
+
+    pub fn unit_end(&self) -> usize {
+        self.unit_end
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentTextPayload {
     source_name: String,
@@ -286,13 +337,37 @@ impl DocumentTextPayload {
 }
 
 pub fn read_document_text_payload(data: &[u8]) -> Result<DocumentTextPayload> {
+    read_document_text_payload_with_limits(data, ParseLimits::DEFAULT)
+}
+
+/// Reads document text from already allocated input with explicit resource limits.
+///
+/// Each LH5 member and the combined output of every member reached by this call are limited. The
+/// input check occurs after the caller has allocated `data`.
+pub fn read_document_text_payload_with_limits(
+    data: &[u8],
+    limits: ParseLimits,
+) -> Result<DocumentTextPayload> {
+    let mut budget = limits.decompression_budget();
+    read_document_text_payload_with_budget(data, &mut budget)
+}
+
+/// Reads document text while sharing a cumulative LH5 output budget with other readers.
+///
+/// This is public only for composition between rjtd crates; downstream callers should prefer
+/// [`read_document_text_payload_with_limits`]. It is not a stable downstream API.
+pub fn read_document_text_payload_with_budget(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<DocumentTextPayload> {
+    budget.check_input_size(data.len())?;
     match read_cfb_stream(data, DOCUMENT_TEXT_PATH) {
         Ok(stream) => Ok(DocumentTextPayload::new(
             DOCUMENT_TEXT_PATH,
             stream.clone(),
             parse_document_text(&stream),
         )),
-        Err(Error::NotFound(_)) => read_compressed_or_embedded_document_text(data),
+        Err(Error::NotFound(_)) => read_compressed_or_embedded_document_text(data, budget),
         Err(error) => Err(error),
     }
 }
@@ -301,7 +376,10 @@ pub fn read_document_text_stream(data: &[u8]) -> Result<Vec<u8>> {
     Ok(read_document_text_payload(data)?.bytes)
 }
 
-fn read_compressed_or_embedded_document_text(data: &[u8]) -> Result<DocumentTextPayload> {
+fn read_compressed_or_embedded_document_text(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<DocumentTextPayload> {
     let stream = match read_cfb_stream(data, COMPRESSED_DOCUMENT_PATH) {
         Ok(stream) => stream,
         Err(Error::NotFound(_)) => return read_embedded_document_text(data),
@@ -312,7 +390,7 @@ fn read_compressed_or_embedded_document_text(data: &[u8]) -> Result<DocumentText
         return read_embedded_document_text(data);
     }
 
-    let inner_document = decompress_just_compressed_document(&stream)?;
+    let inner_document = decompress_just_compressed_document_with_budget(&stream, budget)?;
     let bytes = read_cfb_stream(&inner_document, DOCUMENT_TEXT_PATH)?;
     let parsed_text = parse_document_text(&bytes);
     Ok(DocumentTextPayload::new(
@@ -801,12 +879,15 @@ fn units_to_be_bytes(units: &[u16]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        DocumentTextElement, DocumentTextMapKind, EMBEDDED_DOCUMENT_TEXT_PATH,
+        DocumentTextElement, DocumentTextMapKind, DocumentTextRowHeaderPair,
+        DocumentTextRowHeaderPairClassification, EMBEDDED_DOCUMENT_TEXT_PATH,
         SKIPPED_INLINE_MAX_UNITS, extract_document_text, map_document_text, parse_document_text,
-        read_document_text_payload, read_document_text_stream,
+        parse_document_text_row_headers, read_document_text_payload, read_document_text_stream,
+        units_to_be_bytes,
     };
     use crate::compressed_document::is_just_compressed_document;
     use std::io::{Cursor, Write};
+    use std::path::PathBuf;
 
     #[test]
     fn extracts_utf16be_runs_after_text_marker() {
@@ -1160,6 +1241,203 @@ mod tests {
             "should contain 'sto' but got: {text:?}"
         );
         assert!(text.contains('て'), "should contain 'て' but got: {text:?}");
+    }
+
+    #[test]
+    fn parses_row_header_inventory_as_state_run_pairs() {
+        let payload = row_header_record_bytes(
+            [0x0000, 0x008f, 0x0011, 0x0118, 0x0000, 0x0050],
+            &[
+                0x0008, 0x0003, 0x0013, 0x0000, 0x0000, 0x0046, 0x0013, 0x0000, 0x0000, 0x0017,
+                0x0021, 0x0000, 0x0000, 0x0060, 0xffff, 0x0000,
+            ],
+        );
+
+        let records = parse_document_text_row_headers(&payload);
+
+        assert_eq!(records.len(), 1);
+        let record = &records[0];
+        assert_eq!(record.source_span().unit_start(), 0);
+        assert_eq!(record.source_span().byte_start(), 0);
+        assert_eq!(record.total_len_words(), 29);
+        assert_eq!(record.fixed_fields().subtype(), 0x008f);
+        assert_eq!(record.fixed_fields().grid_extent(), 0x0118);
+        assert_eq!(
+            record.fixed_fields().raw_words(),
+            &[0x0000, 0x008f, 0x0011, 0x0118, 0x0000, 0x0050]
+        );
+        assert_eq!(
+            record.raw_payload_words(),
+            &[
+                0x0008, 0x0003, 0x0013, 0x0000, 0x0000, 0x0046, 0x0013, 0x0000, 0x0000, 0x0017,
+                0x0021, 0x0000, 0x0000, 0x0060, 0xffff, 0x0000,
+            ]
+        );
+        assert_eq!(
+            record
+                .pairs()
+                .iter()
+                .map(|pair| (pair.state_code(), pair.run_length()))
+                .collect::<Vec<_>>(),
+            vec![
+                (0x0008, 0x0003),
+                (0x0013, 0x0000),
+                (0x0000, 0x0046),
+                (0x0013, 0x0000),
+                (0x0000, 0x0017),
+                (0x0021, 0x0000),
+                (0x0000, 0x0060),
+            ]
+        );
+        assert_eq!(record.raw_tail_words(), &[0xffff, 0x0000]);
+        assert!(!record.tail_truncated());
+        assert!(record.geometry_complete());
+        assert_eq!(record.pairs()[0].start_unit(), 81);
+        assert_eq!(record.pairs()[0].end_unit(), 84);
+        assert_eq!(
+            record.pairs()[0].classification(),
+            DocumentTextRowHeaderPairClassification::NonBlankRun
+        );
+        assert_eq!(record.pairs()[1].start_unit(), 85);
+        assert_eq!(record.pairs()[1].end_unit(), 85);
+        assert_eq!(
+            record.pairs()[1].classification(),
+            DocumentTextRowHeaderPairClassification::Junction
+        );
+        assert_eq!(record.pairs()[2].start_unit(), 86);
+        assert_eq!(record.pairs()[2].end_unit(), 156);
+        assert_eq!(
+            record.pairs()[2].classification(),
+            DocumentTextRowHeaderPairClassification::BlankRun
+        );
+        assert!(
+            record
+                .pairs()
+                .iter()
+                .all(DocumentTextRowHeaderPair::geometry_complete)
+        );
+    }
+
+    #[test]
+    fn preserves_odd_row_header_tail_words_losslessly() {
+        let odd_payload = row_header_record_bytes(
+            [0x0000, 0x008f, 0x000f, 0x0118, 0x0000, 0x0020],
+            &[0x0023, 0x0000, 0x0000, 0x0020, 0x7777],
+        );
+
+        let records = parse_document_text_row_headers(&odd_payload);
+
+        assert_eq!(records.len(), 1);
+        let record = &records[0];
+        assert_eq!(
+            record
+                .pairs()
+                .iter()
+                .map(|pair| (pair.state_code(), pair.run_length()))
+                .collect::<Vec<_>>(),
+            vec![(0x0023, 0x0000), (0x0000, 0x0020)]
+        );
+        assert_eq!(record.raw_tail_words(), &[0x7777]);
+        assert!(record.tail_truncated());
+        assert!(!record.geometry_complete());
+    }
+
+    #[test]
+    #[ignore = "requires local shanai_lan sample"]
+    fn inventories_shanai_lan_row_headers_from_local_sample() {
+        let path = repo_root()
+            .join("rjtd-testdata/local-samples")
+            .join("ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd");
+        let bytes = std::fs::read(&path).expect("read local shanai_lan sample");
+        let payload = read_document_text_payload(&bytes).expect("read DocumentText payload");
+
+        let records = parse_document_text_row_headers(payload.bytes());
+
+        let g21 = records
+            .iter()
+            .find(|record| record.source_span().unit_start() == 3989)
+            .expect("g21 row header at unit 3989");
+        assert_eq!(g21.fixed_fields().subtype(), 0x008f);
+        assert_eq!(g21.fixed_fields().grid_extent(), 280);
+        assert_eq!(
+            g21.pairs()
+                .iter()
+                .map(|pair| (pair.state_code(), pair.run_length()))
+                .collect::<Vec<_>>(),
+            vec![
+                (0x0023, 0x0000),
+                (0x0000, 0x0020),
+                (0x0023, 0x0000),
+                (0x0000, 0x0023),
+                (0x0013, 0x0000),
+                (0x0000, 0x0003),
+                (0x002b, 0x0000),
+                (0x0008, 0x001a),
+                (0x0000, 0x0026),
+                (0x0013, 0x0000),
+                (0x0000, 0x0017),
+                (0x0023, 0x0000),
+                (0x0000, 0x0060),
+            ]
+        );
+        assert_eq!(g21.raw_tail_words(), &[0xffff, 0x0000]);
+        assert!(g21.geometry_complete());
+        assert_eq!(g21.pairs()[6].start_unit(), 90);
+        assert_eq!(g21.pairs()[6].end_unit(), 90);
+        assert_eq!(g21.pairs()[7].start_unit(), 91);
+        assert_eq!(g21.pairs()[7].end_unit(), 117);
+        assert_eq!(
+            g21.pairs()[7].classification(),
+            DocumentTextRowHeaderPairClassification::NonBlankRun
+        );
+
+        let g31 = records
+            .iter()
+            .find(|record| record.source_span().unit_start() == 5537)
+            .expect("g31 row header at unit 5537");
+        assert_eq!(g31.fixed_fields().subtype(), 0x008f);
+        assert_eq!(g31.fixed_fields().w8(), 80);
+        assert_eq!(
+            g31.pairs()
+                .iter()
+                .map(|pair| (pair.state_code(), pair.run_length()))
+                .collect::<Vec<_>>(),
+            vec![
+                (0x0008, 0x0003),
+                (0x0013, 0x0000),
+                (0x0000, 0x0046),
+                (0x0013, 0x0000),
+                (0x0000, 0x0017),
+                (0x0021, 0x0000),
+                (0x0000, 0x0060),
+            ]
+        );
+        assert_eq!(g31.raw_tail_words(), &[0xffff, 0x0000]);
+        assert!(g31.geometry_complete());
+        assert_eq!(g31.pairs()[0].start_unit(), 81);
+        assert_eq!(g31.pairs()[0].end_unit(), 84);
+        assert_eq!(g31.pairs()[1].start_unit(), 85);
+        assert_eq!(g31.pairs()[1].end_unit(), 85);
+        assert_eq!(g31.pairs()[2].start_unit(), 86);
+        assert_eq!(g31.pairs()[2].end_unit(), 156);
+    }
+
+    fn row_header_record_bytes(fixed_words: [u16; 6], payload_words: &[u16]) -> Vec<u8> {
+        let total_len_words = (3 + fixed_words.len() + payload_words.len() + 4) as u16;
+        let mut words = vec![0x001c, 0x0010, total_len_words];
+        words.extend_from_slice(&fixed_words);
+        words.extend_from_slice(payload_words);
+        words.extend_from_slice(&[total_len_words, 0x0000, 0x0010, 0x001f]);
+        units_to_be_bytes(&words)
+    }
+
+    fn repo_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|path| path.parent())
+            .and_then(|path| path.parent())
+            .expect("repo root")
+            .to_path_buf()
     }
 
     fn cfb_with_stream(path: &str, payload: &[u8]) -> Vec<u8> {
