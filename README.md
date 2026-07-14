@@ -23,6 +23,21 @@ practical JTD engine that can support faithful layout rendering and editing.
   `/PageMark`, `/PaperMark`, and object/control marker research.
 - WASM wrapper support used by early viewer integration experiments.
 
+## Why OpenJTD matters
+
+Ichitaro's proprietary JTD, JTT, and JTTC formats contain documents that may
+need to remain readable beyond the software that created them. OpenJTD pairs
+an Apache-2.0 Rust implementation (`rjtd`) with public specification notes,
+making format research and compatibility work inspectable and reusable for
+digital preservation, accessibility, and interoperability.
+
+The project is intentionally conservative with untrusted documents: `rjtd`
+separates observed/decoded behavior from experimental research, preserves
+unknown structures where possible, and treats parser crashes, hangs, malformed
+output, and excessive resource use as security concerns. It is not yet a
+complete renderer or editor; see [Project Status](#project-status) and the
+[roadmap](docs/ROADMAP.md) for the current limits.
+
 ## rjtd Quick Start
 
 ```sh
