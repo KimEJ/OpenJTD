@@ -2,16 +2,25 @@
 name = "rjtd-export"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Experimental text, Markdown, HTML, JSON, and PDF exporters for OpenJTD documents."
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/rjtd-export"
+readme = "README.md"
+keywords = ["ichitaro", "jtd", "document", "pdf", "markdown"]
+categories = ["encoding", "text-processing", "rendering"]
+publish = ["crates-io"]
+include = ["src/**/*.rs", "README.md", "LICENSE"]
 
 [lib]
 doctest = false
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png"] }
-rjtd-core = { path = "../rjtd-core" }
-rjtd-model = { path = "../rjtd-model" }
+rjtd-core = { version = "0.0.1", path = "../rjtd-core" }
+rjtd-model = { version = "0.0.1", path = "../rjtd-model" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 pdf-writer = "0.12"

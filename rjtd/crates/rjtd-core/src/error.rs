@@ -8,6 +8,11 @@ pub enum Error {
     NotFound(String),
     Unsupported(&'static str),
     Io(String),
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: usize,
+    },
 }
 
 impl fmt::Display for Error {
@@ -17,6 +22,14 @@ impl fmt::Display for Error {
             Self::NotFound(message) => write!(f, "not found: {message}"),
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(message) => write!(f, "i/o error: {message}"),
+            Self::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => write!(
+                f,
+                "resource limit exceeded: {resource} is {actual}, limit is {limit}"
+            ),
         }
     }
 }

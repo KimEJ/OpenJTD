@@ -1,6 +1,6 @@
 # Local agent and analysis state
 /.omx/
-/.omo/
+**/.omo/
 /.omc/
 /.codegraph
 /.debug-journal.md
@@ -32,5 +32,6 @@
 
 # Generated sample outputs
 /openjtd-samples/pdf-output/
+/output/
 
 *.ko.md

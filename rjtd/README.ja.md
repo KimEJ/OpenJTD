@@ -12,6 +12,20 @@ app-core integration components を提供する。
 
 プロジェクト全体の憲章とエコシステム計画は、上位の [docs/CHARTER.ja.md](../docs/CHARTER.ja.md) に従う。
 
+## 0.0.1 Developer Preview
+
+最初の crates.io release は experimental developer preview である。
+OpenJTD は `rjtd-core`、`rjtd-model`、`rjtd-export`、`rjtd-cli`、
+`rjtd-wasm` を公開し、`rjtd-testkit` は workspace 内部専用のままにする。
+release scope は [CHANGELOG.md](CHANGELOG.md)、必須の公開順序は
+[RELEASING.md](RELEASING.md) を参照する。
+
+観察済み `.jtd`、`.jtt`、`.jttc` files は異なる範囲で対応しているが、
+実装は完全な Ichitaro format specification ではない。`Candidate`、
+`Unknown`、`Diagnostic` と名付けた値、および `decoded: false` の JSON
+fields は、final semantics を主張せず reverse-engineering evidence を保持する。
+public API と command output schema は後続の 0.0.x release で変更され得る。
+
 ## Foundational Principle: Follow rhwp
 
 `rjtd` engine は可能な限り rhwp プロジェクトの構造と思想を参考にする。
@@ -68,6 +82,18 @@ UnknownObject
 ```
 
 リバースエンジニアリング中の data loss を防ぐ。
+
+## Default Resource Limits
+
+public parser surface は 64 MiB を超える source input を拒否する。LH5 member
+は 256 MiB を超える declared output を拒否し、1 MiB の allowance を超える
+output は packed member size の 256 倍以内でなければならない。browser canvas
+rendering は各辺 16,384 pixels、合計 64 MiPixels に制限される。
+
+これらは pre-stable safety ceiling であり compatibility guarantee ではない。
+stream、record、embedded image、page 単位の budget は引き続き強化中であるため、
+untrusted document は適切に制限した環境で処理し、bypass の可能性は上位の
+[security policy](../SECURITY.md) から報告する。
 
 ## Workspace Layout
 

@@ -1,9 +1,16 @@
 use crate::compressed_document::{
-    decompress_just_compressed_document, is_just_compressed_document,
+    decompress_just_compressed_document_with_budget, is_just_compressed_document,
 };
 use crate::container::read_cfb_stream;
 use crate::document_text::COMPRESSED_DOCUMENT_PATH;
-use crate::{Error, Result};
+use crate::{DecompressionBudget, Error, ParseLimits, Result};
+
+mod document_edit;
+
+pub use document_edit::{
+    DocumentEditStyleNestedRecord, DocumentEditStyleSection, DocumentEditStyleSectionInventory,
+    StyleStreamSpan, parse_document_edit_style_sections,
+};
 
 pub const DOCUMENT_EDIT_STYLES_PATH: &str = "/DocumentEditStyles";
 pub const DOCUMENT_VIEW_STYLES_PATH: &str = "/DocumentViewStyles";
@@ -265,14 +272,41 @@ pub fn summarize_style_stream(data: &[u8]) -> StyleStreamSummary {
 }
 
 pub fn read_style_streams(data: &[u8]) -> Result<Vec<StyleStream>> {
-    if let Some(inner_document) = maybe_decompressed_inner_document(data)? {
+    read_style_streams_with_limits(data, ParseLimits::DEFAULT)
+}
+
+/// Reads style streams from already allocated input with explicit resource limits.
+///
+/// Each LH5 member and the combined output of every member reached by this call are limited. The
+/// input check occurs after the caller has allocated `data`.
+pub fn read_style_streams_with_limits(
+    data: &[u8],
+    limits: ParseLimits,
+) -> Result<Vec<StyleStream>> {
+    let mut budget = limits.decompression_budget();
+    read_style_streams_with_budget(data, &mut budget)
+}
+
+/// Reads style streams while sharing a cumulative LH5 output budget with other readers.
+///
+/// This is public only for composition between rjtd crates; downstream callers should prefer
+/// [`read_style_streams_with_limits`]. It is not a stable downstream API.
+pub fn read_style_streams_with_budget(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<Vec<StyleStream>> {
+    budget.check_input_size(data.len())?;
+    if let Some(inner_document) = maybe_decompressed_inner_document(data, budget)? {
         return read_style_streams_from_cfb(&inner_document);
     }
 
     read_style_streams_from_cfb(data)
 }
 
-fn maybe_decompressed_inner_document(data: &[u8]) -> Result<Option<Vec<u8>>> {
+fn maybe_decompressed_inner_document(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<Option<Vec<u8>>> {
     let compressed = match read_cfb_stream(data, COMPRESSED_DOCUMENT_PATH) {
         Ok(stream) => stream,
         Err(Error::NotFound(_)) => return Ok(None),
@@ -280,7 +314,10 @@ fn maybe_decompressed_inner_document(data: &[u8]) -> Result<Option<Vec<u8>>> {
     };
 
     if is_just_compressed_document(&compressed) {
-        Ok(Some(decompress_just_compressed_document(&compressed)?))
+        Ok(Some(decompress_just_compressed_document_with_budget(
+            &compressed,
+            budget,
+        )?))
     } else {
         Ok(None)
     }
@@ -555,9 +592,11 @@ fn read_be_u16_at(data: &[u8], offset: usize) -> u16 {
 mod tests {
     use super::{
         DOCUMENT_EDIT_STYLES_PATH, StyleStreamFamily, StyleStreamRecordLayout,
-        TEXT_LAYOUT_STYLE_PATH, read_style_streams, summarize_style_stream,
+        TEXT_LAYOUT_STYLE_PATH, parse_document_edit_style_sections, read_style_streams,
+        summarize_style_stream,
     };
     use std::io::{Cursor, Write};
+    use std::path::PathBuf;
 
     #[test]
     fn reads_observed_style_streams_from_cfb() {
@@ -695,6 +734,147 @@ mod tests {
         assert_eq!(summary.records()[3].offset(), 0x32);
         assert_eq!(summary.records()[3].code(), 0x3105);
         assert_eq!(summary.records()[3].payload_len(), 1);
+    }
+
+    #[test]
+    fn parses_document_edit_style_sections_and_nested_records() {
+        let bytes = document_edit_style_stream_bytes(
+            &[0x00, 0x01, 0x00, 0x01],
+            &[
+                (0x2000, vec![0xaa, 0xbb, 0xcc, 0xdd]),
+                (
+                    0x2001,
+                    nested_records_bytes(&[
+                        (0x0003, &[0x12, 0x34][..]),
+                        (0x0008, &[0x00, 0x02, 0x00, 0x10][..]),
+                        (0x0009, &[0x56, 0x78][..]),
+                    ]),
+                ),
+                (0x2005, vec![0x00, 0x01, 0x00, 0x02]),
+            ],
+        );
+
+        let inventory = parse_document_edit_style_sections(&bytes).expect("section inventory");
+
+        assert_eq!(inventory.header(), &[0x00, 0x01, 0x00, 0x01]);
+        assert!(inventory.trailing_bytes().is_empty());
+        assert_eq!(inventory.sections().len(), 3);
+        assert_eq!(inventory.sections()[0].section_code(), 0x2000);
+        assert_eq!(inventory.sections()[0].payload(), &[0xaa, 0xbb, 0xcc, 0xdd]);
+        assert_eq!(inventory.sections()[1].section_code(), 0x2001);
+        assert_eq!(inventory.sections()[1].payload_len_bytes(), 20);
+        assert_eq!(inventory.sections()[1].nested_records().len(), 3);
+        assert_eq!(
+            inventory.sections()[1].nested_records()[0].record_type(),
+            0x0003
+        );
+        assert_eq!(
+            inventory.sections()[1].nested_records()[1].payload(),
+            &[0x00, 0x02, 0x00, 0x10]
+        );
+        assert_eq!(
+            inventory.sections()[1].nested_records()[2].record_type(),
+            0x0009
+        );
+        assert!(inventory.sections()[1].nested_trailing_bytes().is_empty());
+        assert_eq!(inventory.sections()[2].section_code(), 0x2005);
+    }
+
+    #[test]
+    fn preserves_truncated_document_edit_style_tails() {
+        let nested_tail = document_edit_style_stream_bytes(
+            &[0x00, 0x01, 0x00, 0x01],
+            &[(0x2001, vec![0x00, 0x06, 0x00, 0x04, 0xaa, 0xbb])],
+        );
+        let nested = parse_document_edit_style_sections(&nested_tail).expect("nested tail");
+        assert_eq!(nested.sections().len(), 1);
+        assert_eq!(nested.sections()[0].nested_records().len(), 0);
+        assert_eq!(
+            nested.sections()[0].nested_trailing_bytes(),
+            &[0x00, 0x06, 0x00, 0x04, 0xaa, 0xbb]
+        );
+
+        let mut top_level = vec![0x00, 0x01, 0x00, 0x01];
+        top_level.extend_from_slice(&0x2007_u16.to_be_bytes());
+        top_level.extend_from_slice(&12_u32.to_be_bytes());
+        top_level.extend_from_slice(&[0xde, 0xad, 0xbe, 0xef]);
+        let inventory = parse_document_edit_style_sections(&top_level).expect("top level tail");
+        assert!(inventory.sections().is_empty());
+        assert_eq!(
+            inventory.trailing_bytes(),
+            &[0x20, 0x07, 0x00, 0x00, 0x00, 0x0c, 0xde, 0xad, 0xbe, 0xef]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires local shanai_lan sample"]
+    fn inventories_shanai_lan_document_edit_styles_from_local_sample() {
+        let path = repo_root()
+            .join("rjtd-testdata/local-samples")
+            .join("ichitaro-20030315134715-success-001-success_data-shanai_lan.jtd");
+        let bytes = std::fs::read(&path).expect("read local shanai_lan sample");
+        let stream = crate::container::read_cfb_stream(&bytes, DOCUMENT_EDIT_STYLES_PATH)
+            .expect("read DocumentEditStyles");
+
+        let inventory =
+            parse_document_edit_style_sections(&stream).expect("document edit style inventory");
+
+        assert_eq!(inventory.header(), &[0x00, 0x01, 0x00, 0x01]);
+        assert!(inventory.trailing_bytes().is_empty());
+        assert_eq!(
+            inventory
+                .sections()
+                .iter()
+                .map(|section| (section.section_code(), section.payload_len_bytes()))
+                .collect::<Vec<_>>(),
+            vec![
+                (0x2000, 28),
+                (0x2001, 1148),
+                (0x2005, 12),
+                (0x2006, 10),
+                (0x2007, 12),
+            ]
+        );
+        let nested_types = inventory.sections()[1]
+            .nested_records()
+            .iter()
+            .map(|record| record.record_type())
+            .collect::<Vec<_>>();
+        assert!(nested_types.contains(&0x0003));
+        assert!(nested_types.contains(&0x0004));
+        assert!(nested_types.contains(&0x0006));
+        assert!(nested_types.contains(&0x0007));
+        assert!(nested_types.contains(&0x0008));
+        assert!(nested_types.contains(&0x0009));
+    }
+
+    fn document_edit_style_stream_bytes(header: &[u8; 4], sections: &[(u16, Vec<u8>)]) -> Vec<u8> {
+        let mut bytes = header.to_vec();
+        for (section_code, payload) in sections {
+            bytes.extend_from_slice(&section_code.to_be_bytes());
+            bytes.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+            bytes.extend_from_slice(payload);
+        }
+        bytes
+    }
+
+    fn nested_records_bytes(records: &[(u16, &[u8])]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for (record_type, payload) in records {
+            bytes.extend_from_slice(&record_type.to_be_bytes());
+            bytes.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+            bytes.extend_from_slice(payload);
+        }
+        bytes
+    }
+
+    fn repo_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|path| path.parent())
+            .and_then(|path| path.parent())
+            .expect("repo root")
+            .to_path_buf()
     }
 
     fn cfb_with_streams(streams: &[(&str, &[u8])]) -> Vec<u8> {

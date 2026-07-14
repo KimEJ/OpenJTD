@@ -2,14 +2,18 @@
 name = "rjtd-testkit"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Internal test document builders for the OpenJTD Rust workspace."
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+publish = false
 
 [lib]
 test = false
 
 [dependencies]
-rjtd-model = { path = "../rjtd-model" }
+rjtd-model = { version = "0.0.1", path = "../rjtd-model" }
 
 [lints]
 workspace = true

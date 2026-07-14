@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{DecompressionBudget, Error, ParseLimits, Result};
 
 const LH5_METHOD: &[u8; 5] = b"-lh5-";
 const LH5_DICBIT: usize = 13;
@@ -32,9 +32,30 @@ impl LhaMember {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
+
+    pub(crate) fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
 }
 
 pub fn decompress_lh5_member(data: &[u8]) -> Result<LhaMember> {
+    decompress_lh5_member_with_limits(data, ParseLimits::DEFAULT)
+}
+
+/// Decompresses one already allocated LH5 member with explicit resource limits.
+///
+/// The per-member output limit applies to this member; the newly created total budget is also
+/// scoped to this call. The input limit checks `data` after the caller has allocated it.
+pub fn decompress_lh5_member_with_limits(data: &[u8], limits: ParseLimits) -> Result<LhaMember> {
+    let mut budget = limits.decompression_budget();
+    decompress_lh5_member_with_budget(data, &mut budget)
+}
+
+pub(crate) fn decompress_lh5_member_with_budget(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<LhaMember> {
+    budget.check_input_size(data.len())?;
     let header = parse_lha_header(data)?;
     let packed_end = header
         .data_start
@@ -48,6 +69,7 @@ pub fn decompress_lh5_member(data: &[u8]) -> Result<LhaMember> {
         )));
     }
 
+    budget.reserve_lh5_output(header.packed_size, header.original_size)?;
     let bytes = decode_lh5_data(&data[header.data_start..packed_end], header.original_size)?;
     Ok(LhaMember {
         filename: header.filename,
@@ -109,7 +131,12 @@ fn read_u32_le(data: &[u8], offset: usize) -> Result<u32> {
 
 fn decode_lh5_data(data: &[u8], original_size: usize) -> Result<Vec<u8>> {
     let mut reader = BitReader::new(data);
-    let mut output = Vec::with_capacity(original_size);
+    let mut output = Vec::new();
+    output.try_reserve_exact(original_size).map_err(|error| {
+        Error::Io(format!(
+            "reserve {original_size} bytes for LH5 output failed: {error}"
+        ))
+    })?;
     let mut dictionary = vec![0u8; LH5_DICSIZ];
     let mut dictionary_pos = 0usize;
     let mut block_remaining = 0usize;
@@ -416,7 +443,10 @@ fn insert_code(
 
 #[cfg(test)]
 mod tests {
-    use super::decompress_lh5_member;
+    use super::{
+        decompress_lh5_member, decompress_lh5_member_with_budget, decompress_lh5_member_with_limits,
+    };
+    use crate::{Error, ParseLimits};
 
     #[test]
     fn decompresses_single_literal_lh5_member() {
@@ -437,6 +467,69 @@ mod tests {
         assert_eq!(decoded.packed_size(), compressed.len());
         assert_eq!(decoded.original_size(), 1);
         assert_eq!(decoded.bytes(), b"A");
+    }
+
+    #[test]
+    fn rejects_lh5_member_before_allocating_output_over_limit() {
+        // Given
+        let compressed = bits(&[
+            (1, 16),
+            (0, 5),
+            (0, 5),
+            (0, 9),
+            (b'A' as u32, 9),
+            (0, 4),
+            (0, 4),
+        ]);
+        let member = lh5_member(&compressed, 2);
+        let limits = ParseLimits::DEFAULT.with_max_decompressed_bytes(1);
+
+        // When
+        let result = decompress_lh5_member_with_limits(&member, limits);
+
+        // Then
+        assert_eq!(
+            result,
+            Err(Error::ResourceLimit {
+                resource: "LH5 decompressed bytes",
+                limit: 1,
+                actual: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_second_lh5_member_when_cumulative_budget_is_exhausted() {
+        // Given
+        let compressed = bits(&[
+            (1, 16),
+            (0, 5),
+            (0, 5),
+            (0, 9),
+            (b'A' as u32, 9),
+            (0, 4),
+            (0, 4),
+        ]);
+        let member = lh5_member(&compressed, 1);
+        let limits = ParseLimits::DEFAULT
+            .with_max_decompressed_bytes(1)
+            .with_max_total_decompressed_bytes(1);
+        let mut budget = limits.decompression_budget();
+
+        // When
+        let first = decompress_lh5_member_with_budget(&member, &mut budget);
+        let second = decompress_lh5_member_with_budget(&member, &mut budget);
+
+        // Then
+        assert_eq!(first.unwrap().bytes(), b"A");
+        assert_eq!(
+            second,
+            Err(Error::ResourceLimit {
+                resource: "total LH5 decompressed bytes",
+                limit: 1,
+                actual: 2,
+            })
+        );
     }
 
     fn lh5_member(compressed: &[u8], original_size: u32) -> Vec<u8> {

@@ -258,15 +258,15 @@ export const hwpdocument_updateClickHereProps: (a: number, b: number, c: number,
 export const hwpdocument_updateConnectorsInSection: (a: number, b: number) => void;
 export const hwpdocument_updateStyle: (a: number, b: number, c: number, d: number) => number;
 export const hwpdocument_updateStyleShapes: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
+export const hwpdocument_findOrCreateFontId: (a: number, b: number, c: number) => number;
+export const hwpdocument_exportHwpx: (a: number) => [number, number];
 export const hwpdocument_renderPageToCanvasLegacy: (a: number, b: number, c: any, d: number) => [number, number];
+export const hwpdocument_createStyle: (a: number, b: number, c: number) => number;
 export const hwpdocument_hitTestFootnote: (a: number, b: number, c: number, d: number) => [number, number];
 export const hwpdocument_hitTestHeaderFooter: (a: number, b: number, c: number, d: number) => [number, number];
 export const hwpdocument_hitTestInFootnote: (a: number, b: number, c: number, d: number) => [number, number];
-export const hwpdocument_exportHwpx: (a: number) => [number, number];
 export const hwpdocument_ensureDefaultNumbering: (a: number) => number;
 export const hwpdocument_ensureParagraphStableIds: (a: number) => void;
-export const hwpdocument_findOrCreateFontId: (a: number, b: number, c: number) => number;
-export const hwpdocument_createStyle: (a: number, b: number, c: number) => number;
 export const __wbindgen_exn_store: (a: number) => void;
 export const __externref_table_alloc: () => number;
 export const __wbindgen_externrefs: WebAssembly.Table;
