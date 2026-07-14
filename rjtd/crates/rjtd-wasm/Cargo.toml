@@ -2,15 +2,24 @@
 name = "rjtd-wasm"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "WebAssembly bindings for parsing and rendering Ichitaro JTD documents in browsers."
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/rjtd-wasm"
+readme = "README.md"
+keywords = ["ichitaro", "jtd", "document", "wasm", "browser"]
+categories = ["wasm", "web-programming", "text-processing"]
+publish = ["crates-io"]
+include = ["src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rjtd-core = { path = "../rjtd-core" }
-rjtd-model = { path = "../rjtd-model", default-features = false }
+rjtd-core = { version = "0.0.1", path = "../rjtd-core" }
+rjtd-model = { version = "0.0.1", path = "../rjtd-model", default-features = false }
 wasm-bindgen = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

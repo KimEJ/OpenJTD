@@ -1,8 +1,8 @@
 use crate::compressed_document::{
-    decompress_just_compressed_document, is_just_compressed_document,
+    decompress_just_compressed_document_with_budget, is_just_compressed_document,
 };
 use crate::container::read_cfb_stream;
-use crate::{Error, Result};
+use crate::{DecompressionBudget, Error, ParseLimits, Result};
 
 mod row_headers;
 mod style_runs;
@@ -337,13 +337,37 @@ impl DocumentTextPayload {
 }
 
 pub fn read_document_text_payload(data: &[u8]) -> Result<DocumentTextPayload> {
+    read_document_text_payload_with_limits(data, ParseLimits::DEFAULT)
+}
+
+/// Reads document text from already allocated input with explicit resource limits.
+///
+/// Each LH5 member and the combined output of every member reached by this call are limited. The
+/// input check occurs after the caller has allocated `data`.
+pub fn read_document_text_payload_with_limits(
+    data: &[u8],
+    limits: ParseLimits,
+) -> Result<DocumentTextPayload> {
+    let mut budget = limits.decompression_budget();
+    read_document_text_payload_with_budget(data, &mut budget)
+}
+
+/// Reads document text while sharing a cumulative LH5 output budget with other readers.
+///
+/// This is public only for composition between rjtd crates; downstream callers should prefer
+/// [`read_document_text_payload_with_limits`]. It is not a stable downstream API.
+pub fn read_document_text_payload_with_budget(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<DocumentTextPayload> {
+    budget.check_input_size(data.len())?;
     match read_cfb_stream(data, DOCUMENT_TEXT_PATH) {
         Ok(stream) => Ok(DocumentTextPayload::new(
             DOCUMENT_TEXT_PATH,
             stream.clone(),
             parse_document_text(&stream),
         )),
-        Err(Error::NotFound(_)) => read_compressed_or_embedded_document_text(data),
+        Err(Error::NotFound(_)) => read_compressed_or_embedded_document_text(data, budget),
         Err(error) => Err(error),
     }
 }
@@ -352,7 +376,10 @@ pub fn read_document_text_stream(data: &[u8]) -> Result<Vec<u8>> {
     Ok(read_document_text_payload(data)?.bytes)
 }
 
-fn read_compressed_or_embedded_document_text(data: &[u8]) -> Result<DocumentTextPayload> {
+fn read_compressed_or_embedded_document_text(
+    data: &[u8],
+    budget: &mut DecompressionBudget,
+) -> Result<DocumentTextPayload> {
     let stream = match read_cfb_stream(data, COMPRESSED_DOCUMENT_PATH) {
         Ok(stream) => stream,
         Err(Error::NotFound(_)) => return read_embedded_document_text(data),
@@ -363,7 +390,7 @@ fn read_compressed_or_embedded_document_text(data: &[u8]) -> Result<DocumentText
         return read_embedded_document_text(data);
     }
 
-    let inner_document = decompress_just_compressed_document(&stream)?;
+    let inner_document = decompress_just_compressed_document_with_budget(&stream, budget)?;
     let bytes = read_cfb_stream(&inner_document, DOCUMENT_TEXT_PATH)?;
     let parsed_text = parse_document_text(&bytes);
     Ok(DocumentTextPayload::new(

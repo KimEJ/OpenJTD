@@ -6,6 +6,13 @@ This space manages the public JTD specification and RFC-style reverse-engineerin
 as a peer to the `rjtd` Rust toolset because the public format knowledge should
 remain useful beyond one implementation.
 
+## License Boundary
+
+Unless a file states otherwise, OpenJTD-authored writing in this directory is
+covered by the root [Apache License, Version 2.0](../LICENSE). Referenced
+software, documents, quoted material, and product names remain subject to their
+respective rights and terms; this documentation does not license them.
+
 ## RFCs
 
 English originals and Japanese translations are tracked together.

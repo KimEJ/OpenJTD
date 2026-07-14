@@ -1,11 +1,25 @@
-const VIEWER_HTML: &str = include_str!("../../../../openjtd.github.io/index.html");
+use std::path::PathBuf;
+
+fn viewer_html() -> Option<String> {
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    if project_root.join("rjtd/Cargo.toml").is_file() {
+        return Some(
+            std::fs::read_to_string(project_root.join("openjtd.github.io/index.html"))
+                .expect("repository viewer must be readable"),
+        );
+    }
+    None
+}
 
 #[test]
 fn viewer_sets_file_name_before_reading_page_count() {
-    let constructor_offset = VIEWER_HTML
+    let Some(viewer_html) = viewer_html() else {
+        return;
+    };
+    let constructor_offset = viewer_html
         .find("doc = new HwpDocument(bytes);")
         .expect("viewer must construct the WASM document from the selected file");
-    let after_constructor = &VIEWER_HTML[constructor_offset..];
+    let after_constructor = &viewer_html[constructor_offset..];
     let file_name_offset = after_constructor
         .find("doc.setFileName(file.name);")
         .expect("viewer must pass the selected file name to the WASM document");
@@ -21,22 +35,25 @@ fn viewer_sets_file_name_before_reading_page_count() {
 
 #[test]
 fn viewer_exposes_open_errors_in_the_visible_drop_zone() {
+    let Some(viewer_html) = viewer_html() else {
+        return;
+    };
     assert!(
-        VIEWER_HTML.contains("id=\"drop-error\"")
-            && VIEWER_HTML.contains("class=\"drop-zone__error\"")
-            && VIEWER_HTML.contains("role=\"alert\""),
+        viewer_html.contains("id=\"drop-error\"")
+            && viewer_html.contains("class=\"drop-zone__error\"")
+            && viewer_html.contains("role=\"alert\""),
         "viewer must provide an accessible error surface beside the file picker"
     );
     assert!(
-        VIEWER_HTML.contains(
+        viewer_html.contains(
             "document.getElementById('drop-error').textContent = msg.startsWith('エラー:') ? msg : '';"
         ),
         "file-open failures must remain visible while the viewer itself is hidden"
     );
     assert!(
-        VIEWER_HTML.contains("resetViewer(`エラー: ${e}`);")
-            && VIEWER_HTML.contains("function resetViewer(status = '')")
-            && VIEWER_HTML.contains("document.getElementById('drop-zone').style.display = 'flex';"),
+        viewer_html.contains("resetViewer(`エラー: ${e}`);")
+            && viewer_html.contains("function resetViewer(status = '')")
+            && viewer_html.contains("document.getElementById('drop-zone').style.display = 'flex';"),
         "failed replacement uploads must return to the drop zone before exposing the error"
     );
 }

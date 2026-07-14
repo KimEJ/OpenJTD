@@ -2,8 +2,17 @@
 name = "rjtd-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Low-level parsers and diagnostics for Ichitaro JTD compound documents."
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/rjtd-core"
+readme = "README.md"
+keywords = ["ichitaro", "jtd", "document", "parser", "cfb"]
+categories = ["parser-implementations", "encoding", "text-processing"]
+publish = ["crates-io"]
+include = ["src/**/*.rs", "README.md", "LICENSE"]
 
 [dependencies]
 cfb = "0.14"

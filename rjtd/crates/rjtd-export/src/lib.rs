@@ -1,4 +1,4 @@
-//! Exporters that consume the document model.
+#![doc = include_str!("../README.md")]
 
 use std::collections::{BTreeMap, BTreeSet};
 
