@@ -2,16 +2,11 @@
 
 This file records user-visible changes to the OpenJTD Rust workspace.
 
-## 0.0.1 - Unreleased
-
-> Release status: none of the five public crates has been published as `0.0.1`.
-> Immediately before the first real upload, replace `Unreleased` with that
-> day's UTC date, review and commit the dated release record, then tag that
-> exact clean commit. Do not wait until after publication to date it.
+## 0.0.1 - 2026-07-14
 
 ### Added
 
-- Initial crates.io release candidates for `rjtd-core`, `rjtd-model`,
+- Initial crates.io releases for `rjtd-core`, `rjtd-model`,
   `rjtd-export`, `rjtd-cli`, and `rjtd-wasm` under Apache-2.0.
 - Low-level CFB and JTD-family stream parsing with evidence-preserving
   diagnostics.
