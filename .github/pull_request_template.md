@@ -21,7 +21,7 @@
 ## Contribution and Rights
 
 - [ ] The pull request targets `dev` unless it is the `dev` to `main` release PR.
-- [ ] Every commit includes a DCO `Signed-off-by` line.
+- [ ] Every non-generated authored commit includes a valid DCO `Signed-off-by` line.
 - [ ] The contribution follows the clean-room rules in `CONTRIBUTING.md`.
 - [ ] Any sample, fixture, image, font, or generated output has documented
       provenance and redistribution permission.
