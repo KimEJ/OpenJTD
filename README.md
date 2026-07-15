@@ -123,6 +123,13 @@ requirements. Report possible vulnerabilities privately by following
 [SECURITY.md](SECURITY.md); do not disclose vulnerability details in a public
 issue or pull request.
 
+## Support
+
+Community help is best effort. For separately scoped paid engineering inquiries,
+contact [the maintainer on Upwork](https://www.upwork.com/freelancers/eojinkim).
+See [SUPPORT.md](SUPPORT.md) for boundaries; security reports follow
+[SECURITY.md](SECURITY.md).
+
 ## License
 
 OpenJTD-authored source code and documentation are licensed under the
