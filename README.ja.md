@@ -122,6 +122,13 @@ pull request の流れ、サンプルの来歴要件については
 [SECURITY.md](SECURITY.md) に従って非公開で報告し、公開 issue や pull request に
 詳細を記載しないでください。
 
+## サポート
+
+コミュニティでの支援はベストエフォートです。個別にスコープを定める有償
+エンジニアリングの相談は、[Upwork のメンテナー](https://www.upwork.com/freelancers/eojinkim)
+に連絡してください。境界は [SUPPORT.md](SUPPORT.md) を参照し、脆弱性の報告は
+[SECURITY.md](SECURITY.md) に従ってください。
+
 ## ライセンス
 
 OpenJTD が著作したソースコードとドキュメントは
