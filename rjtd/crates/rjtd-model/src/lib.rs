@@ -11746,7 +11746,7 @@ fn object_stream_candidates_from_cfb(
         streams.push((entry.path().to_string(), stream));
     }
     attach_object_stream_ownership_references(&mut candidates, &streams);
-    attach_object_stream_fdm_index_entries(&mut candidates, &streams);
+    attach_object_stream_fdm_index_entries(&mut candidates, &streams, budget)?;
     attach_object_stream_fdm_text_index_entries(&mut candidates, &streams);
     Ok(candidates)
 }
@@ -12088,7 +12088,8 @@ fn attach_object_frame_row_suffix_links(rows: &mut [ObjectFrameReferenceRowCandi
 fn attach_object_stream_fdm_index_entries(
     candidates: &mut [ObjectStreamCandidate],
     streams: &[(String, Vec<u8>)],
-) {
+    budget: &mut ResourceBudget,
+) -> Result<()> {
     for candidate in candidates {
         if fdm_index_path_for_vector(candidate.path()).is_none() {
             continue;
@@ -12112,43 +12113,42 @@ fn attach_object_stream_fdm_index_entries(
         if entries.is_empty() {
             continue;
         }
-        let vector_hits = image_signature_hits(vector_stream);
-        let fdm_entries = entries
-            .iter()
-            .map(|entry| {
-                let segment = fdm_vector_segment(entry.vector_offset, entries, vector_stream);
-                let segment_hits =
-                    fdm_segment_signature_hits(&vector_hits, segment.start, segment.end);
-                let relative_hits = fdm_relative_signature_hits(&segment_hits, segment.start);
-                let vector_prefix = vector_stream
-                    .get(segment.start..segment.end)
-                    .unwrap_or_default();
-                let vector_commands = fdm_vector_command_candidates(vector_prefix, segment.start);
-                let connector_candidates = fdm_connector_candidates(&vector_commands);
+        let vector_hits = image_signature_hits(vector_stream, budget)?;
+        let mut fdm_entries = Vec::new();
+        for entry in entries {
+            let segment = fdm_vector_segment(entry.vector_offset, entries, vector_stream);
+            let segment_hits =
+                fdm_segment_signature_hits(&vector_hits, segment.start, segment.end, budget)?;
+            let relative_hits = fdm_relative_signature_hits(&segment_hits, segment.start, budget)?;
+            let vector_prefix = vector_stream
+                .get(segment.start..segment.end)
+                .unwrap_or_default();
+            let vector_commands = fdm_vector_command_candidates(vector_prefix, segment.start);
+            let connector_candidates = fdm_connector_candidates(&vector_commands);
 
-                ObjectFdmIndexEntryCandidate {
-                    index_path: actual_index_path.clone(),
-                    vector_path: candidate.path().to_string(),
-                    row_index: entry.row_index,
-                    index_offset: entry.index_offset,
-                    vector_offset: entry.vector_offset,
-                    next_vector_offset: segment.end,
-                    vector_len: segment.end.saturating_sub(segment.start),
-                    kind: entry.kind,
-                    bbox: ObjectFdmIndexBbox::new(entry.left, entry.top, entry.right, entry.bottom),
-                    valid_vector_offset: entry.valid_vector_offset,
-                    vector_prefix: vector_prefix
-                        [..vector_prefix.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)]
-                        .to_vec(),
-                    image_signature_hits: segment_hits,
-                    segment_image_signature_hits: relative_hits,
-                    vector_commands,
-                    connector_candidates,
-                }
-            })
-            .collect();
+            fdm_entries.push(ObjectFdmIndexEntryCandidate {
+                index_path: actual_index_path.clone(),
+                vector_path: candidate.path().to_string(),
+                row_index: entry.row_index,
+                index_offset: entry.index_offset,
+                vector_offset: entry.vector_offset,
+                next_vector_offset: segment.end,
+                vector_len: segment.end.saturating_sub(segment.start),
+                kind: entry.kind,
+                bbox: ObjectFdmIndexBbox::new(entry.left, entry.top, entry.right, entry.bottom),
+                valid_vector_offset: entry.valid_vector_offset,
+                vector_prefix: vector_prefix
+                    [..vector_prefix.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)]
+                    .to_vec(),
+                image_signature_hits: segment_hits,
+                segment_image_signature_hits: relative_hits,
+                vector_commands,
+                connector_candidates,
+            });
+        }
         candidate.set_fdm_index_entry_candidates(fdm_entries);
     }
+    Ok(())
 }
 
 fn attach_object_stream_fdm_text_index_entries(
@@ -13678,24 +13678,33 @@ fn fdm_segment_signature_hits(
     vector_hits: &[ObjectImageSignatureHit],
     start: usize,
     end: usize,
-) -> Vec<ObjectImageSignatureHit> {
-    vector_hits
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectImageSignatureHit>> {
+    let mut hits = Vec::new();
+    for hit in vector_hits
         .iter()
         .filter(|hit| hit.offset() >= start && hit.offset() < end)
-        .cloned()
-        .collect()
+    {
+        reserve_image_signature_candidate(budget, hit.kind())?;
+        hits.push(hit.clone());
+    }
+    Ok(hits)
 }
 
 fn fdm_relative_signature_hits(
     segment_hits: &[ObjectImageSignatureHit],
     segment_start: usize,
-) -> Vec<ObjectImageSignatureHit> {
-    segment_hits
-        .iter()
-        .map(|hit| {
-            ObjectImageSignatureHit::new(hit.kind(), hit.offset().saturating_sub(segment_start))
-        })
-        .collect()
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectImageSignatureHit>> {
+    let mut hits = Vec::new();
+    for hit in segment_hits {
+        reserve_image_signature_candidate(budget, hit.kind())?;
+        hits.push(ObjectImageSignatureHit::new(
+            hit.kind(),
+            hit.offset().saturating_sub(segment_start),
+        ));
+    }
+    Ok(hits)
 }
 
 fn classify_object_frame_reference_row(
@@ -13770,7 +13779,7 @@ fn classify_object_stream_candidate(
     let mut reasons = Vec::new();
     push_object_path_reasons(path, &mut reasons);
 
-    let image_signature_hits = image_signature_hits(stream);
+    let image_signature_hits = image_signature_hits(stream, budget)?;
     let image_payload_spans = image_payload_spans(stream, &image_signature_hits, budget)?;
     let visual_list_candidate = visual_list_candidate_from_stream(path, stream);
     let figure_link_candidate = figure_link_candidate_from_stream(path, stream);
@@ -15004,29 +15013,33 @@ fn push_unique_object_reason(
     }
 }
 
-fn image_signature_hits(stream: &[u8]) -> Vec<ObjectImageSignatureHit> {
+fn image_signature_hits(
+    stream: &[u8],
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectImageSignatureHit>> {
     let mut hits = Vec::new();
-    push_signature_hits(&mut hits, stream, "png", b"\x89PNG\r\n\x1a\n", true);
-    push_signature_hits(&mut hits, stream, "jpeg", b"\xff\xd8\xff", true);
-    push_signature_hits(&mut hits, stream, "gif87a", b"GIF87a", true);
-    push_signature_hits(&mut hits, stream, "gif89a", b"GIF89a", true);
-    push_signature_hits(&mut hits, stream, "tiff-le", b"II\x2a\0", true);
-    push_signature_hits(&mut hits, stream, "tiff-be", b"MM\0\x2a", true);
+    push_signature_hits(&mut hits, stream, "png", b"\x89PNG\r\n\x1a\n", true, budget)?;
+    push_signature_hits(&mut hits, stream, "jpeg", b"\xff\xd8\xff", true, budget)?;
+    push_signature_hits(&mut hits, stream, "gif87a", b"GIF87a", true, budget)?;
+    push_signature_hits(&mut hits, stream, "gif89a", b"GIF89a", true, budget)?;
+    push_signature_hits(&mut hits, stream, "tiff-le", b"II\x2a\0", true, budget)?;
+    push_signature_hits(&mut hits, stream, "tiff-be", b"MM\0\x2a", true, budget)?;
     push_signature_hits(
         &mut hits,
         stream,
         "wmf-placeable",
         b"\xd7\xcd\xc6\x9a",
         true,
-    );
-    push_signature_hits(&mut hits, stream, "bmp", b"BM", false);
+        budget,
+    )?;
+    push_signature_hits(&mut hits, stream, "bmp", b"BM", false, budget)?;
 
     hits.sort_by(|left, right| {
         left.offset()
             .cmp(&right.offset())
             .then_with(|| left.kind().cmp(right.kind()))
     });
-    hits
+    Ok(hits)
 }
 
 fn push_signature_hits(
@@ -15035,18 +15048,35 @@ fn push_signature_hits(
     kind: &'static str,
     signature: &[u8],
     scan_anywhere: bool,
-) {
-    let offsets = if scan_anywhere {
-        find_subslice_offsets(stream, signature)
-    } else if stream.starts_with(signature) {
-        vec![0]
-    } else {
-        Vec::new()
-    };
-
-    for offset in offsets {
-        hits.push(ObjectImageSignatureHit::new(kind, offset));
+    budget: &mut ResourceBudget,
+) -> Result<()> {
+    if signature.is_empty() {
+        return Ok(());
     }
+
+    if scan_anywhere {
+        for (offset, candidate) in stream.windows(signature.len()).enumerate() {
+            if candidate == signature {
+                reserve_image_signature_candidate(budget, kind)?;
+                hits.push(ObjectImageSignatureHit::new(kind, offset));
+            }
+        }
+    } else if stream.starts_with(signature) {
+        reserve_image_signature_candidate(budget, kind)?;
+        hits.push(ObjectImageSignatureHit::new(kind, 0));
+    }
+    Ok(())
+}
+
+fn reserve_image_signature_candidate(budget: &mut ResourceBudget, kind: &str) -> Result<()> {
+    let bytes = std::mem::size_of::<ObjectImageSignatureHit>()
+        .checked_add(kind.len())
+        .ok_or(Error::ResourceLimit {
+            resource: "document record bytes",
+            limit: usize::MAX,
+            actual: usize::MAX,
+        })?;
+    budget.reserve_record(bytes)
 }
 
 fn image_payload_spans(
@@ -15056,28 +15086,22 @@ fn image_payload_spans(
 ) -> Result<Vec<ObjectImagePayloadSpan>> {
     let mut candidates = hits
         .iter()
-        .filter_map(|hit| image_payload_candidate(stream, hit))
-        .collect::<Vec<_>>();
-    candidates.sort_by(|left, right| {
-        left.start
-            .cmp(&right.start)
-            .then_with(|| left.end.cmp(&right.end))
-            .then_with(|| left.kind.cmp(&right.kind))
-    });
+        .filter_map(|hit| image_payload_candidate(stream, hit));
+    let mut previous_end = None;
+    let mut candidate = candidates.next();
+    let mut spans = Vec::new();
 
-    let mut spans = Vec::with_capacity(candidates.len());
-    for (index, candidate) in candidates.iter().enumerate() {
-        let previous_end = index
-            .checked_sub(1)
-            .map(|previous| candidates[previous].end);
-        let next_start = candidates.get(index + 1).map(|next| next.start);
+    while let Some(current) = candidate {
+        candidate = candidates.next();
+        let next_start = candidate.as_ref().map(|next| next.start);
         let header_start = previous_end
-            .filter(|end| *end <= candidate.start)
+            .filter(|end| *end <= current.start)
             .unwrap_or(0);
         let trailer_end = next_start
-            .filter(|start| *start >= candidate.end)
+            .filter(|start| *start >= current.end)
             .unwrap_or(stream.len());
-        let Some(payload) = stream.get(candidate.start..candidate.end) else {
+        let Some(payload) = stream.get(current.start..current.end) else {
+            previous_end = Some(current.end);
             continue;
         };
         let dimensions = image_payload_dimensions(payload);
@@ -15087,31 +15111,28 @@ fn image_payload_spans(
         let retained_bytes = image_payload_retained_bytes(
             payload.len(),
             header_start,
-            candidate.start,
-            candidate.end,
+            current.start,
+            current.end,
             trailer_end,
         )?;
         budget.reserve_image(retained_bytes)?;
         let envelope = image_payload_envelope(
             stream,
             header_start,
-            candidate.start,
-            candidate.end,
+            current.start,
+            current.end,
             trailer_end,
         );
         spans.push(ObjectImagePayloadSpan::new_with_dimensions(
-            &candidate.kind,
-            &candidate.mime,
-            ObjectImagePayloadLocation::new(
-                candidate.signature_offset,
-                candidate.start,
-                candidate.end,
-            ),
+            current.kind,
+            current.mime,
+            ObjectImagePayloadLocation::new(current.signature_offset, current.start, current.end),
             true,
             payload.to_vec(),
             dimensions,
             envelope,
         ));
+        previous_end = Some(current.end);
     }
     Ok(spans)
 }
@@ -15148,18 +15169,18 @@ fn image_payload_retained_bytes(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ImagePayloadCandidate {
-    kind: String,
-    mime: String,
+struct ImagePayloadCandidate<'a> {
+    kind: &'a str,
+    mime: &'static str,
     signature_offset: usize,
     start: usize,
     end: usize,
 }
 
-fn image_payload_candidate(
+fn image_payload_candidate<'a>(
     stream: &[u8],
-    hit: &ObjectImageSignatureHit,
-) -> Option<ImagePayloadCandidate> {
+    hit: &'a ObjectImageSignatureHit,
+) -> Option<ImagePayloadCandidate<'a>> {
     let end = match hit.kind() {
         "jpeg" => jpeg_payload_end(stream, hit.offset())?,
         "png" => png_payload_end(stream, hit.offset())?,
@@ -15169,8 +15190,8 @@ fn image_payload_candidate(
     };
 
     Some(ImagePayloadCandidate {
-        kind: hit.kind().to_string(),
-        mime: image_mime_for_kind(hit.kind()).to_string(),
+        kind: hit.kind(),
+        mime: image_mime_for_kind(hit.kind()),
         signature_offset: hit.offset(),
         start: hit.offset(),
         end,
