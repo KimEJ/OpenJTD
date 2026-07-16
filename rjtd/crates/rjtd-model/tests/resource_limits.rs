@@ -3,7 +3,9 @@ use std::io::{Cursor, Write};
 
 use rjtd_core::compressed_document::JUST_COMPRESSED_DOCUMENT_MAGIC;
 use rjtd_core::{Error, ParseLimits};
-use rjtd_model::{Document, DocumentCore, parse_document, parse_document_with_limits};
+use rjtd_model::{
+    Document, DocumentCore, parse_document, parse_document_with_budget, parse_document_with_limits,
+};
 
 #[test]
 fn rejects_document_input_over_default_limit() {
@@ -254,6 +256,77 @@ fn rejects_cumulative_embedded_image_payload_bytes() {
 }
 
 #[test]
+fn accepts_exact_and_rejects_plus_one_repeated_image_signature_candidates() {
+    // Given
+    let signatures = repeated_jpeg_signatures(3);
+    let bytes =
+        document_with_streams(&[("/DocumentText", b"SsmgV.01"), ("/ImageData", &signatures)]);
+
+    // When / Then
+    assert!(
+        DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(3),)
+            .is_ok()
+    );
+    assert_resource_limit(
+        DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(2)),
+        Error::ResourceLimit {
+            resource: "document records",
+            limit: 2,
+            actual: 3,
+        },
+    );
+}
+
+#[test]
+fn accepts_exact_and_rejects_plus_one_fdm_image_signature_candidates() {
+    // Given
+    let signatures = repeated_jpeg_signatures(3);
+    let index = fdm_index_for_vector_start();
+    let bytes = document_with_streams(&[
+        ("/DocumentText", b"SsmgV.01"),
+        ("/FigureData/main_data/FDMVector", &signatures),
+        ("/FigureData/main_data/FDMIndex", &index),
+    ]);
+
+    // When / Then
+    assert!(
+        DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(12),)
+            .is_ok()
+    );
+    assert_resource_limit(
+        DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(11)),
+        Error::ResourceLimit {
+            resource: "document records",
+            limit: 11,
+            actual: 12,
+        },
+    );
+}
+
+#[test]
+fn preserves_signature_candidate_budget_across_parse_layers() {
+    // Given
+    let signatures = repeated_jpeg_signatures(3);
+    let bytes =
+        document_with_streams(&[("/DocumentText", b"SsmgV.01"), ("/ImageData", &signatures)]);
+    let mut budget = ParseLimits::DEFAULT.with_max_records(3).resource_budget();
+    budget.reserve_record(0).unwrap();
+
+    // When
+    let result = parse_document_with_budget(&bytes, &mut budget);
+
+    // Then
+    assert_eq!(
+        result,
+        Err(Error::ResourceLimit {
+            resource: "document records",
+            limit: 3,
+            actual: 4,
+        })
+    );
+}
+
+#[test]
 fn preserves_one_budget_from_model_construction_through_page_construction() {
     let mut budget = ParseLimits::DEFAULT.with_max_pages(1).resource_budget();
     budget.reserve_page().unwrap();
@@ -399,6 +472,23 @@ fn minimal_jpeg_payload() -> &'static [u8] {
         0x00, 0x20, 0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00, 0xff, 0xda, 0x00,
         0x0c, 0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00, 0x00, 0xff, 0xd9,
     ]
+}
+
+fn repeated_jpeg_signatures(count: usize) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(count * 3);
+    for _ in 0..count {
+        bytes.extend_from_slice(b"\xff\xd8\xff");
+    }
+    bytes
+}
+
+fn fdm_index_for_vector_start() -> Vec<u8> {
+    let mut bytes = vec![0; 20 + 22];
+    bytes[..4].copy_from_slice(&[0x03, 0x0b, 0x00, 0x01]);
+    bytes[18..20].copy_from_slice(&1_u16.to_be_bytes());
+    bytes[20..24].copy_from_slice(&0_u32.to_be_bytes());
+    bytes[24..26].copy_from_slice(&0x0b00_u16.to_be_bytes());
+    bytes
 }
 
 fn oversized_lh5_stream() -> Vec<u8> {
