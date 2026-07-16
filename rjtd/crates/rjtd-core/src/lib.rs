@@ -16,4 +16,4 @@ pub mod stream;
 pub mod style_stream;
 
 pub use error::{Error, Result};
-pub use limits::{DecompressionBudget, ParseLimits};
+pub use limits::{DecompressionBudget, ParseLimits, ResourceBudget, ResourceKind};
