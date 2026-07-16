@@ -50,9 +50,13 @@ for entry in entries {
 output at 256 MiB, and the aggregate LH5 output accumulated while parsing one
 document at 256 MiB. It also applies a 256x expansion ceiling above a 1 MiB
 allowance. The input check runs after the caller has already allocated its
-`&[u8]`, so it cannot reclaim that allocation. Some low-level helpers accept
-caller-owned byte slices directly; applications must also budget stream,
-record, image, and page processing around those APIs.
+`&[u8]`, so it cannot reclaim that allocation. The same limit set creates one
+`ResourceBudget` for a limits-aware document: declared CFB stream count and
+bytes, retained record count and bytes, retained image count and bytes,
+header-derived image width/height/pixels, and constructed page/page-line
+output are charged with checked cumulative arithmetic. Low-level helpers that
+accept caller-owned slices remain compositional APIs; use the higher-level
+`*_with_limits` or `*_with_budget` entry points when parsing untrusted input.
 
 Types and fields named `Unknown`, `Candidate`, `Diagnostic`, or otherwise
 marked as undecoded are evidence-preserving surfaces, not stable semantic

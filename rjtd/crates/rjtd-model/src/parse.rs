@@ -1,4 +1,4 @@
-use rjtd_core::{Error, ParseLimits, Result};
+use rjtd_core::{Error, ParseLimits, ResourceBudget, Result};
 
 use crate::{Document, IchitaroParser};
 
@@ -14,9 +14,13 @@ pub fn parse_document(data: &[u8]) -> Result<Document> {
 /// Resource-limit failures from optional style and font streams are returned instead of being
 /// treated as malformed optional content.
 pub fn parse_document_with_limits(data: &[u8], limits: ParseLimits) -> Result<Document> {
-    limits.check_input_size(data.len())?;
-    let mut budget = limits.decompression_budget();
-    IchitaroParser.parse_with_budget(data, &mut budget)
+    let mut budget = limits.resource_budget();
+    parse_document_with_budget(data, &mut budget)
+}
+
+pub fn parse_document_with_budget(data: &[u8], budget: &mut ResourceBudget) -> Result<Document> {
+    budget.check_input_size(data.len())?;
+    IchitaroParser.parse_with_budget(data, budget)
 }
 
 pub(crate) fn optional_stream<T>(result: Result<T>) -> Result<Option<T>> {

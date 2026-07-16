@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+use rjtd_core::{ParseLimits, ResourceBudget};
 use rjtd_model::{Document, DocumentCore};
 use wasm_bindgen::prelude::*;
 
@@ -34,13 +35,32 @@ impl std::ops::DerefMut for HwpDocument {
 
 impl HwpDocument {
     pub fn from_bytes(data: &[u8]) -> rjtd_core::Result<Self> {
-        DocumentCore::from_bytes(data).map(|core| Self { core })
+        Self::from_bytes_with_limits(data, ParseLimits::DEFAULT)
+    }
+
+    pub fn from_bytes_with_limits(data: &[u8], limits: ParseLimits) -> rjtd_core::Result<Self> {
+        let mut budget = limits.resource_budget();
+        Self::from_bytes_with_budget(data, &mut budget)
+    }
+
+    pub fn from_bytes_with_budget(
+        data: &[u8],
+        budget: &mut ResourceBudget,
+    ) -> rjtd_core::Result<Self> {
+        DocumentCore::from_bytes_with_budget(data, budget).map(|core| Self { core })
     }
 
     pub fn from_document(document: Document) -> Self {
         Self {
             core: DocumentCore::from_document(document),
         }
+    }
+
+    pub fn from_document_with_limits(
+        document: Document,
+        limits: ParseLimits,
+    ) -> rjtd_core::Result<Self> {
+        DocumentCore::from_document_with_limits(document, limits).map(|core| Self { core })
     }
 }
 
@@ -3396,12 +3416,57 @@ fn blank_document() -> Document {
 }
 
 fn js_error(error: rjtd_core::Error) -> JsValue {
-    JsValue::from_str(&error.to_string())
+    JsValue::from_str(&js_error_message(&error))
+}
+
+fn js_error_message(error: &rjtd_core::Error) -> String {
+    error.to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn limits_aware_byte_loading_preserves_resource_limit_error_message() {
+        let error = match HwpDocument::from_bytes_with_limits(
+            &[0],
+            ParseLimits::DEFAULT.with_max_input_bytes(0),
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("expected resource-limit error"),
+        };
+
+        assert!(matches!(
+            &error,
+            rjtd_core::Error::ResourceLimit {
+                resource: "input bytes",
+                limit: 0,
+                actual: 1,
+            }
+        ));
+        assert_eq!(
+            js_error_message(&error),
+            "resource limit exceeded: input bytes is 1, limit is 0"
+        );
+    }
+
+    #[test]
+    fn limits_aware_document_entry_point_rejects_page_allocation() {
+        let result = HwpDocument::from_document_with_limits(
+            Document::from_plain_text("page"),
+            ParseLimits::DEFAULT.with_max_pages(0),
+        );
+
+        assert!(matches!(
+            result,
+            Err(rjtd_core::Error::ResourceLimit {
+                resource: "document pages",
+                limit: 0,
+                actual: 1,
+            })
+        ));
+    }
 
     #[test]
     fn hwp_document_wrapper_exposes_rhwp_shaped_surface() {
