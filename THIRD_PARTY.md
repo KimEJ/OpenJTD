@@ -20,3 +20,12 @@ No `NOTICE` file is included solely for this boundary: no third-party material
 is tracked in this source tree for redistribution. If permitted third-party
 material is added later, preserve its required attribution and add a `NOTICE`
 file only when that material's terms require one.
+
+For the `rjtd-wasm` browser distribution workflow, locked compiled dependency
+identities and archive-root source texts are recorded in
+[`rjtd/licenses/wasm/DEPENDENCIES.lock.tsv`](rjtd/licenses/wasm/DEPENDENCIES.lock.tsv)
+and [`rjtd/licenses/wasm/THIRD_PARTY_NOTICES.txt`](rjtd/licenses/wasm/THIRD_PARTY_NOTICES.txt).
+The workflow copies the generated notice bundle to
+`openjtd.github.io/pkg/THIRD_PARTY_NOTICES.txt` with the generated WebAssembly
+package. This boundary records source identities and retained texts only; it
+does not make a legal-sufficiency claim.
