@@ -48,6 +48,19 @@ The resulting `Signed-off-by` line certifies that you have the right to submit
 the contribution under the project's license. OpenJTD does not currently
 require a separate contributor license agreement or copyright assignment.
 
+### Generated Merge Commits
+
+DCO remains required on every human-authored contribution commit. A two-parent
+GitHub/web-flow generated merge commit that adds no independent authored content
+is exempt from its own `Signed-off-by` line only when every non-generated
+authored contribution commit it combines has a valid `Signed-off-by` line.
+
+There is no exemption for a squash or rebase commit that replaces authored
+identity, or for a generated commit that contains independent content.
+
+Lore trailers remain required on agent-authored project commits. Content-free
+platform-generated merge commits are exempt from Lore trailers.
+
 ## Clean-Room Research Rules
 
 Allowed evidence includes:
