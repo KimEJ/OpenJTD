@@ -4423,7 +4423,7 @@ fn local_pdf_backed_page_mark_u16_profiles_stay_stable_when_available() {
         checked += 1;
     }
 
-    if sample_dir.join("a5.jtd").exists() {
+    if sample_dir.join("a5.jtd").exists() && sample_dir.join("a5.pdf").exists() {
         assert!(checked >= 1);
     }
 }
@@ -4484,7 +4484,7 @@ fn local_pdf_backed_page_mark_pitch_profiles_stay_stable_when_available() {
         checked += 1;
     }
 
-    if sample_dir.join("a5.jtd").exists() {
+    if sample_dir.join("a5.jtd").exists() && sample_dir.join("a5.pdf").exists() {
         assert!(checked >= 1);
     }
 }
