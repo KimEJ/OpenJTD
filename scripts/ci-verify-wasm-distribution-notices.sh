@@ -81,7 +81,11 @@ validate_closure() {
       package = columns[1]
       sub(/ \(\*\)$/, "", package)
       if (package ~ /^rjtd-[^ ]+ v[^ ]+ \(/) { next }
-      if (package !~ /^[^ ]+ v[^ ]+$/) { invalid = 1; next }
+      if (package !~ /^[^ ]+ v[^ ]+$/) {
+        print "unexpected cargo tree package: " package > "/dev/stderr"
+        invalid = 1
+        next
+      }
       split(package, fields, " ")
       sub(/^v/, "", fields[2])
       print fields[1] "\t" fields[2]
