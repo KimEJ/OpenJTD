@@ -40,9 +40,13 @@ document features.
   `rjtd-wasm`. Construct it with `DocumentCore::from_document` or
   `DocumentCore::from_bytes` when page information, rendering, navigation, or
   editing fallbacks are needed.
-- `parse_document_with_limits` and `DocumentCore::from_bytes_with_limits` are
-  the limits-aware alternatives when a caller must choose a non-default
-  `ParseLimits` budget.
+- `parse_document_with_limits`, `DocumentCore::from_bytes_with_limits`, and
+  `DocumentCore::from_document_with_limits` are the limits-aware alternatives
+  when a caller must choose a non-default `ParseLimits` budget.
+- `parse_document_with_budget`, `DocumentCore::from_bytes_with_budget`, and
+  `DocumentCore::from_document_with_budget` are compositional Rust entry
+  points for callers that must preserve one mutable `ResourceBudget` across
+  parsing, model construction, and page construction.
 
 When optional style or font sources exceed a resource limit, their
 `ResourceLimit` error is propagated rather than silently treating the source
@@ -70,14 +74,20 @@ println!("{} blocks", document.blocks().len());
 ## Resource and interpretation limits
 
 The default parser rejects source input larger than 64 MiB and inherits the
-LH5 limits documented by `rjtd-core`. A `Candidate` is an observed-but-not-
-confirmed interpretation, `Unknown` preserves unclassified source material,
-and `Diagnostic` records why an interpretation is incomplete. JSON fields
-carrying `decoded: false` are evidence boundaries: consume the retained bytes
-or display the diagnostic, but do not promote the field to authoritative
-layout or document meaning. Advanced layout, tables, embedded objects, styles,
-and editing APIs can return conservative fallback results. The 0.0.1 model is
-not a lossless round-trip editing contract.
+LH5 limits documented by `rjtd-core`. One mutable resource budget reserves
+known CFB stream declarations before reads, charges retained frame and
+embedding records before collection growth, charges embedded-image payload and
+envelope bytes before cloning, and reserves page/page-line output before page
+render preparation. Image dimensions are read from supported image headers;
+this model path does not decode or retain bitmap pixels, so its image limits do
+not claim coverage for a downstream bitmap decoder. A `Candidate` is an
+observed-but-not-confirmed interpretation, `Unknown` preserves unclassified
+source material, and `Diagnostic` records why an interpretation is incomplete.
+JSON fields carrying `decoded: false` are evidence boundaries: consume the
+retained bytes or display the diagnostic, but do not promote the field to
+authoritative layout or document meaning. Advanced layout, tables, embedded
+objects, styles, and editing APIs can return conservative fallback results.
+The 0.0.1 model is not a lossless round-trip editing contract.
 
 ## License
 

@@ -26,13 +26,13 @@ use rjtd_core::style_stream::{
     StyleStreamSubrecordSummary, TEXT_LAYOUT_STYLE_PATH, read_style_streams_with_budget,
     summarize_style_stream,
 };
-use rjtd_core::{DecompressionBudget, Error, ParseLimits, Result};
+use rjtd_core::{Error, ParseLimits, ResourceBudget, Result};
 
 mod document_text_text_style;
 mod parse;
 mod shanai_lan_sparse_borders;
 
-pub use parse::{parse_document, parse_document_with_limits};
+pub use parse::{parse_document, parse_document_with_budget, parse_document_with_limits};
 
 use document_text_text_style::{
     DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS, DocumentTextProperty15ColorCandidate,
@@ -528,8 +528,10 @@ pub trait DocumentParser {
 pub struct IchitaroParser;
 
 impl IchitaroParser {
-    fn parse_with_budget(&self, data: &[u8], budget: &mut DecompressionBudget) -> Result<Document> {
-        let payload = read_document_text_payload_with_budget(data, budget)?;
+    fn parse_with_budget(&self, data: &[u8], budget: &mut ResourceBudget) -> Result<Document> {
+        reserve_and_verify_cfb_streams(data, budget)?;
+        let payload =
+            read_document_text_payload_with_budget(data, budget.decompression_budget_mut())?;
         let map = map_document_text(payload.bytes());
         let mut document = Document::from_document_text_payload(&payload);
         for entry in document_text_toc_entries(map.entries()) {
@@ -553,9 +555,10 @@ impl IchitaroParser {
                 document.push_raw_stream(RawStream::new(stream_name, stream));
             }
         }
-        if let Some(style_streams) =
-            parse::optional_stream(read_style_streams_with_budget(data, budget))?
-        {
+        if let Some(style_streams) = parse::optional_stream(read_style_streams_with_budget(
+            data,
+            budget.decompression_budget_mut(),
+        ))? {
             for stream in style_streams {
                 document.push_unknown_style(UnknownStyle::from_stream(
                     stream.name(),
@@ -563,9 +566,10 @@ impl IchitaroParser {
                 ));
             }
         }
-        if let Some(font_stream) =
-            parse::optional_stream(read_font_stream_with_budget(data, budget))?
-        {
+        if let Some(font_stream) = parse::optional_stream(read_font_stream_with_budget(
+            data,
+            budget.decompression_budget_mut(),
+        ))? {
             for entry in font_stream.entries() {
                 document.push_font(DocumentFont::from_font_stream_entry(
                     font_stream.name(),
@@ -590,13 +594,15 @@ impl IchitaroParser {
                 &paper_mark,
             ));
         }
-        for candidate in object_stream_candidates_from_cfb(data) {
+        for candidate in object_stream_candidates_from_cfb(data, budget)? {
             document.push_object_stream_candidate(candidate);
         }
-        for record in object_frame_records_from_cfb(data) {
+        let object_frame_records = object_frame_records_from_cfb(data, budget)?;
+        for record in object_frame_records {
             document.push_object_frame_record(record);
         }
-        for frame in object_embedding_frames_from_cfb(data) {
+        let object_embedding_frames = object_embedding_frames_from_cfb(data, budget)?;
+        for frame in object_embedding_frames {
             document.push_object_embedding_frame(frame);
         }
         if let Ok(position_tables) = read_document_text_position_tables(data) {
@@ -640,7 +646,8 @@ impl IchitaroParser {
 
 impl DocumentParser for IchitaroParser {
     fn parse(&self, data: &[u8]) -> Result<Document> {
-        let mut budget = ParseLimits::DEFAULT.decompression_budget();
+        let mut budget = ParseLimits::DEFAULT.resource_budget();
+        budget.check_input_size(data.len())?;
         self.parse_with_budget(data, &mut budget)
     }
 }
@@ -991,8 +998,7 @@ fn source_document_layout_hint(
         });
     }
 
-    let paragraphs = document_paragraph_texts(document);
-    if ginga_front_matter_indices(&paragraphs).is_some() {
+    if ginga_front_matter_indices_in_document(document).is_some() {
         let margin_override_px = if page_layout_is_close_to_mm(decoded_layout, 105.0, 148.0) {
             Some(37.6)
         } else {
@@ -1306,10 +1312,38 @@ impl DocumentCore {
     /// Per-member and total LH5 output are bounded by `limits`; the input limit checks this
     /// `&[u8]` after the caller has allocated it, so it cannot reduce the caller's allocation.
     pub fn from_bytes_with_limits(data: &[u8], limits: ParseLimits) -> Result<Self> {
-        parse_document_with_limits(data, limits).map(Self::from_document)
+        let mut budget = limits.resource_budget();
+        Self::from_bytes_with_budget(data, &mut budget)
+    }
+
+    /// Builds a document core with caller-owned shared resource accounting.
+    pub fn from_bytes_with_budget(data: &[u8], budget: &mut ResourceBudget) -> Result<Self> {
+        let document = parse_document_with_budget(data, budget)?;
+        Self::from_document_with_budget(document, budget)
     }
 
     pub fn from_document(document: Document) -> Self {
+        let mut core = Self::from_document_unpaginated(document);
+        core.refresh_pages();
+        core
+    }
+
+    pub fn from_document_with_limits(document: Document, limits: ParseLimits) -> Result<Self> {
+        let mut budget = limits.resource_budget();
+        Self::from_document_with_budget(document, &mut budget)
+    }
+
+    /// Builds page state with caller-owned shared resource accounting.
+    pub fn from_document_with_budget(
+        document: Document,
+        budget: &mut ResourceBudget,
+    ) -> Result<Self> {
+        let mut core = Self::from_document_unpaginated(document);
+        core.refresh_pages_with_budget(budget)?;
+        Ok(core)
+    }
+
+    fn from_document_unpaginated(document: Document) -> Self {
         let decoded_page_layout = page_layout_from_document(&document);
         let hint = source_document_layout_hint(&document, decoded_page_layout);
         let mut page_layout = decoded_page_layout;
@@ -1326,7 +1360,7 @@ impl DocumentCore {
             }
             writing_mode = hint.writing_mode;
         }
-        let mut core = Self {
+        Self {
             document,
             pages: Vec::new(),
             file_name: String::new(),
@@ -1343,9 +1377,7 @@ impl DocumentCore {
             caret_paragraph: 0,
             caret_char_offset: 0,
             clipboard_text: None,
-        };
-        core.refresh_pages();
-        core
+        }
     }
 
     pub fn document(&self) -> &Document {
@@ -6424,6 +6456,13 @@ impl DocumentCore {
         }
     }
 
+    fn refresh_pages_with_budget(&mut self, budget: &mut ResourceBudget) -> Result<()> {
+        let shape = page_construction_shape(&self.document, self.page_layout, self.writing_mode)?;
+        budget.reserve_page_output(shape.pages, shape.lines)?;
+        self.refresh_pages();
+        Ok(())
+    }
+
     fn ensure_section(&self, section_idx: u32) -> Result<()> {
         if section_idx == 0 {
             Ok(())
@@ -8247,6 +8286,20 @@ impl ObjectImagePayloadSpan {
         envelope: ObjectImagePayloadEnvelope,
     ) -> Self {
         let dimensions = image_payload_dimensions(&payload);
+        Self::new_with_dimensions(
+            kind, mime, location, complete, payload, dimensions, envelope,
+        )
+    }
+
+    fn new_with_dimensions(
+        kind: impl Into<String>,
+        mime: impl Into<String>,
+        location: ObjectImagePayloadLocation,
+        complete: bool,
+        payload: Vec<u8>,
+        dimensions: Option<ObjectImageDimensions>,
+        envelope: ObjectImagePayloadEnvelope,
+    ) -> Self {
         Self {
             kind: kind.into(),
             mime: mime.into(),
@@ -11636,9 +11689,45 @@ fn unknown_object_from_skipped_inline(segment: &SkippedInlineTextSegment) -> Unk
     )
 }
 
-fn object_stream_candidates_from_cfb(data: &[u8]) -> Vec<ObjectStreamCandidate> {
+fn reserve_and_verify_cfb_streams(data: &[u8], budget: &mut ResourceBudget) -> Result<()> {
     let Ok(entries) = inspect_cfb_entries(data) else {
-        return Vec::new();
+        return Ok(());
+    };
+
+    for entry in entries
+        .iter()
+        .filter(|entry| entry.kind() == EntryKind::Stream)
+    {
+        budget.reserve_streams(1, declared_cfb_stream_bytes(entry)?)?;
+    }
+
+    for entry in entries
+        .iter()
+        .filter(|entry| entry.kind() == EntryKind::Stream)
+    {
+        let Ok(stream) = read_cfb_stream(data, entry.path()) else {
+            continue;
+        };
+        budget.verify_stream_bytes(declared_cfb_stream_bytes(entry)?, stream.len())?;
+    }
+
+    Ok(())
+}
+
+fn declared_cfb_stream_bytes(entry: &rjtd_core::container::ContainerEntry) -> Result<usize> {
+    usize::try_from(entry.size()).map_err(|_| Error::ResourceLimit {
+        resource: "document stream bytes",
+        limit: usize::MAX,
+        actual: usize::MAX,
+    })
+}
+
+fn object_stream_candidates_from_cfb(
+    data: &[u8],
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectStreamCandidate>> {
+    let Ok(entries) = inspect_cfb_entries(data) else {
+        return Ok(Vec::new());
     };
 
     let mut candidates = Vec::new();
@@ -11650,78 +11739,110 @@ fn object_stream_candidates_from_cfb(data: &[u8]) -> Vec<ObjectStreamCandidate> 
         let Ok(stream) = read_cfb_stream(data, entry.path()) else {
             continue;
         };
-        if let Some(candidate) = classify_object_stream_candidate(entry.path(), &stream) {
+        budget.verify_stream_bytes(declared_cfb_stream_bytes(entry)?, stream.len())?;
+        if let Some(candidate) = classify_object_stream_candidate(entry.path(), &stream, budget)? {
             candidates.push(candidate);
         }
         streams.push((entry.path().to_string(), stream));
     }
     attach_object_stream_ownership_references(&mut candidates, &streams);
-    attach_object_stream_fdm_index_entries(&mut candidates, &streams);
+    attach_object_stream_fdm_index_entries(&mut candidates, &streams, budget)?;
     attach_object_stream_fdm_text_index_entries(&mut candidates, &streams);
-    candidates
+    Ok(candidates)
 }
 
-fn object_frame_records_from_cfb(data: &[u8]) -> Vec<ObjectFrameRecordCandidate> {
+fn object_frame_records_from_cfb(
+    data: &[u8],
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectFrameRecordCandidate>> {
     let Ok(entries) = inspect_cfb_entries(data) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
 
     let Some(entry) = entries.iter().find(|entry| {
         entry.kind() == EntryKind::Stream && entry.path().eq_ignore_ascii_case("/Frame")
     }) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
 
     let Ok(stream) = read_cfb_stream(data, entry.path()) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
+    budget.verify_stream_bytes(declared_cfb_stream_bytes(entry)?, stream.len())?;
 
-    object_frame_records_from_stream(entry.path(), &stream)
+    object_frame_records_from_stream(entry.path(), &stream, budget)
 }
 
-fn object_frame_records_from_stream(path: &str, stream: &[u8]) -> Vec<ObjectFrameRecordCandidate> {
+fn object_frame_records_from_stream(
+    path: &str,
+    stream: &[u8],
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectFrameRecordCandidate>> {
     let Some(declared_count) =
         read_be16_at(stream, FRAME_RECORD_DECLARED_COUNT_OFFSET).map(usize::from)
     else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
 
-    let Some(expected_len) =
-        FRAME_RECORD_HEADER_BYTES.checked_add(declared_count.saturating_mul(FRAME_RECORD_BYTES))
-    else {
-        return Vec::new();
-    };
+    let record_bytes = declared_count
+        .checked_mul(FRAME_RECORD_BYTES)
+        .ok_or_else(record_bytes_overflow)?;
+    let expected_len = FRAME_RECORD_HEADER_BYTES
+        .checked_add(record_bytes)
+        .ok_or_else(record_bytes_overflow)?;
     if stream.len() < expected_len {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
-    (0..declared_count)
-        .filter_map(|row_index| {
-            let row_start = FRAME_RECORD_HEADER_BYTES
-                .checked_add(row_index.checked_mul(FRAME_RECORD_BYTES)?)?;
-            let row_end = row_start.checked_add(FRAME_RECORD_BYTES)?;
-            let row = stream.get(row_start..row_end)?;
-            Some(ObjectFrameRecordCandidate::new(
-                path, row_index, row_start, row,
-            ))
-        })
-        .collect()
+    let mut records = Vec::new();
+    for row_index in 0..declared_count {
+        let row_offset = row_index
+            .checked_mul(FRAME_RECORD_BYTES)
+            .ok_or_else(record_bytes_overflow)?;
+        let row_start = FRAME_RECORD_HEADER_BYTES
+            .checked_add(row_offset)
+            .ok_or_else(record_bytes_overflow)?;
+        let row_end = row_start
+            .checked_add(FRAME_RECORD_BYTES)
+            .ok_or_else(record_bytes_overflow)?;
+        let row = stream
+            .get(row_start..row_end)
+            .ok_or_else(record_bytes_overflow)?;
+        budget.reserve_record(row.len())?;
+        records.push(ObjectFrameRecordCandidate::new(
+            path, row_index, row_start, row,
+        ));
+    }
+
+    Ok(records)
 }
 
-fn object_embedding_frames_from_cfb(data: &[u8]) -> Vec<ObjectEmbeddingFrameCandidate> {
+fn record_bytes_overflow() -> Error {
+    Error::ResourceLimit {
+        resource: "document record bytes",
+        limit: usize::MAX,
+        actual: usize::MAX,
+    }
+}
+
+fn object_embedding_frames_from_cfb(
+    data: &[u8],
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectEmbeddingFrameCandidate>> {
     let Ok(stream) = read_cfb_stream(data, EMBEDDING_INFO_PATH) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
 
-    object_embedding_frames_from_stream(EMBEDDING_INFO_PATH, &stream)
+    object_embedding_frames_from_stream(EMBEDDING_INFO_PATH, &stream, budget)
 }
 
 fn object_embedding_frames_from_stream(
     path: &str,
     stream: &[u8],
-) -> Vec<ObjectEmbeddingFrameCandidate> {
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectEmbeddingFrameCandidate>> {
     let Some(declared_count) = read_le32_at(stream, 0).map(|value| value as usize) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
 
     let mut frames = Vec::new();
@@ -11750,6 +11871,7 @@ fn object_embedding_frames_from_stream(
             break;
         };
         let trailing = &stream[class_end..row_end];
+        budget.reserve_record(row.len())?;
         let Some(class_name) = decode_utf16le_c_string(class_bytes) else {
             break;
         };
@@ -11767,7 +11889,7 @@ fn object_embedding_frames_from_stream(
         cursor = row_end;
     }
 
-    frames
+    Ok(frames)
 }
 
 fn embedding_frame_candidate_is_plausible(frame: &ObjectEmbeddingFrameCandidate) -> bool {
@@ -11966,7 +12088,8 @@ fn attach_object_frame_row_suffix_links(rows: &mut [ObjectFrameReferenceRowCandi
 fn attach_object_stream_fdm_index_entries(
     candidates: &mut [ObjectStreamCandidate],
     streams: &[(String, Vec<u8>)],
-) {
+    budget: &mut ResourceBudget,
+) -> Result<()> {
     for candidate in candidates {
         if fdm_index_path_for_vector(candidate.path()).is_none() {
             continue;
@@ -11990,43 +12113,42 @@ fn attach_object_stream_fdm_index_entries(
         if entries.is_empty() {
             continue;
         }
-        let vector_hits = image_signature_hits(vector_stream);
-        let fdm_entries = entries
-            .iter()
-            .map(|entry| {
-                let segment = fdm_vector_segment(entry.vector_offset, entries, vector_stream);
-                let segment_hits =
-                    fdm_segment_signature_hits(&vector_hits, segment.start, segment.end);
-                let relative_hits = fdm_relative_signature_hits(&segment_hits, segment.start);
-                let vector_prefix = vector_stream
-                    .get(segment.start..segment.end)
-                    .unwrap_or_default();
-                let vector_commands = fdm_vector_command_candidates(vector_prefix, segment.start);
-                let connector_candidates = fdm_connector_candidates(&vector_commands);
+        let vector_hits = image_signature_hits(vector_stream, budget)?;
+        let mut fdm_entries = Vec::new();
+        for entry in entries {
+            let segment = fdm_vector_segment(entry.vector_offset, entries, vector_stream);
+            let segment_hits =
+                fdm_segment_signature_hits(&vector_hits, segment.start, segment.end, budget)?;
+            let relative_hits = fdm_relative_signature_hits(&segment_hits, segment.start, budget)?;
+            let vector_prefix = vector_stream
+                .get(segment.start..segment.end)
+                .unwrap_or_default();
+            let vector_commands = fdm_vector_command_candidates(vector_prefix, segment.start);
+            let connector_candidates = fdm_connector_candidates(&vector_commands);
 
-                ObjectFdmIndexEntryCandidate {
-                    index_path: actual_index_path.clone(),
-                    vector_path: candidate.path().to_string(),
-                    row_index: entry.row_index,
-                    index_offset: entry.index_offset,
-                    vector_offset: entry.vector_offset,
-                    next_vector_offset: segment.end,
-                    vector_len: segment.end.saturating_sub(segment.start),
-                    kind: entry.kind,
-                    bbox: ObjectFdmIndexBbox::new(entry.left, entry.top, entry.right, entry.bottom),
-                    valid_vector_offset: entry.valid_vector_offset,
-                    vector_prefix: vector_prefix
-                        [..vector_prefix.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)]
-                        .to_vec(),
-                    image_signature_hits: segment_hits,
-                    segment_image_signature_hits: relative_hits,
-                    vector_commands,
-                    connector_candidates,
-                }
-            })
-            .collect();
+            fdm_entries.push(ObjectFdmIndexEntryCandidate {
+                index_path: actual_index_path.clone(),
+                vector_path: candidate.path().to_string(),
+                row_index: entry.row_index,
+                index_offset: entry.index_offset,
+                vector_offset: entry.vector_offset,
+                next_vector_offset: segment.end,
+                vector_len: segment.end.saturating_sub(segment.start),
+                kind: entry.kind,
+                bbox: ObjectFdmIndexBbox::new(entry.left, entry.top, entry.right, entry.bottom),
+                valid_vector_offset: entry.valid_vector_offset,
+                vector_prefix: vector_prefix
+                    [..vector_prefix.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)]
+                    .to_vec(),
+                image_signature_hits: segment_hits,
+                segment_image_signature_hits: relative_hits,
+                vector_commands,
+                connector_candidates,
+            });
+        }
         candidate.set_fdm_index_entry_candidates(fdm_entries);
     }
+    Ok(())
 }
 
 fn attach_object_stream_fdm_text_index_entries(
@@ -13556,24 +13678,33 @@ fn fdm_segment_signature_hits(
     vector_hits: &[ObjectImageSignatureHit],
     start: usize,
     end: usize,
-) -> Vec<ObjectImageSignatureHit> {
-    vector_hits
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectImageSignatureHit>> {
+    let mut hits = Vec::new();
+    for hit in vector_hits
         .iter()
         .filter(|hit| hit.offset() >= start && hit.offset() < end)
-        .cloned()
-        .collect()
+    {
+        reserve_image_signature_candidate(budget, hit.kind())?;
+        hits.push(hit.clone());
+    }
+    Ok(hits)
 }
 
 fn fdm_relative_signature_hits(
     segment_hits: &[ObjectImageSignatureHit],
     segment_start: usize,
-) -> Vec<ObjectImageSignatureHit> {
-    segment_hits
-        .iter()
-        .map(|hit| {
-            ObjectImageSignatureHit::new(hit.kind(), hit.offset().saturating_sub(segment_start))
-        })
-        .collect()
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectImageSignatureHit>> {
+    let mut hits = Vec::new();
+    for hit in segment_hits {
+        reserve_image_signature_candidate(budget, hit.kind())?;
+        hits.push(ObjectImageSignatureHit::new(
+            hit.kind(),
+            hit.offset().saturating_sub(segment_start),
+        ));
+    }
+    Ok(hits)
 }
 
 fn classify_object_frame_reference_row(
@@ -13640,12 +13771,16 @@ fn is_object_reference_target_path(path: &str) -> bool {
         || lower.ends_with("/papermark")
 }
 
-fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectStreamCandidate> {
+fn classify_object_stream_candidate(
+    path: &str,
+    stream: &[u8],
+    budget: &mut ResourceBudget,
+) -> Result<Option<ObjectStreamCandidate>> {
     let mut reasons = Vec::new();
     push_object_path_reasons(path, &mut reasons);
 
-    let image_signature_hits = image_signature_hits(stream);
-    let image_payload_spans = image_payload_spans(stream, &image_signature_hits);
+    let image_signature_hits = image_signature_hits(stream, budget)?;
+    let image_payload_spans = image_payload_spans(stream, &image_signature_hits, budget)?;
     let visual_list_candidate = visual_list_candidate_from_stream(path, stream);
     let figure_link_candidate = figure_link_candidate_from_stream(path, stream);
     let embedded_press_snapshot_candidate = embedded_press_snapshot_candidate_from_stream(stream);
@@ -13687,10 +13822,10 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
     }
 
     if reasons.is_empty() {
-        return None;
+        return Ok(None);
     }
 
-    Some(ObjectStreamCandidate::new(
+    Ok(Some(ObjectStreamCandidate::new(
         path,
         stream.len(),
         ObjectStreamCandidateEvidence::new(
@@ -13708,7 +13843,7 @@ fn classify_object_stream_candidate(path: &str, stream: &[u8]) -> Option<ObjectS
         .with_jsfart_art_candidate(jsfart_art_candidate)
         .with_jseq3_formula_candidate(jseq3_formula_candidate),
         stream[..stream.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec(),
-    ))
+    )))
 }
 
 fn jsfart_stream_profile_candidate_from_stream(
@@ -14878,29 +15013,33 @@ fn push_unique_object_reason(
     }
 }
 
-fn image_signature_hits(stream: &[u8]) -> Vec<ObjectImageSignatureHit> {
+fn image_signature_hits(
+    stream: &[u8],
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectImageSignatureHit>> {
     let mut hits = Vec::new();
-    push_signature_hits(&mut hits, stream, "png", b"\x89PNG\r\n\x1a\n", true);
-    push_signature_hits(&mut hits, stream, "jpeg", b"\xff\xd8\xff", true);
-    push_signature_hits(&mut hits, stream, "gif87a", b"GIF87a", true);
-    push_signature_hits(&mut hits, stream, "gif89a", b"GIF89a", true);
-    push_signature_hits(&mut hits, stream, "tiff-le", b"II\x2a\0", true);
-    push_signature_hits(&mut hits, stream, "tiff-be", b"MM\0\x2a", true);
+    push_signature_hits(&mut hits, stream, "png", b"\x89PNG\r\n\x1a\n", true, budget)?;
+    push_signature_hits(&mut hits, stream, "jpeg", b"\xff\xd8\xff", true, budget)?;
+    push_signature_hits(&mut hits, stream, "gif87a", b"GIF87a", true, budget)?;
+    push_signature_hits(&mut hits, stream, "gif89a", b"GIF89a", true, budget)?;
+    push_signature_hits(&mut hits, stream, "tiff-le", b"II\x2a\0", true, budget)?;
+    push_signature_hits(&mut hits, stream, "tiff-be", b"MM\0\x2a", true, budget)?;
     push_signature_hits(
         &mut hits,
         stream,
         "wmf-placeable",
         b"\xd7\xcd\xc6\x9a",
         true,
-    );
-    push_signature_hits(&mut hits, stream, "bmp", b"BM", false);
+        budget,
+    )?;
+    push_signature_hits(&mut hits, stream, "bmp", b"BM", false, budget)?;
 
     hits.sort_by(|left, right| {
         left.offset()
             .cmp(&right.offset())
             .then_with(|| left.kind().cmp(right.kind()))
     });
-    hits
+    Ok(hits)
 }
 
 fn push_signature_hits(
@@ -14909,84 +15048,139 @@ fn push_signature_hits(
     kind: &'static str,
     signature: &[u8],
     scan_anywhere: bool,
-) {
-    let offsets = if scan_anywhere {
-        find_subslice_offsets(stream, signature)
-    } else if stream.starts_with(signature) {
-        vec![0]
-    } else {
-        Vec::new()
-    };
-
-    for offset in offsets {
-        hits.push(ObjectImageSignatureHit::new(kind, offset));
+    budget: &mut ResourceBudget,
+) -> Result<()> {
+    if signature.is_empty() {
+        return Ok(());
     }
+
+    if scan_anywhere {
+        for (offset, candidate) in stream.windows(signature.len()).enumerate() {
+            if candidate == signature {
+                reserve_image_signature_candidate(budget, kind)?;
+                hits.push(ObjectImageSignatureHit::new(kind, offset));
+            }
+        }
+    } else if stream.starts_with(signature) {
+        reserve_image_signature_candidate(budget, kind)?;
+        hits.push(ObjectImageSignatureHit::new(kind, 0));
+    }
+    Ok(())
+}
+
+fn reserve_image_signature_candidate(budget: &mut ResourceBudget, kind: &str) -> Result<()> {
+    let bytes = std::mem::size_of::<ObjectImageSignatureHit>()
+        .checked_add(kind.len())
+        .ok_or(Error::ResourceLimit {
+            resource: "document record bytes",
+            limit: usize::MAX,
+            actual: usize::MAX,
+        })?;
+    budget.reserve_record(bytes)
 }
 
 fn image_payload_spans(
     stream: &[u8],
     hits: &[ObjectImageSignatureHit],
-) -> Vec<ObjectImagePayloadSpan> {
+    budget: &mut ResourceBudget,
+) -> Result<Vec<ObjectImagePayloadSpan>> {
     let mut candidates = hits
         .iter()
-        .filter_map(|hit| image_payload_candidate(stream, hit))
-        .collect::<Vec<_>>();
-    candidates.sort_by(|left, right| {
-        left.start
-            .cmp(&right.start)
-            .then_with(|| left.end.cmp(&right.end))
-            .then_with(|| left.kind.cmp(&right.kind))
-    });
+        .filter_map(|hit| image_payload_candidate(stream, hit));
+    let mut previous_end = None;
+    let mut candidate = candidates.next();
+    let mut spans = Vec::new();
 
-    let mut spans = Vec::with_capacity(candidates.len());
-    for (index, candidate) in candidates.iter().enumerate() {
-        let previous_end = index
-            .checked_sub(1)
-            .map(|previous| candidates[previous].end);
-        let next_start = candidates.get(index + 1).map(|next| next.start);
+    while let Some(current) = candidate {
+        candidate = candidates.next();
+        let next_start = candidate.as_ref().map(|next| next.start);
         let header_start = previous_end
-            .filter(|end| *end <= candidate.start)
+            .filter(|end| *end <= current.start)
             .unwrap_or(0);
         let trailer_end = next_start
-            .filter(|start| *start >= candidate.end)
+            .filter(|start| *start >= current.end)
             .unwrap_or(stream.len());
+        let Some(payload) = stream.get(current.start..current.end) else {
+            previous_end = Some(current.end);
+            continue;
+        };
+        let dimensions = image_payload_dimensions(payload);
+        if let Some(dimensions) = dimensions {
+            budget.check_image_dimensions(dimensions.width(), dimensions.height())?;
+        }
+        let retained_bytes = image_payload_retained_bytes(
+            payload.len(),
+            header_start,
+            current.start,
+            current.end,
+            trailer_end,
+        )?;
+        budget.reserve_image(retained_bytes)?;
         let envelope = image_payload_envelope(
             stream,
             header_start,
-            candidate.start,
-            candidate.end,
+            current.start,
+            current.end,
             trailer_end,
         );
-        spans.push(ObjectImagePayloadSpan::new(
-            &candidate.kind,
-            &candidate.mime,
-            ObjectImagePayloadLocation::new(
-                candidate.signature_offset,
-                candidate.start,
-                candidate.end,
-            ),
+        spans.push(ObjectImagePayloadSpan::new_with_dimensions(
+            current.kind,
+            current.mime,
+            ObjectImagePayloadLocation::new(current.signature_offset, current.start, current.end),
             true,
-            candidate.payload.clone(),
+            payload.to_vec(),
+            dimensions,
             envelope,
         ));
+        previous_end = Some(current.end);
     }
-    spans
+    Ok(spans)
+}
+
+fn image_payload_retained_bytes(
+    payload_len: usize,
+    header_start: usize,
+    payload_start: usize,
+    payload_end: usize,
+    trailer_end: usize,
+) -> Result<usize> {
+    let header_len = payload_start
+        .checked_sub(header_start)
+        .ok_or(Error::ResourceLimit {
+            resource: "embedded image bytes",
+            limit: usize::MAX,
+            actual: usize::MAX,
+        })?;
+    let trailer_len = trailer_end
+        .checked_sub(payload_end)
+        .ok_or(Error::ResourceLimit {
+            resource: "embedded image bytes",
+            limit: usize::MAX,
+            actual: usize::MAX,
+        })?;
+    payload_len
+        .checked_add(header_len)
+        .and_then(|bytes| bytes.checked_add(trailer_len))
+        .ok_or(Error::ResourceLimit {
+            resource: "embedded image bytes",
+            limit: usize::MAX,
+            actual: usize::MAX,
+        })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ImagePayloadCandidate {
-    kind: String,
-    mime: String,
+struct ImagePayloadCandidate<'a> {
+    kind: &'a str,
+    mime: &'static str,
     signature_offset: usize,
     start: usize,
     end: usize,
-    payload: Vec<u8>,
 }
 
-fn image_payload_candidate(
+fn image_payload_candidate<'a>(
     stream: &[u8],
-    hit: &ObjectImageSignatureHit,
-) -> Option<ImagePayloadCandidate> {
+    hit: &'a ObjectImageSignatureHit,
+) -> Option<ImagePayloadCandidate<'a>> {
     let end = match hit.kind() {
         "jpeg" => jpeg_payload_end(stream, hit.offset())?,
         "png" => png_payload_end(stream, hit.offset())?,
@@ -14996,21 +15190,52 @@ fn image_payload_candidate(
     };
 
     Some(ImagePayloadCandidate {
-        kind: hit.kind().to_string(),
-        mime: image_mime_for_kind(hit.kind()).to_string(),
+        kind: hit.kind(),
+        mime: image_mime_for_kind(hit.kind()),
         signature_offset: hit.offset(),
         start: hit.offset(),
         end,
-        payload: stream[hit.offset()..end].to_vec(),
     })
 }
 
 fn image_payload_dimensions(payload: &[u8]) -> Option<ObjectImageDimensions> {
-    #[cfg(feature = "bitmap-images")]
-    if let Ok(image) = image::load_from_memory(payload) {
-        return Some(ObjectImageDimensions::new(image.width(), image.height()));
+    png_payload_dimensions(payload)
+        .or_else(|| gif_payload_dimensions(payload))
+        .or_else(|| bmp_payload_dimensions(payload))
+        .or_else(|| jpeg_payload_dimensions(payload))
+}
+
+fn png_payload_dimensions(payload: &[u8]) -> Option<ObjectImageDimensions> {
+    if payload.get(..8)? != b"\x89PNG\r\n\x1a\n" || payload.get(12..16)? != b"IHDR" {
+        return None;
     }
-    jpeg_payload_dimensions(payload)
+    let width = u32::from_be_bytes(payload.get(16..20)?.try_into().ok()?);
+    let height = u32::from_be_bytes(payload.get(20..24)?.try_into().ok()?);
+    (width != 0 && height != 0).then_some(ObjectImageDimensions::new(width, height))
+}
+
+fn gif_payload_dimensions(payload: &[u8]) -> Option<ObjectImageDimensions> {
+    if !(payload.starts_with(b"GIF87a") || payload.starts_with(b"GIF89a")) {
+        return None;
+    }
+    let width = u16::from_le_bytes(payload.get(6..8)?.try_into().ok()?) as u32;
+    let height = u16::from_le_bytes(payload.get(8..10)?.try_into().ok()?) as u32;
+    (width != 0 && height != 0).then_some(ObjectImageDimensions::new(width, height))
+}
+
+fn bmp_payload_dimensions(payload: &[u8]) -> Option<ObjectImageDimensions> {
+    if payload.get(..2)? != b"BM" {
+        return None;
+    }
+    let dib_header_size = u32::from_le_bytes(payload.get(14..18)?.try_into().ok()?);
+    if dib_header_size < 40 {
+        return None;
+    }
+    let width = i32::from_le_bytes(payload.get(18..22)?.try_into().ok()?);
+    let height = i32::from_le_bytes(payload.get(22..26)?.try_into().ok()?);
+    let width = u32::try_from(width).ok()?;
+    let height = height.unsigned_abs();
+    (width != 0 && height != 0).then_some(ObjectImageDimensions::new(width, height))
 }
 
 fn jpeg_payload_dimensions(payload: &[u8]) -> Option<ObjectImageDimensions> {
@@ -17275,6 +17500,228 @@ fn projected_control_layout_json(
     )
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct PageOutputShape {
+    pages: usize,
+    lines: usize,
+}
+
+#[derive(Debug, Default)]
+struct PagePreflight {
+    shape: PageOutputShape,
+    current_lines: usize,
+    current_has_nonempty_line: bool,
+    trailing_trim_lines: usize,
+    lines_per_page: usize,
+}
+
+impl PagePreflight {
+    fn new(lines_per_page: usize) -> Self {
+        Self {
+            lines_per_page,
+            ..Self::default()
+        }
+    }
+
+    fn push_line(&mut self, nonempty: bool, trim_at_page_end: bool) -> Result<()> {
+        if self.current_lines >= self.lines_per_page {
+            self.finish_current_page()?;
+        }
+        self.current_lines = checked_page_shape_add(self.current_lines, 1)?;
+        self.current_has_nonempty_line |= nonempty;
+        self.trailing_trim_lines = if trim_at_page_end {
+            checked_page_shape_add(self.trailing_trim_lines, 1)?
+        } else {
+            0
+        };
+        Ok(())
+    }
+
+    fn force_page_break(&mut self) -> Result<()> {
+        self.current_lines = self.current_lines.saturating_sub(self.trailing_trim_lines);
+        self.trailing_trim_lines = 0;
+        if self.current_has_nonempty_line {
+            self.finish_current_page()?;
+        } else {
+            self.current_lines = 0;
+        }
+        Ok(())
+    }
+
+    fn finish(mut self, has_raw_streams: bool) -> Result<PageOutputShape> {
+        self.current_lines = self.current_lines.saturating_sub(self.trailing_trim_lines);
+        self.trailing_trim_lines = 0;
+        if self.current_lines != 0 {
+            self.finish_current_page()?;
+        }
+        if self.shape.pages == 0 {
+            self.shape.pages = 1;
+            self.shape.lines = usize::from(has_raw_streams);
+        }
+        Ok(self.shape)
+    }
+
+    fn finish_current_page(&mut self) -> Result<()> {
+        self.shape.pages = checked_page_shape_add(self.shape.pages, 1)?;
+        self.shape.lines = checked_page_shape_add(self.shape.lines, self.current_lines)?;
+        self.current_lines = 0;
+        self.trailing_trim_lines = 0;
+        self.current_has_nonempty_line = false;
+        Ok(())
+    }
+}
+
+fn checked_page_shape_add(left: usize, right: usize) -> Result<usize> {
+    left.checked_add(right).ok_or(Error::ResourceLimit {
+        resource: "document page lines",
+        limit: usize::MAX,
+        actual: usize::MAX,
+    })
+}
+
+fn page_output_shape(
+    document: &Document,
+    layout: PageLayout,
+    writing_mode: WritingMode,
+) -> Result<PageOutputShape> {
+    let wrap_columns = layout.wrap_columns(writing_mode);
+    let forced_breaks = projected_page_breaks(document);
+    let mut preflight = PagePreflight::new(layout.lines_per_page(writing_mode));
+    let mut paragraph_index = 0usize;
+
+    for block in document.blocks() {
+        match block {
+            Block::Paragraph(paragraph) => {
+                let paragraph_breaks = forced_breaks
+                    .get(&paragraph_index)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                let forced_at_paragraph_end = page_shape_for_paragraph(
+                    paragraph,
+                    paragraph_breaks,
+                    wrap_columns,
+                    &mut preflight,
+                )?;
+                if !forced_at_paragraph_end && !writing_mode.is_vertical() {
+                    preflight.push_line(false, true)?;
+                }
+                paragraph_index = checked_page_shape_add(paragraph_index, 1)?;
+            }
+            Block::Unknown(_) => {
+                preflight.push_line(true, false)?;
+                preflight.push_line(false, true)?;
+            }
+        }
+    }
+
+    preflight.finish(!document.raw_streams().is_empty())
+}
+
+fn page_construction_shape(
+    document: &Document,
+    layout: PageLayout,
+    writing_mode: WritingMode,
+) -> Result<PageOutputShape> {
+    let normal = page_output_shape(document, layout, writing_mode)?;
+    if !writing_mode.is_vertical() {
+        return Ok(normal);
+    }
+
+    if ginga_front_matter_indices_in_document(document).is_none() {
+        return Ok(normal);
+    }
+
+    let source_lines = document_paragraph_character_count(document)?;
+    let projection_lines = source_lines
+        .checked_mul(4)
+        .and_then(|total| checked_page_shape_add(total, document.toc_entries().len()).ok())
+        .and_then(|total| checked_page_shape_add(total, 32).ok())
+        .ok_or(Error::ResourceLimit {
+            resource: "document page lines",
+            limit: usize::MAX,
+            actual: usize::MAX,
+        })?;
+    let projection_pages = checked_page_shape_add(projection_lines, 5)?;
+
+    Ok(PageOutputShape {
+        pages: checked_page_shape_add(normal.pages, projection_pages)?,
+        lines: checked_page_shape_add(normal.lines, projection_lines)?,
+    })
+}
+
+fn page_shape_for_paragraph(
+    paragraph: &Paragraph,
+    paragraph_breaks: &[usize],
+    wrap_columns: usize,
+    preflight: &mut PagePreflight,
+) -> Result<bool> {
+    let mut line_start = 0usize;
+    let mut char_offset = 0usize;
+    let mut line_width = 0usize;
+    for inline in paragraph.inlines() {
+        let text = match inline {
+            Inline::Text(run) => run.text(),
+            Inline::Ruby(ruby) => ruby.base_text(),
+            Inline::Unknown(_) => continue,
+        };
+        for character in text.chars() {
+            let character_width = display_column_width(character);
+            if line_width > 0 && line_width + character_width > wrap_columns {
+                page_shape_for_wrapped_line(line_start, char_offset, paragraph_breaks, preflight)?;
+                line_width = 0;
+                line_start = char_offset;
+            }
+            line_width += character_width;
+            char_offset = checked_page_shape_add(char_offset, 1)?;
+        }
+    }
+
+    if char_offset == 0 {
+        preflight.push_line(false, false)?;
+        if paragraph_breaks.contains(&0) {
+            preflight.force_page_break()?;
+            return Ok(true);
+        }
+        return Ok(false);
+    }
+
+    page_shape_for_wrapped_line(line_start, char_offset, paragraph_breaks, preflight)
+}
+
+fn page_shape_for_wrapped_line(
+    line_start: usize,
+    line_end: usize,
+    paragraph_breaks: &[usize],
+    preflight: &mut PagePreflight,
+) -> Result<bool> {
+    let mut segment_start = line_start;
+    let mut emitted_segment = false;
+    let mut forced_after_last_segment = false;
+
+    for break_offset in paragraph_breaks.iter().copied() {
+        if break_offset < segment_start || break_offset > line_end {
+            continue;
+        }
+        if break_offset > segment_start || break_offset == line_start {
+            preflight.push_line(break_offset > segment_start, false)?;
+            preflight.force_page_break()?;
+            emitted_segment = true;
+            forced_after_last_segment = true;
+        }
+        segment_start = break_offset;
+    }
+
+    if segment_start < line_end {
+        preflight.push_line(true, false)?;
+        return Ok(false);
+    }
+    if !emitted_segment {
+        preflight.push_line(true, false)?;
+        return Ok(false);
+    }
+    Ok(forced_after_last_segment)
+}
+
 fn paginate_document_text(
     document: &Document,
     layout: PageLayout,
@@ -17768,6 +18215,158 @@ fn ginga_front_matter_indices(paragraphs: &[(usize, String)]) -> Option<GingaFro
         body_title_index,
         body_start_index,
     })
+}
+
+fn ginga_front_matter_indices_in_document(document: &Document) -> Option<GingaFrontMatterIndices> {
+    let mut paragraph_index = 0usize;
+    let mut toc_start_index = None;
+    let mut body_title_index = None;
+
+    for block in document.blocks() {
+        let Block::Paragraph(paragraph) = block else {
+            continue;
+        };
+
+        if paragraph_index == 0
+            && (!paragraph_contains(paragraph, "銀河鉄道の夜")
+                || !paragraph_contains(paragraph, "宮沢"))
+        {
+            return None;
+        }
+
+        if toc_start_index.is_none() && paragraph_trimmed_equals(paragraph, "目次") {
+            toc_start_index = Some(paragraph_index);
+        } else if let Some(toc_start_index) = toc_start_index {
+            if paragraph_index > toc_start_index
+                && body_title_index.is_none()
+                && paragraph_trimmed_equals(paragraph, "銀河鉄道の夜")
+            {
+                body_title_index = Some(paragraph_index);
+            } else if let Some(body_title_index) = body_title_index
+                && paragraph_index == body_title_index + 1
+            {
+                if paragraph_trimmed_starts_with(paragraph, "一、午后の授業") {
+                    return Some(GingaFrontMatterIndices {
+                        title_index: 0,
+                        toc_start_index,
+                        body_title_index,
+                        body_start_index: paragraph_index,
+                    });
+                }
+                return None;
+            }
+        }
+
+        paragraph_index = paragraph_index.checked_add(1)?;
+    }
+
+    None
+}
+
+fn paragraph_contains(paragraph: &Paragraph, needle: &str) -> bool {
+    let mut matched = 0usize;
+    let needle_len = needle.chars().count();
+    if needle_len == 0 {
+        return true;
+    }
+
+    for text in paragraph_text_fragments(paragraph) {
+        for character in text.chars() {
+            let expected = needle.chars().nth(matched);
+            if expected == Some(character) {
+                matched += 1;
+                if matched == needle_len {
+                    return true;
+                }
+            } else {
+                matched = usize::from(needle.starts_with(character));
+            }
+        }
+    }
+
+    false
+}
+
+fn paragraph_trimmed_equals(paragraph: &Paragraph, expected: &str) -> bool {
+    let mut expected_index = 0usize;
+    let mut saw_non_whitespace = false;
+    let mut trailing_whitespace = false;
+
+    for text in paragraph_text_fragments(paragraph) {
+        for character in text.chars() {
+            if !saw_non_whitespace && character.is_whitespace() {
+                continue;
+            }
+            saw_non_whitespace = true;
+            if trailing_whitespace {
+                if !character.is_whitespace() {
+                    return false;
+                }
+                continue;
+            }
+            if character.is_whitespace() && expected.chars().nth(expected_index).is_none() {
+                trailing_whitespace = true;
+                continue;
+            }
+            if expected.chars().nth(expected_index) != Some(character) {
+                return false;
+            }
+            expected_index += 1;
+        }
+    }
+
+    saw_non_whitespace && expected.chars().nth(expected_index).is_none()
+}
+
+fn paragraph_trimmed_starts_with(paragraph: &Paragraph, expected: &str) -> bool {
+    let mut expected_index = 0usize;
+    let mut saw_non_whitespace = false;
+
+    for text in paragraph_text_fragments(paragraph) {
+        for character in text.chars() {
+            if !saw_non_whitespace && character.is_whitespace() {
+                continue;
+            }
+            saw_non_whitespace = true;
+            if expected.chars().nth(expected_index) != Some(character) {
+                return false;
+            }
+            expected_index += 1;
+            if expected.chars().nth(expected_index).is_none() {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn paragraph_text_fragments(paragraph: &Paragraph) -> impl Iterator<Item = &str> {
+    paragraph
+        .inlines()
+        .iter()
+        .filter_map(|inline| match inline {
+            Inline::Text(run) => Some(run.text()),
+            Inline::Ruby(ruby) => Some(ruby.base_text()),
+            Inline::Unknown(_) => None,
+        })
+}
+
+fn document_paragraph_character_count(document: &Document) -> Result<usize> {
+    document
+        .blocks()
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            Block::Unknown(_) => None,
+        })
+        .try_fold(0usize, |total, paragraph| {
+            let character_count =
+                paragraph_text_fragments(paragraph).try_fold(0usize, |character_count, text| {
+                    checked_page_shape_add(character_count, text.chars().count())
+                })?;
+            checked_page_shape_add(total, character_count.max(1))
+        })
 }
 
 fn document_paragraph_texts(document: &Document) -> Vec<(usize, String)> {
@@ -90171,6 +90770,45 @@ mod tests {
 
     fn document_text_fixture() -> Vec<u8> {
         document_text_fixture_for("銀河")
+    }
+
+    #[test]
+    fn page_output_preflight_matches_standard_pagination_shape() {
+        let documents = [
+            Document::from_plain_text(""),
+            Document::from_plain_text("single line"),
+            Document::from_plain_text("first\n\nthird"),
+            Document::from_plain_text(&"x".repeat(200)),
+        ];
+
+        for document in documents {
+            let pages =
+                paginate_document_text(&document, PageLayout::default(), WritingMode::Horizontal);
+            let shape =
+                page_output_shape(&document, PageLayout::default(), WritingMode::Horizontal)
+                    .unwrap();
+            assert_eq!(shape.pages, pages.len());
+            assert_eq!(shape.lines, pages.iter().map(Vec::len).sum());
+        }
+    }
+
+    #[test]
+    fn front_matter_projection_preflight_reserves_additional_page_headroom() {
+        let document = Document::from_plain_text(
+            "宮沢賢治 銀河鉄道の夜\n目次\n第一章\n銀河鉄道の夜\n一、午后の授業\n本文",
+        );
+        let normal =
+            page_output_shape(&document, PageLayout::default(), WritingMode::VerticalRl).unwrap();
+        let construction =
+            page_construction_shape(&document, PageLayout::default(), WritingMode::VerticalRl)
+                .unwrap();
+
+        assert_eq!(
+            ginga_front_matter_indices_in_document(&document),
+            ginga_front_matter_indices(&document_paragraph_texts(&document))
+        );
+        assert!(construction.pages > normal.pages);
+        assert!(construction.lines > normal.lines);
     }
 
     fn document_text_fixture_for(text: &str) -> Vec<u8> {
