@@ -95,9 +95,22 @@ also remain within 256 times the packed member size. Browser canvas rendering is
 limited to 16,384 pixels per dimension and 64 MiPixels in total.
 
 These are pre-stable safety ceilings, not compatibility guarantees. Stream,
-record, embedded-image, and page-level budgets are still being hardened, so
-process untrusted documents in an appropriately constrained environment and
-report possible bypasses through the root [security policy](../SECURITY.md).
+record, embedded-image, and page construction use one `ParseLimits`-backed
+resource budget for each limits-aware document load. The default budget caps
+1,024 declared CFB streams and 64 MiB of their cumulative declared bytes;
+65,536 retained frame or embedding records and 64 MiB of their record bytes;
+1,024 retained images and 64 MiB of their retained payload/envelope bytes;
+and 65,536 pages with 1 Mi retained page lines. Embedded-image width, height,
+and cumulative header-derived pixels are also bounded at 16,384, 16,384, and
+64 MiPixels.
+
+Known CFB stream declarations are charged before reads and their actual bytes
+are checked without charging strict/lenient fallback twice. Image dimensions
+come from PNG, GIF, BMP, or JPEG headers before retained payload/envelope
+clones. This Rust model path does not decode or retain a bitmap, so these
+limits do not claim to bound a downstream decoded-image allocation. Process
+untrusted documents in an appropriately constrained environment and report
+possible bypasses through the root [security policy](../SECURITY.md).
 
 ## Workspace Layout
 

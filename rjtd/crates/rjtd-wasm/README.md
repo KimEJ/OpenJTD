@@ -31,8 +31,9 @@ crate to crates.io does not itself publish an npm package.
 `HwpDocument` is the public wrapper name retained for application-surface
 compatibility; it wraps OpenJTD's JTD-family `DocumentCore` and is not a claim
 that this crate parses the HWP file format. Rust callers can construct it with
-`HwpDocument::from_bytes` or `HwpDocument::from_document`; JavaScript callers
-use the `wasm-bindgen` constructor.
+`HwpDocument::from_bytes`, `HwpDocument::from_bytes_with_limits`, or
+`HwpDocument::from_document_with_limits`; JavaScript callers use the
+`wasm-bindgen` constructor.
 
 `HwpDocument` implements both `Deref<Target = DocumentCore>` and `DerefMut`.
 That makes the Rust-facing `DocumentCore` query, rendering, navigation, and
@@ -53,8 +54,12 @@ println!("{}", document.page_count());
 
 ## Resource and interpretation limits
 
-Construction rejects source input larger than 64 MiB. Canvas rendering is
-limited to 16,384 pixels per dimension and 64 MiPixels total. The binding uses
+Construction rejects source input larger than 64 MiB and carries one mutable
+`ResourceBudget` through byte parsing, `DocumentCore` page construction, and
+the `HwpDocument` wrapper. Rust callers can supply custom `ParseLimits`; the
+generated JavaScript constructor uses the default limits and converts
+`ResourceLimit` failures to its error message. Canvas rendering is limited to
+16,384 pixels per dimension and 64 MiPixels total. The binding uses
 conservative fallback behavior for features not yet decoded by OpenJTD. A
 `Candidate` is a provisional interpretation, `Unknown` is retained
 unclassified data, and `Diagnostic` explains an incomplete interpretation.
