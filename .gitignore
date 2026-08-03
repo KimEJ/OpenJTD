@@ -1,7 +1,7 @@
 # Local agent and analysis state
 /.omx/
 **/.omo/
-/.omc/
+**/.omc/
 /.codegraph
 /.debug-journal.md
 **/AGENTS.md
