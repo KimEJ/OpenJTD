@@ -71,7 +71,7 @@ validate_inventory_format() {
 validate_closure() {
   (
     cd "$repository_root/rjtd"
-    cargo tree -p rjtd-wasm --target wasm32-unknown-unknown --locked --offline \
+    cargo tree --color never -p rjtd-wasm --target wasm32-unknown-unknown --locked --offline \
       --edges no-dev,no-build,no-proc-macro --prefix none --format '{p}'
   ) > "$temporary_directory/cargo-tree.tsv"
 
