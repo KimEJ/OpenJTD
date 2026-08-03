@@ -72,26 +72,24 @@ validate_closure() {
   (
     cd "$repository_root/rjtd"
     cargo tree -p rjtd-wasm --target wasm32-unknown-unknown --locked --offline \
-      --edges no-dev,no-build,no-proc-macro --prefix none --format '{p}\t{l}'
+      --edges no-dev,no-build,no-proc-macro --prefix none --format '{p}'
   ) > "$temporary_directory/cargo-tree.tsv"
 
   awk '
     {
       split($0, columns, /\\t/)
       package = columns[1]
-      license = columns[2]
       sub(/ \(\*\)$/, "", package)
-      sub(/ \(\*\)$/, "", license)
       if (package ~ /^rjtd-[^ ]+ v[^ ]+ \(/) { next }
       if (package !~ /^[^ ]+ v[^ ]+$/) { invalid = 1; next }
       split(package, fields, " ")
       sub(/^v/, "", fields[2])
-      print fields[1] "\t" fields[2] "\t" license
+      print fields[1] "\t" fields[2]
     }
     END { if (invalid) { exit 1 } }
   ' "$temporary_directory/cargo-tree.tsv" | LC_ALL=C sort -u > "$temporary_directory/closure.tsv" || die "could not normalize the locked wasm closure"
 
-  cut -f1,2,4 "$temporary_directory/inventory-packages.tsv" | LC_ALL=C sort > "$temporary_directory/inventory-closure.tsv"
+  cut -f1,2 "$temporary_directory/inventory-packages.tsv" | LC_ALL=C sort > "$temporary_directory/inventory-closure.tsv"
   cmp -s "$temporary_directory/closure.tsv" "$temporary_directory/inventory-closure.tsv" || die "inventory does not match the locked wasm closure"
 }
 
@@ -137,6 +135,20 @@ validate_archives() {
   done < <(awk 'NR > 1 { print }' "$inventory_path")
 }
 
+validate_declared_licenses() {
+  local package version expected_checksum declared_license source_url archive observed_license
+  while IFS=$'\t' read -r package version expected_checksum declared_license source_url; do
+    archive="$(archive_for "$package" "$version" "$expected_checksum")"
+    observed_license="$(
+      tar -xOf "$archive" "$package-$version/Cargo.toml" \
+        | sed -nE 's/^license[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' \
+        | head -n 1
+    )"
+    [[ -n "$observed_license" ]] || die "archive Cargo.toml has no declared license for $package $version"
+    [[ "$observed_license" == "$declared_license" ]] || die "archive Cargo.toml license mismatch for $package $version"
+  done < "$temporary_directory/inventory-packages.tsv"
+}
+
 render_notices() {
   local cargo_lock_checksum package version expected_checksum declared_license source_url archive_root_text archive_root_text_sha256 archive current_package=""
   cargo_lock_checksum="$(checksum_of "$cargo_lock_path")"
@@ -169,6 +181,7 @@ verify() {
   validate_closure
   validate_lock_checksums
   validate_archives
+  validate_declared_licenses
 }
 
 case "${1:-}" in
