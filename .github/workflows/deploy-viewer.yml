@@ -10,6 +10,7 @@ on:
       - 'rjtd/Cargo.toml'
       - 'rjtd/Cargo.lock'
       - 'openjtd.github.io/**'
+      - 'scripts/ci-verify-wasm-distribution-notices.sh'
       - '.github/workflows/deploy-viewer.yml'
   workflow_dispatch:
 
@@ -53,6 +54,9 @@ jobs:
       - name: Build WASM
         run: wasm-pack build --target web rjtd/crates/rjtd-wasm
 
+      - name: Verify WASM distribution notices
+        run: bash scripts/ci-verify-wasm-distribution-notices.sh
+
       - name: Replace viewer package
         run: |
           rm -rf openjtd.github.io/pkg
@@ -62,6 +66,9 @@ jobs:
           test -f openjtd.github.io/pkg/rjtd_wasm.js
           test -s openjtd.github.io/pkg/rjtd_wasm_bg.wasm
           test ! -e openjtd.github.io/pkg/pkg
+          cp rjtd/licenses/wasm/THIRD_PARTY_NOTICES.txt openjtd.github.io/pkg/THIRD_PARTY_NOTICES.txt
+          test -s openjtd.github.io/pkg/THIRD_PARTY_NOTICES.txt
+          cmp --silent rjtd/licenses/wasm/THIRD_PARTY_NOTICES.txt openjtd.github.io/pkg/THIRD_PARTY_NOTICES.txt
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0 (was v5)

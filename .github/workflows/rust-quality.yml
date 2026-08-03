@@ -96,6 +96,9 @@ jobs:
       - name: Verify LICENSE copies
         run: bash ../scripts/ci-verify-license-copies.sh
 
+      - name: Verify WASM distribution notices
+        run: bash ../scripts/ci-verify-wasm-distribution-notices.sh
+
       - name: Install cargo-audit
         run: |
           cargo install --locked --version 0.22.2 cargo-audit --root "$RUNNER_TEMP/cargo-audit"
