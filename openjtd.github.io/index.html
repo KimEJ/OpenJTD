@@ -110,6 +110,13 @@
     color: var(--color-gray-600);
     margin-left: auto;
   }
+  .site-header__notices {
+    color: var(--color-key-700);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .site-header__notices:hover { color: var(--color-key-600); }
 
   /* ドロップゾーン */
   #drop-zone {
@@ -331,6 +338,7 @@
     <span class="site-header__title">OpenJTD Viewer</span>
   </div>
   <span class="site-header__subtitle">一太郎 JTD ファイルビューア（ブラウザ内処理・サーバー送信なし）</span>
+  <a class="site-header__notices" href="./pkg/THIRD_PARTY_NOTICES.txt">Third-party notices</a>
 </header>
 
 <div id="drop-zone">
