@@ -155,7 +155,10 @@ impl ParseLimits {
         self
     }
 
-    /// Sets the maximum retained bytes declared by all container streams.
+    /// Sets the maximum bytes represented by all readable container streams.
+    ///
+    /// Strict CFB inventories use stream declarations. Lenient recovery inventories use the
+    /// bytes reachable through their sector chains because their declarations are not trusted.
     pub const fn with_max_stream_bytes(mut self, max_stream_bytes: usize) -> Self {
         self.max_stream_bytes = max_stream_bytes;
         self
@@ -295,7 +298,7 @@ impl ResourceBudget {
         &mut self.decompression
     }
 
-    /// Reserves declared container streams before their bytes are retained.
+    /// Reserves container streams before their bytes are retained by the model.
     pub fn reserve_streams(&mut self, count: usize, bytes: usize) -> Result<()> {
         self.reserve_pair(
             ResourceKind::Stream,
@@ -305,9 +308,9 @@ impl ResourceBudget {
         )
     }
 
-    /// Verifies that a stream read did not exceed its container declaration.
-    pub fn verify_stream_bytes(&self, declared: usize, actual: usize) -> Result<()> {
-        check_resource(ResourceKind::StreamBytes.resource_name(), declared, actual)
+    /// Verifies that a stream read did not exceed its preflight accounting.
+    pub fn verify_stream_bytes(&self, accounted: usize, actual: usize) -> Result<()> {
+        check_resource(ResourceKind::StreamBytes.resource_name(), accounted, actual)
     }
 
     /// Reserves one retained frame or embedding record before it grows a collection.

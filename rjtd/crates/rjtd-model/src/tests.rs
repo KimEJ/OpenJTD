@@ -11832,6 +11832,22 @@ fn front_matter_projection_preflight_reserves_additional_page_headroom() {
     assert!(construction.lines > normal.lines);
 }
 
+#[test]
+fn front_matter_projection_does_not_charge_characters_as_pages() {
+    let text = format!(
+        "宮沢賢治 銀河鉄道の夜\n目次\n第一章\n銀河鉄道の夜\n一、午后の授業\n{}",
+        "本".repeat(17_000)
+    );
+    let core = DocumentCore::from_document_with_limits(
+        Document::from_plain_text(&text),
+        ParseLimits::DEFAULT,
+    )
+    .unwrap();
+
+    assert_eq!(core.writing_mode(), WritingMode::VerticalRl);
+    assert!(core.page_count() < 1_000);
+}
+
 fn document_text_fixture_for(text: &str) -> Vec<u8> {
     let mut bytes = b"SsmgV.01".to_vec();
     bytes.extend_from_slice(&[0x00, 0x1f]);

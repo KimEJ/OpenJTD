@@ -47,20 +47,21 @@ pub(super) fn object_stream_candidates_from_cfb(
         return Ok(Vec::new());
     };
 
-    let mut candidates = Vec::new();
-    let mut streams = Vec::new();
-    for entry in entries
+    let paths = entries
         .iter()
         .filter(|entry| entry.kind() == EntryKind::Stream)
-    {
-        let Ok(stream) = read_cfb_stream(data, entry.path()) else {
+        .map(|entry| entry.path())
+        .collect::<BTreeSet<_>>();
+    let mut candidates = Vec::new();
+    let mut streams = Vec::new();
+    for path in paths {
+        let Ok(stream) = read_cfb_stream(data, path) else {
             continue;
         };
-        budget.verify_stream_bytes(declared_cfb_stream_bytes(entry)?, stream.len())?;
-        if let Some(candidate) = classify_object_stream_candidate(entry.path(), &stream, budget)? {
+        if let Some(candidate) = classify_object_stream_candidate(path, &stream, budget)? {
             candidates.push(candidate);
         }
-        streams.push((entry.path().to_string(), stream));
+        streams.push((path.to_string(), stream));
     }
     attach_object_stream_ownership_references(&mut candidates, &streams);
     attach_object_stream_fdm_index_entries(&mut candidates, &streams, budget)?;
@@ -85,7 +86,6 @@ pub(super) fn object_frame_records_from_cfb(
     let Ok(stream) = read_cfb_stream(data, entry.path()) else {
         return Ok(Vec::new());
     };
-    budget.verify_stream_bytes(declared_cfb_stream_bytes(entry)?, stream.len())?;
 
     object_frame_records_from_stream(entry.path(), &stream, budget)
 }
