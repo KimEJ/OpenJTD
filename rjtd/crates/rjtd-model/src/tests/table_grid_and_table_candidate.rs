@@ -392,15 +392,59 @@ fn table_grid_cross_table_subrecord_ordering_helpers_detect_regressions() {
         selected_span_units: Some(58),
         line_domain_projected_y: Some(875.539),
         candidates: vec![absolute_y_slot_candidate.clone()],
-        best_absolute_y_slot: Some(absolute_y_slot_candidate),
+        best_absolute_y_slot: Some(absolute_y_slot_candidate.clone()),
         residual_px: Some(107.539),
         agrees: false,
+        field_quantization: None,
     };
     assert_eq!(
         table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(
             &absolute_y_slot_disagreement
         ),
         "line-domain-projection-disagrees-with-page-mark-absolute-y-slot"
+    );
+    assert!(!absolute_y_slot_disagreement.field_quantization_refutes_page_space_px());
+    let no_quantization = absolute_y_slot_disagreement.field_quantization_blocked_reasons();
+    assert!(no_quantization.is_empty());
+
+    // A residual small enough to "agree" must still not unlock the slot while the
+    // field is 256-quantized and repeats per raw record instead of per row.
+    let quantized_but_agreeing = TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
+        line_domain_y: Some(768.0),
+        selected_span_units: Some(0),
+        line_domain_projected_y: Some(768.0),
+        candidates: vec![absolute_y_slot_candidate.clone()],
+        best_absolute_y_slot: Some(absolute_y_slot_candidate),
+        residual_px: Some(0.0),
+        agrees: true,
+        field_quantization: Some(TableGridSourceOnlyPageMarkFieldQuantization {
+            field_index: 2,
+            tail_block16_word_index: Some(11),
+            quantum_units: 256,
+            value_count: 3,
+            row_values: vec![768, 256, 768],
+            distinct_values: vec![256, 768],
+            all_values_multiple_of_quantum: true,
+            low_byte_all_zero: true,
+            high_byte_values: vec![1, 3],
+            raw_record_scan_indexes: vec![2, 6, 2],
+            values_constant_per_raw_record_scan_index: true,
+            value_row_distinct: false,
+            page_space_px_plausible: false,
+        }),
+    };
+    assert!(quantized_but_agreeing.field_quantization_refutes_page_space_px());
+    assert!(!quantized_but_agreeing.semantics_ready());
+    assert_eq!(
+        quantized_but_agreeing.field_quantization_blocked_reasons(),
+        vec![
+            "page-mark-absolute-y-slot-field-quantized-not-page-space-px",
+            "page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct",
+        ]
+    );
+    assert_eq!(
+        table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(&quantized_but_agreeing),
+        "page-mark-absolute-y-slot-field-quantized-not-page-space-px"
     );
 }
 

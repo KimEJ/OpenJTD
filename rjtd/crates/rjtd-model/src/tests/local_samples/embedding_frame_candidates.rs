@@ -1148,7 +1148,7 @@ fn local_success_data_test_preserves_embedding_frame_candidates_when_reference_p
         "\"sourceOnlyPageYRenderAdmissionGate\":{\"source\":\"sourcePageYTransformGate source-only page-y render admission gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"admissionReady\":true,\"directLineMarkOriginAdmissible\":true,\"sourceLayoutCandidatePresent\":true,\"pageOriginAuthority\":\"lineMarkPageGrid\",\"lineMarkRowsExactAndContiguous\":true,\"lineMarkPageOriginPresent\":true,\"lineMarkPageOriginStridePresent\":false"
     ));
     assert!(layer_tree.contains(
-        "\"pageMarkAbsoluteYSlotBlockedReason\":\"page-mark-absolute-y-slot-absent\",\"pageMarkAbsoluteYSlotResidualPx\":null,\"blockedReasons\":[],\"renderPromotionContribution\":\"source-only-page-y-render-admission-gate\",\"renderPromotionBlockedReason\":null"
+        "\"pageMarkAbsoluteYSlotBlockedReason\":\"page-mark-absolute-y-slot-absent\",\"pageMarkAbsoluteYSlotResidualPx\":null,\"sourceOnlyPageMarkFieldQuantizationGate\":null,\"blockedReasons\":[],\"renderPromotionContribution\":\"source-only-page-y-render-admission-gate\",\"renderPromotionBlockedReason\":null"
     ));
     assert!(layer_tree.contains(
         "\"referenceFallbackAdmissionGate\":{\"source\":\"table_grid_reference_layout_visible_fallback_allowed+sourceOnlyPageYRenderAdmissionGate\",\"diagnosticOnly\":true"

@@ -70,6 +70,8 @@ pub(crate) fn table_grid_source_only_page_y_origin_candidate_supports(
                 extra_blocked_reasons
                     .push("line-domain-projection-disagrees-with-page-mark-absolute-y-slot");
             }
+            extra_blocked_reasons
+                .extend(absolute_y_slot_agreement.field_quantization_blocked_reasons());
             push_table_grid_source_only_page_y_origin_candidate_support_with_extra_blockers(
                 &mut supports,
                 "page-mark-absolute-y-slot-field2-tail-block16-word11",
