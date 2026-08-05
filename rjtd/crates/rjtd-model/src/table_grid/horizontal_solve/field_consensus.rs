@@ -693,6 +693,7 @@ pub(crate) fn push_table_grid_source_only_horizontal_field_selector_json(
         output,
         compact_column_count,
         page_mark_field_source,
+        page_mark_fields,
         word_14,
         word_15,
         word_21,
@@ -718,6 +719,7 @@ pub(crate) fn push_table_grid_source_only_horizontal_width_field_role_gate_json(
     output: &mut String,
     compact_column_count: usize,
     page_mark_field_source: &'static str,
+    page_mark_fields: &[u16],
     page_mark_x_word_14: u16,
     page_mark_word_15: Option<u16>,
     page_mark_word_21: Option<u16>,
@@ -796,12 +798,214 @@ pub(crate) fn push_table_grid_source_only_horizontal_width_field_role_gate_json(
     } else {
         "false"
     });
+    output.push_str(",\"pageMarkFieldUnitDomainGate\":");
+    push_table_grid_page_mark_horizontal_unit_domain_gate_json(
+        output,
+        page_mark_fields,
+        selected_width_word_index,
+    );
     output.push_str(",\"renderPromotionContribution\":\"source-horizontal-width-field-role-gate\"");
     output.push_str(",\"renderPromotionBlockedReason\":");
     output.push_str(&json_string(
-        "width-field-role-semantics-needs-cross-sample-validation",
+        "page-mark-horizontal-fields-read-as-raw-css-px-contradict-mm100-row-pitch-decode",
     ));
     output.push('}');
+}
+
+/// `/PageMark` word indexes whose mm100 role is already decoded elsewhere in this
+/// crate: `shanai_lan_sparse_borders::transform` reads words 13/14 as row-pitch
+/// addends in mm100 and word 21 as `page_mark_w21_mm100`.
+const PAGE_MARK_MM100_DECODED_WORD_INDEXES: [usize; 3] = [13, 14, 21];
+
+/// Diagnostic-only unit-domain evidence for the source-only horizontal selector.
+///
+/// The selector reads `/PageMark` words 14/15/21 as raw CSS px. This records the
+/// source-backed facts that contradict that reading — the entry's u16 geometry
+/// class, the `word13 + word14 == word21` additive invariant, the mm100 reading of
+/// the same words, and whether the selected width value is even identifiable
+/// inside the entry — without claiming the mm100 domain is decoded for the entry.
+pub(crate) struct TableGridPageMarkHorizontalUnitDomain {
+    geometry_class: &'static str,
+    non_zero_additive_unit_candidate: bool,
+    word20_is_00ff: bool,
+    word_13: Option<u16>,
+    word_14: Option<u16>,
+    word_21: Option<u16>,
+    word_13_plus_word_14: Option<u32>,
+    word_13_plus_word_14_equals_word_21: bool,
+    x_word_14_mm100_px: Option<f32>,
+    selected_width_word_index: usize,
+    selected_width_word: Option<u16>,
+    selected_width_word_mm100_px: Option<f32>,
+    selected_width_word_raw_as_px_minus_mm100_px: Option<f32>,
+    width_word_value_duplicate_word_indexes: Vec<usize>,
+    x_word_14_decoded_elsewhere_as_mm100: bool,
+    selected_width_word_decoded_elsewhere_as_mm100: bool,
+}
+
+impl TableGridPageMarkHorizontalUnitDomain {
+    fn selected_width_word_value_unique(&self) -> bool {
+        self.width_word_value_duplicate_word_indexes.len() <= 1
+    }
+
+    fn crate_decoded_field_role_conflict(&self) -> bool {
+        self.x_word_14_decoded_elsewhere_as_mm100
+            || self.selected_width_word_decoded_elsewhere_as_mm100
+    }
+
+    fn unit_domain_conflicts(&self) -> Vec<&'static str> {
+        let mut conflicts = Vec::new();
+        if !self.non_zero_additive_unit_candidate {
+            conflicts.push("page-mark-u16-geometry-class-not-additive-unit-candidate");
+        }
+        if self.crate_decoded_field_role_conflict() {
+            conflicts
+                .push("selected-horizontal-words-decoded-as-mm100-row-pitch-elsewhere-in-crate");
+        }
+        if !self.selected_width_word_value_unique() {
+            conflicts
+                .push("selected-width-word-value-duplicated-across-page-mark-horizontal-words");
+        }
+        conflicts
+    }
+
+    fn selector_field_role_authoritative(&self) -> bool {
+        self.unit_domain_conflicts().is_empty()
+    }
+}
+
+pub(crate) fn table_grid_page_mark_horizontal_unit_domain(
+    page_mark_fields: &[u16],
+    selected_width_word_index: usize,
+) -> TableGridPageMarkHorizontalUnitDomain {
+    let profile = page_mark_u16_geometry_profile(page_mark_fields);
+    let field = |word_index: usize| page_mark_fields.get(word_index).copied();
+    let word_13 = field(13);
+    let word_14 = field(14);
+    let word_21 = field(21);
+    let word_13_plus_word_14 = word_13
+        .zip(word_14)
+        .map(|(primary, secondary)| u32::from(primary) + u32::from(secondary));
+    let word_13_plus_word_14_equals_word_21 = word_13_plus_word_14
+        .zip(word_21)
+        .is_some_and(|(sum, combined)| sum == u32::from(combined));
+    let selected_width_word = field(selected_width_word_index);
+    let selected_width_word_mm100_px =
+        selected_width_word.map(|value| hundredth_millimeters_to_css_px(u32::from(value)));
+    let width_word_value_duplicate_word_indexes = selected_width_word
+        .map(|value| {
+            PAGE_MARK_HORIZONTAL_REFERENCE_WORD_INDEXES
+                .iter()
+                .copied()
+                .filter(|word_index| field(*word_index) == Some(value))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    TableGridPageMarkHorizontalUnitDomain {
+        geometry_class: profile.class_name(),
+        non_zero_additive_unit_candidate: profile.non_zero_additive_unit_candidate(),
+        word20_is_00ff: profile.word20_is_00ff(),
+        word_13,
+        word_14,
+        word_21,
+        word_13_plus_word_14,
+        word_13_plus_word_14_equals_word_21,
+        x_word_14_mm100_px: word_14.map(|value| hundredth_millimeters_to_css_px(u32::from(value))),
+        selected_width_word_index,
+        selected_width_word,
+        selected_width_word_mm100_px,
+        selected_width_word_raw_as_px_minus_mm100_px: selected_width_word
+            .zip(selected_width_word_mm100_px)
+            .map(|(raw, mm100_px)| f32::from(raw) - mm100_px),
+        width_word_value_duplicate_word_indexes,
+        x_word_14_decoded_elsewhere_as_mm100: PAGE_MARK_MM100_DECODED_WORD_INDEXES.contains(&14),
+        selected_width_word_decoded_elsewhere_as_mm100: PAGE_MARK_MM100_DECODED_WORD_INDEXES
+            .contains(&selected_width_word_index),
+    }
+}
+
+pub(crate) fn push_table_grid_page_mark_horizontal_unit_domain_gate_json(
+    output: &mut String,
+    page_mark_fields: &[u16],
+    selected_width_word_index: usize,
+) {
+    let domain =
+        table_grid_page_mark_horizontal_unit_domain(page_mark_fields, selected_width_word_index);
+    let conflicts = domain.unit_domain_conflicts();
+
+    output.push_str("{\"source\":\"/PageMark u16 geometry profile+crate mm100 field-role decode\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false");
+    output.push_str(",\"pageMarkU16GeometryClass\":");
+    output.push_str(&json_string(domain.geometry_class));
+    output.push_str(",\"nonZeroAdditiveUnitCandidate\":");
+    output.push_str(&domain.non_zero_additive_unit_candidate.to_string());
+    output.push_str(",\"word20Is00ff\":");
+    output.push_str(&domain.word20_is_00ff.to_string());
+    output.push_str(",\"word13\":");
+    push_optional_u16_json(output, domain.word_13);
+    output.push_str(",\"word14\":");
+    push_optional_u16_json(output, domain.word_14);
+    output.push_str(",\"word21\":");
+    push_optional_u16_json(output, domain.word_21);
+    output.push_str(",\"word13PlusWord14\":");
+    match domain.word_13_plus_word_14 {
+        Some(sum) => output.push_str(&sum.to_string()),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"word13PlusWord14EqualsWord21\":");
+    output.push_str(&domain.word_13_plus_word_14_equals_word_21.to_string());
+    output.push_str(",\"mm100ToCssPxScale\":");
+    output.push_str(&format!("{FRAME_RECORD_UNIT_TO_CSS_PX:.6}"));
+    output.push_str(",\"mm100DomainDecodedForThisEntry\":false");
+    output.push_str(",\"mm100UnknownReason\":");
+    output.push_str(&json_string("page-mark-entry-field-layout-not-decoded"));
+    output.push_str(",\"pageMarkXWord14Mm100PxCandidate\":");
+    push_optional_px_json(output, domain.x_word_14_mm100_px);
+    output.push_str(",\"selectedWidthWordIndex\":");
+    output.push_str(&domain.selected_width_word_index.to_string());
+    output.push_str(",\"selectedWidthWord\":");
+    push_optional_u16_json(output, domain.selected_width_word);
+    output.push_str(",\"selectedWidthWordMm100PxCandidate\":");
+    push_optional_px_json(output, domain.selected_width_word_mm100_px);
+    output.push_str(",\"selectedWidthWordRawAsPxMinusMm100PxCandidate\":");
+    push_optional_px_json(output, domain.selected_width_word_raw_as_px_minus_mm100_px);
+    output.push_str(",\"widthWordValueDuplicateWordIndexes\":");
+    push_usize_array_json(output, &domain.width_word_value_duplicate_word_indexes);
+    output.push_str(",\"selectedWidthWordValueUnique\":");
+    output.push_str(&domain.selected_width_word_value_unique().to_string());
+    output.push_str(",\"pageMarkXWord14DecodedElsewhereAsMm100\":");
+    output.push_str(&domain.x_word_14_decoded_elsewhere_as_mm100.to_string());
+    output.push_str(",\"selectedWidthWordDecodedElsewhereAsMm100\":");
+    output.push_str(
+        &domain
+            .selected_width_word_decoded_elsewhere_as_mm100
+            .to_string(),
+    );
+    output.push_str(",\"crateDecodedFieldRoleBasis\":");
+    output.push_str(&json_string(
+        "shanaiLanSparseBorders.rowPitchAddendMm100+pageMarkW21Mm100",
+    ));
+    output.push_str(",\"crateDecodedFieldRoleConflict\":");
+    output.push_str(&domain.crate_decoded_field_role_conflict().to_string());
+    output.push_str(",\"unitDomainConflicts\":");
+    push_json_string_slice_array(output, &conflicts);
+    output.push_str(",\"selectorFieldRoleAuthoritative\":");
+    output.push_str(&domain.selector_field_role_authoritative().to_string());
+    output.push_str(",\"renderPromotionContribution\":\"page-mark-horizontal-unit-domain-gate\"");
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    output.push_str(&json_string(
+        "page-mark-horizontal-fields-read-as-raw-css-px-contradict-mm100-row-pitch-decode",
+    ));
+    output.push('}');
+}
+
+fn push_optional_px_json(output: &mut String, value: Option<f32>) {
+    match value {
+        Some(value) => output.push_str(&format!("{value:.3}")),
+        None => output.push_str("null"),
+    }
 }
 
 pub(crate) fn push_table_grid_source_only_horizontal_field_consensus_hypotheses_items_json(
@@ -1458,4 +1662,204 @@ pub(crate) fn table_grid_unit_bbox_slot_widths(
         trailing_slot_width_units,
         trailing_headers.len(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `ichitaro-20030228030923-success-002-success_data-test.jtd` `/PageMark` entry 0
+    /// as reported by `rjtd page-marks`: the ABC-table entry, class `additive-boundary`.
+    const ABC_PAGE_MARK_U16_FIELDS: [u16; 24] = [
+        0, 0, 1, 0, 0, 0, 0, 39, 0, 0, 370, 0, 0, 370, 185, 0, 0, 370, 370, 370, 255, 555, 0, 0,
+    ];
+
+    /// `ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd` `/PageMark` entry 0 as reported
+    /// by `rjtd page-marks`: the single entry both visible table candidates consume,
+    /// class `mixed-payload`.
+    const TSAITEN_PAGE_MARK_U16_FIELDS: [u16; 24] = [
+        0, 0, 1, 0, 0, 0, 0, 42, 0, 0, 564, 0, 0, 564, 194, 423, 223, 564, 564, 370, 255, 564, 0, 0,
+    ];
+
+    /// ABC source row height decoded from `documentTextLineHeaderFontSizeUnits`.
+    const ABC_SOURCE_ROW_HEIGHT_PX: f32 = 21.000;
+
+    #[test]
+    fn reports_additive_unit_candidate_and_mm100_row_pitch_agreement_for_the_abc_page_mark_entry() {
+        let domain = table_grid_page_mark_horizontal_unit_domain(&ABC_PAGE_MARK_U16_FIELDS, 21);
+
+        assert_eq!(domain.geometry_class, "additive-boundary");
+        assert!(domain.non_zero_additive_unit_candidate);
+        assert!(domain.word_13_plus_word_14_equals_word_21);
+        assert_eq!(domain.word_13_plus_word_14, Some(555));
+
+        // word21 read as mm100 lands on the decoded ABC source row height; read as raw
+        // CSS px the same word is off by more than 25 rows.
+        let width_mm100_px = domain.selected_width_word_mm100_px.unwrap();
+        assert!(
+            (width_mm100_px - ABC_SOURCE_ROW_HEIGHT_PX).abs() < 0.05,
+            "word21 mm100 px {width_mm100_px} should match the decoded ABC row height"
+        );
+        assert!(domain.selected_width_word_raw_as_px_minus_mm100_px.unwrap() > 500.0);
+
+        // Even on the additive-boundary entry the raw-as-px read conflicts with this
+        // crate's own mm100 decode of words 13/14/21.
+        assert!(domain.crate_decoded_field_role_conflict());
+        assert!(!domain.selector_field_role_authoritative());
+        assert_eq!(domain.width_word_value_duplicate_word_indexes, vec![21]);
+    }
+
+    #[test]
+    fn reports_mixed_payload_and_duplicate_width_words_for_the_tsaiten_page_mark_entry() {
+        let three_column =
+            table_grid_page_mark_horizontal_unit_domain(&TSAITEN_PAGE_MARK_U16_FIELDS, 15);
+        let two_column =
+            table_grid_page_mark_horizontal_unit_domain(&TSAITEN_PAGE_MARK_U16_FIELDS, 21);
+
+        // One entry, one geometry class, for both visible tables.
+        assert_eq!(three_column.geometry_class, "mixed-payload");
+        assert_eq!(two_column.geometry_class, "mixed-payload");
+        assert!(!three_column.non_zero_additive_unit_candidate);
+        // word20 is 0x00ff exactly as on ABC, so only the additive invariant separates
+        // the two entries' geometry classes.
+        assert!(three_column.word20_is_00ff);
+        assert!(!three_column.word_13_plus_word_14_equals_word_21);
+        assert_eq!(three_column.word_13_plus_word_14, Some(758));
+        assert_eq!(three_column.word_21, Some(564));
+
+        // Under mm100 both selected widths are smaller than a single ABC-sized row, so
+        // the 421/554 px candidates exist only under the raw-integer-as-px reading.
+        assert!(three_column.selected_width_word_mm100_px.unwrap() < ABC_SOURCE_ROW_HEIGHT_PX);
+        assert!(two_column.selected_width_word_mm100_px.unwrap() < 25.0);
+        assert!(
+            three_column
+                .selected_width_word_raw_as_px_minus_mm100_px
+                .unwrap()
+                > 400.0
+        );
+        assert!(
+            two_column
+                .selected_width_word_raw_as_px_minus_mm100_px
+                .unwrap()
+                > 500.0
+        );
+
+        // The 2-column selector picks word21 by index, but that value is not
+        // identifiable inside the entry: five horizontal words carry 564.
+        assert_eq!(
+            two_column.width_word_value_duplicate_word_indexes,
+            vec![10, 13, 17, 18, 21]
+        );
+        assert!(!two_column.selected_width_word_value_unique());
+        assert_eq!(
+            three_column.width_word_value_duplicate_word_indexes,
+            vec![15]
+        );
+        assert!(three_column.selected_width_word_value_unique());
+
+        assert!(!three_column.selector_field_role_authoritative());
+        assert!(!two_column.selector_field_role_authoritative());
+        assert_eq!(
+            two_column.unit_domain_conflicts(),
+            vec![
+                "page-mark-u16-geometry-class-not-additive-unit-candidate",
+                "selected-horizontal-words-decoded-as-mm100-row-pitch-elsewhere-in-crate",
+                "selected-width-word-value-duplicated-across-page-mark-horizontal-words",
+            ]
+        );
+    }
+
+    #[test]
+    fn preserves_unknown_unit_domain_when_page_mark_fields_are_truncated() {
+        let domain = table_grid_page_mark_horizontal_unit_domain(&[0, 0, 1], 21);
+
+        assert_eq!(domain.geometry_class, "mixed-payload");
+        assert_eq!(domain.word_21, None);
+        assert_eq!(domain.word_13_plus_word_14, None);
+        assert_eq!(domain.selected_width_word_mm100_px, None);
+        assert!(domain.width_word_value_duplicate_word_indexes.is_empty());
+        assert!(!domain.selector_field_role_authoritative());
+    }
+
+    #[test]
+    fn emits_diagnostic_only_unit_domain_gate_json_for_both_tsaiten_selectors() {
+        let mut three_column = String::new();
+        push_table_grid_page_mark_horizontal_unit_domain_gate_json(
+            &mut three_column,
+            &TSAITEN_PAGE_MARK_U16_FIELDS,
+            15,
+        );
+        let mut two_column = String::new();
+        push_table_grid_page_mark_horizontal_unit_domain_gate_json(
+            &mut two_column,
+            &TSAITEN_PAGE_MARK_U16_FIELDS,
+            21,
+        );
+
+        assert_eq!(
+            three_column,
+            concat!(
+                "{\"source\":\"/PageMark u16 geometry profile+crate mm100 field-role decode\"",
+                ",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false",
+                ",\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false",
+                ",\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false",
+                ",\"pageMarkU16GeometryClass\":\"mixed-payload\"",
+                ",\"nonZeroAdditiveUnitCandidate\":false,\"word20Is00ff\":true",
+                ",\"word13\":564,\"word14\":194,\"word21\":564",
+                ",\"word13PlusWord14\":758,\"word13PlusWord14EqualsWord21\":false",
+                ",\"mm100ToCssPxScale\":0.037795,\"mm100DomainDecodedForThisEntry\":false",
+                ",\"mm100UnknownReason\":\"page-mark-entry-field-layout-not-decoded\"",
+                ",\"pageMarkXWord14Mm100PxCandidate\":7.332",
+                ",\"selectedWidthWordIndex\":15,\"selectedWidthWord\":423",
+                ",\"selectedWidthWordMm100PxCandidate\":15.987",
+                ",\"selectedWidthWordRawAsPxMinusMm100PxCandidate\":407.013",
+                ",\"widthWordValueDuplicateWordIndexes\":[15]",
+                ",\"selectedWidthWordValueUnique\":true",
+                ",\"pageMarkXWord14DecodedElsewhereAsMm100\":true",
+                ",\"selectedWidthWordDecodedElsewhereAsMm100\":false",
+                ",\"crateDecodedFieldRoleBasis\":\"shanaiLanSparseBorders.rowPitchAddendMm100+pageMarkW21Mm100\"",
+                ",\"crateDecodedFieldRoleConflict\":true",
+                ",\"unitDomainConflicts\":[\"page-mark-u16-geometry-class-not-additive-unit-candidate\",\"selected-horizontal-words-decoded-as-mm100-row-pitch-elsewhere-in-crate\"]",
+                ",\"selectorFieldRoleAuthoritative\":false",
+                ",\"renderPromotionContribution\":\"page-mark-horizontal-unit-domain-gate\"",
+                ",\"renderPromotionBlockedReason\":\"page-mark-horizontal-fields-read-as-raw-css-px-contradict-mm100-row-pitch-decode\"}",
+            )
+        );
+        assert_eq!(
+            two_column,
+            concat!(
+                "{\"source\":\"/PageMark u16 geometry profile+crate mm100 field-role decode\"",
+                ",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false",
+                ",\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false",
+                ",\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false",
+                ",\"pageMarkU16GeometryClass\":\"mixed-payload\"",
+                ",\"nonZeroAdditiveUnitCandidate\":false,\"word20Is00ff\":true",
+                ",\"word13\":564,\"word14\":194,\"word21\":564",
+                ",\"word13PlusWord14\":758,\"word13PlusWord14EqualsWord21\":false",
+                ",\"mm100ToCssPxScale\":0.037795,\"mm100DomainDecodedForThisEntry\":false",
+                ",\"mm100UnknownReason\":\"page-mark-entry-field-layout-not-decoded\"",
+                ",\"pageMarkXWord14Mm100PxCandidate\":7.332",
+                ",\"selectedWidthWordIndex\":21,\"selectedWidthWord\":564",
+                ",\"selectedWidthWordMm100PxCandidate\":21.317",
+                ",\"selectedWidthWordRawAsPxMinusMm100PxCandidate\":542.683",
+                ",\"widthWordValueDuplicateWordIndexes\":[10,13,17,18,21]",
+                ",\"selectedWidthWordValueUnique\":false",
+                ",\"pageMarkXWord14DecodedElsewhereAsMm100\":true",
+                ",\"selectedWidthWordDecodedElsewhereAsMm100\":true",
+                ",\"crateDecodedFieldRoleBasis\":\"shanaiLanSparseBorders.rowPitchAddendMm100+pageMarkW21Mm100\"",
+                ",\"crateDecodedFieldRoleConflict\":true",
+                ",\"unitDomainConflicts\":[\"page-mark-u16-geometry-class-not-additive-unit-candidate\",\"selected-horizontal-words-decoded-as-mm100-row-pitch-elsewhere-in-crate\",\"selected-width-word-value-duplicated-across-page-mark-horizontal-words\"]",
+                ",\"selectorFieldRoleAuthoritative\":false",
+                ",\"renderPromotionContribution\":\"page-mark-horizontal-unit-domain-gate\"",
+                ",\"renderPromotionBlockedReason\":\"page-mark-horizontal-fields-read-as-raw-css-px-contradict-mm100-row-pitch-decode\"}",
+            )
+        );
+
+        // Diagnostic-only: the gate never unlocks selection or promotion.
+        for gate in [&three_column, &two_column] {
+            assert!(gate.contains("\"selectionReady\":false"));
+            assert!(gate.contains("\"referenceBacked\":false"));
+            assert!(gate.contains("\"selectorFieldRoleAuthoritative\":false"));
+        }
+    }
 }
