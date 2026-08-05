@@ -74,7 +74,7 @@ use diagnostic_layout_types::*;
 use document_metadata::*;
 pub use document_metadata::{
     DocumentAutoText, DocumentFont, DocumentPageMark, DocumentPageMarkEntry, DocumentPaperMark,
-    DocumentPaperMarkEntry, DocumentTocEntry, Metadata, PageMarkU16GeometryProfile,
+    DocumentPaperMarkEntry, DocumentTocEntry, Metadata, PageMarkU16GeometryProfile, RawStream,
 };
 pub use document_text::*;
 use document_text_control_layout::*;
