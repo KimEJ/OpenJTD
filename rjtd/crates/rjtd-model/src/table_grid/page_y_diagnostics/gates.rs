@@ -575,6 +575,11 @@ pub(crate) fn push_table_grid_source_only_page_y_render_admission_gate_json(
         if page_mark_absolute_y_slot_blocked_reason != "none" {
             blocked_reasons.push(page_mark_absolute_y_slot_blocked_reason);
         }
+        for reason in page_mark_absolute_y_slot_agreement.field_quantization_blocked_reasons() {
+            if !blocked_reasons.contains(&reason) {
+                blocked_reasons.push(reason);
+            }
+        }
         if y_selector_blocked_reason != "none" {
             blocked_reasons.push(y_selector_blocked_reason);
         }
@@ -719,6 +724,11 @@ pub(crate) fn push_table_grid_source_only_page_y_render_admission_gate_json(
     output.push_str(&json_string(page_mark_absolute_y_slot_blocked_reason));
     output.push_str(",\"pageMarkAbsoluteYSlotResidualPx\":");
     push_optional_f32_json(output, page_mark_absolute_y_slot_agreement.residual_px);
+    output.push_str(",\"sourceOnlyPageMarkFieldQuantizationGate\":");
+    push_table_grid_source_only_page_mark_field_quantization_gate_json(
+        output,
+        &page_mark_absolute_y_slot_agreement,
+    );
     output.push_str(",\"blockedReasons\":");
     push_json_string_slice_array(output, &blocked_reasons);
     output
@@ -931,6 +941,8 @@ pub(crate) fn table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(
         && !agreement.agrees
     {
         "line-domain-projection-disagrees-with-page-mark-absolute-y-slot"
+    } else if agreement.field_quantization_refutes_page_space_px() {
+        "page-mark-absolute-y-slot-field-quantized-not-page-space-px"
     } else if agreement.best_absolute_y_slot.is_none() {
         "page-mark-absolute-y-slot-absent"
     } else if agreement.line_domain_projected_y.is_none() {
@@ -985,6 +997,8 @@ pub(crate) fn table_grid_source_only_page_mark_absolute_y_slot_agreement(
         .zip(absolute_y_slot_y)
         .map(|(projected_y, absolute_y)| projected_y - absolute_y);
     let agrees = residual_px.is_some_and(|residual| residual.abs() <= 2.0);
+    let field_quantization =
+        table_grid_source_only_page_mark_field_quantization(document, subrecord_span_readiness);
 
     TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
         line_domain_y,
@@ -994,6 +1008,7 @@ pub(crate) fn table_grid_source_only_page_mark_absolute_y_slot_agreement(
         best_absolute_y_slot,
         residual_px,
         agrees,
+        field_quantization,
     }
 }
 
@@ -1035,6 +1050,7 @@ pub(crate) fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
     {
         blocked_reasons.push("line-domain-projection-disagrees-with-page-mark-absolute-y-slot");
     }
+    blocked_reasons.extend(agreement.field_quantization_blocked_reasons());
     if !agreement.semantics_ready() {
         blocked_reasons.push("page-mark-absolute-y-slot-semantics-unproven");
     }
@@ -1075,6 +1091,8 @@ pub(crate) fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
     push_optional_f32_json(output, agreement.residual_px);
     output.push_str(",\"lineDomainProjectionAgreesWithAbsoluteYSlot\":");
     output.push_str(if agreement.agrees { "true" } else { "false" });
+    output.push_str(",\"sourceOnlyPageMarkFieldQuantizationGate\":");
+    push_table_grid_source_only_page_mark_field_quantization_gate_json(output, &agreement);
     output.push_str(",\"lineageClass\":");
     output.push_str(&json_string(lineage_class));
     output.push_str(",\"blockedReasons\":");
@@ -1087,6 +1105,155 @@ pub(crate) fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
         output.push_str("null");
     } else {
         output.push_str(&json_string(blocked_reasons[0]));
+    }
+    output.push('}');
+}
+
+/// Word index currently interpreted by the absolute-y-slot candidate path.
+/// Words 3/5/7 are structurally zero and words 4/6 form the line range;
+/// words 0/1 remain unknown and are not decoded by this gate.
+pub(crate) const PAGE_MARK_ABSOLUTE_Y_SLOT_FIELD_INDEX: usize = 2;
+
+/// Byte boundary tested for the absolute-y-slot field. A page-space px value has
+/// no reason to be a whole multiple of 256 with a zero low byte.
+pub(crate) const PAGE_MARK_ABSOLUTE_Y_SLOT_FIELD_QUANTUM_UNITS: u16 = 256;
+
+/// Reads the absolute-y-slot field once per matched line-mark record (duplicates
+/// kept, so per-row repetition stays visible) and reports whether the values can
+/// be direct page-space px at all.
+pub(crate) fn table_grid_source_only_page_mark_field_quantization(
+    document: &Document,
+    subrecord_span_readiness: Option<&TableGridPageMarkSubrecordLineSpanReadiness>,
+) -> Option<TableGridSourceOnlyPageMarkFieldQuantization> {
+    let page_mark_bytes = raw_stream_bytes(document, PAGE_MARK_PATH)?;
+    let readiness = subrecord_span_readiness?;
+    let record_headers = page_mark_record_headers(page_mark_bytes);
+    let field_index = PAGE_MARK_ABSOLUTE_Y_SLOT_FIELD_INDEX;
+    let quantum_units = PAGE_MARK_ABSOLUTE_Y_SLOT_FIELD_QUANTUM_UNITS;
+
+    let mut row_values = Vec::new();
+    let mut raw_record_scan_indexes = Vec::new();
+    let mut tail_block16_word_indexes = BTreeSet::new();
+    for subrecord_byte_offset in readiness
+        .selected_post_row_gap_span_coverage
+        .matched_candidate_byte_offsets
+        .iter()
+        .copied()
+    {
+        let Some(subrecord) =
+            page_mark_raw_u16_subrecord_candidate_at(page_mark_bytes, subrecord_byte_offset)
+        else {
+            continue;
+        };
+        let byte_offset = subrecord.byte_offset + field_index * 2;
+        let Some((raw_record_scan_index, _, tail_block16_word_index)) =
+            page_mark_raw_subrecord_record_context(&record_headers, byte_offset)
+        else {
+            continue;
+        };
+        row_values.push(subrecord.words[field_index]);
+        raw_record_scan_indexes.push(raw_record_scan_index);
+        tail_block16_word_indexes.insert(tail_block16_word_index);
+    }
+    if row_values.is_empty() {
+        return None;
+    }
+
+    let distinct_values = row_values.iter().copied().collect::<BTreeSet<_>>();
+    let high_byte_values = row_values.iter().map(|v| v >> 8).collect::<BTreeSet<_>>();
+    let all_values_multiple_of_quantum = row_values.iter().all(|v| v % quantum_units == 0);
+    let low_byte_all_zero = row_values.iter().all(|value| (*value & 0x00ff) == 0);
+    let mut values_by_raw_record_scan_index: BTreeMap<usize, u16> = BTreeMap::new();
+    let mut values_constant_per_raw_record_scan_index = true;
+    for (scan_index, value) in raw_record_scan_indexes
+        .iter()
+        .copied()
+        .zip(row_values.iter().copied())
+    {
+        match values_by_raw_record_scan_index.get(&scan_index) {
+            Some(seen) => values_constant_per_raw_record_scan_index &= *seen == value,
+            None => {
+                values_by_raw_record_scan_index.insert(scan_index, value);
+            }
+        }
+    }
+    let value_row_distinct = distinct_values.len() == row_values.len();
+    let quantized = all_values_multiple_of_quantum && low_byte_all_zero;
+
+    Some(TableGridSourceOnlyPageMarkFieldQuantization {
+        field_index,
+        tail_block16_word_index: tail_block16_word_indexes
+            .iter()
+            .copied()
+            .next()
+            .filter(|_| tail_block16_word_indexes.len() == 1),
+        quantum_units,
+        value_count: row_values.len(),
+        distinct_values: distinct_values.into_iter().collect(),
+        all_values_multiple_of_quantum,
+        low_byte_all_zero,
+        high_byte_values: high_byte_values.into_iter().collect(),
+        raw_record_scan_indexes,
+        values_constant_per_raw_record_scan_index,
+        value_row_distinct,
+        // Quantization refutes the direct-px interpretation. Repetition alone is
+        // diagnostic evidence, not a refutation: a table-origin field could repeat.
+        page_space_px_plausible: !quantized,
+        row_values,
+    })
+}
+
+pub(crate) fn push_table_grid_source_only_page_mark_field_quantization_gate_json(
+    output: &mut String,
+    agreement: &TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement,
+) {
+    let Some(quantization) = agreement.field_quantization.as_ref() else {
+        output.push_str("null");
+        return;
+    };
+    let blocked_reasons = agreement.field_quantization_blocked_reasons();
+
+    output.push_str("{\"source\":\"/PageMark raw u16 subrecord field scan\"");
+    output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false");
+    output.push_str(",\"referenceBBoxUsed\":false,\"selectionReady\":false");
+    output.push_str(",\"fieldIndex\":");
+    output.push_str(&quantization.field_index.to_string());
+    output.push_str(",\"tailBlock16WordIndex\":");
+    push_option_usize_json(output, quantization.tail_block16_word_index);
+    output.push_str(",\"quantumUnits\":");
+    output.push_str(&quantization.quantum_units.to_string());
+    output.push_str(",\"valueCount\":");
+    output.push_str(&quantization.value_count.to_string());
+    output.push_str(",\"rowValues\":");
+    push_u16_array_json(output, &quantization.row_values);
+    output.push_str(",\"distinctValues\":");
+    push_u16_array_json(output, &quantization.distinct_values);
+    output.push_str(",\"allValuesMultipleOfQuantum\":");
+    output.push_str(json_bool(quantization.all_values_multiple_of_quantum));
+    output.push_str(",\"lowByteAllZero\":");
+    output.push_str(json_bool(quantization.low_byte_all_zero));
+    output.push_str(",\"highByteValues\":");
+    push_u16_array_json(output, &quantization.high_byte_values);
+    output.push_str(",\"rawRecordScanIndexes\":");
+    push_usize_array_json(output, &quantization.raw_record_scan_indexes);
+    output.push_str(",\"valuesConstantPerRawRecordScanIndex\":");
+    output.push_str(json_bool(
+        quantization.values_constant_per_raw_record_scan_index,
+    ));
+    output.push_str(",\"valueRowDistinct\":");
+    output.push_str(json_bool(quantization.value_row_distinct));
+    output.push_str(",\"pageSpacePxPlausible\":");
+    output.push_str(json_bool(quantization.page_space_px_plausible));
+    output.push_str(",\"highByteVsRowCountRelationship\":\"undecoded-diagnostic-comparison\"");
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &blocked_reasons);
+    output.push_str(
+        ",\"renderPromotionContribution\":\"source-only-page-mark-field-quantization-gate\"",
+    );
+    output.push_str(",\"renderPromotionBlockedReason\":");
+    match blocked_reasons.first() {
+        Some(reason) => output.push_str(&json_string(reason)),
+        None => output.push_str("null"),
     }
     output.push('}');
 }
@@ -1118,7 +1285,7 @@ pub(crate) fn table_grid_source_only_page_mark_absolute_y_slot_candidates(
         else {
             continue;
         };
-        let field_index = 2usize;
+        let field_index = PAGE_MARK_ABSOLUTE_Y_SLOT_FIELD_INDEX;
         let byte_offset = subrecord.byte_offset + field_index * 2;
         let Some((raw_record_scan_index, raw_record_index, tail_block16_word_index)) =
             page_mark_raw_subrecord_record_context(&record_headers, byte_offset)

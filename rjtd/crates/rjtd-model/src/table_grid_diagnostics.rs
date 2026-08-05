@@ -780,6 +780,26 @@ pub(crate) struct TableGridSourceOnlyPageMarkAbsoluteYSlotCandidate {
     pub(crate) value_px: f32,
 }
 
+/// Row-ordered value scan of the absolute-y-slot field across the subrecords the
+/// selected post-row-gap coverage matched. Diagnostic-only: it tests whether the
+/// field can be direct page-space px at all, it does not decode the field.
+#[derive(Debug, Clone)]
+pub(crate) struct TableGridSourceOnlyPageMarkFieldQuantization {
+    pub(crate) field_index: usize,
+    pub(crate) tail_block16_word_index: Option<usize>,
+    pub(crate) quantum_units: u16,
+    pub(crate) value_count: usize,
+    pub(crate) row_values: Vec<u16>,
+    pub(crate) distinct_values: Vec<u16>,
+    pub(crate) all_values_multiple_of_quantum: bool,
+    pub(crate) low_byte_all_zero: bool,
+    pub(crate) high_byte_values: Vec<u16>,
+    pub(crate) raw_record_scan_indexes: Vec<usize>,
+    pub(crate) values_constant_per_raw_record_scan_index: bool,
+    pub(crate) value_row_distinct: bool,
+    pub(crate) page_space_px_plausible: bool,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
     pub(crate) line_domain_y: Option<f32>,
@@ -789,11 +809,38 @@ pub(crate) struct TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
     pub(crate) best_absolute_y_slot: Option<TableGridSourceOnlyPageMarkAbsoluteYSlotCandidate>,
     pub(crate) residual_px: Option<f32>,
     pub(crate) agrees: bool,
+    pub(crate) field_quantization: Option<TableGridSourceOnlyPageMarkFieldQuantization>,
 }
 
 impl TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
     pub(crate) fn semantics_ready(&self) -> bool {
-        self.line_domain_projected_y.is_some() && self.best_absolute_y_slot.is_some() && self.agrees
+        self.line_domain_projected_y.is_some()
+            && self.best_absolute_y_slot.is_some()
+            && self.agrees
+            && !self.field_quantization_refutes_page_space_px()
+    }
+
+    pub(crate) fn field_quantization_refutes_page_space_px(&self) -> bool {
+        self.field_quantization
+            .as_ref()
+            .is_some_and(|quantization| !quantization.page_space_px_plausible)
+    }
+
+    pub(crate) fn field_quantization_blocked_reasons(&self) -> Vec<&'static str> {
+        let mut reasons = Vec::new();
+        let Some(quantization) = self.field_quantization.as_ref() else {
+            return reasons;
+        };
+        if quantization.all_values_multiple_of_quantum && quantization.low_byte_all_zero {
+            reasons.push("page-mark-absolute-y-slot-field-quantized-not-page-space-px");
+        }
+        if quantization.values_constant_per_raw_record_scan_index
+            && !quantization.value_row_distinct
+        {
+            reasons
+                .push("page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct");
+        }
+        reasons
     }
 }
 
