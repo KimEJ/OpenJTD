@@ -6,7 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg(feature = "bitmap-images")]
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use rjtd_core::auto_text_info::{AutoTextEntry, read_auto_text_info};
-use rjtd_core::container::{EntryKind, inspect_cfb_entries, read_cfb_stream};
+use rjtd_core::container::{
+    CfbEntryReadMode, EntryKind, inspect_cfb_entries, inspect_cfb_entries_with_mode,
+    inspect_cfb_stream_chain, read_cfb_stream,
+};
 use rjtd_core::document_text::{
     DocumentTextControl, DocumentTextElement, DocumentTextMap, DocumentTextMapEntry,
     DocumentTextMapKind, DocumentTextPayload, DocumentTextStyleResolver, InlineTextSegment,
@@ -9187,36 +9190,49 @@ impl DocumentTextModelBuilder {
 }
 
 fn reserve_and_verify_cfb_streams(data: &[u8], budget: &mut ResourceBudget) -> Result<()> {
-    let Ok(entries) = inspect_cfb_entries(data) else {
+    let Ok((entries, mode)) = inspect_cfb_entries_with_mode(data) else {
         return Ok(());
     };
+    let mut streams = BTreeMap::new();
 
     for entry in entries
         .iter()
         .filter(|entry| entry.kind() == EntryKind::Stream)
     {
-        budget.reserve_streams(1, declared_cfb_stream_bytes(entry)?)?;
+        streams
+            .entry(entry.path())
+            .and_modify(|size: &mut u64| *size = (*size).max(entry.size()))
+            .or_insert(entry.size());
     }
 
-    for entry in entries
-        .iter()
-        .filter(|entry| entry.kind() == EntryKind::Stream)
-    {
-        let Ok(stream) = read_cfb_stream(data, entry.path()) else {
+    for (path, declared) in streams {
+        let accounted = match mode {
+            CfbEntryReadMode::Strict => cfb_stream_bytes_from_u64(declared)?,
+            CfbEntryReadMode::Lenient => reachable_cfb_stream_bytes(data, path).unwrap_or(0),
+        };
+        budget.reserve_streams(1, accounted)?;
+
+        let Ok(stream) = read_cfb_stream(data, path) else {
             continue;
         };
-        budget.verify_stream_bytes(declared_cfb_stream_bytes(entry)?, stream.len())?;
+        budget.verify_stream_bytes(accounted, stream.len())?;
     }
 
     Ok(())
 }
 
-fn declared_cfb_stream_bytes(entry: &rjtd_core::container::ContainerEntry) -> Result<usize> {
-    usize::try_from(entry.size()).map_err(|_| Error::ResourceLimit {
+fn cfb_stream_bytes_from_u64(size: u64) -> Result<usize> {
+    usize::try_from(size).map_err(|_| Error::ResourceLimit {
         resource: "document stream bytes",
         limit: usize::MAX,
         actual: usize::MAX,
     })
+}
+
+fn reachable_cfb_stream_bytes(data: &[u8], path: &str) -> Result<usize> {
+    let chain = inspect_cfb_stream_chain(data, path)?;
+    let capacity = u64::try_from(chain.capacity_bytes()).unwrap_or(u64::MAX);
+    cfb_stream_bytes_from_u64(chain.location().size().min(capacity))
 }
 
 fn record_bytes_overflow() -> Error {
@@ -10610,7 +10626,10 @@ fn page_construction_shape(
             limit: usize::MAX,
             actual: usize::MAX,
         })?;
-    let projection_pages = checked_page_shape_add(projection_lines, 5)?;
+    // The projection temporarily coexists with normal pagination. It contributes five fixed
+    // front-matter pages and body pagination can gain at most one carry page when chapter
+    // spacing is inserted. Page-line expansion is accounted separately below.
+    let projection_pages = checked_page_shape_add(normal.pages, 6)?;
 
     Ok(PageOutputShape {
         pages: checked_page_shape_add(normal.pages, projection_pages)?,

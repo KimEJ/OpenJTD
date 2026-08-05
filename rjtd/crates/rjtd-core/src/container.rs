@@ -69,6 +69,12 @@ pub struct ContainerEntry {
     kind: EntryKind,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CfbEntryReadMode {
+    Strict,
+    Lenient,
+}
+
 impl ContainerEntry {
     pub fn new(path: impl Into<String>, size: u64, kind: EntryKind) -> Self {
         Self {
@@ -439,10 +445,16 @@ impl CfbSectorChain {
 }
 
 pub fn inspect_cfb_entries(data: &[u8]) -> Result<Vec<ContainerEntry>> {
+    inspect_cfb_entries_with_mode(data).map(|(entries, _)| entries)
+}
+
+pub fn inspect_cfb_entries_with_mode(
+    data: &[u8],
+) -> Result<(Vec<ContainerEntry>, CfbEntryReadMode)> {
     match inspect_cfb_entries_strict(data) {
-        Ok(entries) => Ok(entries),
+        Ok(entries) => Ok((entries, CfbEntryReadMode::Strict)),
         Err(strict_error) if has_cfb_magic(data) => match inspect_cfb_entries_lenient(data) {
-            Ok(entries) => Ok(entries),
+            Ok(entries) => Ok((entries, CfbEntryReadMode::Lenient)),
             Err(_) => Err(strict_error),
         },
         Err(error) => Err(error),
@@ -1190,9 +1202,10 @@ fn normalize_requested_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        CfbDirectoryEntryKind, ContainerEntry, EntryKind, StreamChainStatus, StreamStorage,
-        inspect_cfb_directory, inspect_cfb_entries, inspect_cfb_overview, inspect_cfb_stream_chain,
-        inspect_cfb_stream_location, open_cfb, read_cfb_stream, read_u32_le, sector_offset,
+        CfbDirectoryEntryKind, CfbEntryReadMode, ContainerEntry, EntryKind, StreamChainStatus,
+        StreamStorage, inspect_cfb_directory, inspect_cfb_entries, inspect_cfb_entries_with_mode,
+        inspect_cfb_overview, inspect_cfb_stream_chain, inspect_cfb_stream_location, open_cfb,
+        read_cfb_stream, read_u32_le, sector_offset,
     };
     use std::io::{Cursor, Write};
 
@@ -1281,8 +1294,10 @@ mod tests {
 
     #[test]
     fn inspects_cfb_entries_with_kind_size_and_normalized_path() {
-        let entries = inspect_cfb_entries(&tiny_cfb()).unwrap();
+        let bytes = tiny_cfb();
+        let (entries, mode) = inspect_cfb_entries_with_mode(&bytes).unwrap();
 
+        assert_eq!(mode, CfbEntryReadMode::Strict);
         assert_eq!(
             entries,
             vec![
@@ -1372,8 +1387,9 @@ mod tests {
         let bytes = cfb_with_duplicate_fat_pointer();
         assert!(open_cfb(&bytes).is_err());
 
-        let entries = inspect_cfb_entries(&bytes).unwrap();
+        let (entries, mode) = inspect_cfb_entries_with_mode(&bytes).unwrap();
 
+        assert_eq!(mode, CfbEntryReadMode::Lenient);
         assert!(entries.contains(&ContainerEntry::new("/A", 5000, EntryKind::Stream)));
         assert!(entries.contains(&ContainerEntry::new("/B", 5000, EntryKind::Stream)));
     }

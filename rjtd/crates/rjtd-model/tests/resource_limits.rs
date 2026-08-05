@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::io::{Cursor, Write};
 
 use rjtd_core::compressed_document::JUST_COMPRESSED_DOCUMENT_MAGIC;
+use rjtd_core::container::{CfbEntryReadMode, EntryKind, inspect_cfb_entries_with_mode};
 use rjtd_core::{Error, ParseLimits};
 use rjtd_model::{
     Document, DocumentCore, parse_document, parse_document_with_budget, parse_document_with_limits,
@@ -82,6 +83,51 @@ fn accepts_exact_cumulative_cfb_stream_bytes_and_rejects_limit_plus_one() {
             actual: 12,
         })
     );
+}
+
+#[test]
+fn budgets_duplicate_cfb_stream_paths_once() {
+    let mut bytes = document_with_streams(&[
+        ("/DocumentText", b"SsmgV.01"),
+        ("/DuplicateTxt", b"SsmgV.01"),
+    ]);
+    rename_root_directory_entry(&mut bytes, "DuplicateTxt", "DocumentText");
+
+    let (entries, mode) = inspect_cfb_entries_with_mode(&bytes).unwrap();
+    assert_eq!(mode, CfbEntryReadMode::Lenient);
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|entry| {
+                entry.kind() == EntryKind::Stream && entry.path() == "/DocumentText"
+            })
+            .count(),
+        2
+    );
+    assert!(
+        parse_document_with_limits(
+            &bytes,
+            ParseLimits::DEFAULT
+                .with_max_streams(1)
+                .with_max_stream_bytes(8),
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn budgets_lenient_cfb_streams_by_reachable_bytes() {
+    let mut bytes = document_with_streams(&[
+        ("/DocumentText", b"SsmgV.01"),
+        ("/A", &vec![b'a'; 5000]),
+        ("/B", &vec![b'b'; 5000]),
+    ]);
+    make_fat_inventory_lenient(&mut bytes, "A", "B");
+    set_directory_entry_size(&mut bytes, "A", u64::MAX);
+
+    let (_, mode) = inspect_cfb_entries_with_mode(&bytes).unwrap();
+    assert_eq!(mode, CfbEntryReadMode::Lenient);
+    assert!(parse_document_with_limits(&bytes, ParseLimits::DEFAULT).is_ok());
 }
 
 #[test]
@@ -434,6 +480,65 @@ fn create_parent_storages(
             compound.create_storage(&current).unwrap();
         }
     }
+}
+
+fn rename_root_directory_entry(bytes: &mut [u8], current: &str, replacement: &str) {
+    let offset = directory_entry_offset(bytes, current);
+    let units = replacement.encode_utf16().collect::<Vec<_>>();
+    assert!(units.len() < 32);
+    bytes[offset..offset + 64].fill(0);
+    for (index, unit) in units.iter().enumerate() {
+        let start = offset + index * 2;
+        bytes[start..start + 2].copy_from_slice(&unit.to_le_bytes());
+    }
+    let name_bytes = u16::try_from((units.len() + 1) * 2).unwrap();
+    bytes[offset + 64..offset + 66].copy_from_slice(&name_bytes.to_le_bytes());
+}
+
+fn make_fat_inventory_lenient(bytes: &mut [u8], source: &str, target: &str) {
+    let source_offset = directory_entry_offset(bytes, source);
+    let target_offset = directory_entry_offset(bytes, target);
+    let source_start = read_u32_le(bytes, source_offset + 116);
+    let target_start = read_u32_le(bytes, target_offset + 116);
+    let source_fat_offset = fat_entry_offset(bytes, source_start);
+    let target_fat_offset = fat_entry_offset(bytes, target_start);
+    let source_next = bytes[source_fat_offset..source_fat_offset + 4].to_vec();
+    bytes[target_fat_offset..target_fat_offset + 4].copy_from_slice(&source_next);
+}
+
+fn set_directory_entry_size(bytes: &mut [u8], name: &str, size: u64) {
+    let offset = directory_entry_offset(bytes, name);
+    bytes[offset + 120..offset + 128].copy_from_slice(&size.to_le_bytes());
+}
+
+fn directory_entry_offset(bytes: &[u8], name: &str) -> usize {
+    let sector_size = 1usize << u16::from_le_bytes([bytes[30], bytes[31]]);
+    let directory_sector = read_u32_le(bytes, 48);
+    let directory_offset = (directory_sector as usize + 1) * sector_size;
+    let directory_end = directory_offset + sector_size;
+
+    for offset in (directory_offset..directory_end).step_by(128) {
+        let name_length = u16::from_le_bytes([bytes[offset + 64], bytes[offset + 65]]) as usize;
+        let name_end = name_length.saturating_sub(2).min(64);
+        let units = bytes[offset..offset + name_end]
+            .chunks_exact(2)
+            .map(|unit| u16::from_le_bytes([unit[0], unit[1]]))
+            .collect::<Vec<_>>();
+        if String::from_utf16_lossy(&units) == name {
+            return offset;
+        }
+    }
+    panic!("directory entry `{name}` not found");
+}
+
+fn fat_entry_offset(bytes: &[u8], sector_id: u32) -> usize {
+    let sector_size = 1usize << u16::from_le_bytes([bytes[30], bytes[31]]);
+    let fat_sector = read_u32_le(bytes, 76);
+    (fat_sector as usize + 1) * sector_size + sector_id as usize * 4
+}
+
+fn read_u32_le(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
 }
 
 fn embedding_info_frames(count: usize) -> Vec<u8> {
