@@ -354,6 +354,8 @@ pub(crate) fn push_table_grid_source_page_y_transform_gate_json(
         cross_table_row_boundary_offset_probe.as_ref(),
         subrecord_span_readiness,
     );
+    output.push_str(",\"pageMarkVariableRecordNormalizationGate\":");
+    push_table_grid_page_mark_variable_record_normalization_gate_json(output, document, candidate);
     output.push_str(",\"pageGridYAnchor\":");
     push_table_grid_page_grid_y_anchor_gate_json(output, page_grid_y_anchor.as_ref());
     output.push_str(",\"sourceOnlyPageYRenderAdmissionGate\":");

@@ -35,6 +35,152 @@ fn page_mark_record_header_stream(
     bytes
 }
 
+fn page_mark_variable_record_stream(records: &[(u32, u32, u32, u32, usize)]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&3u32.to_be_bytes());
+    bytes.extend_from_slice(&0x10u32.to_be_bytes());
+    bytes.extend_from_slice(&2u32.to_be_bytes());
+    for (record_number, &(index, flags, line_start, line_end, record_len)) in
+        records.iter().enumerate()
+    {
+        assert!(record_len >= PAGE_MARK_RECORD_HEADER_BYTES);
+        bytes.extend_from_slice(&page_mark_record_header_bytes(
+            index, flags, line_start, line_end,
+        ));
+        bytes.resize(
+            bytes.len() + record_len - PAGE_MARK_RECORD_HEADER_BYTES,
+            record_number as u8 + 1,
+        );
+    }
+    bytes
+}
+
+#[test]
+fn page_mark_normalized_record_headers_preserve_variable_flag_records_and_tails() {
+    let bytes = page_mark_variable_record_stream(&[
+        (0, 0x0001_0000, 0, 42, 80),
+        (1, 0x0001_0000, 43, 84, 48),
+        (2, 0x0001_0000, 85, 85, 32),
+        (2, 0x0005_0300, 85, 140, 80),
+    ]);
+    let headers = page_mark_normalized_record_headers(&bytes);
+
+    assert_eq!(
+        headers
+            .iter()
+            .map(|header| header.offset)
+            .collect::<Vec<_>>(),
+        vec![12, 92, 140, 172]
+    );
+    assert_eq!(headers[3].flags, 0x0005_0300);
+    assert_eq!(headers[2].index, headers[3].index);
+    assert_eq!(headers[2].line_end, headers[3].line_start);
+
+    let tail_ranges = (0..headers.len())
+        .map(|scan_index| {
+            page_mark_record_tail_range(&headers, scan_index, bytes.len())
+                .expect("every accepted record must retain its exact tail")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(tail_ranges, vec![28..92, 108..140, 156..172, 188..252]);
+    assert_eq!(
+        PAGE_MARK_RECORD_HEADER_BYTES * headers.len()
+            + tail_ranges.iter().map(|range| range.len()).sum::<usize>(),
+        bytes.len() - 12,
+        "normalization must neither drop nor duplicate source bytes"
+    );
+    assert!(bytes[tail_ranges[3].clone()].iter().all(|byte| *byte == 4));
+}
+
+#[test]
+fn page_mark_normalized_record_headers_keep_replayed_and_overlapping_ranges() {
+    let bytes = page_mark_variable_record_stream(&[
+        (12, 0x0001_0000, 619, 619, 16),
+        (12, 0x0001_0100, 567, 610, 16),
+        (13, 0x0005_0400, 611, 650, 16),
+    ]);
+    let headers = page_mark_normalized_record_headers(&bytes);
+
+    assert_eq!(headers.len(), 3);
+    assert_eq!(
+        headers
+            .iter()
+            .map(|header| header.index)
+            .collect::<Vec<_>>(),
+        vec![12, 12, 13]
+    );
+    assert_eq!(
+        headers
+            .iter()
+            .map(|header| (header.line_start, header.line_end))
+            .collect::<Vec<_>>(),
+        vec![(619, 619), (567, 610), (611, 650)]
+    );
+}
+
+#[test]
+fn page_mark_line_index_relationship_preserves_ambiguous_containment() {
+    let bytes = page_mark_variable_record_stream(&[
+        (0, 0x0001_0000, 0, 42, 80),
+        (1, 0x0001_0000, 43, 84, 48),
+        (2, 0x0001_0000, 85, 85, 32),
+        (2, 0x0005_0300, 85, 140, 80),
+    ]);
+    let headers = page_mark_normalized_record_headers(&bytes);
+    let rows = page_mark_record_line_index_rows(&headers, &[7, 9, 43, 85]);
+
+    assert_eq!(rows[0].matches.len(), 1);
+    assert_eq!(rows[0].matches[0].normalized_scan_index, 0);
+    assert_eq!(rows[0].matches[0].offset_from_line_start, 7);
+    assert_eq!(rows[1].matches[0].offset_from_line_start, 9);
+    assert_eq!(rows[2].matches[0].normalized_scan_index, 1);
+    assert_eq!(rows[2].matches[0].offset_from_line_start, 0);
+    assert_eq!(
+        rows[3]
+            .matches
+            .iter()
+            .map(|match_| match_.normalized_scan_index)
+            .collect::<Vec<_>>(),
+        vec![2, 3],
+        "overlapping PageMark ranges must remain ambiguous"
+    );
+}
+
+#[test]
+fn page_mark_normalized_record_header_predicate_rejects_unobserved_shapes() {
+    for (index, flags, line_start, line_end) in [
+        (3, 0x0002_0400, 100, 200),
+        (256, 0x0001_0400, 100, 200),
+        (3, 0x0001_0400, 200, 100),
+        (3, 0x0001_0400, 100, 10_000),
+    ] {
+        let bytes = page_mark_variable_record_stream(&[(index, flags, line_start, line_end, 16)]);
+        assert!(page_mark_normalized_record_headers(&bytes).is_empty());
+    }
+    assert!(page_mark_normalized_record_headers(&[0u8; 27]).is_empty());
+}
+
+#[test]
+fn page_mark_separator_keeps_the_legacy_exact_flag_boundary() {
+    let mut high_five = page_mark_variable_record_stream(&[(2, 0x0005_0300, 85, 140, 24)]);
+    high_five[28..32].copy_from_slice(&[0xff, 0xff, 0x00, 0x00]);
+    high_five[34..36].copy_from_slice(&20_000u16.to_be_bytes());
+    assert_eq!(page_mark_normalized_record_headers(&high_five).len(), 1);
+    assert!(page_mark_record_headers(&high_five).is_empty());
+    assert!(
+        page_mark_separator_candidate(&high_five).is_none(),
+        "diagnostic flag widening must not alter separator rendering"
+    );
+
+    let mut exact = page_mark_variable_record_stream(&[(2, 0x0001_0000, 85, 140, 24)]);
+    exact[28..32].copy_from_slice(&[0xff, 0xff, 0x00, 0x00]);
+    exact[34..36].copy_from_slice(&20_000u16.to_be_bytes());
+    let candidate = page_mark_separator_candidate(&exact)
+        .expect("legacy exact record must retain separator detection");
+    assert_eq!(candidate.record_offset, 12);
+    assert_eq!(candidate.y_centipoints, 20_000);
+}
+
 #[test]
 fn page_mark_absolute_y_slot_field_is_the_owning_record_flags_low_u16() {
     let bytes = page_mark_record_header_stream(3, 0x0001_0400, 100, 200);

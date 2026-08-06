@@ -593,6 +593,15 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
         "\"pageMarkRawRecordScanEvidence\":{\"source\":\"/PageMark raw record scan+/LineMark\",\"present\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"diagnosticOnly\":true,\"streamByteLength\":1108,\"parsedPageMarkFamily\":\"count-plus-one-variable\",\"parsedPageMarkEntryCount\":4,\"scannedRecordHeaderCount\":15"
     ));
     assert!(layer_tree.contains(
+        "\"pageMarkVariableRecordNormalizationGate\":{\"source\":\"/PageMark observed variable raw record normalization+/LineMark\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectionReady\":false,\"acceptedFlagsHighU16Values\":[1,5],\"observedFlagsHighU16Values\":[1,5],\"flagsLowU16Semantics\":\"opaque-source-field\",\"legacyExactRecordHeaderCount\":15,\"normalizedRecordHeaderCount\":19,\"normalizedOnlyRecordHeaderCount\":4"
+    ));
+    assert!(layer_tree.contains(
+        "\"normalizedOnlyRecordHeaders\":[{\"normalizedScanIndex\":3,\"byteOffset\":172,\"index\":2,\"flags\":328448,\"flagsHex\":\"0x00050300\",\"lineStart\":85,\"lineEnd\":140},{\"normalizedScanIndex\":5,\"byteOffset\":332,\"index\":4,\"flags\":66304,\"flagsHex\":\"0x00010300\",\"lineStart\":192,\"lineEnd\":241},{\"normalizedScanIndex\":6,\"byteOffset\":412,\"index\":5,\"flags\":328704,\"flagsHex\":\"0x00050400\",\"lineStart\":242,\"lineEnd\":304},{\"normalizedScanIndex\":10,\"byteOffset\":732,\"index\":9,\"flags\":327936,\"flagsHex\":\"0x00050100\",\"lineStart\":437,\"lineEnd\":489}],\"normalizedTailByteCount\":792,\"normalizedPartitionComplete\":true,\"duplicateIndexCount\":3,\"overlappingAdjacentLineDomainCount\":2,\"legacyConsumersUnchanged\":true"
+    ));
+    assert!(layer_tree.contains(
+        "\"lineMarkRecordIndexToPageLineRelationship\":{\"source\":\"/LineMark record ordinal contained by normalized /PageMark raw line range\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectionReady\":false,\"lineMarkRecordIndexes\":[7,9,11,13],\"rowCount\":4,\"coveredRowCount\":4,\"uniquelyCoveredRowCount\":4,\"allRowsUniquelyCovered\":true,\"allRowsShareOneNormalizedRecord\":true"
+    ));
+    assert!(layer_tree.contains(
         "\"candidateRowCount\":4,\"rowLineMarkMatchCount\":4,\"rowScannedRecordHeaderMatchCount\":4,\"allRowsHaveLineMark\":true,\"allRowsHaveScannedRecordHeader\":true,\"singleScannedRecordHeaderMatched\":true,\"matchedScannedRecordHeaderIndex\":0,\"lineMarkRecordIndexes\":[8,10,12,14]"
     ));
     assert!(layer_tree.contains(
@@ -1002,6 +1011,9 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
     // records, all diagnostic-only.
     assert!(layer_tree.contains(
         "\"pageGridYAnchor\":{\"source\":\"/PageLayoutStyle+/PageMark+/LineMark source page grid fields\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"paperWidthMm100\":21000,\"paperHeightMm100\":29700,\"paperWidthPx\":793.701,\"paperHeightPx\":1122.520,\"pageLayoutStyleRecordOffset\":276,\"marginQuadMm100\":[3000,3000,2500,1500],\"marginQuadPayloadOffsets\":[304,306,308,310],\"marginQuadComplete\":true,\"marginQuadCandidateCount\":2,\"marginQuadSelectionUnique\":true,\"marginQuadPageFitRemainderMm100\":12,\"marginQuadFieldOrderProven\":false"
+    ));
+    assert!(layer_tree.contains(
+        "\"lineMarkRecordIndexes\":[32,34,36],\"rowCount\":3,\"coveredRowCount\":3,\"uniquelyCoveredRowCount\":3,\"allRowsUniquelyCovered\":true,\"allRowsShareOneNormalizedRecord\":true,\"rows\":[{\"lineMarkRecordIndex\":32,\"containingRecordCount\":1,\"matches\":[{\"normalizedScanIndex\":0,\"recordIndex\":0,\"recordLineStart\":0,\"recordLineEnd\":42,\"offsetFromRecordLineStart\":32}]"
     ));
     assert!(
         layer_tree.contains("\"pageLineStart\":0,\"pageLineEnd\":42,\"pageRecordLineCount\":43")

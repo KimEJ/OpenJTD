@@ -1,12 +1,6 @@
 use super::*;
 use crate::*;
 
-/// Observed high halves of `/PageMark` record-header `flags` be32 values. Only
-/// the high half is used as a structural discriminator: the low half is what the
-/// absolute-y-slot probe has been reading as a coordinate. Their semantics stay
-/// undecoded.
-pub(crate) const PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES: &[u16] = &[0x0001, 0x0005];
-
 /// A `/PageMark` raw u16 subrecord is a record header read two bytes early.
 ///
 /// Record header be32 layout at `O`: `index`, `flags`, `lineStart`, `lineEnd`.
@@ -17,12 +11,6 @@ pub(crate) const PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES: &[u16] = &[0x000
 /// `words[4] <= words[6]` is `lineStart <= lineEnd`. The absolute-y-slot field
 /// `words[2]` is therefore the low u16 of that record's `flags`, not a coordinate.
 pub(crate) const PAGE_MARK_SUBRECORD_RECORD_HEADER_BACK_SHIFT_BYTES: usize = 2;
-
-/// Same line-range sanity bound as `page_mark_record_headers`.
-pub(crate) const PAGE_MARK_RECORD_HEADER_MAX_LINE_END: u32 = 10_000;
-
-/// Same record-index sanity bound as `page_mark_record_headers`.
-pub(crate) const PAGE_MARK_RECORD_HEADER_MAX_INDEX: u32 = 256;
 
 /// One absolute-y-slot row resolved against the record header the subrecord
 /// window actually overlaps.
@@ -101,24 +89,7 @@ pub(crate) fn page_mark_subrecord_shifted_record_header(
 ) -> Option<PageMarkRecordHeader> {
     let offset =
         subrecord_byte_offset.checked_sub(PAGE_MARK_SUBRECORD_RECORD_HEADER_BACK_SHIFT_BYTES)?;
-    let index = read_be32_at(bytes, offset)?;
-    let flags = read_be32_at(bytes, offset + 4)?;
-    let line_start = read_be32_at(bytes, offset + 8)?;
-    let line_end = read_be32_at(bytes, offset + 12)?;
-    if index >= PAGE_MARK_RECORD_HEADER_MAX_INDEX
-        || !PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES.contains(&((flags >> 16) as u16))
-        || line_start > line_end
-        || line_end >= PAGE_MARK_RECORD_HEADER_MAX_LINE_END
-    {
-        return None;
-    }
-    Some(PageMarkRecordHeader {
-        offset,
-        index,
-        flags,
-        line_start,
-        line_end,
-    })
+    page_mark_record_header_at(bytes, offset)
 }
 
 /// Builds one alias row per subrecord the selected post-row-gap coverage matched,
