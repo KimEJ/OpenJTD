@@ -259,6 +259,285 @@ fn local_page_mark_raw_line_extent_never_equals_the_line_mark_declared_record_co
     }
 }
 
+/// `/DocumentEditStyles` byte offsets that differ anywhere across the top-margin
+/// series, and the `be32` reading of the field containing them. The values are
+/// not ordered by the controlled edit, so it is not a direct monotonic vertical
+/// metric and cannot directly explain the line domain.
+const PAGE_GEOMETRY_EDIT_STYLE_DIFFERING_OFFSETS: &[usize] = &[0x001f];
+const PAGE_GEOMETRY_EDIT_STYLE_FIELD_OFFSET: usize = 0x001c;
+const PAGE_GEOMETRY_EDIT_STYLE_FIELD_VALUES: &[u32] =
+    &[265_912, 265_900, 265_895, 265_897, 265_926];
+
+/// `/DocumentViewStyles` byte offsets that differ across the same series. Only
+/// two 2-byte fields move: one inside record `0x1002` and one in the trailing
+/// area past the end of the sequential record chain.
+const PAGE_GEOMETRY_VIEW_STYLE_DIFFERING_OFFSETS: &[usize] = &[0x0011, 0x0012, 0x0401, 0x0402];
+
+/// Record `0x1002` of `/DocumentViewStyles`: `be16` quadruple at payload offsets
+/// 3, 5, 7 and 9. Only the first entry moves across the series, in steps of
+/// `1000` per file, while the other three stay at `3000`. The entry is a
+/// source-backed page field that tracks the controlled edit in steps of `1000`,
+/// `1000`, `1000`, and `1001`; what it measures stays undecoded.
+const PAGE_GEOMETRY_VIEW_STYLE_RECORD_CODE: u16 = 0x1002;
+const PAGE_GEOMETRY_VIEW_STYLE_RECORD_OFFSET: usize = 10;
+const PAGE_GEOMETRY_VIEW_STYLE_RECORD_PAYLOAD_LEN: usize = 33;
+const PAGE_GEOMETRY_VIEW_STYLE_QUAD_PAYLOAD_OFFSETS: &[usize] = &[3, 5, 7, 9];
+const PAGE_GEOMETRY_VIEW_STYLE_MOVING_QUAD_VALUES: &[u16] = &[2000, 3000, 4000, 5000, 6001];
+const PAGE_GEOMETRY_VIEW_STYLE_FIXED_QUAD_VALUE: u16 = 3000;
+
+/// The second moving `/DocumentViewStyles` field, read as `be32` at `0x03ff`.
+/// It decreases monotonically, but its steps are not proportional to the line
+/// domain: two series steps share the same line-extent delta and disagree on
+/// this field, so no affine map from the line domain to it exists.
+const PAGE_GEOMETRY_VIEW_STYLE_TRAILING_FIELD_OFFSET: usize = 0x03ff;
+const PAGE_GEOMETRY_VIEW_STYLE_TRAILING_FIELD_VALUES: &[u32] =
+    &[48_801, 47_812, 46_797, 45_808, 44_792];
+
+/// Local files carrying a `/DocumentViewStyles` record `0x1002` payload that is
+/// byte-identical to the `040b` baseline, with their `/PageMark` raw line
+/// extents. One source record, six different line domains.
+const SHARED_VIEW_STYLE_RECORD_1002_SAMPLES: &[(&str, u32)] = &[
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/040b_top_margin_30mm_baseline.jtd",
+        55,
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/010a_table_after_1_paragraph.jtd",
+        56,
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/054_font_size_paragraph_plus.jtd",
+        53,
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/074c_table_crosses_page_boundary.jtd",
+        90,
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/081_plain_paragraph_line_spacing_plus.jtd",
+        63,
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/082_plain_paragraph_font_size_plus.jtd",
+        64,
+    ),
+];
+
+fn read_style_stream(relative_path: &str, name: &str) -> Option<Vec<u8>> {
+    let sample_bytes = fs::read(local_samples_dir().join(relative_path)).ok()?;
+    let document = parse_document(&sample_bytes).unwrap();
+    document
+        .unknown_styles()
+        .iter()
+        .find(|style| style.name() == Some(name))
+        .map(|style| style.payload().to_vec())
+}
+
+fn read_page_mark_line_extent(relative_path: &str) -> Option<u32> {
+    let sample_bytes = fs::read(local_samples_dir().join(relative_path)).ok()?;
+    let document = parse_document(&sample_bytes).unwrap();
+    let page_mark = raw_stream_bytes(&document, PAGE_MARK_PATH)
+        .unwrap_or_else(|| panic!("{relative_path} must expose /PageMark"));
+    page_mark_normalized_record_headers(page_mark)
+        .iter()
+        .map(|header| header.line_end + 1)
+        .max()
+}
+
+fn document_view_styles_record_1002_payload(bytes: &[u8]) -> Vec<u8> {
+    let summary = summarize_style_stream(bytes);
+    let record = summary
+        .records()
+        .iter()
+        .find(|record| record.code() == PAGE_GEOMETRY_VIEW_STYLE_RECORD_CODE)
+        .expect("/DocumentViewStyles must expose record 0x1002");
+    assert_eq!(record.offset(), PAGE_GEOMETRY_VIEW_STYLE_RECORD_OFFSET);
+    assert_eq!(
+        record.payload_len(),
+        PAGE_GEOMETRY_VIEW_STYLE_RECORD_PAYLOAD_LEN
+    );
+    let payload_start = record.offset() + 4;
+    bytes[payload_start..payload_start + record.payload_len()].to_vec()
+}
+
+fn differing_byte_offsets(blobs: &[Vec<u8>]) -> Vec<usize> {
+    let len = blobs.first().map(Vec::len).unwrap_or(0);
+    assert!(
+        blobs.iter().all(|blob| blob.len() == len),
+        "the series must expose one stream length"
+    );
+    (0..len)
+        .filter(|offset| blobs.iter().any(|blob| blob[*offset] != blobs[0][*offset]))
+        .collect()
+}
+
+fn read_be16(bytes: &[u8], offset: usize) -> u16 {
+    u16::from_be_bytes([bytes[offset], bytes[offset + 1]])
+}
+
+fn read_be32(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_be_bytes([
+        bytes[offset],
+        bytes[offset + 1],
+        bytes[offset + 2],
+        bytes[offset + 3],
+    ])
+}
+
+/// Of the two style streams that survived the earlier five-distinct-contents
+/// survey, only `/DocumentViewStyles` carries a field that moves monotonically
+/// with the controlled page-geometry edit. The single `/DocumentEditStyles` byte
+/// that changes is not ordered by the edit, and the second `/DocumentViewStyles`
+/// field admits no affine map from the line domain. The monotonic field is then
+/// tested below against documents that share it but have different line domains.
+#[test]
+fn local_page_geometry_series_style_streams_expose_one_monotonic_source_field() {
+    let Some(edit_styles) = PAGE_GEOMETRY_ONLY_EDIT_SERIES
+        .iter()
+        .map(|(relative_path, _)| {
+            read_style_stream(
+                relative_path,
+                rjtd_core::style_stream::DOCUMENT_EDIT_STYLES_PATH,
+            )
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    let view_styles = PAGE_GEOMETRY_ONLY_EDIT_SERIES
+        .iter()
+        .map(|(relative_path, _)| read_style_stream(relative_path, DOCUMENT_VIEW_STYLES_PATH))
+        .collect::<Option<Vec<_>>>()
+        .expect("every file with /DocumentEditStyles must expose /DocumentViewStyles");
+
+    assert_eq!(
+        differing_byte_offsets(&edit_styles),
+        PAGE_GEOMETRY_EDIT_STYLE_DIFFERING_OFFSETS.to_vec(),
+        "/DocumentEditStyles differing byte offsets across the series"
+    );
+    let edit_field_values = edit_styles
+        .iter()
+        .map(|blob| read_be32(blob, PAGE_GEOMETRY_EDIT_STYLE_FIELD_OFFSET))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        edit_field_values,
+        PAGE_GEOMETRY_EDIT_STYLE_FIELD_VALUES.to_vec(),
+        "/DocumentEditStyles be32 field containing the only changing byte"
+    );
+    assert!(
+        !edit_field_values.is_sorted() && !edit_field_values.iter().rev().is_sorted(),
+        "the /DocumentEditStyles field must not be ordered by the controlled edit"
+    );
+
+    assert_eq!(
+        differing_byte_offsets(&view_styles),
+        PAGE_GEOMETRY_VIEW_STYLE_DIFFERING_OFFSETS.to_vec(),
+        "/DocumentViewStyles differing byte offsets across the series"
+    );
+    let payloads = view_styles
+        .iter()
+        .map(|blob| document_view_styles_record_1002_payload(blob))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        differing_byte_offsets(&payloads),
+        vec![
+            PAGE_GEOMETRY_VIEW_STYLE_QUAD_PAYLOAD_OFFSETS[0],
+            PAGE_GEOMETRY_VIEW_STYLE_QUAD_PAYLOAD_OFFSETS[0] + 1
+        ],
+        "only the first record 0x1002 quadruple entry may move"
+    );
+    assert_eq!(
+        payloads
+            .iter()
+            .map(|payload| read_be16(payload, PAGE_GEOMETRY_VIEW_STYLE_QUAD_PAYLOAD_OFFSETS[0]))
+            .collect::<Vec<_>>(),
+        PAGE_GEOMETRY_VIEW_STYLE_MOVING_QUAD_VALUES.to_vec(),
+        "record 0x1002 moving quadruple entry"
+    );
+    for payload in &payloads {
+        for offset in &PAGE_GEOMETRY_VIEW_STYLE_QUAD_PAYLOAD_OFFSETS[1..] {
+            assert_eq!(
+                read_be16(payload, *offset),
+                PAGE_GEOMETRY_VIEW_STYLE_FIXED_QUAD_VALUE,
+                "record 0x1002 quadruple entry at payload offset {offset}"
+            );
+        }
+    }
+
+    let trailing_values = view_styles
+        .iter()
+        .map(|blob| read_be32(blob, PAGE_GEOMETRY_VIEW_STYLE_TRAILING_FIELD_OFFSET))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        trailing_values,
+        PAGE_GEOMETRY_VIEW_STYLE_TRAILING_FIELD_VALUES.to_vec(),
+        "/DocumentViewStyles trailing moving field"
+    );
+    let line_extents = PAGE_GEOMETRY_ONLY_EDIT_SERIES
+        .iter()
+        .map(|(_, ranges)| ranges.iter().map(|(_, end)| end + 1).max().unwrap())
+        .collect::<Vec<_>>();
+    let steps = (1..line_extents.len())
+        .map(|index| {
+            (
+                i64::from(line_extents[index]) - i64::from(line_extents[index - 1]),
+                i64::from(trailing_values[index]) - i64::from(trailing_values[index - 1]),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        steps.iter().any(|left| steps
+            .iter()
+            .any(|right| left.0 == right.0 && left.1 != right.1)),
+        "two series steps must share a line-extent delta and disagree on the trailing field, \
+         which rules out any affine map from the line domain: {steps:?}"
+    );
+}
+
+/// The counter-direction for the one moving source field: the whole record
+/// `0x1002` payload is byte-identical in six local files whose `/PageMark` raw
+/// line extents are all different. A source field that does not change while
+/// the line domain does cannot produce that domain on its own.
+#[test]
+fn local_page_mark_line_domain_is_not_a_function_of_view_style_record_1002() {
+    let Some(payloads) = SHARED_VIEW_STYLE_RECORD_1002_SAMPLES
+        .iter()
+        .map(|(relative_path, _)| {
+            read_style_stream(relative_path, DOCUMENT_VIEW_STYLES_PATH)
+                .map(|blob| document_view_styles_record_1002_payload(&blob))
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    assert_eq!(
+        distinct_count(&payloads),
+        1,
+        "every sample must share one byte-identical record 0x1002 payload"
+    );
+
+    let extents = SHARED_VIEW_STYLE_RECORD_1002_SAMPLES
+        .iter()
+        .map(|(relative_path, _)| {
+            read_page_mark_line_extent(relative_path)
+                .unwrap_or_else(|| panic!("{relative_path} must expose a normalized /PageMark"))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        extents,
+        SHARED_VIEW_STYLE_RECORD_1002_SAMPLES
+            .iter()
+            .map(|(_, extent)| *extent)
+            .collect::<Vec<_>>(),
+        "raw /PageMark line extents behind one shared source record"
+    );
+    assert_eq!(
+        distinct_count(&extents),
+        SHARED_VIEW_STYLE_RECORD_1002_SAMPLES.len(),
+        "the shared source record must stand behind one distinct line extent per sample"
+    );
+}
+
 #[test]
 fn local_page_mark_flags_high_three_records_complete_an_alternating_chain() {
     for (sample_name, expected_records) in FLAGS_HIGH_THREE_PARTITION_SAMPLES {
