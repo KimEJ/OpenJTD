@@ -64,6 +64,172 @@ const LINE_DOMAIN_SIZE_DELTAS: &[(&str, i64)] = &[
     ),
 ];
 
+/// `page01-grid` keeps one page setup and only moves the body: `DOWNTEST` and
+/// `down_*Low` push it down by whole lines, `right_*Tick` pushes it sideways.
+const CONTENT_ONLY_EDIT_SERIES: &[&str] = &[
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_DOWNTEST_1LINE.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_DOWNTEST_BASE.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_down_1Low.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_down_2Low.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_down_3Low.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_down_4Low.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_right_1Tick.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_right_2Tick.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_right_3Tick.jtd",
+    "ichitaro-source-y-probe/corpus/page01-grid/PAGE 01_right_4Tick.jtd",
+];
+
+const CONTENT_ONLY_EDIT_LINE_RANGES: &[(u32, u32)] = &[(0, 39), (40, 79), (80, 80)];
+
+/// `baseline-sweep` top-margin series: same body, five different top margins.
+const PAGE_GEOMETRY_ONLY_EDIT_SERIES: &[(&str, &[(u32, u32)])] = &[
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/040a_top_margin_20mm.jtd",
+        &[(0, 5), (6, 56), (57, 57)],
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/040b_top_margin_30mm_baseline.jtd",
+        &[(0, 5), (6, 53), (54, 54)],
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/040c_top_margin_40mm.jtd",
+        &[(0, 5), (6, 51), (52, 52)],
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/040d_top_margin_50mm.jtd",
+        &[(0, 5), (6, 49), (50, 50)],
+    ),
+    (
+        "ichitaro-source-y-probe/corpus/baseline-sweep/040e_top_margin_60mm.jtd",
+        &[(0, 5), (6, 47), (48, 48)],
+    ),
+];
+
+/// The first three top-margin files also share one byte-identical
+/// `/PageLayoutStyle`, so that stream cannot carry the line domain either.
+const PAGE_GEOMETRY_SHARED_PAGE_LAYOUT_STYLE_PREFIX: usize = 3;
+
+struct SeriesSample {
+    line_ranges: Vec<(u32, u32)>,
+    document_text: Vec<u8>,
+    line_mark: Vec<u8>,
+    page_layout_style: Option<Vec<u8>>,
+}
+
+fn read_series_sample(relative_path: &str) -> Option<SeriesSample> {
+    let sample_bytes = fs::read(local_samples_dir().join(relative_path)).ok()?;
+    let document = parse_document(&sample_bytes).unwrap();
+    let page_mark = raw_stream_bytes(&document, PAGE_MARK_PATH)
+        .unwrap_or_else(|| panic!("{relative_path} must expose /PageMark"));
+    let stream = |name: &str| {
+        raw_stream_bytes(&document, name)
+            .unwrap_or_else(|| panic!("{relative_path} must expose {name}"))
+            .to_vec()
+    };
+    Some(SeriesSample {
+        line_ranges: page_mark_normalized_record_headers(page_mark)
+            .iter()
+            .map(|header| (header.line_start, header.line_end))
+            .collect(),
+        document_text: stream("/DocumentText"),
+        line_mark: stream(LINE_MARK_PATH),
+        page_layout_style: document
+            .unknown_styles()
+            .iter()
+            .find(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+            .map(|style| style.payload().to_vec()),
+    })
+}
+
+fn distinct_count<T: Ord>(values: impl IntoIterator<Item = T>) -> usize {
+    values.into_iter().collect::<BTreeSet<_>>().len()
+}
+
+/// Moving the body without touching the page setup rewrites `/DocumentText` and
+/// `/LineMark` but leaves the raw `/PageMark` line tuples alone, so the raw line
+/// fields cannot be an ordinal into either stream's units or records.
+#[test]
+fn local_page_mark_raw_line_domain_is_invariant_while_content_streams_change() {
+    let samples = CONTENT_ONLY_EDIT_SERIES
+        .iter()
+        .filter_map(|relative_path| read_series_sample(relative_path))
+        .collect::<Vec<_>>();
+    if samples.len() < CONTENT_ONLY_EDIT_SERIES.len() {
+        return;
+    }
+
+    for (relative_path, sample) in CONTENT_ONLY_EDIT_SERIES.iter().zip(&samples) {
+        assert_eq!(
+            sample.line_ranges,
+            CONTENT_ONLY_EDIT_LINE_RANGES.to_vec(),
+            "{relative_path} raw /PageMark line ranges"
+        );
+    }
+    assert_eq!(
+        distinct_count(samples.iter().map(|sample| &sample.document_text)),
+        CONTENT_ONLY_EDIT_SERIES.len(),
+        "every sample in the series must carry a different /DocumentText"
+    );
+    assert_eq!(
+        distinct_count(samples.iter().map(|sample| &sample.line_mark)),
+        8,
+        "the series must carry eight distinct /LineMark streams"
+    );
+}
+
+/// The mirror case: `/DocumentText` and `/LineMark` are byte-identical across the
+/// top-margin series while every raw `/PageMark` line domain differs, and the
+/// first three files share `/PageLayoutStyle` as well.
+#[test]
+fn local_page_mark_raw_line_domain_changes_while_content_streams_are_byte_identical() {
+    let samples = PAGE_GEOMETRY_ONLY_EDIT_SERIES
+        .iter()
+        .filter_map(|(relative_path, _)| read_series_sample(relative_path))
+        .collect::<Vec<_>>();
+    if samples.len() < PAGE_GEOMETRY_ONLY_EDIT_SERIES.len() {
+        return;
+    }
+
+    for ((relative_path, expected_ranges), sample) in
+        PAGE_GEOMETRY_ONLY_EDIT_SERIES.iter().zip(&samples)
+    {
+        assert_eq!(
+            sample.line_ranges,
+            expected_ranges.to_vec(),
+            "{relative_path} raw /PageMark line ranges"
+        );
+    }
+    assert_eq!(
+        distinct_count(samples.iter().map(|sample| &sample.line_ranges)),
+        PAGE_GEOMETRY_ONLY_EDIT_SERIES.len(),
+        "the raw line domain must differ in every file of the series"
+    );
+    assert_eq!(
+        distinct_count(samples.iter().map(|sample| &sample.document_text)),
+        1,
+        "/DocumentText must stay byte-identical across the series"
+    );
+    assert_eq!(
+        distinct_count(samples.iter().map(|sample| &sample.line_mark)),
+        1,
+        "/LineMark must stay byte-identical across the series"
+    );
+    assert_eq!(
+        distinct_count(
+            samples[..PAGE_GEOMETRY_SHARED_PAGE_LAYOUT_STYLE_PREFIX]
+                .iter()
+                .map(|sample| &sample.page_layout_style)
+        ),
+        1,
+        "the first three files must share one /PageLayoutStyle while their line domains differ"
+    );
+    assert!(
+        samples[0].page_layout_style.is_some(),
+        "the shared /PageLayoutStyle must be present rather than absent in all three"
+    );
+}
+
 #[test]
 fn local_page_mark_raw_line_extent_never_equals_the_line_mark_declared_record_count() {
     for (sample_name, expected_delta) in LINE_DOMAIN_SIZE_DELTAS {
