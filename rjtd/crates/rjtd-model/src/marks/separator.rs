@@ -4,8 +4,24 @@ use std::ops::Range;
 
 pub(crate) const PAGE_MARK_RECORD_HEADER_BYTES: usize = 16;
 
-/// Observed high halves for nested `/PageMark` record flags. The low half is
+/// High halves the additive normalized record walk accepts. The low half is
 /// retained as opaque source data; it is not geometry.
+///
+/// `0x0003` is admitted on walk-position frequency, not on one sample: over the
+/// 109 readable local `/PageMark` streams it occurs at 145 walk positions
+/// concentrated in 8 files, while every other rejected high half at a walk
+/// position looks like noise (`0x0000` 3864 positions in 88 files, `0x0172` 27
+/// in 27, `0x0002` 6 in 3, everything else at most 4). In
+/// `justsystems-...-kibasen.jtd` the six admitted records are byte-for-byte the
+/// first four u32 fields of core's six parsed `fixed84` entries at `12 + k*84`,
+/// which corroborates that the `0x0003` records are top-level `/PageMark`
+/// records and not a nested sub-grammar. What the flags mean stays undecoded.
+pub(crate) const PAGE_MARK_NORMALIZED_VIEW_FLAGS_HIGH_U16_VALUES: [u16; 3] =
+    [0x0001, 0x0003, 0x0005];
+
+/// High halves accepted when a raw u16 subrecord window claims to be a record
+/// header read two bytes early. Deliberately narrower than the normalized walk
+/// so the alias gate keeps its independent anti-coincidence strength.
 pub(crate) const PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES: [u16; 2] = [0x0001, 0x0005];
 
 pub(crate) const PAGE_MARK_RECORD_HEADER_MAX_LINE_END: u32 = 10_000;
@@ -141,7 +157,11 @@ pub(crate) fn page_mark_normalized_record_headers(bytes: &[u8]) -> Vec<PageMarkR
     let mut headers = Vec::new();
     let mut offset = 12usize;
     while offset + PAGE_MARK_RECORD_HEADER_BYTES <= bytes.len() {
-        if let Some(header) = page_mark_record_header_at(bytes, offset) {
+        if let Some(header) = page_mark_record_header_at(
+            bytes,
+            offset,
+            &PAGE_MARK_NORMALIZED_VIEW_FLAGS_HIGH_U16_VALUES,
+        ) {
             headers.push(header);
             offset += PAGE_MARK_RECORD_HEADER_BYTES;
         } else {
@@ -151,16 +171,20 @@ pub(crate) fn page_mark_normalized_record_headers(bytes: &[u8]) -> Vec<PageMarkR
     headers
 }
 
+/// `accepted_flags_high_u16_values` is passed in so each consumer states its own
+/// admission set: the normalized walk widens, the shifted-header alias gate does
+/// not.
 pub(crate) fn page_mark_record_header_at(
     bytes: &[u8],
     offset: usize,
+    accepted_flags_high_u16_values: &[u16],
 ) -> Option<PageMarkRecordHeader> {
     let index = read_be32_at(bytes, offset)?;
     let flags = read_be32_at(bytes, offset + 4)?;
     let line_start = read_be32_at(bytes, offset + 8)?;
     let line_end = read_be32_at(bytes, offset + 12)?;
     if index >= PAGE_MARK_RECORD_HEADER_MAX_INDEX
-        || !PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES.contains(&((flags >> 16) as u16))
+        || !accepted_flags_high_u16_values.contains(&((flags >> 16) as u16))
         || line_start > line_end
         || line_end >= PAGE_MARK_RECORD_HEADER_MAX_LINE_END
     {
