@@ -602,9 +602,11 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
         "\"lineMarkRecordIndexToPageLineRelationship\":{\"source\":\"/LineMark record ordinal contained by normalized /PageMark raw line range\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectionReady\":false,\"lineMarkRecordIndexes\":[7,9,11,13],\"rowCount\":4,\"coveredRowCount\":4,\"uniquelyCoveredRowCount\":4,\"allRowsUniquelyCovered\":true,\"allRowsShareOneNormalizedRecord\":true"
     ));
     // Containment is unanimous only because all 45 /LineMark ordinals fall inside a
-    // raw line span that reaches 710, which is why the identity stays unproven.
+    // raw line span that reaches 710. The raw line field therefore takes 665 values
+    // that are not record ordinals at all, which refutes the identity here rather
+    // than merely leaving it unproven.
     assert!(layer_tree.contains(
-        "\"maxLineEndPlusOne\":710,\"minLineStart\":0,\"lineMarkDeclaredRecordCount\":45,\"maxLineEndPlusOneEqualsLineMarkDeclaredRecordCount\":false,\"identityCandidateSelectedByContainment\":true,\"identityCandidateIndependentlyProven\":false,\"pageSpaceYDecoded\":false,\"blockedReasons\":[\"line-mark-record-index-page-line-candidate-selected-by-containment\",\"page-mark-raw-line-range-role-unproven\",\"line-domain-to-page-space-y-transform-required\"]"
+        "\"maxLineEndPlusOne\":710,\"minLineStart\":0,\"lineMarkDeclaredRecordCount\":45,\"maxLineEndPlusOneEqualsLineMarkDeclaredRecordCount\":false,\"lineMarkDeclaredRecordCountMinusMaxLineEndPlusOne\":-665,\"identityCandidateSelectedByContainment\":true,\"identityCandidateRefutedByRawLineExtent\":true,\"identityCandidateIndependentlyProven\":false,\"pageSpaceYDecoded\":false,\"blockedReasons\":[\"line-mark-record-index-page-line-candidate-selected-by-containment\",\"page-mark-raw-line-range-role-unproven\",\"line-domain-to-page-space-y-transform-required\",\"page-mark-raw-line-extent-exceeds-line-mark-declared-record-count\"]"
     ));
     assert!(layer_tree.contains(
         "\"candidateRowCount\":4,\"rowLineMarkMatchCount\":4,\"rowScannedRecordHeaderMatchCount\":4,\"allRowsHaveLineMark\":true,\"allRowsHaveScannedRecordHeader\":true,\"singleScannedRecordHeaderMatched\":true,\"matchedScannedRecordHeaderIndex\":0,\"lineMarkRecordIndexes\":[8,10,12,14]"

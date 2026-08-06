@@ -229,6 +229,56 @@ fn line_mark_declared_record_count_rejects_streams_too_short_for_the_records() {
     assert_eq!(line_mark_declared_record_count(&zero_count), None);
 }
 
+/// A `/LineMark` be-delta stream long enough for its declared record count. The
+/// record payloads stay zero because only the declared count is compared here.
+fn line_mark_be_delta_stream(record_count: u16) -> Vec<u8> {
+    let mut bytes = vec![0u8; LINE_MARK_BE_DELTA_HEADER_BYTES];
+    bytes[LINE_MARK_BE_DELTA_COUNT_OFFSET..LINE_MARK_BE_DELTA_COUNT_OFFSET + 2]
+        .copy_from_slice(&record_count.to_be_bytes());
+    bytes.resize(
+        LINE_MARK_BE_DELTA_HEADER_BYTES
+            + usize::from(record_count) * LINE_MARK_BE_DELTA_RECORD_BYTES,
+        0,
+    );
+    bytes
+}
+
+#[test]
+fn line_mark_declared_record_count_minus_page_mark_line_extent_reports_both_directions() {
+    let page_mark = page_mark_variable_record_stream(&[
+        (0, 0x0001_0000, 0, 9, 16),
+        (1, 0x0001_0000, 10, 19, 16),
+    ]);
+    let headers = page_mark_normalized_record_headers(&page_mark);
+    assert_eq!(headers.len(), 2);
+
+    // The raw line extent is 20. Only the negative case refutes the ordinal
+    // reading; the positive case is coverage that stops short of the records.
+    for (record_count, expected) in [(20u16, 0i64), (21, 1), (5, -15)] {
+        assert_eq!(
+            line_mark_declared_record_count_minus_page_mark_line_extent(
+                &headers,
+                &line_mark_be_delta_stream(record_count)
+            ),
+            Some(expected)
+        );
+    }
+
+    // Either side missing its own record evidence leaves the comparison absent
+    // instead of defaulting to a same-domain reading.
+    assert_eq!(
+        line_mark_declared_record_count_minus_page_mark_line_extent(
+            &[],
+            &line_mark_be_delta_stream(20)
+        ),
+        None
+    );
+    assert_eq!(
+        line_mark_declared_record_count_minus_page_mark_line_extent(&headers, &[0u8; 8]),
+        None
+    );
+}
+
 #[test]
 fn page_mark_normalized_record_header_predicate_rejects_unobserved_shapes() {
     for (index, flags, line_start, line_end) in [
