@@ -114,6 +114,7 @@ pub(crate) fn push_table_grid_source_page_y_transform_gate_json(
         table_grid_cross_table_subrecord_ordering_probe(document, candidate);
     let cross_table_row_boundary_offset_probe =
         table_grid_cross_table_row_boundary_offset_probe(document, candidate);
+    let page_grid_y_anchor = table_grid_page_grid_y_anchor(document, candidate);
     let selected_complete = subrecord_span_readiness.as_ref().is_some_and(|readiness| {
         !readiness.selected_post_row_gap_span_targets.is_empty()
             && readiness.selected_post_row_gap_span_hit_count
@@ -353,6 +354,8 @@ pub(crate) fn push_table_grid_source_page_y_transform_gate_json(
         cross_table_row_boundary_offset_probe.as_ref(),
         subrecord_span_readiness,
     );
+    output.push_str(",\"pageGridYAnchor\":");
+    push_table_grid_page_grid_y_anchor_gate_json(output, page_grid_y_anchor.as_ref());
     output.push_str(",\"sourceOnlyPageYRenderAdmissionGate\":");
     push_table_grid_source_only_page_y_render_admission_gate_json(
         output,
@@ -575,7 +578,11 @@ pub(crate) fn push_table_grid_source_only_page_y_render_admission_gate_json(
         if page_mark_absolute_y_slot_blocked_reason != "none" {
             blocked_reasons.push(page_mark_absolute_y_slot_blocked_reason);
         }
-        for reason in page_mark_absolute_y_slot_agreement.field_quantization_blocked_reasons() {
+        for reason in page_mark_absolute_y_slot_agreement
+            .field_quantization_blocked_reasons()
+            .into_iter()
+            .chain(page_mark_absolute_y_slot_agreement.record_flag_alias_blocked_reasons())
+        {
             if !blocked_reasons.contains(&reason) {
                 blocked_reasons.push(reason);
             }
@@ -728,6 +735,14 @@ pub(crate) fn push_table_grid_source_only_page_y_render_admission_gate_json(
     push_table_grid_source_only_page_mark_field_quantization_gate_json(
         output,
         &page_mark_absolute_y_slot_agreement,
+    );
+    output.push_str(",\"pageMarkAbsoluteYSlotRecordFlagAliasGate\":");
+    push_table_grid_source_only_page_mark_record_flag_alias_gate_json(
+        output,
+        page_mark_absolute_y_slot_agreement
+            .record_flag_alias
+            .as_ref(),
+        &page_mark_absolute_y_slot_agreement.record_flag_alias_blocked_reasons(),
     );
     output.push_str(",\"blockedReasons\":");
     push_json_string_slice_array(output, &blocked_reasons);
@@ -943,6 +958,8 @@ pub(crate) fn table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(
         "line-domain-projection-disagrees-with-page-mark-absolute-y-slot"
     } else if agreement.field_quantization_refutes_page_space_px() {
         "page-mark-absolute-y-slot-field-quantized-not-page-space-px"
+    } else if agreement.record_flag_alias_refutes_page_space_px() {
+        "page-mark-absolute-y-slot-field-is-owning-raw-record-flags-low-u16"
     } else if agreement.best_absolute_y_slot.is_none() {
         "page-mark-absolute-y-slot-absent"
     } else if agreement.line_domain_projected_y.is_none() {
@@ -999,6 +1016,10 @@ pub(crate) fn table_grid_source_only_page_mark_absolute_y_slot_agreement(
     let agrees = residual_px.is_some_and(|residual| residual.abs() <= 2.0);
     let field_quantization =
         table_grid_source_only_page_mark_field_quantization(document, subrecord_span_readiness);
+    let record_flag_alias = table_grid_source_only_page_mark_absolute_y_slot_record_flag_alias(
+        document,
+        subrecord_span_readiness,
+    );
 
     TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
         line_domain_y,
@@ -1009,6 +1030,7 @@ pub(crate) fn table_grid_source_only_page_mark_absolute_y_slot_agreement(
         residual_px,
         agrees,
         field_quantization,
+        record_flag_alias,
     }
 }
 
@@ -1051,6 +1073,7 @@ pub(crate) fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
         blocked_reasons.push("line-domain-projection-disagrees-with-page-mark-absolute-y-slot");
     }
     blocked_reasons.extend(agreement.field_quantization_blocked_reasons());
+    blocked_reasons.extend(agreement.record_flag_alias_blocked_reasons());
     if !agreement.semantics_ready() {
         blocked_reasons.push("page-mark-absolute-y-slot-semantics-unproven");
     }
@@ -1093,6 +1116,12 @@ pub(crate) fn push_table_grid_source_only_page_mark_absolute_y_slot_gate_json(
     output.push_str(if agreement.agrees { "true" } else { "false" });
     output.push_str(",\"sourceOnlyPageMarkFieldQuantizationGate\":");
     push_table_grid_source_only_page_mark_field_quantization_gate_json(output, &agreement);
+    output.push_str(",\"pageMarkAbsoluteYSlotRecordFlagAliasGate\":");
+    push_table_grid_source_only_page_mark_record_flag_alias_gate_json(
+        output,
+        agreement.record_flag_alias.as_ref(),
+        &agreement.record_flag_alias_blocked_reasons(),
+    );
     output.push_str(",\"lineageClass\":");
     output.push_str(&json_string(lineage_class));
     output.push_str(",\"blockedReasons\":");

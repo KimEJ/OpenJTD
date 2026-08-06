@@ -53,9 +53,13 @@ pub(crate) fn table_grid_source_only_page_y_origin_candidate_supports(
             cross_table_row_boundary_offset_probe,
             subrecord_span_readiness,
         );
+        // A slot already refuted as page-space px by the record-flag alias or by
+        // field quantization is not a y-origin candidate at all, so it must not
+        // reach the selector as a support.
         if let Some(slot) = absolute_y_slot_agreement.best_absolute_y_slot.as_ref()
             && slot.field_index == 2
             && slot.tail_block16_word_index == Some(11)
+            && !absolute_y_slot_agreement.refuted_as_page_space_px()
         {
             let blocked_reason = if absolute_y_slot_agreement.semantics_ready() {
                 "none"
@@ -72,6 +76,8 @@ pub(crate) fn table_grid_source_only_page_y_origin_candidate_supports(
             }
             extra_blocked_reasons
                 .extend(absolute_y_slot_agreement.field_quantization_blocked_reasons());
+            extra_blocked_reasons
+                .extend(absolute_y_slot_agreement.record_flag_alias_blocked_reasons());
             push_table_grid_source_only_page_y_origin_candidate_support_with_extra_blockers(
                 &mut supports,
                 "page-mark-absolute-y-slot-field2-tail-block16-word11",

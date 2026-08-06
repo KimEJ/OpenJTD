@@ -2,6 +2,7 @@ mod document_core;
 mod document_text;
 mod fdm_and_embedded_press;
 mod local_samples;
+mod page_grid_y_anchor_and_record_flags;
 mod shanai_lan;
 mod support;
 mod table_grid_and_table_candidate;
