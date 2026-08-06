@@ -45,6 +45,28 @@ pub(crate) fn page_mark_record_line_index_rows(
         .collect()
 }
 
+/// Literal size comparison between the observed `/PageMark` raw line extent
+/// (`max(lineEnd) + 1`) and the `/LineMark` declared record count.
+///
+/// The two carry different weight. A negative value means the raw line field
+/// takes values above the last declared record ordinal, which refutes reading
+/// the raw line field as a `/LineMark` record ordinal in that file. A positive
+/// value only means the observed raw line ranges stop short of the declared
+/// records, so containment cannot reach the top ordinals; that is incomplete
+/// coverage, not a refutation. Across the 50 local files that expose both a
+/// normalized `/PageMark` record and a `/LineMark` declared record count, the
+/// value is never `0`: 35 are negative and 15 are exactly `1`.
+pub(crate) fn line_mark_declared_record_count_minus_page_mark_line_extent(
+    normalized_headers: &[PageMarkRecordHeader],
+    line_mark_bytes: &[u8],
+) -> Option<i64> {
+    let extent = normalized_headers
+        .iter()
+        .map(|header| i64::from(header.line_end) + 1)
+        .max()?;
+    Some(line_mark_declared_record_count(line_mark_bytes)? as i64 - extent)
+}
+
 pub(crate) fn push_table_grid_page_mark_variable_record_normalization_gate_json(
     output: &mut String,
     document: &Document,
@@ -114,16 +136,28 @@ pub(crate) fn push_table_grid_page_mark_variable_record_normalization_gate_json(
         .iter()
         .map(|header| header.line_start as usize)
         .min();
-    let line_mark_declared_record_count =
-        raw_stream_bytes(document, LINE_MARK_PATH).and_then(line_mark_declared_record_count);
+    let line_mark_bytes = raw_stream_bytes(document, LINE_MARK_PATH);
+    let line_mark_declared_record_count = line_mark_bytes.and_then(line_mark_declared_record_count);
     let max_line_end_plus_one_equals_line_mark_record_count = max_line_end_plus_one
         .zip(line_mark_declared_record_count)
         .is_some_and(|(extent, count)| extent == count);
-    let relationship_blocked_reasons = [
+    // Only the negative direction refutes anything: raw line values above the last
+    // declared record ordinal cannot be /LineMark record ordinals, so unanimous
+    // containment below stays a selection rather than an identity proof.
+    let declared_record_count_minus_line_extent = line_mark_bytes.and_then(|bytes| {
+        line_mark_declared_record_count_minus_page_mark_line_extent(&normalized_headers, bytes)
+    });
+    let line_extent_exceeds_declared_record_count =
+        declared_record_count_minus_line_extent.is_some_and(|delta| delta < 0);
+    let mut relationship_blocked_reasons = vec![
         "line-mark-record-index-page-line-candidate-selected-by-containment",
         "page-mark-raw-line-range-role-unproven",
         "line-domain-to-page-space-y-transform-required",
     ];
+    if line_extent_exceeds_declared_record_count {
+        relationship_blocked_reasons
+            .push("page-mark-raw-line-extent-exceeds-line-mark-declared-record-count");
+    }
     let line_index_rows =
         page_mark_record_line_index_rows(&normalized_headers, &line_mark_record_indexes);
     let covered_row_count = line_index_rows
@@ -241,8 +275,15 @@ pub(crate) fn push_table_grid_page_mark_variable_record_normalization_gate_json(
     output.push_str(json_bool(
         max_line_end_plus_one_equals_line_mark_record_count,
     ));
+    output.push_str(",\"lineMarkDeclaredRecordCountMinusMaxLineEndPlusOne\":");
+    match declared_record_count_minus_line_extent {
+        Some(delta) => output.push_str(&delta.to_string()),
+        None => output.push_str("null"),
+    }
     output.push_str(",\"identityCandidateSelectedByContainment\":");
     output.push_str(json_bool(all_rows_uniquely_covered));
+    output.push_str(",\"identityCandidateRefutedByRawLineExtent\":");
+    output.push_str(json_bool(line_extent_exceeds_declared_record_count));
     output.push_str(",\"identityCandidateIndependentlyProven\":false");
     output.push_str(",\"pageSpaceYDecoded\":false");
     output.push_str(",\"blockedReasons\":");
