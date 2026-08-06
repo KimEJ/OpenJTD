@@ -89,7 +89,11 @@ pub(crate) fn page_mark_subrecord_shifted_record_header(
 ) -> Option<PageMarkRecordHeader> {
     let offset =
         subrecord_byte_offset.checked_sub(PAGE_MARK_SUBRECORD_RECORD_HEADER_BACK_SHIFT_BYTES)?;
-    page_mark_record_header_at(bytes, offset)
+    page_mark_record_header_at(
+        bytes,
+        offset,
+        &PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES,
+    )
 }
 
 /// Builds one alias row per subrecord the selected post-row-gap coverage matched,

@@ -593,13 +593,18 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
         "\"pageMarkRawRecordScanEvidence\":{\"source\":\"/PageMark raw record scan+/LineMark\",\"present\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"diagnosticOnly\":true,\"streamByteLength\":1108,\"parsedPageMarkFamily\":\"count-plus-one-variable\",\"parsedPageMarkEntryCount\":4,\"scannedRecordHeaderCount\":15"
     ));
     assert!(layer_tree.contains(
-        "\"pageMarkVariableRecordNormalizationGate\":{\"source\":\"/PageMark observed variable raw record normalization+/LineMark\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectionReady\":false,\"acceptedFlagsHighU16Values\":[1,5],\"observedFlagsHighU16Values\":[1,5],\"flagsLowU16Semantics\":\"opaque-source-field\",\"legacyExactRecordHeaderCount\":15,\"normalizedRecordHeaderCount\":19,\"normalizedOnlyRecordHeaderCount\":4"
+        "\"pageMarkVariableRecordNormalizationGate\":{\"source\":\"/PageMark observed variable raw record normalization+/LineMark\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectionReady\":false,\"acceptedFlagsHighU16Values\":[1,3,5],\"observedFlagsHighU16Values\":[1,5],\"flagsLowU16Semantics\":\"opaque-source-field\",\"legacyExactRecordHeaderCount\":15,\"normalizedRecordHeaderCount\":19,\"normalizedOnlyRecordHeaderCount\":4"
     ));
     assert!(layer_tree.contains(
         "\"normalizedOnlyRecordHeaders\":[{\"normalizedScanIndex\":3,\"byteOffset\":172,\"index\":2,\"flags\":328448,\"flagsHex\":\"0x00050300\",\"lineStart\":85,\"lineEnd\":140},{\"normalizedScanIndex\":5,\"byteOffset\":332,\"index\":4,\"flags\":66304,\"flagsHex\":\"0x00010300\",\"lineStart\":192,\"lineEnd\":241},{\"normalizedScanIndex\":6,\"byteOffset\":412,\"index\":5,\"flags\":328704,\"flagsHex\":\"0x00050400\",\"lineStart\":242,\"lineEnd\":304},{\"normalizedScanIndex\":10,\"byteOffset\":732,\"index\":9,\"flags\":327936,\"flagsHex\":\"0x00050100\",\"lineStart\":437,\"lineEnd\":489}],\"normalizedTailByteCount\":792,\"normalizedPartitionComplete\":true,\"duplicateIndexCount\":3,\"overlappingAdjacentLineDomainCount\":2,\"legacyConsumersUnchanged\":true"
     ));
     assert!(layer_tree.contains(
         "\"lineMarkRecordIndexToPageLineRelationship\":{\"source\":\"/LineMark record ordinal contained by normalized /PageMark raw line range\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectionReady\":false,\"lineMarkRecordIndexes\":[7,9,11,13],\"rowCount\":4,\"coveredRowCount\":4,\"uniquelyCoveredRowCount\":4,\"allRowsUniquelyCovered\":true,\"allRowsShareOneNormalizedRecord\":true"
+    ));
+    // Containment is unanimous only because all 45 /LineMark ordinals fall inside a
+    // raw line span that reaches 710, which is why the identity stays unproven.
+    assert!(layer_tree.contains(
+        "\"maxLineEndPlusOne\":710,\"minLineStart\":0,\"lineMarkDeclaredRecordCount\":45,\"maxLineEndPlusOneEqualsLineMarkDeclaredRecordCount\":false,\"identityCandidateSelectedByContainment\":true,\"identityCandidateIndependentlyProven\":false,\"pageSpaceYDecoded\":false,\"blockedReasons\":[\"line-mark-record-index-page-line-candidate-selected-by-containment\",\"page-mark-raw-line-range-role-unproven\",\"line-domain-to-page-space-y-transform-required\"]"
     ));
     assert!(layer_tree.contains(
         "\"candidateRowCount\":4,\"rowLineMarkMatchCount\":4,\"rowScannedRecordHeaderMatchCount\":4,\"allRowsHaveLineMark\":true,\"allRowsHaveScannedRecordHeader\":true,\"singleScannedRecordHeaderMatched\":true,\"matchedScannedRecordHeaderIndex\":0,\"lineMarkRecordIndexes\":[8,10,12,14]"

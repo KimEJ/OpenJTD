@@ -102,6 +102,28 @@ pub(crate) fn push_table_grid_page_mark_variable_record_normalization_gate_json(
 
     let line_mark_record_indexes =
         table_grid_previous_row_span_line_mark_record_indexes(document, candidate);
+    // Raw extent of the observed line fields, reported as the two literal
+    // aggregates it is rather than as a decoded domain: the maximum `lineEnd + 1`
+    // and the minimum `lineStart`. Whether those bound a /LineMark ordinal space
+    // is not settled here.
+    let max_line_end_plus_one = normalized_headers
+        .iter()
+        .map(|header| header.line_end as usize + 1)
+        .max();
+    let min_line_start = normalized_headers
+        .iter()
+        .map(|header| header.line_start as usize)
+        .min();
+    let line_mark_declared_record_count =
+        raw_stream_bytes(document, LINE_MARK_PATH).and_then(line_mark_declared_record_count);
+    let max_line_end_plus_one_equals_line_mark_record_count = max_line_end_plus_one
+        .zip(line_mark_declared_record_count)
+        .is_some_and(|(extent, count)| extent == count);
+    let relationship_blocked_reasons = [
+        "line-mark-record-index-page-line-candidate-selected-by-containment",
+        "page-mark-raw-line-range-role-unproven",
+        "line-domain-to-page-space-y-transform-required",
+    ];
     let line_index_rows =
         page_mark_record_line_index_rows(&normalized_headers, &line_mark_record_indexes);
     let covered_row_count = line_index_rows
@@ -125,7 +147,7 @@ pub(crate) fn push_table_grid_page_mark_variable_record_normalization_gate_json(
         .push_str("{\"source\":\"/PageMark observed variable raw record normalization+/LineMark\"");
     output.push_str(",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"selectionReady\":false");
     output.push_str(",\"acceptedFlagsHighU16Values\":");
-    push_u16_array_json(output, &PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES);
+    push_u16_array_json(output, &PAGE_MARK_NORMALIZED_VIEW_FLAGS_HIGH_U16_VALUES);
     output.push_str(",\"observedFlagsHighU16Values\":");
     push_u16_array_json(output, &flags_high_u16_values);
     output.push_str(",\"flagsLowU16Semantics\":\"opaque-source-field\"");
@@ -209,11 +231,22 @@ pub(crate) fn push_table_grid_page_mark_variable_record_normalization_gate_json(
         output.push_str("]}");
     }
     output.push(']');
+    output.push_str(",\"maxLineEndPlusOne\":");
+    push_option_usize_json(output, max_line_end_plus_one);
+    output.push_str(",\"minLineStart\":");
+    push_option_usize_json(output, min_line_start);
+    output.push_str(",\"lineMarkDeclaredRecordCount\":");
+    push_option_usize_json(output, line_mark_declared_record_count);
+    output.push_str(",\"maxLineEndPlusOneEqualsLineMarkDeclaredRecordCount\":");
+    output.push_str(json_bool(
+        max_line_end_plus_one_equals_line_mark_record_count,
+    ));
     output.push_str(",\"identityCandidateSelectedByContainment\":");
     output.push_str(json_bool(all_rows_uniquely_covered));
     output.push_str(",\"identityCandidateIndependentlyProven\":false");
     output.push_str(",\"pageSpaceYDecoded\":false");
-    output.push_str(",\"blockedReasons\":[\"line-mark-record-index-page-line-candidate-selected-by-containment\",\"page-mark-raw-line-range-role-unproven\",\"line-domain-to-page-space-y-transform-required\"]");
+    output.push_str(",\"blockedReasons\":");
+    push_json_string_slice_array(output, &relationship_blocked_reasons);
     output.push_str(
         ",\"renderPromotionContribution\":\"normalized-record-line-domain-diagnostic-only\"",
     );

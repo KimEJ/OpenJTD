@@ -35,6 +35,8 @@ fn page_mark_record_header_stream(
     bytes
 }
 
+/// The record walk starts at byte 12 and never reads the leading words, so the
+/// header stays an opaque fixed prefix here rather than a grammar claim.
 fn page_mark_variable_record_stream(records: &[(u32, u32, u32, u32, usize)]) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&3u32.to_be_bytes());
@@ -144,6 +146,87 @@ fn page_mark_line_index_relationship_preserves_ambiguous_containment() {
         vec![2, 3],
         "overlapping PageMark ranges must remain ambiguous"
     );
+}
+
+#[test]
+fn page_mark_normalized_record_headers_admit_flags_high_three_records() {
+    // The alternating 0x0001/0x0003 shape observed in the local corpus, with raw
+    // line ranges that chain without a gap.
+    let bytes = page_mark_variable_record_stream(&[
+        (0, 0x0001_0000, 0, 9, 84),
+        (0, 0x0003_0000, 10, 19, 84),
+        (1, 0x0001_0000, 20, 29, 84),
+        (1, 0x0003_0000, 30, 39, 84),
+        (2, 0x0001_0000, 40, 41, 84),
+        (2, 0x0003_0000, 42, 42, 84),
+    ]);
+    let headers = page_mark_normalized_record_headers(&bytes);
+
+    assert_eq!(headers.len(), 6);
+    assert_eq!(
+        headers
+            .iter()
+            .map(|header| (header.flags >> 16) as u16)
+            .collect::<Vec<_>>(),
+        vec![0x0001, 0x0003, 0x0001, 0x0003, 0x0001, 0x0003]
+    );
+    assert_eq!(
+        headers
+            .iter()
+            .map(|header| (header.line_start, header.line_end))
+            .collect::<Vec<_>>(),
+        vec![(0, 9), (10, 19), (20, 29), (30, 39), (40, 41), (42, 42)]
+    );
+    assert!(
+        headers
+            .windows(2)
+            .all(|pair| pair[1].line_start == pair[0].line_end + 1),
+        "the admitted chain must stay a gap-free line-domain partition"
+    );
+
+    // Legacy exact-flag consumers keep the three 0x00010000 records only.
+    let legacy = page_mark_record_headers(&bytes);
+    assert_eq!(legacy.len(), 3);
+    assert!(legacy.iter().all(|header| header.flags == 0x0001_0000));
+}
+
+/// The normalized walk and the shifted-header alias gate carry different accepted
+/// flag sets on purpose, so widening the walk must not weaken the gate.
+#[test]
+fn page_mark_flags_high_three_stays_rejected_by_the_shifted_header_alias_gate() {
+    let bytes = page_mark_variable_record_stream(&[(0, 0x0003_0000, 10, 19, 84)]);
+
+    let headers = page_mark_normalized_record_headers(&bytes);
+    assert_eq!(headers.len(), 1);
+    assert_eq!(headers[0].offset, 12);
+    assert_eq!(headers[0].flags, 0x0003_0000);
+
+    assert!(
+        page_mark_subrecord_shifted_record_header(&bytes, 14).is_none(),
+        "the alias gate must keep its narrower [0x0001, 0x0005] admission set"
+    );
+    assert_eq!(
+        PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES,
+        [0x0001, 0x0005]
+    );
+    assert_eq!(
+        PAGE_MARK_NORMALIZED_VIEW_FLAGS_HIGH_U16_VALUES,
+        [0x0001, 0x0003, 0x0005]
+    );
+}
+
+#[test]
+fn line_mark_declared_record_count_rejects_streams_too_short_for_the_records() {
+    let mut bytes = vec![0u8; LINE_MARK_BE_DELTA_HEADER_BYTES];
+    bytes[LINE_MARK_BE_DELTA_COUNT_OFFSET..LINE_MARK_BE_DELTA_COUNT_OFFSET + 2]
+        .copy_from_slice(&3u16.to_be_bytes());
+    assert_eq!(line_mark_declared_record_count(&bytes), None);
+
+    bytes.extend_from_slice(&[0u8; 3 * LINE_MARK_BE_DELTA_RECORD_BYTES]);
+    assert_eq!(line_mark_declared_record_count(&bytes), Some(3));
+
+    let zero_count = vec![0u8; LINE_MARK_BE_DELTA_HEADER_BYTES + 16];
+    assert_eq!(line_mark_declared_record_count(&zero_count), None);
 }
 
 #[test]

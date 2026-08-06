@@ -245,6 +245,18 @@ pub(crate) fn is_line_mark_tag_word(word: u16) -> bool {
     matches!(word, 0x1000..=0x1002)
 }
 
+/// `/LineMark` declares its be-delta record count in the stream header. The same
+/// length guard the interval walk applies keeps malformed streams out, so the
+/// source-declared count can be reported beside other literal stream bounds.
+pub(crate) fn line_mark_declared_record_count(bytes: &[u8]) -> Option<usize> {
+    let count = read_be16_at(bytes, LINE_MARK_BE_DELTA_COUNT_OFFSET).map(usize::from)?;
+    (count > 0
+        && bytes.len()
+            >= LINE_MARK_BE_DELTA_HEADER_BYTES
+                + count.saturating_mul(LINE_MARK_BE_DELTA_RECORD_BYTES))
+    .then_some(count)
+}
+
 pub(crate) fn line_mark_interval_for_record(
     intervals: &[ShanaiLanLineMarkInterval],
     record_index: usize,
