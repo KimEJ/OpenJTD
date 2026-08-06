@@ -396,6 +396,7 @@ fn table_grid_cross_table_subrecord_ordering_helpers_detect_regressions() {
         residual_px: Some(107.539),
         agrees: false,
         field_quantization: None,
+        record_flag_alias: None,
     };
     assert_eq!(
         table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(
@@ -432,9 +433,11 @@ fn table_grid_cross_table_subrecord_ordering_helpers_detect_regressions() {
             value_row_distinct: false,
             page_space_px_plausible: false,
         }),
+        record_flag_alias: None,
     };
     assert!(quantized_but_agreeing.field_quantization_refutes_page_space_px());
     assert!(!quantized_but_agreeing.semantics_ready());
+    assert!(quantized_but_agreeing.refuted_as_page_space_px());
     assert_eq!(
         quantized_but_agreeing.field_quantization_blocked_reasons(),
         vec![
@@ -446,6 +449,50 @@ fn table_grid_cross_table_subrecord_ordering_helpers_detect_regressions() {
         table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(&quantized_but_agreeing),
         "page-mark-absolute-y-slot-field-quantized-not-page-space-px"
     );
+
+    // Structure alone must block the slot: an unquantized, agreeing value is still
+    // refuted when it is the owning record's flags low u16.
+    let structurally_aliased = TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
+        field_quantization: None,
+        record_flag_alias: Some(TableGridSourceOnlyPageMarkAbsoluteYSlotRecordFlagAlias {
+            back_shift_bytes: PAGE_MARK_SUBRECORD_RECORD_HEADER_BACK_SHIFT_BYTES,
+            rows: vec![PageMarkSubrecordRecordFlagAliasRow {
+                subrecord_byte_offset: 174,
+                shifted_record_header_offset: 172,
+                shifted_record_index: 2,
+                shifted_record_flags: 0x0001_0300,
+                flags_high_u16: 0x0001,
+                flags_low_u16: 0x0300,
+                field_value: 768,
+                header_shape_valid: true,
+                line_range_matches_subrecord: true,
+            }],
+            page_space_px_plausible: false,
+        }),
+        ..quantized_but_agreeing.clone()
+    };
+    assert!(structurally_aliased.record_flag_alias_refutes_page_space_px());
+    assert!(!structurally_aliased.field_quantization_refutes_page_space_px());
+    assert!(structurally_aliased.refuted_as_page_space_px());
+    assert!(!structurally_aliased.semantics_ready());
+    assert_eq!(
+        structurally_aliased.record_flag_alias_blocked_reasons(),
+        vec!["page-mark-absolute-y-slot-field-is-owning-raw-record-flags-low-u16"]
+    );
+    assert_eq!(
+        table_grid_source_only_page_mark_absolute_y_slot_blocked_reason(&structurally_aliased),
+        "page-mark-absolute-y-slot-field-is-owning-raw-record-flags-low-u16"
+    );
+
+    let alias = structurally_aliased
+        .record_flag_alias
+        .as_ref()
+        .expect("alias present");
+    assert_eq!(alias.row_count(), 1);
+    assert_eq!(alias.header_shape_valid_count(), 1);
+    assert_eq!(alias.field_equals_flags_low_u16_count(), 1);
+    assert_eq!(alias.line_range_match_count(), 1);
+    assert!(alias.all_rows_refute_page_space_px());
 }
 
 #[test]

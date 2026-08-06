@@ -810,6 +810,7 @@ pub(crate) struct TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
     pub(crate) residual_px: Option<f32>,
     pub(crate) agrees: bool,
     pub(crate) field_quantization: Option<TableGridSourceOnlyPageMarkFieldQuantization>,
+    pub(crate) record_flag_alias: Option<TableGridSourceOnlyPageMarkAbsoluteYSlotRecordFlagAlias>,
 }
 
 impl TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
@@ -818,6 +819,28 @@ impl TableGridSourceOnlyPageMarkAbsoluteYSlotAgreement {
             && self.best_absolute_y_slot.is_some()
             && self.agrees
             && !self.field_quantization_refutes_page_space_px()
+            && !self.record_flag_alias_refutes_page_space_px()
+    }
+
+    pub(crate) fn record_flag_alias_refutes_page_space_px(&self) -> bool {
+        self.record_flag_alias
+            .as_ref()
+            .is_some_and(|alias| !alias.page_space_px_plausible)
+    }
+
+    pub(crate) fn record_flag_alias_blocked_reasons(&self) -> Vec<&'static str> {
+        let mut reasons = Vec::new();
+        if self.record_flag_alias_refutes_page_space_px() {
+            reasons.push("page-mark-absolute-y-slot-field-is-owning-raw-record-flags-low-u16");
+        }
+        reasons
+    }
+
+    /// True when either the structural record-flag alias or the value
+    /// quantization has refuted the direct page-space px reading of the slot.
+    pub(crate) fn refuted_as_page_space_px(&self) -> bool {
+        self.record_flag_alias_refutes_page_space_px()
+            || self.field_quantization_refutes_page_space_px()
     }
 
     pub(crate) fn field_quantization_refutes_page_space_px(&self) -> bool {

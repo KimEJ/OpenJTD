@@ -379,8 +379,13 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
     assert!(layer_tree.contains(
         "\"quantumUnits\":256,\"valueCount\":3,\"rowValues\":[1024,1024,1024],\"distinctValues\":[1024],\"allValuesMultipleOfQuantum\":true,\"lowByteAllZero\":true,\"highByteValues\":[4],\"rawRecordScanIndexes\":[3,3,3],\"valuesConstantPerRawRecordScanIndex\":true,\"valueRowDistinct\":false,\"pageSpacePxPlausible\":false,\"highByteVsRowCountRelationship\":\"undecoded-diagnostic-comparison\",\"blockedReasons\":[\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\"],\"renderPromotionContribution\":\"source-only-page-mark-field-quantization-gate\",\"renderPromotionBlockedReason\":\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\"}"
     ));
+    // Split around the record-flag alias blocker, which is only appended when the
+    // matched subrecords really are two-byte-early record headers.
     assert!(layer_tree.contains(
-        "\"blockedReasons\":[\"direct-line-mark-page-origin-absent\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"cross-table-line-domain-not-page-space-origin\",\"source-order-vs-subrecord-order-contradiction\",\"cross-table-row-boundary-offset-transform-required\",\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\",\"source-y-origin-selector-fragmented-by-table-not-render-admissible\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"decoded-line-mark-page-y-transform-missing\"],\"renderPromotionContribution\":\"source-only-page-y-render-admission-gate\",\"renderPromotionBlockedReason\":\"source-page-y-render-admission-not-ready\""
+        "\"blockedReasons\":[\"direct-line-mark-page-origin-absent\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"cross-table-line-domain-not-page-space-origin\",\"source-order-vs-subrecord-order-contradiction\",\"cross-table-row-boundary-offset-transform-required\",\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\""
+    ));
+    assert!(layer_tree.contains(
+        "\"source-y-origin-selector-fragmented-by-table-not-render-admissible\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"decoded-line-mark-page-y-transform-missing\"],\"renderPromotionContribution\":\"source-only-page-y-render-admission-gate\",\"renderPromotionBlockedReason\":\"source-page-y-render-admission-not-ready\""
     ));
     assert!(layer_tree.contains(
         "\"blockedReasons\":[\"line-mark-page-origin-candidate-absent\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"page-mark-subrecord-spans-do-not-decode-page-y-origin\",\"page-mark-cross-table-raw-record-order-regression\",\"page-mark-cross-table-subrecord-ordering-unproven\",\"cross-table-row-boundary-offset-transform-required\",\"decoded-line-mark-page-y-transform-missing\"],\"renderPromotionContribution\":\"source-page-y-transform-gate\",\"renderPromotionBlockedReason\":\"source-page-y-transform-not-decoded\""
@@ -839,16 +844,16 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
         "\"sourceOnlyAxisAdmissionGate\":{\"source\":\"pageSpaceHorizontalTransformGate+sourcePageYTransformGate source-only selector coupling\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"admissionReady\":false,\"activeSourceLayoutAdmissionReady\":false,\"activeSourceLayoutAdmissionBasis\":null,\"sourceOnlySelectorFallbackIgnoredByActiveSourceLayout\":false,\"sourceLayoutCandidatePresent\":true,\"sourceLayoutRenderable\":false,\"horizontalAxisReady\":false,\"horizontalSelectorCandidatePresent\":true,\"horizontalSelectorInBestAgreementGroup\":true,\"horizontalCandidateCount\":6,\"horizontalAgreementGroupCount\":4,\"horizontalBestSupportCount\":3,\"horizontalUniqueBestSupported\":true,\"horizontalBestSupportedSelectedX\":174.000,\"horizontalBestSupportedSelectedWidth\":554.000"
     ));
     assert!(layer_tree.contains(
-        "\"horizontalBestSupportedFrameBases\":[\"page-mark-word14-word21-first-slot-adjusted\",\"page-mark-word14-first-slot-word21-half-slot\",\"page-mark-word14-first-slot-word21-half-slot\"],\"yAxisReady\":false,\"ySelectorCandidatePresent\":true,\"ySelectorSingleSupportFallback\":true,\"ySelectorSupportFragmentedByTable\":false,\"ySelectorSupportCount\":1,\"ySelectorCrossTableSupportPresent\":false,\"ySelectorAgreementAdmissible\":false,\"ySelectorAdmissionBlockedReason\":\"source-y-origin-selector-single-support-fallback-not-render-admissible\",\"ySelectorSupportBlockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-semantics-unproven\"],\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\""
+        "\"horizontalBestSupportedFrameBases\":[\"page-mark-word14-word21-first-slot-adjusted\",\"page-mark-word14-first-slot-word21-half-slot\",\"page-mark-word14-first-slot-word21-half-slot\"],\"yAxisReady\":false,\"ySelectorCandidatePresent\":true,\"ySelectorSingleSupportFallback\":true,\"ySelectorSupportFragmentedByTable\":false,\"ySelectorSupportCount\":1,\"ySelectorCrossTableSupportPresent\":false,\"ySelectorAgreementAdmissible\":false,\"ySelectorAdmissionBlockedReason\":\"source-y-origin-selector-single-support-fallback-not-render-admissible\",\"ySelectorSupportBlockedReasons\":[\"stride-origin-needs-page-origin-rule\"],\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\""
     ));
     assert!(layer_tree.contains(
         "\"source\":\"sourceOnlyAxisAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"transformDomain\":\"source-unit-gap-to-page-mark-line-index-gap\",\"canDecodeSourceTransform\":false,\"tableFamilyTransformStable\":false,\"tableFamilyTransformBlockedReason\":\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"transitionCount\":3,\"allTransitionsSamePageMarkEntry\":true,\"bestCandidateTransformKind\":\"segment-offset-gap\",\"bestCandidateMaxAbsDeltaUnits\":105,\"transformCandidateCount\":4,\"exactTransformCandidateCount\":0"
     ));
     assert!(layer_tree.contains(
-        "\"pageMarkAbsoluteYSlotSemanticsReady\":false,\"pageMarkAbsoluteYSlotBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"pageMarkAbsoluteYSlotResidualPx\":107.539,\"yCandidateCount\":12,\"yAgreementGroupCount\":11,\"yBestSupportCount\":2,\"yUniqueBestSupported\":true,\"ySelectedOriginBasis\":\"page-mark-absolute-y-slot-field2-tail-block16-word11\",\"ySelectedY\":768.000,\"ySelectedRowHeight\":null,\"ySelectorTableCandidateIndexes\":[3]"
+        "\"pageMarkAbsoluteYSlotSemanticsReady\":false,\"pageMarkAbsoluteYSlotBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"pageMarkAbsoluteYSlotResidualPx\":107.539,\"yCandidateCount\":11,\"yAgreementGroupCount\":10,\"yBestSupportCount\":2,\"yUniqueBestSupported\":true,\"ySelectedOriginBasis\":\"line-mark-stride-raw-record-index-first-row\",\"ySelectedY\":744.000,\"ySelectedRowHeight\":21.000,\"ySelectorTableCandidateIndexes\":[]"
     ));
     assert!(layer_tree.contains(
-        "\"sourceOnlyAxisCandidateBBox\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceOnlyAxisCandidateBBox\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidatePresent\":true,\"bboxPresent\":true,\"horizontalCandidatePresent\":true,\"yCandidatePresent\":true,\"rowHeightCandidatePresent\":true,\"rowCount\":3,\"horizontalFrameBasis\":\"page-mark-word14-word21-first-slot-adjusted\",\"yOriginBasis\":\"page-mark-absolute-y-slot-field2-tail-block16-word11\",\"rowHeight\":21.000,\"bbox\":{\"x\":174.000,\"y\":768.000,\"width\":554.000,\"height\":63.000}"
+        "\"sourceOnlyAxisCandidateBBox\":{\"source\":\"sourceOnlyAxisAdmissionGate.sourceOnlyAxisCandidateBBox\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"candidatePresent\":true,\"bboxPresent\":true,\"horizontalCandidatePresent\":true,\"yCandidatePresent\":true,\"rowHeightCandidatePresent\":true,\"rowCount\":3,\"horizontalFrameBasis\":\"page-mark-word14-word21-first-slot-adjusted\",\"yOriginBasis\":\"line-mark-stride-raw-record-index-first-row\",\"rowHeight\":21.000,\"bbox\":{\"x\":174.000,\"y\":744.000,\"width\":554.000,\"height\":63.000}"
     ));
     assert!(layer_tree.contains(
         "\"blockedReasons\":[\"source-horizontal-axis-not-render-admissible\",\"source-y-origin-selector-single-support-fallback\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"source-y-axis-not-render-admissible\",\"source-derived-layout-not-renderable\"],\"renderPromotionContribution\":\"source-only-axis-selector-admission-gate\",\"renderPromotionBlockedReason\":\"source-page-space-axis-selector-coupling-unproven\""
@@ -919,14 +924,30 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
     assert!(layer_tree.contains(
         "\"sourceOnlyPageYOriginSelector\":{\"source\":\"sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":2,\"selectionBasis\":\"single-support-source-only-y-origin-fallback\",\"singleSupportFallback\":true,\"selectedOriginBasis\":\"line-mark-stride-raw-record-index-first-row\",\"selectedY\":618.000,\"selectedRowHeight\":21.000"
     ));
+    // The 768 slot is refuted as page-space px by field quantization and by the
+    // record-flag alias, so it must not reach the source-only y origin selector at
+    // all: the lower table now falls back to the stride origin like tables 1 and 2.
     assert!(layer_tree.contains(
-        "\"sourceOnlyPageYOriginSelector\":{\"source\":\"sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":3,\"selectionBasis\":\"single-support-source-only-y-origin-fallback\",\"singleSupportFallback\":true,\"selectedOriginBasis\":\"page-mark-absolute-y-slot-field2-tail-block16-word11\",\"selectedY\":768.000,\"selectedRowHeight\":null,\"supportCount\":1,\"supportOriginBases\":[\"page-mark-absolute-y-slot-field2-tail-block16-word11\"],\"supportTableCandidateIndexes\":[3],\"supportCoversMultipleTableCandidates\":false,\"supportFragmentedByTable\":false"
+        "\"sourceOnlyPageYOriginSelector\":{\"source\":\"sourceOnlyPageYOriginCandidateAgreementGate best-supported group selector\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsedForSelection\":false,\"selectionReady\":false,\"tableCandidateIndex\":3,\"selectionBasis\":\"single-support-source-only-y-origin-fallback\",\"singleSupportFallback\":true,\"selectedOriginBasis\":\"line-mark-stride-raw-record-index-first-row\""
     ));
+    assert!(
+        !layer_tree.contains(
+            "\"selectedOriginBasis\":\"page-mark-absolute-y-slot-field2-tail-block16-word11\""
+        ),
+        "a slot refuted as page-space px must never be selected as a y origin"
+    );
+    assert!(
+        !layer_tree
+            .contains("\"originBases\":[\"page-mark-absolute-y-slot-field2-tail-block16-word11\"]"),
+        "a slot refuted as page-space px must not form a y origin agreement group"
+    );
+    assert!(
+        !layer_tree
+            .contains("\"contributions\":[\"source-only-page-mark-absolute-y-slot-y-origin\"]"),
+        "a slot refuted as page-space px must not contribute a y origin support"
+    );
     assert!(layer_tree.contains(
-        "\"supportBlockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-semantics-unproven\",\"single-source-y-origin-support-unproven\"],\"renderPromotionContribution\":\"source-only-page-y-origin-selector\",\"renderPromotionBlockedReason\":\"single-source-y-origin-support-unproven\""
-    ));
-    assert!(layer_tree.contains(
-        "{\"selectedY\":768.000,\"rowHeight\":null,\"supportCount\":1,\"originBases\":[\"page-mark-absolute-y-slot-field2-tail-block16-word11\"],\"tableCandidateIndexes\":[3],\"contributions\":[\"source-only-page-mark-absolute-y-slot-y-origin\"],\"blockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-semantics-unproven\"]}"
+        "\"supportBlockedReasons\":[\"stride-origin-needs-page-origin-rule\",\"single-source-y-origin-support-unproven\"],\"renderPromotionContribution\":\"source-only-page-y-origin-selector\",\"renderPromotionBlockedReason\":\"single-source-y-origin-support-unproven\""
     ));
     assert!(layer_tree.contains(
         "\"lineMarkRowBoundaryAlignment\":{\"source\":\"/LineMark source unit boundaries+table row source unit boundaries\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"coordinateSpace\":\"documentTextSourceUnits\",\"policy\":\"line-mark-start-end-compared-to-table-row-source-start-end\",\"candidateRowCount\":3,\"rowBoundaryOffsetCandidateFamily\":\"previous-row-span-records\",\"rowBoundaryOffsetCandidateUnits\":-82,\"rowBoundaryOffsetCandidateStable\":true,\"rowBoundaryOffsetCandidateRequiresTransform\":true"
@@ -976,8 +997,46 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
     assert!(layer_tree.contains(
         "\"quantumUnits\":256,\"valueCount\":3,\"rowValues\":[768,256,768],\"distinctValues\":[256,768],\"allValuesMultipleOfQuantum\":true,\"lowByteAllZero\":true,\"highByteValues\":[1,3],\"rawRecordScanIndexes\":[2,6,2],\"valuesConstantPerRawRecordScanIndex\":true,\"valueRowDistinct\":false,\"pageSpacePxPlausible\":false"
     ));
+    // Source-only page grid y anchor candidates: /PageLayoutStyle paper and margin
+    // quad, the /PageMark pitch = font + leading identity, and the /LineMark own-row
+    // records, all diagnostic-only.
     assert!(layer_tree.contains(
-        "\"lineageClass\":\"page-mark-absolute-y-slot\",\"blockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\",\"page-mark-absolute-y-slot-semantics-unproven\",\"page-y-origin-transform-undecoded\"],\"renderPromotionContribution\":\"source-only-page-mark-absolute-y-slot-gate\",\"renderPromotionBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\""
+        "\"pageGridYAnchor\":{\"source\":\"/PageLayoutStyle+/PageMark+/LineMark source page grid fields\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"paperWidthMm100\":21000,\"paperHeightMm100\":29700,\"paperWidthPx\":793.701,\"paperHeightPx\":1122.520,\"pageLayoutStyleRecordOffset\":276,\"marginQuadMm100\":[3000,3000,2500,1500],\"marginQuadPayloadOffsets\":[304,306,308,310],\"marginQuadComplete\":true,\"marginQuadCandidateCount\":2,\"marginQuadSelectionUnique\":true,\"marginQuadPageFitRemainderMm100\":12,\"marginQuadFieldOrderProven\":false"
+    ));
+    assert!(
+        layer_tree.contains("\"pageLineStart\":0,\"pageLineEnd\":42,\"pageRecordLineCount\":43")
+    );
+    assert!(layer_tree.contains("\"ownRowLineMarkRecordIndexes\":[7,9,11,13]"));
+    assert!(layer_tree.contains("\"ownRowLineMarkRecordIndexes\":[32,34,36]"));
+    assert!(layer_tree.contains(
+        "\"linePitchIdentity\":{\"identity\":\"pitchMm100 == fontMm100 + leadingMm100\",\"pitchMm100\":564,\"pitchWordIndexes\":[10,13,17,18,21],\"pitchSearchWordLimit\":24,\"fontMm100\":370,\"fontWordIndex\":19,\"leadingMm100\":194,\"leadingWordIndex\":14,\"addendPairCount\":1"
+    ));
+    assert!(layer_tree.contains("\"addendRolesProven\":false"));
+    assert!(layer_tree.contains("\"ownRowTopYPx\":[262.602,305.235,347.868,390.501]"));
+    assert!(layer_tree.contains("\"ownRowTopYPx\":[795.515,838.148,880.781]"));
+    assert!(layer_tree.contains(
+        "\"page-layout-style-margin-quad-field-order-unproven\",\"page-layout-style-margin-quad-selected-by-page-line-capacity\""
+    ));
+    assert!(layer_tree.contains("\"page-mark-font-leading-addend-roles-unproven\""));
+    assert!(layer_tree.contains(
+        "\"line-mark-record-index-to-page-line-index-mapping-unproven\",\"page-grid-y-anchor-is-not-a-decoded-page-space-origin\"],\"renderPromotionContribution\":\"source-only-page-grid-y-anchor-gate\",\"renderPromotionBlockedReason\":\"page-grid-y-anchor-is-not-a-decoded-page-space-origin\""
+    ));
+
+    // The raw slot observation is retained; only the promotion path is closed.
+    assert!(layer_tree.contains(
+        "\"pageMarkAbsoluteYSlotRecordFlagAliasGate\":{\"source\":\"/PageMark raw u16 subrecord scan+record header grammar\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"selectionReady\":false,\"fieldIndex\":2,\"recordHeaderBackShiftBytes\":2,\"aliasRelation\":\"absoluteYSlotField2 == owningRawRecordFlags & 0xffff\",\"rowCount\":3"
+    ));
+    assert!(layer_tree.contains("\"fieldValues\":[768,256,768]"));
+    assert!(layer_tree.contains("\"fieldValues\":[1024,1024,1024]"));
+    assert!(layer_tree.contains(
+        "\"shiftedRecordFlagsHex\":[\"0x00050300\",\"0x00050100\",\"0x00050300\"],\"flagsHighU16Values\":[5,5,5],\"flagsLowU16Values\":[768,256,768],\"fieldValues\":[768,256,768],\"headerShapeValidCount\":3,\"allHeaderShapesValid\":true,\"lineRangeMatchesSubrecordCount\":3,\"allLineRangesMatchSubrecord\":true,\"fieldEqualsFlagsLowU16Count\":3,\"allFieldsEqualFlagsLowU16\":true,\"structurallyRefutesPageSpacePx\":true,\"pageSpacePxPlausible\":false"
+    ));
+    assert!(layer_tree.contains("\"flagsSemantics\":\"undecoded-record-flag-half-word\""));
+    assert!(layer_tree.contains(
+        "\"lineageClass\":\"page-mark-absolute-y-slot\",\"blockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\""
+    ));
+    assert!(layer_tree.contains(
+        "\"page-mark-absolute-y-slot-semantics-unproven\",\"page-y-origin-transform-undecoded\"],\"renderPromotionContribution\":\"source-only-page-mark-absolute-y-slot-gate\",\"renderPromotionBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\""
     ));
     assert!(layer_tree.contains(
         "\"sourceOnlyPageYRenderAdmissionGate\":{\"source\":\"sourcePageYTransformGate source-only page-y render admission gate\",\"diagnosticOnly\":true,\"sourceBacked\":true,\"referenceBacked\":false,\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":false,\"referenceBBoxUsed\":false,\"admissionReady\":false,\"directLineMarkOriginAdmissible\":false,\"sourceLayoutCandidatePresent\":true,\"pageOriginAuthority\":\"lineMarkPageGridStrideRawRecordIndex\",\"lineMarkRowsExactAndContiguous\":false,\"lineMarkPageOriginPresent\":false,\"lineMarkPageOriginStridePresent\":true,\"crossTableLineDomainPresent\":true"
@@ -986,13 +1045,16 @@ fn local_tsaiten_preserves_document_text_control_table_candidates_when_reference
         "\"selectedPostRowGapSpanComplete\":true,\"selectedPostRowGapSpanOrderedUniqueCoverageComplete\":false,\"previousRowSpanComplete\":false,\"previousRowSpanOrderedUniqueCoverageComplete\":false,\"compactRowSpanComplete\":false,\"sourceOnlySelectorPresent\":true,\"sourceOnlySelectorSingleSupportFallback\":true,\"sourceOnlySelectorSupportCount\":1,\"sourceOnlySelectorSupportFragmentedByTable\":false,\"sourceOnlySelectorBlockedReason\":\"source-y-origin-selector-single-support-fallback-not-render-admissible\""
     ));
     assert!(layer_tree.contains(
-        "\"sourceOnlySelectorSupportBlockedReasons\":[\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-semantics-unproven\"],\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyPageYRenderAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\""
+        "\"sourceOnlySelectorSupportBlockedReasons\":[\"stride-origin-needs-page-origin-rule\"],\"sourceGapToPageLineGapTransformAdmissionGate\":{\"source\":\"sourceOnlyPageYRenderAdmissionGate.sourceGapToPageLineGapTransformAdmissionGate\""
     ));
     assert!(layer_tree.contains(
         "\"pageMarkAbsoluteYSlotBlockedReason\":\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"pageMarkAbsoluteYSlotResidualPx\":107.539,\"sourceOnlyPageMarkFieldQuantizationGate\":{\"source\":\"/PageMark raw u16 subrecord field scan\""
     ));
     assert!(layer_tree.contains(
-        "\"blockedReasons\":[\"direct-line-mark-page-origin-absent\",\"line-mark-record-stride-to-page-y-transform-unproven\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"cross-table-line-domain-not-page-space-origin\",\"selected-post-row-gap-spans-not-page-y-origin\",\"selected-post-row-gap-coverage-not-row-unique\",\"source-order-vs-subrecord-order-contradiction\",\"cross-table-row-boundary-offset-transform-required\",\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\",\"source-y-origin-selector-single-support-fallback-not-render-admissible\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"decoded-line-mark-page-y-transform-missing\"]"
+        "\"blockedReasons\":[\"direct-line-mark-page-origin-absent\",\"line-mark-record-stride-to-page-y-transform-unproven\",\"page-origin-authority-not-renderable-line-mark-page-grid\",\"line-mark-rows-not-exact-source-boundaries\",\"cross-table-line-domain-not-page-space-origin\",\"selected-post-row-gap-spans-not-page-y-origin\",\"selected-post-row-gap-coverage-not-row-unique\",\"source-order-vs-subrecord-order-contradiction\",\"cross-table-row-boundary-offset-transform-required\",\"line-domain-projection-disagrees-with-page-mark-absolute-y-slot\",\"page-mark-absolute-y-slot-field-quantized-not-page-space-px\",\"page-mark-absolute-y-slot-field-constant-per-raw-record-not-row-distinct\""
+    ));
+    assert!(layer_tree.contains(
+        "\"source-y-origin-selector-single-support-fallback-not-render-admissible\",\"source-gap-to-page-line-gap-transform-unstable-across-table-family\",\"decoded-line-mark-page-y-transform-missing\"]"
     ));
     assert!(layer_tree.contains(
         "\"renderPromoted\":false,\"renderPromotionAuthority\":null,\"renderPromotionBlockedReason\":\"line-mark-record-stride-to-page-y-transform-unproven\""
