@@ -1,5 +1,16 @@
 use super::*;
 use crate::*;
+use std::ops::Range;
+
+pub(crate) const PAGE_MARK_RECORD_HEADER_BYTES: usize = 16;
+
+/// Observed high halves for nested `/PageMark` record flags. The low half is
+/// retained as opaque source data; it is not geometry.
+pub(crate) const PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES: [u16; 2] = [0x0001, 0x0005];
+
+pub(crate) const PAGE_MARK_RECORD_HEADER_MAX_LINE_END: u32 = 10_000;
+
+pub(crate) const PAGE_MARK_RECORD_HEADER_MAX_INDEX: u32 = 256;
 
 pub(crate) fn page_mark_section_separator_projection(
     document: &Document,
@@ -70,15 +81,7 @@ pub(crate) fn page_mark_separator_candidate(bytes: &[u8]) -> Option<PageMarkSepa
     let advance_centipoints = page_mark_recurring_advance_centipoints(bytes).unwrap_or(0);
     let headers = page_mark_record_headers(bytes);
     for (header_index, header) in headers.iter().enumerate() {
-        let next_offset = headers
-            .get(header_index + 1)
-            .map(|next| next.offset)
-            .unwrap_or(bytes.len());
-        let tail_start = header.offset.checked_add(16)?;
-        if tail_start > next_offset || next_offset > bytes.len() {
-            continue;
-        }
-        let tail = &bytes[tail_start..next_offset];
+        let tail = &bytes[page_mark_record_tail_range(&headers, header_index, bytes.len())?];
         let Some(y_centipoints) = page_mark_separator_tail_y_centipoints(tail) else {
             continue;
         };
@@ -94,10 +97,13 @@ pub(crate) fn page_mark_separator_candidate(bytes: &[u8]) -> Option<PageMarkSepa
     None
 }
 
+/// Legacy exact-flag scan retained by existing diagnostics and rendered section
+/// separators. New source ownership evidence is additive through
+/// `page_mark_normalized_record_headers`.
 pub(crate) fn page_mark_record_headers(bytes: &[u8]) -> Vec<PageMarkRecordHeader> {
     let mut headers = Vec::new();
     let mut offset = 12usize;
-    while offset + 16 <= bytes.len() {
+    while offset + PAGE_MARK_RECORD_HEADER_BYTES <= bytes.len() {
         let Some(index) = read_be32_at(bytes, offset) else {
             break;
         };
@@ -110,7 +116,11 @@ pub(crate) fn page_mark_record_headers(bytes: &[u8]) -> Vec<PageMarkRecordHeader
         let Some(line_end) = read_be32_at(bytes, offset + 12) else {
             break;
         };
-        if flags == 0x0001_0000 && index < 256 && line_start <= line_end && line_end < 10_000 {
+        if flags == 0x0001_0000
+            && index < PAGE_MARK_RECORD_HEADER_MAX_INDEX
+            && line_start <= line_end
+            && line_end < PAGE_MARK_RECORD_HEADER_MAX_LINE_END
+        {
             headers.push(PageMarkRecordHeader {
                 offset,
                 index,
@@ -122,6 +132,61 @@ pub(crate) fn page_mark_record_headers(bytes: &[u8]) -> Vec<PageMarkRecordHeader
         offset += 1;
     }
     headers
+}
+
+/// Additive source-preserving view of observed variable `/PageMark` records.
+/// A record owns bytes through the next accepted header (or the stream end);
+/// duplicate indexes and overlapping line ranges remain distinct.
+pub(crate) fn page_mark_normalized_record_headers(bytes: &[u8]) -> Vec<PageMarkRecordHeader> {
+    let mut headers = Vec::new();
+    let mut offset = 12usize;
+    while offset + PAGE_MARK_RECORD_HEADER_BYTES <= bytes.len() {
+        if let Some(header) = page_mark_record_header_at(bytes, offset) {
+            headers.push(header);
+            offset += PAGE_MARK_RECORD_HEADER_BYTES;
+        } else {
+            offset += 2;
+        }
+    }
+    headers
+}
+
+pub(crate) fn page_mark_record_header_at(
+    bytes: &[u8],
+    offset: usize,
+) -> Option<PageMarkRecordHeader> {
+    let index = read_be32_at(bytes, offset)?;
+    let flags = read_be32_at(bytes, offset + 4)?;
+    let line_start = read_be32_at(bytes, offset + 8)?;
+    let line_end = read_be32_at(bytes, offset + 12)?;
+    if index >= PAGE_MARK_RECORD_HEADER_MAX_INDEX
+        || !PAGE_MARK_RECORD_HEADER_FLAGS_HIGH_U16_VALUES.contains(&((flags >> 16) as u16))
+        || line_start > line_end
+        || line_end >= PAGE_MARK_RECORD_HEADER_MAX_LINE_END
+    {
+        return None;
+    }
+    Some(PageMarkRecordHeader {
+        offset,
+        index,
+        flags,
+        line_start,
+        line_end,
+    })
+}
+
+pub(crate) fn page_mark_record_tail_range(
+    headers: &[PageMarkRecordHeader],
+    scan_index: usize,
+    stream_len: usize,
+) -> Option<Range<usize>> {
+    let header = headers.get(scan_index)?;
+    let end = headers
+        .get(scan_index + 1)
+        .map(|next| next.offset)
+        .unwrap_or(stream_len);
+    let start = header.offset.checked_add(PAGE_MARK_RECORD_HEADER_BYTES)?;
+    (start <= end && end <= stream_len).then_some(start..end)
 }
 
 pub(crate) fn page_mark_separator_tail_y_centipoints(tail: &[u8]) -> Option<u16> {
