@@ -3,6 +3,7 @@ mod embedding_frame_and_fdm_assertions;
 mod embedding_frame_candidates;
 mod facing_page_and_layout;
 mod fdm_mirror_and_shanai_frame;
+mod page_mark_line_extent_decomposition;
 mod page_mark_record_partition;
 mod shanai_axis_gate_and_tsaiten;
 mod validation_and_projection;

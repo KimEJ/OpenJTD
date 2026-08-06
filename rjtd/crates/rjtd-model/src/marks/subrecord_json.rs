@@ -7,6 +7,10 @@ pub(crate) const LINE_MARK_BE_DELTA_HEADER_BYTES: usize = 18;
 
 pub(crate) const LINE_MARK_BE_DELTA_COUNT_OFFSET: usize = 8;
 
+/// `be16` at byte offset `12` of the `/LineMark` be-delta header, named by
+/// position only. What it counts is not decoded here.
+pub(crate) const LINE_MARK_BE_DELTA_HEADER_U16_12_OFFSET: usize = 12;
+
 pub(crate) const LINE_MARK_BE_DELTA_BASE_UNIT: usize = 16;
 
 pub(crate) const LINE_MARK_BE_DELTA_RECORD_BYTES: usize = 4;
