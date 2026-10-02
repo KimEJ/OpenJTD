@@ -2430,7 +2430,7 @@ pub(crate) fn success_data_test_answer_sheet_text_tokens(
     let plain_text = document_plain_text(document);
     let start = plain_text.find("(1)表面積の比")?;
     let tail = &plain_text[start..];
-    let end = tail.rfind('®').map_or(tail.len(), |index| index);
+    let end = tail.rfind('®').unwrap_or(tail.len());
     let tokens = tokenize_success_data_test_answer_sheet_tail(&tail[..end]);
     let expected_prefix = ["(1)表面積の比", "(1)体積の比", "(2)", "１", "(3)"];
     if tokens.len() >= 34
