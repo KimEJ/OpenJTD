@@ -232,19 +232,25 @@ pub(crate) fn format_optional_u32(value: Option<u32>) -> String {
 
 pub(crate) fn be16_words(bytes: &[u8]) -> impl Iterator<Item = u16> + '_ {
     bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|bytes| u16::from_be_bytes([bytes[0], bytes[1]]))
 }
 
 pub(crate) fn be32_dwords(bytes: &[u8]) -> impl Iterator<Item = u32> + '_ {
     bytes
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|bytes| u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
 pub(crate) fn le32_dwords(bytes: &[u8]) -> impl Iterator<Item = u32> + '_ {
     bytes
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 

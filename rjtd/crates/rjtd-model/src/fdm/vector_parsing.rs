@@ -458,7 +458,9 @@ pub(crate) fn fdm_vector_compound_child_layout(record: &[u8]) -> Option<FdmCompo
         return None;
     }
     let child_offsets = prefix[8..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .filter_map(|chunk| read_be16_at(chunk, 0))
         .collect::<Vec<_>>();
     if child_offsets.is_empty() {
@@ -514,7 +516,9 @@ pub(crate) fn fdm_vector_compound_child_offsets(record: &[u8]) -> Vec<u16> {
         return Vec::new();
     }
     let offsets = prefix[8..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .filter_map(|chunk| read_be16_at(chunk, 0))
         .collect::<Vec<_>>();
     if offsets.is_empty() {

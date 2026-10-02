@@ -177,7 +177,9 @@ fn document_text_line_header_at(bytes: &[u8], offset: usize) -> Option<DocumentT
     }
     let mut words = [0u16; 12];
     for (index, chunk) in bytes[offset..offset + DOCUMENT_TEXT_LINE_HEADER_BYTES]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .enumerate()
     {
         words[index] = u16::from_be_bytes([chunk[0], chunk[1]]);

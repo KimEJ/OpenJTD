@@ -439,7 +439,7 @@ fn read_ssmg_slot_record_label(
     }
 
     let mut units = Vec::with_capacity(unit_len);
-    for chunk in data[label_start..label_end].chunks_exact(2) {
+    for chunk in data[label_start..label_end].as_chunks::<2>().0.iter() {
         units.push(u16::from_be_bytes([chunk[0], chunk[1]]));
     }
     while units.last().copied() == Some(0) {

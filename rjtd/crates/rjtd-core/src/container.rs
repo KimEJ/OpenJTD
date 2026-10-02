@@ -1032,11 +1032,13 @@ fn collect_sector_ids(
 
 fn parse_directory_entries(data: &[u8]) -> Result<Vec<LenientDirectoryEntry>> {
     let mut entries = Vec::new();
-    for entry_data in data.chunks_exact(128) {
+    for entry_data in data.as_chunks::<128>().0.iter() {
         let name_length = u16::from_le_bytes([entry_data[64], entry_data[65]]) as usize;
         let name_bytes_end = name_length.saturating_sub(2).min(64);
         let name_units = entry_data[..name_bytes_end]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
             .collect::<Vec<_>>();
         let name = String::from_utf16_lossy(&name_units);
@@ -1166,7 +1168,9 @@ fn read_u32_le(data: &[u8], offset: usize) -> Result<u32> {
 }
 
 fn read_u32_table(data: &[u8]) -> Vec<u32> {
-    data.chunks_exact(4)
+    data.as_chunks::<4>()
+        .0
+        .iter()
         .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
         .collect()
 }
@@ -1282,7 +1286,9 @@ mod tests {
             let name_length = u16::from_le_bytes([bytes[offset + 64], bytes[offset + 65]]) as usize;
             let name_bytes_end = name_length.saturating_sub(2).min(64);
             let units = bytes[offset..offset + name_bytes_end]
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
                 .collect::<Vec<_>>();
             if String::from_utf16_lossy(&units) == name {

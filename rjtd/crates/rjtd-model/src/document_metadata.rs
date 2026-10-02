@@ -254,7 +254,9 @@ impl DocumentPageMarkEntry {
 }
 
 pub(crate) fn u16_fields_be(raw: &[u8]) -> Vec<u16> {
-    raw.chunks_exact(2)
+    raw.as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect()
 }

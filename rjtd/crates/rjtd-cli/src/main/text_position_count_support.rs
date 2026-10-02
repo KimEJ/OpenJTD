@@ -367,7 +367,9 @@ pub(crate) fn format_be16_signed_fields(bytes: &[u8]) -> String {
 
 pub(crate) fn read_be16_fields(bytes: &[u8]) -> Vec<u16> {
     bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|bytes| u16::from_be_bytes([bytes[0], bytes[1]]))
         .collect()
 }
@@ -728,7 +730,7 @@ pub(crate) fn format_tail_delta_score(score: TailDeltaScore) -> String {
 }
 
 pub(crate) fn format_tail_extra_byte(bytes: &[u8]) -> String {
-    let extra = bytes.chunks_exact(2).remainder();
+    let extra = bytes.as_chunks::<2>().1;
     if extra.is_empty() {
         "-".to_string()
     } else {
@@ -738,7 +740,9 @@ pub(crate) fn format_tail_extra_byte(bytes: &[u8]) -> String {
 
 pub(crate) fn format_le16_fields(bytes: &[u8]) -> String {
     let values = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]).to_string())
         .collect::<Vec<_>>();
     if values.is_empty() {

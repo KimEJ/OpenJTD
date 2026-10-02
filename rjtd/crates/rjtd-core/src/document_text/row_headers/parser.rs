@@ -3,7 +3,9 @@ use super::types::*;
 
 pub fn parse_document_text_row_headers(data: &[u8]) -> Vec<DocumentTextRowHeaderRecord> {
     let units = data
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect::<Vec<_>>();
     let mut records = Vec::new();

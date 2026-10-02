@@ -1258,7 +1258,9 @@ pub(crate) fn read_i32_be_at(bytes: &[u8], offset: usize) -> Option<i32> {
 
 pub(crate) fn read_be16_fields(bytes: &[u8]) -> Vec<u16> {
     bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|bytes| u16::from_be_bytes([bytes[0], bytes[1]]))
         .collect()
 }

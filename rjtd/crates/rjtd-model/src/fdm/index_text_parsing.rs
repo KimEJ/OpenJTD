@@ -720,15 +720,15 @@ pub(crate) fn decode_fdm_text_bytes(bytes: &[u8]) -> Option<String> {
 
 pub(crate) fn decode_fdm_text_utf16be(bytes: &[u8]) -> Option<String> {
     let mut output = String::new();
-    let mut chunks = bytes.chunks_exact(2);
-    for chunk in &mut chunks {
+    let (chunks, remainder) = bytes.as_chunks::<2>();
+    for chunk in chunks {
         let code_unit = u16::from_be_bytes([chunk[0], chunk[1]]);
         if code_unit == u16::from(b'\r') {
             continue;
         }
         output.push(char::from_u32(u32::from(code_unit))?);
     }
-    chunks.remainder().is_empty().then_some(output)
+    remainder.is_empty().then_some(output)
 }
 
 pub(crate) fn decode_fdm_text_shift_jis_pair(first: u8, second: u8) -> Option<char> {

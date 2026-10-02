@@ -405,7 +405,7 @@ pub(crate) fn collect_page_mark_raw_header_y_value_candidates(
         return;
     }
     let tail = &bytes[tail_start..next_offset];
-    for (word_index, chunk) in tail.chunks_exact(2).enumerate() {
+    for (word_index, chunk) in tail.as_chunks::<2>().0.iter().enumerate() {
         let value = u16::from_be_bytes([chunk[0], chunk[1]]);
         let stream_word_index = (tail_start / 2).saturating_add(word_index);
         let stream_byte_offset = tail_start.saturating_add(word_index * 2);
@@ -428,7 +428,7 @@ pub(crate) fn collect_page_mark_raw_header_y_value_candidates(
             page_mark_centipoints_to_css_px(u32::from(value)),
         );
     }
-    for (word_index, chunk) in tail.chunks_exact(4).enumerate() {
+    for (word_index, chunk) in tail.as_chunks::<4>().0.iter().enumerate() {
         let value = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         if value <= 10_000 {
             push_page_mark_scoped_y_value_candidate(

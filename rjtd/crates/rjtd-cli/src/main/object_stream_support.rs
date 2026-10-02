@@ -298,7 +298,7 @@ pub(crate) fn jsfart_stream_magic_family(stream: &[u8], utf16le_preview: &str) -
 
 pub(crate) fn utf16le_printable_preview(bytes: &[u8]) -> String {
     let mut preview = String::new();
-    for chunk in bytes.chunks_exact(2) {
+    for chunk in bytes.as_chunks::<2>().0.iter() {
         let value = u16::from_le_bytes([chunk[0], chunk[1]]);
         if value == 0 {
             break;

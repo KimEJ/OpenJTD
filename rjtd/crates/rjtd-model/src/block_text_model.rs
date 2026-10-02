@@ -399,7 +399,9 @@ pub(crate) fn decode_utf16le_c_string(bytes: &[u8]) -> Option<String> {
         return None;
     }
     let units = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
         .take_while(|unit| *unit != 0)
         .collect::<Vec<_>>();
@@ -417,7 +419,7 @@ pub(crate) fn stream_path_ends_with(path: &str, suffix: &str) -> bool {
 
 pub(crate) fn utf16le_printable_preview(bytes: &[u8]) -> String {
     let mut preview = String::new();
-    for chunk in bytes.chunks_exact(2) {
+    for chunk in bytes.as_chunks::<2>().0.iter() {
         let value = u16::from_le_bytes([chunk[0], chunk[1]]);
         if value == 0 {
             break;

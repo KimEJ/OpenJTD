@@ -673,7 +673,7 @@ pub(crate) fn page_mark_raw_u16_subrecord_candidate_at(
 ) -> Option<PageMarkRawU16SubrecordCandidate> {
     let raw = bytes.get(byte_offset..byte_offset + 16)?;
     let mut words = [0u16; 8];
-    for (index, chunk) in raw.chunks_exact(2).enumerate() {
+    for (index, chunk) in raw.as_chunks::<2>().0.iter().enumerate() {
         words[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
     }
     if words[3] != 0 || words[5] != 0 || words[7] != 0 || words[4] > words[6] {

@@ -704,7 +704,9 @@ fn native_parent_row_header(
     row_start_unit: usize,
 ) -> Option<NativeControlTableRowHeader> {
     let units = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect::<Vec<_>>();
     let mut matches = Vec::new();

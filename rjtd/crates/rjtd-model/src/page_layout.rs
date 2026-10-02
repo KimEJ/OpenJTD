@@ -245,7 +245,9 @@ pub(super) fn page_be32_field_points(page_mark: &PageMark) -> Vec<usize> {
         .flat_map(|entry| {
             entry
                 .raw()
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize)
         })
         .collect()

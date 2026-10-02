@@ -638,7 +638,7 @@ pub(crate) fn shanai_lan_line_header_at(
         return None;
     }
     let mut words = [0u16; 12];
-    for (index, chunk) in raw.chunks_exact(2).enumerate() {
+    for (index, chunk) in raw.as_chunks::<2>().0.iter().enumerate() {
         words[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
     }
     // Class 0x0030 carries a word count and an echoed count, not a font size.

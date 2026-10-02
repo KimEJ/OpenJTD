@@ -521,7 +521,9 @@ fn directory_entry_offset(bytes: &[u8], name: &str) -> usize {
         let name_length = u16::from_le_bytes([bytes[offset + 64], bytes[offset + 65]]) as usize;
         let name_end = name_length.saturating_sub(2).min(64);
         let units = bytes[offset..offset + name_end]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|unit| u16::from_le_bytes([unit[0], unit[1]]))
             .collect::<Vec<_>>();
         if String::from_utf16_lossy(&units) == name {

@@ -220,7 +220,9 @@ pub(crate) fn page_mark_separator_tail_y_centipoints(tail: &[u8]) -> Option<u16>
     {
         return None;
     }
-    tail.chunks_exact(2)
+    tail.as_chunks::<2>()
+        .0
+        .iter()
         .filter_map(|chunk| {
             let value = u16::from_be_bytes([chunk[0], chunk[1]]);
             (PAGE_MARK_SEPARATOR_MIN_Y_CENTIPOINTS..=PAGE_MARK_SEPARATOR_MAX_Y_CENTIPOINTS)

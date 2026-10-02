@@ -182,7 +182,9 @@ pub(crate) fn fallback_text_fill_color() -> &'static str {
 
 pub(crate) fn document_text_units(bytes: &[u8]) -> Vec<u16> {
     bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect()
 }

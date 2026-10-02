@@ -633,7 +633,7 @@ pub(crate) fn layout_map_target_sets(
                 .into_iter()
                 .flat_map(|mark| {
                     mark.entries().iter().flat_map(|entry| {
-                        entry.raw().chunks_exact(4).map(|chunk| {
+                        entry.raw().as_chunks::<4>().0.iter().map(|chunk| {
                             u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize
                         })
                     })
@@ -846,7 +846,9 @@ pub(crate) fn format_page_be32_field_value_refs(
         .flat_map(|(row_index, entry)| {
             entry
                 .raw()
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .enumerate()
                 .filter_map(move |(field_index, chunk)| {
                     let field = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);

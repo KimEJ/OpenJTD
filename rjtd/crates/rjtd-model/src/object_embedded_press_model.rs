@@ -158,8 +158,10 @@ impl ObjectEmbeddedPressStateRecordCandidate {
 
     pub fn payload_le32_words(&self) -> Vec<u32> {
         self.payload
-            .chunks_exact(4)
-            .map(|chunk| u32::from_le_bytes(chunk.try_into().expect("chunk size is exact")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| u32::from_le_bytes(*chunk))
             .collect()
     }
 }

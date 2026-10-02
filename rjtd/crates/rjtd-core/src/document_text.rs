@@ -548,7 +548,9 @@ fn parse_document_text_range(
     range: Option<std::ops::Range<usize>>,
 ) -> ParsedDocumentText {
     let units = data
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect::<Vec<_>>();
     let mut elements = Vec::new();
@@ -615,7 +617,9 @@ pub fn map_document_text_content(data: &[u8]) -> DocumentTextMap {
 
 fn map_document_text_range(data: &[u8], range: Option<std::ops::Range<usize>>) -> DocumentTextMap {
     let units = data
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect::<Vec<_>>();
     let mut entries = Vec::new();
