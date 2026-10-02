@@ -5,13 +5,19 @@ OpenJTD は現在の Rust implementation として `rjtd` を使う。`rjtd` は
 
 そのため、最上位ワークスペースに `rhwp/` をローカル参照リポジトリとして置く。
 
+この文書は参照方針と蓄積した実装・研究メモを保持する。サンプル数と投影の測定値は
+記録当時の実験を示し、最新の互換性認証ではない。現在の範囲と優先順位は
+[roadmap](ROADMAP.ja.md)、モデルの境界は [architecture](ARCHITECTURE.ja.md) を参照する。
+特に、基本的な `rjtd-export` HTML 出力は実装済みであり、app-core の rich HTML clipboard
+fallback とは別の surface である。
+
 ## Source
 
 ```text
 https://github.com/edwardkim/rhwp.git
 ```
 
-現在のローカルクローン基準:
+このメモで用いた参照 snapshot:
 
 ```text
 branch: main

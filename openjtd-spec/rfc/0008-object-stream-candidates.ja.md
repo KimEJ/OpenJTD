@@ -244,6 +244,58 @@ Table layer diagnostics は `referenceFallbackAdmissionGate` も expose する�
 
 `pageMarkScopedYTransformProbe` は probe top level で reference-target status を明示するようになった。source-backed PageMark/LineMark record matches の横に `referenceBBoxUsed:true`、`referenceTargetBasis:"referenceTableBBox.rowTopTargets"`、`sourceOnlyReplacementBlockedReason:"page-mark-scoped-y-transform-targets-reference-backed"` を emit する。これにより reference row-top residual probe は calibration diagnostics として保持しつつ、source-only render authority と誤読されない。source-only promotion は `sourceOnlyPageYOriginSelector`、`sourceOnlyPageMarkAbsoluteYSlotGate`、`lineHeaderLineMarkCouplingEvidence` から来なければならない。
 
+## Frame-Linked Text Boxes
+
+2026-09-26 の corpus 調査では、byte 8 の family word が `2` の Frame rows は、
+**Frame stream の保存順**で密な `/LayoutBox`・`/LayoutBoxText` records に対応する。
+調査した 27 files 中 25 files で件数が一致し、残る files は stream の根拠が不完全または
+不正なため描画対象に昇格しない。Frame object ID は疎な値を取り、text-block index ではない。
+未解読フィールドも含む 60-byte row 全体を model と JSON `rawHex` に保存する。
+
+従来 `objectType` として公開した byte 12 の word で text block や汎用の図形種別を選んでは
+ならない。`tmogi2_2` の text block 6 は新聞出典の caption で Frame object 9 に属するが、
+byte-12 値で並べ替えると title frame に誤対応する。新しい配置根拠ではこの値を中立的な
+`rawWord6` として報告し、順序・描画順の意味は未解読のままとする。
+
+観測された Frame reference は次の 14-word DocumentText context record を使う。
+
+```text
+001c 0000 000e 0000 0030 [w5] 0507 0012 [frame-id] 0000 000e 0000 0000 001f
+```
+
+同じ形式が本文と text-box content に現れる。統制文書 `054_font_size_paragraph_plus` では
+本文が Frame 0 を参照し、その親 text box が Frames 6 から 1 を参照する。相対矩形は
+2 列・3 行の grid を隙間なく構成する。source length `3175` と `568` は 1/100 mm 単位で
+それぞれ 90 pt と約 16.10 pt に対応する。
+
+renderer は最初の本文段落の前に anchor を持つ完全な単一階層 text-frame grid を対象とする。
+ID の一意性、frame/layout/text 件数の一致、単一 root、対応済み相対 anchor envelope、
+単一行の leaf text、親領域を隙間や重なりなく埋める矩形を確認する。source frame offset と
+対応済み text style を使い、実行時に参照 PDF の座標は読まない。制御だけの container を
+装飾タイトル枠として描画する経路は抑止する。複雑な木、混在 object、page assignment、
+罫線、paint order は未解読。出力は `decoded:false` と配置の根拠を保持する。
+
+この統制文書では生成・参照 PDF とも 612×792 pt の 1 ページとなり、7 labels を復元する。
+セルの X 座標は一致し、上端座標の誤差は最大 0.19 pt、単語幅の差は約 0.21 pt 残る。
+これは限定した根拠であり、一般的なレイアウト同等性を意味しない。
+
+### Page Margins Used by This Path
+
+明示的な `/PageLayoutStyle` `0x4444` record 内の `0x4002` subrecord は view の既定値より
+優先する。対応する 39-byte payload は `fe 80 00` で始まり、byte 3 から top、bottom、left、
+right の順で 1/100 mm 単位の big-endian `u16` 値を持つ。現在は曖昧さのない単一の
+page-layout record のみ使う。未対応の明示 margin record があるとき、矛盾する view 値へ
+黙って fallback しない。
+
+明示 record がない場合、対応する `/DocumentViewStyles` `0x1002` payload も同じ 4 値の
+順序を使う。`00 d8` で始まる 32 bytes は byte 2、`00 d9 01` で始まる 33 bytes は byte 3
+から値を読む。予約値や紙幅・高さ全体を消費する margin は拒否する。model は辺ごとの
+margin を公開し、本文領域と fallback text origin に使用する。
+
+import 経由の margin-sweep 文書は view の既定値を変更しても明示 page-layout margin を
+維持している。その PDF 座標が同じであることは page-layout の優先と整合し、margin field
+の欠落を示すものではない。正確な typography と他の page-style profile は別の課題として残る。
+
 ## Next Work
 
 - image payload signatures 前の semantic object header fields を decode し、`/Figure`、`/Frame`、`/LayoutBox`、layout mark evidence と接続する。

@@ -54,14 +54,40 @@ text	鉄道\n
 
 ## Current Structured Token Parser
 
+### Named Text Segment Boundary
+
+byte 0 に `SsmgV.01`、byte 20 に `TextV.01` がある観測済み stream では、byte 28 の
+big-endian `u32` が UTF-16 unit 単位の content length を示す。本文は byte 32 から始まり、
+宣言した unit 数の後に style section が続く。DocumentText style-section parser も
+同じ境界を使用する。
+
+可視テキストは `0x001f` marker なしに byte 32 から始まる場合がある。統制実験の
+`PAGE 01` family と、独立したローカル `sample_macro` / `toolbox` 文書で確認した。
+header の下位 word を raw/record format の選択値とみなすと先頭テキストを失うため、
+parser と source map は named segment の先頭で text mode に入り、宣言された終端までを
+利用可能な完全な unit 数で制限する。これにより style tail の marker bytes を本文として
+読むことも防ぐ。長さには `u32` の両方の word を使う。
+
+named header のない stream は marker-based recovery を維持する。物理ファイル内の
+embedded fragment は連続した logical stream bytes と仮定できないため、fragment の
+宣言長で後続の復元可能なテキストを破棄せず、既存の上限付き salvage scan を維持する。
+raw bytes は文書モデルに保持する。
+
+### Token Decoding
+
 current parser:
 
 1. `/DocumentText` を big-endian 16-bit units として読む。
-2. `0x001F` 後に text run を開始する。
+2. 検証できた named segment の先頭、または `0x001F` 後で text run を開始する。
 3. tab、LF、CR を除く C0/C1 control boundaries で text run を停止する。
 4. `0x001D ... 0x001E` に包まれた selected visible inline segments を復元する。
 5. decoded pieces を `TextRun`、`InlineText`、`SkippedInlineText`、`ControlBoundary` elements として保存する。
 6. structured parser の plain-text projection から `cat` output を生成する。
+
+本文、可視 inline、保存する skipped-inline text では、有効な UTF-16 surrogate pair を
+まとめて decode する。source range の単位は UTF-16 のままであり、補助平面の文字は
+2 units を占める。pair は宣言された text segment の境界を越えず、不正な unit は
+従来の boundary 処理を維持する。
 
 `SkippedInlineText` は plain `cat` output には出力しない。selector、decoded text、raw UTF-16BE bytes とともに保持し、source tag `0x001d` を持つ `UnknownObject` として document model に lift する。
 
@@ -73,6 +99,35 @@ embedded fallback は raw `SsmgV.01` fragments を見つけた後、同じ heuri
 - 各 fragment は next `SsmgV.01` marker または 64 KiB までに bound する。
 - implausible noise lines は conservative character filter で落とす。
 - document model は source を `/EmbeddedDocumentText` として記録する。
+
+## Observed Font Size Sources
+
+統制実験の文字サイズ変更では、property `2` の big-endian `u16` が 1/100 mm 単位の
+サイズを示す。`370` は約 10.5 pt、`494` は約 14 pt に対応する。
+`053_font_size_table_plus` のセル範囲と `054_font_size_paragraph_plus` /
+`082_plain_paragraph_font_size_plus` の本文範囲が大きい値を持つ。参照 PDF は
+10.44/14.04 pt を使い、printer の量子化と整合するが、正確な device rounding は未解読。
+
+対応する `/DocumentViewStyles` sequential `0x1006` profile は 20 または 21 byte の
+payload が `1f 00 00` で始まり、payload byte 3–4 に同じ単位の既定サイズを持つ。
+他の profile は未対応。property `2 = 0` は既定値へ戻す。欠落、不正、混在、未被覆の
+property 範囲を一様な明示サイズとみなしてはならない。予約値 `0xfffd..0xffff` は
+巨大なフォントとして描画しない。
+
+model renderer は対応する明示・既定サイズとその根拠を SVG/PDF、layer-tree の text run
+へ渡す。文字送りと折返しはまだ fallback metrics を使うため、完全な font shaping や
+レイアウト再現を意味しない。
+
+## LayoutBoxText Content
+
+`/LayoutBoxText` にも長さで区切られた `TextV.01` block がある。区切られた content は
+先頭から text mode で map し、先頭テキストと UTF-16 surrogate pair も保持する。
+可視 text/inline だけを投影し、skipped inline annotation は raw stream に保持する。
+
+制御だけの block で printable な payload word をすべて文字として読む fallback は
+使わない。`054_font_size_paragraph_plus` の最初の block はタイトルではなく object
+reference を持ち、以前の fallback は誤った `0ԇ` を出力した。この fallback は削除した。
+テキストの復元だけでは、後続セル block の位置や所有関係は証明されない。
 
 ## Inline Segment Observation
 

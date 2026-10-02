@@ -44,7 +44,7 @@ rhwp
 
 OpenJTD
  ├─ JTD
- ├─ JTDC
+ ├─ JTT / JTTC
  └─ Ichitaro ecosystem
 ```
 
@@ -87,10 +87,10 @@ Record Layer
       ▼
 Document Model
       │
-      ├──── Markdown Export
+      ├──── Plain Text / Markdown Export
       ├──── HTML Export
       ├──── JSON Export
-      └──── Future Renderer
+      └──── App Core / SVG / PDF Export
 ```
 
 すべての機能はこの階層を通して実装する。
@@ -202,6 +202,9 @@ rjtd は clean-room reverse engineering を原則とする。
 - 著作権侵害
 
 ## Initial Milestones
+
+以下は創設時のマイルストーンである。現在の状態、追加の WASM ビューア milestone、
+次の完了条件は [ROADMAP.ja.md](ROADMAP.ja.md) で管理する。
 
 ### M1: Container Explorer
 

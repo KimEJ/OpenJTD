@@ -244,6 +244,67 @@ Table layer diagnostics now also expose `referenceFallbackAdmissionGate`, a beha
 
 `pageMarkScopedYTransformProbe` now declares its reference-target status at the probe top level. It emits `referenceBBoxUsed:true`, `referenceTargetBasis:"referenceTableBBox.rowTopTargets"`, and `sourceOnlyReplacementBlockedReason:"page-mark-scoped-y-transform-targets-reference-backed"` beside the source-backed PageMark/LineMark record matches. This keeps the reference row-top residual probe available for calibration diagnostics while preventing it from being mistaken for source-only render authority; source-only promotion must come from `sourceOnlyPageYOriginSelector`, `sourceOnlyPageMarkAbsoluteYSlotGate`, and `lineHeaderLineMarkCouplingEvidence`.
 
+## Frame-Linked Text Boxes
+
+The 2026-09-26 corpus check found that Frame rows with the family word at byte
+8 equal to `2` correspond to the dense `/LayoutBox` and `/LayoutBoxText` records
+in **Frame stream order**. Counts agree in 25 of the 27 inspected files; the
+remaining files have incomplete or malformed stream evidence and are not admitted. Frame
+object IDs may be sparse and are not text-block indexes. Full 60-byte rows are
+now preserved in the model and JSON `rawHex`, including undecoded fields.
+
+The word at byte 12, historically exposed as `objectType`, must not select a
+text block or a universal shape type. In `tmogi2_2`, text block 6 is the newspaper
+caption and belongs to Frame object 9, while sorting by byte-12 values would
+associate it with a title frame. The new placement evidence reports this field
+neutrally as `rawWord6`; its ordering/paint semantics remain unproven.
+
+Observed frame references use this 14-word DocumentText context record:
+
+```text
+001c 0000 000e 0000 0030 [w5] 0507 0012 [frame-id] 0000 000e 0000 0000 001f
+```
+
+The same form occurs in the main text and in text-box content. In the controlled
+`054_font_size_paragraph_plus` document, the body references Frame 0 and the
+parent text box references Frames 6 through 1. Their relative rectangles form
+an exact 2-column, 3-row grid. Source lengths `3175` and `568` correspond to
+90 pt and approximately 16.10 pt in hundredths of a millimeter.
+
+The renderer admits a complete single-level text-frame grid anchored before the
+first body paragraph: unique IDs, matching frame/layout/text counts, one root,
+known relative-anchor envelope, single-line text leaves, and rectangles that
+tile the parent without gaps or overlap. It uses source frame offsets and
+supported text styles; it does not read reference-PDF coordinates at runtime.
+Control-only containers are no longer rendered as decorative title frames.
+More complex trees, mixed objects, page assignment, borders, and paint order
+remain unproven. Output retains `decoded:false` and placement provenance.
+
+For the controlled document, the generated and reference PDFs both have one
+612×792 pt page. All seven labels are recovered; cell X positions agree exactly,
+cell top-coordinate errors are at most 0.19 pt, and word-width differences remain
+about 0.21 pt. This is bounded evidence, not general layout equivalence.
+
+### Page Margins Used by This Path
+
+An explicit `/PageLayoutStyle` `0x4444` record's `0x4002` subrecord takes priority
+over view defaults. The supported 39-byte payload begins `fe 80 00`, followed at
+byte 3 by four big-endian `u16` values: top, bottom, left, right in 1/100 mm.
+Only a single unambiguous page-layout record is currently used. Unsupported
+explicit margin records do not silently fall back to conflicting view values.
+
+Without that explicit record, supported `/DocumentViewStyles` `0x1002` payloads
+use the same four-value order: 32 bytes beginning `00 d8` (values at byte 2), or
+33 bytes beginning `00 d9 01` (values at byte 3). Reserved values and margins
+that consume the paper's full width or height are rejected. The model exposes
+per-edge margins and uses them for body bounds and fallback text origins.
+
+The imported margin-sweep documents retain the same explicit page-layout
+margins despite changes to view defaults. Their identical PDF positions are
+therefore consistent with page-layout precedence, not evidence that the margin
+fields are absent. Exact typography and broader page-style profiles remain
+separate work.
+
 ## Next Work
 
 - Decode the semantic object header fields preceding image payload signatures and connect them to `/Figure`, `/Frame`, `/LayoutBox`, and layout mark evidence.

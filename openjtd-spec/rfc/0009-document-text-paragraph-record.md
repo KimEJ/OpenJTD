@@ -122,6 +122,17 @@ Appears inside table-heavy samples, one per table cell per display row. Fixed
 ```
 
 **`b0` and `b1` are cell boundary coordinates (decoded:false for scale/unit).**
+The `w2` value and `w8` echo are the record length, not font size. A 2026-09-26
+sweep found 12,315 windows matching the supported envelope (`w6=0x00ff`, `w7=0`)
+across 83 local files; every window had `w2=w8=12`. The fixed-width reader now
+requires both lengths to match. Other envelopes remain unproven.
+
+Some older model diagnostics still call this value `fontSizeUnits` and use it
+in reference-calibrated row/stroke projections. Those names and formulas are
+legacy hypotheses, not decoded font metrics. Actual text-size evidence comes
+from style property 2 and the supported view-style default described in
+[RFC 0003](0003-document-text.md#observed-font-size-sources).
+
 Analysis of 703 records in `sample-table.jtd`:
 
 - `b0` = left edge of cell in the table coordinate space
@@ -205,6 +216,83 @@ row delimiter) and immediately before a `0x001c/0x0010` single-column paragraph:
 `w4=0x0010=16` (class code of the following `0x0010` record), `w7=0x0001=1`
 constant. `w5=0x0002` or `0x0000`. Appears to mark the transition from a table
 section back to normal single-column text. Semantic meaning is not decoded.
+
+## Verified First-Page Control-Table Text Placement
+
+The controlled source-y corpus establishes one narrow renderable profile for
+horizontal first-page control tables. It is intentionally stricter than generic
+table-candidate detection. The profile requires all of the following:
+
+- a unit-based `0x000e` table candidate with a stable column pattern;
+- one immediate `0x0010` parent record for each row, either starting at the
+  row interval or ending immediately before it, with the same nonzero `w6`
+  grid extent;
+- one `0x0030` header ending exactly at every cell text range;
+- a selected `LineMark` interval starting at that parent or row and ending at
+  the row interval's end;
+- a single first `PageMark` entry whose `w21` is a plausible 1/100-mm line
+  pitch; and
+- supported page margins and a uniform resolved text style for each cell.
+
+For that profile, cell text uses the `0x0030` `b0` offset scaled over the
+parent `w6` extent inside the source margins. Each row baseline uses its
+`LineMark` record index multiplied by `PageMark w21`, plus the actual resolved
+font size. ASCII spaces preserved immediately before a cell label contribute
+two source grid units each; they adjust its position but are not repainted as
+new visible glyphs.
+
+The 20 admitted controlled documents cover baseline, horizontal movement,
+whole-line vertical movement, and individual row-height changes. The generated
+PDFs for `PAGE 01`, `PAGE 01_right_4Tick`, `PAGE 01_down_4Low`, `000_base_a`,
+`013_table_moved_right`, and `020_row1_height_plus` place cell text within
+0.25 pt in X/Y against their Ichitaro PDFs. This evidence does not include
+the ink width: the local substitute font remains up to about 3.9 pt narrower
+on a label. Source border-paint semantics remain unproven; the basic border
+projection below uses an explicit renderer fallback style.
+
+`050_wrapped_one_cell` is excluded. Its cell header offsets vary between rows
+after wrapping, so a simple per-row text placement rule would not be sound.
+Multi-page tables, merged cells, empty/sparse cells, vertical writing, and
+mixed object trees remain diagnostic-only.
+
+### Interstitial flow text between two native control tables
+
+One further first-page horizontal profile is renderable only when two complete
+control-table projections bracket a single `DocumentText` text run. The run
+must contain exactly two non-empty ASCII lines with the same nonzero leading
+ASCII-space count, one unique preceding zero-offset `0x0030` header in the
+gap after the first table, and exact containment of each line in a distinct
+`LineMark` interval. Both intervals must resolve to the same first `PageMark`
+entry with the supported `w21` pitch. The renderer preserves the source spaces
+and sets each baseline from that interval's record index, the shared pitch,
+and the resolved source font size.
+
+`070_two_tables_vertical` satisfies this profile: two 2×2 native-table
+projections bracket `BETWEEN01` and `BETWEEN02`, whose `LineMark` records are
+7 and 9. Its generated PDF keeps all ten text runs separate and is within
+0.51 pt in X and 0.21 pt in top position against the Ichitaro PDF. Those
+figures validate only this tightly gated flow bridge; they do not decode
+generic paragraph layout, whitespace semantics, or font ink widths.
+
+### Basic control-table border projection
+
+For the admitted profile, vertical border positions use `parent w8 + 1` and
+each cell header's `b1 + 1`, scaled by `bodyWidth / parent w6`. Horizontal
+positions use `marginTop + recordIndex * pitch + resolvedFontSize / 2`.
+The first boundary selects the first nonempty row's record minus one; internal
+boundaries select the next nonempty row's record minus one. The last boundary
+follows contiguous source-empty control rows only while their parent grid and
+left edge match and their source ranges equal the corresponding `LineMark`
+intervals. A non-table transition ends the scan; a source gap must not be skipped.
+
+The local `020_row1_height_plus`, `PAGE 01`, and `070_two_tables_vertical`
+PDF comparisons place the measured border centers within 0.14 pt. This is
+coordinate evidence for that profile, not full border-paint equivalence.
+The current SVG/PDF projection uses black 0.8 CSS-px lines (0.6 PDF pt) as a
+renderer fallback. Color, thickness, dash patterns, joins, and overhanging corner
+marks are not decoded by this projection. Border output remains `decoded:false`
+and currently belongs to SVG/PDF; the page-layer tree exposes the table text
+but does not emit these border lines.
 
 ## Correlation with LineMark unit-start
 

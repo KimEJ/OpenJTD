@@ -56,14 +56,42 @@ text	鉄道\n
 
 ## Current Structured Token Parser
 
+### Named Text Segment Boundary
+
+Observed streams with `SsmgV.01` at byte 0 and `TextV.01` at byte 20 have a
+big-endian `u32` content length at byte 28, measured in UTF-16 units. Content
+starts at byte 32; the style section follows those declared units. This is the
+same boundary used by the DocumentText style-section parser.
+
+Visible text can begin immediately at byte 32 without a `0x001f` marker. The
+controlled `PAGE 01` family and independent local `sample_macro` / `toolbox`
+documents expose this case. Treating the low header word as a raw-vs-record
+format selector loses that initial text. The parser and source map therefore
+enter text mode at the named segment's start and stop at its declared end,
+bounded by the available complete units. This also prevents style-tail marker
+bytes from becoming body text. Lengths use both words of the `u32` field.
+
+Streams without this named header retain marker-based recovery. Physical-file
+embedded-fragment recovery cannot assume contiguous logical stream bytes, so
+it retains the existing bounded salvage scan rather than trusting a fragment's
+declared logical length to discard later recoverable text. Raw bytes remain
+preserved in the document model.
+
+### Token Decoding
+
 The current parser:
 
 1. Reads `/DocumentText` as big-endian 16-bit units.
-2. Starts a text run after `0x001F`.
+2. Starts text at a validated named segment's beginning or after `0x001F`.
 3. Stops a text run on C0/C1 control boundaries, except tab, LF, and CR.
 4. Recovers selected visible inline segments wrapped by `0x001D ... 0x001E`.
 5. Preserves decoded pieces as `TextRun`, `InlineText`, `SkippedInlineText`, and `ControlBoundary` elements.
 6. Produces `cat` output from the structured parser's plain-text projection.
+
+Valid UTF-16 surrogate pairs are decoded together in body, visible-inline, and
+preserved skipped-inline text. Source ranges remain measured in UTF-16 units,
+so a supplementary character occupies two units. A pair cannot cross the
+declared text-segment boundary; malformed units retain boundary behavior.
 
 `SkippedInlineText` is not emitted in plain `cat` output. It is retained with its selector, decoded text, and raw UTF-16BE bytes, then lifted into the document model as an `UnknownObject` with source tag `0x001d`.
 
@@ -75,6 +103,39 @@ Embedded fallback uses the same heuristic after locating raw `SsmgV.01` fragment
 - each fragment is bounded to the next `SsmgV.01` marker or 64 KiB;
 - implausible noise lines are dropped with a conservative character filter;
 - the document model records the source as `/EmbeddedDocumentText`.
+
+## Observed Font Size Sources
+
+Controlled font changes expose property `2` as a big-endian `u16` size in
+hundredths of a millimeter: `370` corresponds to approximately 10.5 pt and `494`
+to 14 pt. The `053_font_size_table_plus` cell ranges and the
+`054_font_size_paragraph_plus` / `082_plain_paragraph_font_size_plus` body ranges
+carry the larger value. Reference PDFs use 10.44/14.04 pt, consistent with
+printer quantization; exact device rounding is not decoded here.
+
+The supported `/DocumentViewStyles` sequential `0x1006` record profile has a
+20- or 21-byte payload beginning `1f 00 00`, with the default size at payload
+bytes 3–4 in the same units. Other record profiles remain unsupported. Property
+`2 = 0` restores the default. Missing, malformed, mixed, or uncovered property
+ranges must not be mistaken for a uniform explicit size; reserved values
+`0xfffd..0xffff` are not rendered as giant fonts.
+
+The model renderer now carries supported explicit/default sizes into SVG/PDF
+and layer-tree text runs with their basis. Text advance and line wrapping still
+use fallback metrics; this is not full font shaping or layout fidelity.
+
+## LayoutBoxText Content
+
+`/LayoutBoxText` also contains length-delimited `TextV.01` blocks. Their bounded
+content is mapped in text mode from its beginning, including leading text and
+UTF-16 surrogate pairs. Only visible text/inline entries are projected;
+skipped inline annotations remain in the preserved raw stream.
+
+A control-only block must not fall back to treating every printable control
+payload word as text. The first block of `054_font_size_paragraph_plus` contains
+object references, not a title; the former fallback emitted spurious `0ԇ`
+fragments. That fallback has been removed. Text recovery does not by itself
+prove the geometry or ownership of the later cell-text blocks.
 
 ## Inline Segment Observation
 

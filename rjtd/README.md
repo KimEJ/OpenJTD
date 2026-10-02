@@ -58,7 +58,7 @@ Record Layer
       ▼
 Document Model
       │
-      ├──── Markdown Export
+      ├──── Plain Text / Markdown Export
       ├──── HTML Export
       ├──── JSON Export
       └──── App Core / SVG / PDF Export
@@ -66,7 +66,21 @@ Document Model
 
 Every feature must be implemented through these layers. No exporter may read source data directly. Exporters must go through the Document Model.
 
-The current `rjtd-model::DocumentCore` follows the rhwp app-core flow and provides `from_bytes`, `page_count`, `get_document_info`, `get_page_info`, page/section setting fallbacks, `render_page_svg`, `render_page_html`, layer/overlay fallback APIs, text-page cursor/hit-test helpers, basic body paragraph editing, undo snapshots, body search/replace, view-state toggles, page-position lookup, document-tree navigation fallbacks, selection rectangles, and a plain-text internal clipboard. `get_page_layer_tree` emits fallback `textRun` ops plus rhwp-shaped `textSources`/`source` spans, including JTD byte/unit source ranges where parsed `/DocumentText` spans are known, inside a rhwp-shaped layer envelope with schema/resource table versions, output options, empty font resources, feature lists, and fallback `textV2` diagnostics. `rjtd-wasm` provides an `HwpDocument` wrapper named to match the surface expected by rhwp Studio; direct Studio-call API gaps are now closed except for wasm-bindgen's generated `free` method. Most advanced surfaces are conservative fallbacks: field/header/footer/note, table/cell, picture/shape/equation/bookmark/form, HTML paste/export, HWP/HWPX export, formatting/style, and numbering APIs return no-hit/no-op/default values until the corresponding JTD structures are decoded.
+`rjtd-model::DocumentCore` provides loading, page queries, SVG/HTML rendering,
+layer diagnostics, and basic body-text editing, search, selection, clipboard,
+and snapshots. Source byte/unit spans are retained where parsed. The
+`rjtd-wasm::HwpDocument` wrapper exposes a rhwp-shaped browser API.
+
+Many advanced formatting, table/cell, object, header/footer, and note methods
+still return defaults, no-hit results, or no-op results. Some setting methods
+return success without persisting decoded JTD settings. These compatibility
+surfaces do not establish native editing or save support. HWP/HWPX export
+returns empty bytes; `exportHwpVerify` reports that conversion is unimplemented.
+
+Basic document HTML export is implemented in `rjtd-export` and the CLI, including
+paragraph text and ruby markup. App-core rich HTML clipboard methods remain
+limited; basic body selection can produce escaped paragraph text. For current
+milestones and acceptance criteria, see the [roadmap](../docs/ROADMAP.md).
 
 ## Document Model First
 
@@ -97,15 +111,16 @@ limited to 16,384 pixels per dimension and 64 MiPixels in total.
 These are pre-stable safety ceilings, not compatibility guarantees. Stream,
 record, embedded-image, and page construction use one `ParseLimits`-backed
 resource budget for each limits-aware document load. The default budget caps
-1,024 declared CFB streams and 64 MiB of their cumulative declared bytes;
+1,024 distinct CFB stream paths and 64 MiB of their cumulative accounted bytes;
 65,536 retained frame or embedding records and 64 MiB of their record bytes;
 1,024 retained images and 64 MiB of their retained payload/envelope bytes;
 and 65,536 pages with 1 Mi retained page lines. Embedded-image width, height,
 and cumulative header-derived pixels are also bounded at 16,384, 16,384, and
 64 MiPixels.
 
-Known CFB stream declarations are charged before reads and their actual bytes
-are checked without charging strict/lenient fallback twice. Image dimensions
+Strict CFB streams are charged from declarations; lenient recovery uses bytes
+reachable through the sector chain. Duplicate paths are counted once, and
+actual reads are checked against that accounting. Image dimensions
 come from PNG, GIF, BMP, or JPEG headers before retained payload/envelope
 clones. This Rust model path does not decode or retain a bitmap, so these
 limits do not claim to bound a downstream decoded-image allocation. Process
@@ -130,7 +145,10 @@ rjtd/
 └── tools
 ```
 
-Crates that are not currently used are still created early. This fixes the intended growth direction of the project.
+All six workspace crates have implementation or fixture-support roles.
+`fuzz/`, `docs/`, `samples/`, `tests/`, and `tools/` are reserved workspace
+directories; crate tests live under `crates/`. Directory presence alone does
+not mean a fuzzing or test program exists there.
 
 ## Commands
 
@@ -196,6 +214,7 @@ cargo run -p rjtd-cli -- text-position-line-context <file.jtd>
 cargo run -p rjtd-cli -- text-position-delta-scan <file.jtd>
 cargo run -p rjtd-cli -- export <file.jtd> --format json
 cargo run -p rjtd-cli -- export <file.jtd> --format md
+cargo run -p rjtd-cli -- export <file.jtd> --format html
 cargo run -p rjtd-cli -- export <file.jtd> --format text
 cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 ```
@@ -266,4 +285,4 @@ cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 
 `style-records` prints preserved style stream summaries and record candidates, including family, header candidates, record layout, offsets, codes, payload lengths, and conservative labels. `style-candidates` lists labeled `/TextLayoutStyle` candidates as stable per-document rows for cross-sample correlation. `text-layout-style-records` prints all `/TextLayoutStyle` records with payload digests and previews. `document-view-style-groups` prints `/DocumentViewStyles` group record payload lengths, digests, and short previews. `text-position-style-context` compares `TCntV.01` tail fields against text/page style candidate IDs, record indexes, and `/DocumentViewStyles` group records; `text-position-style-summary` aggregates those hits per tail field; `text-position-count-tail-field-roles` compares tail fields and adjacent pairs against document-text unit/text hits. Parsed `TextRun` values preserve `/DocumentText` byte/UTF-16 source spans, and valid `TCntV.01` entries are preserved as decoded-false `textCountRanges` with byte/unit `documentTextOverlaps` in model JSON and app-core document info. These are reverse-engineering diagnostics, not decoded paragraph style assignments yet.
 
-`export` parses through the `DocumentParser` entry point, consumes `ParsedDocumentText` to build a minimal `Document` model, preserves the raw text source in the model, preserves skipped inline text as `UnknownObject` payloads, promotes observed ruby base/phonetic pairs to `Inline::Ruby`, preserves observed style/layout streams as named `UnknownStyle` entries, and then emits JSON, Markdown, plain text, or native PDF. Plain text, Markdown, and PDF output use the visible ruby base text, while JSON keeps the annotation text, style stream names, observed style stream family/header summaries, neutral record boundary candidates with conservative label candidates, and raw payloads. PDF export requires `-o`/`--output` and follows rhwp's native pipeline direction: `DocumentCore` renders text SVG pages and `rjtd-export` converts them with `svg2pdf` plus `pdf-writer`. For observed `.jttc`, the preserved `/DocumentText` and style streams come from the decompressed inner CFB. For embedded samples, the preserved source is `/EmbeddedDocumentText`. If a document has preserved raw streams but no extractable text yet, PDF/SVG output shows a visible diagnostic notice instead of a silent blank page. HTML export is reserved for a later milestone.
+`export` parses through the `DocumentParser` entry point, consumes `ParsedDocumentText` to build a minimal `Document` model, preserves the raw text source in the model, preserves skipped inline text as `UnknownObject` payloads, promotes observed ruby base/phonetic pairs to `Inline::Ruby`, preserves observed style/layout streams as named `UnknownStyle` entries, and then emits JSON, Markdown, plain text, basic HTML, or native PDF. Plain text, Markdown, and PDF output use the visible ruby base text, while JSON keeps the annotation text, style stream names, observed style stream family/header summaries, neutral record boundary candidates with conservative label candidates, and raw payloads. PDF export requires `-o`/`--output` and follows rhwp's native pipeline direction: `DocumentCore` renders text SVG pages and `rjtd-export` converts them with `svg2pdf` plus `pdf-writer`. For observed `.jttc`, the preserved `/DocumentText` and style streams come from the decompressed inner CFB. For embedded samples, the preserved source is `/EmbeddedDocumentText`. If a document has preserved raw streams but no extractable text yet, PDF/SVG output shows a visible diagnostic notice instead of a silent blank page. Basic HTML emits paragraphs and ruby markup; full layout and rich clipboard semantics remain unfinished.

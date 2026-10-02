@@ -1,5 +1,15 @@
 # TODO
 
+This file retains the detailed backlog and research history. For the current
+milestone summary, priorities, and acceptance criteria, start with the
+[roadmap](docs/ROADMAP.md).
+
+A checked item records the implementation or experiment described by that item.
+It does not turn `decoded:false`, `reference-backed`, or diagnostic evidence
+into decoded semantics. Sample counts and measurements describe the recorded
+experiment, not a fresh verification of every later checkout. M1–M4 retain
+their original IDs; M5 is the public specification and M6 is the WASM viewer.
+
 ## M1: Container Explorer
 
 Goal: implement `rjtd streams <file.jtd>` as the first executable milestone.
@@ -760,33 +770,43 @@ Completed:
 Remaining:
 
 - [ ] Preserve headings, lists, tables, ruby, and layout semantics once the record parser exposes them.
-- [x] Add HTML export after the model has stable block/inline semantics.
+- [x] Add basic HTML export for paragraph text and ruby markup; full layout and rich HTML clipboard semantics remain unfinished.
 
-## M5: WASM Viewer on Cloudflare Pages
+## M5: Public Specification
 
-Goal: build `rjtd-wasm` with `wasm-pack` and deploy a static web viewer to Cloudflare Pages where users can drag-and-drop JTD files for in-browser viewing.
+Status: ongoing; RFCs 0001–0009 are recorded in English and Japanese.
 
-Status: not started.
+- [x] Maintain the [RFC index](openjtd-spec/README.md) alongside the implementation.
+- [ ] Extend the records as semantics are proven across samples; retain unknown
+  fields, rejected hypotheses, and counterexamples.
 
-Background:
-- `rjtd-wasm` is already configured as `cdylib` + `wasm-bindgen` and exposes `renderPageSvg()`, `renderPageHtml()`, `renderPageToCanvas()`, `plainText()`, `pageCount()`, and other browser-facing APIs.
-- Rendering accuracy is actively improving in M2/M3; the viewer implementation must not interfere with ongoing parser work.
+## M6: WASM Viewer
 
-Prerequisites:
-- `wasm-pack --target web` build succeeds (verify WASM compatibility of `cfb` crate and other I/O dependencies).
-- `rjtd-core` reads CFB via a byte-slice interface without calling `std::fs` directly.
+Goal: provide a static browser viewer for local JTD-family files.
 
-Immediate tasks:
+Status: MVP implemented. The repository's current deployment workflow targets
+GitHub Pages from `main`. Earlier Cloudflare deployment experiments are historical;
+this status does not certify the availability of any hosted instance.
 
-- [x] Verify `wasm-pack build --target web rjtd/crates/rjtd-wasm` compiles and identify any WASM-incompatible dependencies (`std::fs`, desktop-only `image` crate features, etc.).
-- [x] Add `cfg(target_arch = "wasm32")` guards as needed to make the WASM build pass (I/O stubs, `image` crate feature gating, etc.).
-- [x] Create a minimal HTML frontend in `openjtd.github.io/` (file drop → `HwpDocument.new(bytes)` → `renderPageSvg()` injected into a `<div>`, MVP only).
-- [x] Add page navigation UI (previous/next buttons, page number display).
-- [x] Add a `plainText()` output tab as a baseline for text search.
-- [x] Package `wasm-pack` artifacts (`.wasm` + JS glue) alongside the HTML for deployment to Cloudflare Pages (static files only, no Workers required).
-- [x] Set up a Cloudflare Pages GitHub Actions pipeline for automatic build and deploy when `rjtd-wasm` source is updated.
+Completed:
+
+- [x] Configure the `rjtd-wasm` browser bindings and the `wasm-pack --target web` build.
+- [x] Implement local file selection/drop, SVG pages, page navigation, and a
+  `plainText()` tab in `openjtd.github.io/`.
+- [x] Add the GitHub Pages workflow that builds WASM, assembles the static assets
+  and distribution notices, and deploys from `main`.
+
+Remaining:
+
+- [ ] Add browser runtime regression coverage for opening, replacing, navigating,
+  and closing documents, including error cases.
+- [ ] Show the renderer's fallback and fidelity limitations in the viewer.
 
 Constraints:
-- Files must be processed entirely in-browser; nothing is uploaded to a server (privacy requirement).
-- Rendering quality depends on M2/M3 progress; the MVP may ship with `decoded:false` output.
-- Do not modify `rjtd-model` or `rjtd-core` parsing code for the viewer; the viewer adapts to the WASM API.
+
+- Process document contents entirely in the browser; do not upload them.
+- Keep `decoded:false` and fallback limits visible; viewer availability does not
+  prove native layout fidelity or full editing support.
+- Adapt the viewer to the WASM API; parser work stays in M2/M3.
+
+See the [viewer guide](openjtd.github.io/README.md) for build and deployment details.

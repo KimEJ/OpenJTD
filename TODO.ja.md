@@ -1,5 +1,13 @@
 # TODO
 
+この文書は詳細 backlog と研究履歴を保持する。現在のマイルストーン概要、優先順位、
+完了条件は [roadmap](docs/ROADMAP.ja.md) を参照する。
+
+チェック済みの項目は、その項目に書かれた実装や実験が行われたことを示す。
+`decoded:false`、`reference-backed`、診断根拠が解読済みの意味に変わるわけではない。
+サンプル数と測定値は記録当時の実験を示し、後の checkout 全体を再検証した結果ではない。
+M1–M4 は元の ID を維持し、M5 は公開仕様、M6 は WASM ビューアとする。
+
 ## M1: Container Explorer
 
 Goal: 最初の実行可能マイルストーンとして `rjtd streams <file.jtd>` を実装する。
@@ -725,35 +733,42 @@ Completed:
 Remaining:
 
 - [ ] record parser がそれらを expose した後、headings、lists、tables、ruby、layout semantics を保存する。
-- [x] model が stable block/inline semantics を持った後に HTML export を追加する。
+- [x] 段落テキストとルビのマークアップを出力する基本 HTML export を追加する。完全なレイアウトと rich HTML clipboard semantics は未完成。
 
-## M5: WASM Viewer on Cloudflare Pages
+## M5: Public Specification
 
-Goal: `rjtd-wasm` を `wasm-pack` でビルドし、ブラウザで JTD ファイルをドラッグ&ドロップして閲覧できる静的 Web ビューアを Cloudflare Pages にデプロイする。
+Status: 継続中。RFC 0001–0009 を英語・日本語で記録済み。
 
-Status: MVP デプロイ済み（2026-06-24）。
-- https://openjtd.pages.dev
-- https://jtdview.pages.dev
-- https://jtd-438.pages.dev（初期テスト用）
+- [x] 実装と併せて [RFC index](openjtd-spec/README.ja.md) を管理する。
+- [ ] 複数サンプルで意味が証明されたら記録を拡張し、未知の field、棄却した仮説、反例を保持する。
 
-背景:
-- `rjtd-wasm` クレートは `cdylib` + `wasm-bindgen` 構成済みで、`renderPageSvg()`、`renderPageHtml()`、`renderPageToCanvas()`、`plainText()`、`pageCount()` などのブラウザ API を公開している。
-- レンダリング精度は M2/M3 でアクティブに更新中のため、ビューア実装はレンダリング改善を妨げない範囲に限定する。
+## M6: WASM Viewer
 
-前提条件:
-- `wasm-pack` の `--target web` ビルドが通ること（`cfb` crate 等の I/O 依存を WASM で確認する）。
-- `rjtd-core` が `std::fs` を直接使わず、バイト列インターフェース経由で CFB を読める状態であること。
+Goal: ローカル JTD 系ファイルを表示する静的ブラウザビューアを提供する。
 
-Immediate tasks:
+Status: MVP 実装済み。現在のリポジトリのデプロイ workflow は `main` から
+GitHub Pages へ公開する。以前の Cloudflare デプロイ実験は履歴であり、
+この status はいずれの公開先についても現在の稼働状況を保証しない。
 
-- [x] `wasm-pack build --target web rjtd/crates/rjtd-wasm` が通るか確認し、WASM 非対応の依存（`std::fs`、`image` crate のデスクトップ feature など）を特定する。→ 追加対応不要で一発通過。
-- [x] `openjtd.github.io/` に最小限の HTML フロントエンドを作成する（ファイルドロップ → `HwpDocument.new(bytes)` → `renderPageSvg()` を `<div>` に挿入する MVP）。デジタル庁デザインシステムのカラートークン・タイポグラフィ適用済み。
-- [x] ページナビゲーション UI（前ページ・次ページボタン、ページ番号表示）を追加する。
-- [x] `plainText()` 出力タブを追加する。
-- [x] `wasm-pack` 成果物（`.wasm` + JS glue）と HTML を Cloudflare Pages にデプロイする。
-- [x] Cloudflare Pages の GitHub Actions デプロイパイプラインを設定し、`rjtd-wasm` ソース更新時に自動ビルド・デプロイできるようにする。
+Completed:
+
+- [x] `rjtd-wasm` browser bindings と `wasm-pack --target web` build を構成する。
+- [x] `openjtd.github.io/` にローカルファイル選択・ドロップ、SVG ページ、ページ移動、
+  `plainText()` タブを実装する。
+- [x] WASM をビルドし、静的資材と distribution notices を組み立て、`main` から公開する
+  GitHub Pages workflow を追加する。
+
+Remaining:
+
+- [ ] 文書を開く・置き換える・ページ移動する・閉じる操作とエラー経路のブラウザ実行時
+  回帰検証を追加する。
+- [ ] renderer の fallback と再現精度の制限をビューアに表示する。
 
 Constraints:
-- ファイルはブラウザ内で処理し、サーバーへ送信しない（プライバシー要件）。
-- レンダリング品質は M2/M3 の進捗に依存するため、MVP は `decoded:false` 状態のまま公開してよい。
-- `rjtd-model`、`rjtd-core` の解析コードはビューア実装のために変更しない。ビューア側が WASM API に適応する。
+
+- 文書の内容はすべてブラウザ内で処理し、アップロードしない。
+- `decoded:false` と fallback の制限を明示する。ビューアの存在は native layout の再現や
+  完全な編集対応を証明しない。
+- ビューアが WASM API に適応する。parser の作業は M2/M3 に置く。
+
+ビルドとデプロイの詳細は [viewer guide](openjtd.github.io/README.ja.md) を参照する。

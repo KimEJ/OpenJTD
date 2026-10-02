@@ -45,7 +45,7 @@ rhwp
 
 OpenJTD
  ├─ JTD
- ├─ JTDC
+ ├─ JTT / JTTC
  └─ Ichitaro ecosystem
 ```
 
@@ -88,10 +88,10 @@ Record Layer
       ▼
 Document Model
       │
-      ├──── Markdown Export
+      ├──── Plain Text / Markdown Export
       ├──── HTML Export
       ├──── JSON Export
-      └──── Future Renderer
+      └──── App Core / SVG / PDF Export
 ```
 
 Every feature must be implemented through these layers.
@@ -203,6 +203,9 @@ Forbidden:
 - Copyright infringement
 
 ## Initial Milestones
+
+These are the founding milestones. Current status, the additional WASM viewer
+milestone, and next acceptance criteria are maintained in [ROADMAP.md](ROADMAP.md).
 
 ### M1: Container Explorer
 

@@ -6,13 +6,21 @@ separate architecture from scratch.
 
 The top-level workspace therefore keeps `rhwp/` as a local reference repository.
 
+This document retains reference policy and accumulated implementation/research
+notes. Sample counts and projection measurements describe their recorded
+experiments, not a fresh compatibility certification. Use the
+[roadmap](ROADMAP.md) for current scope and priorities, and the
+[architecture](ARCHITECTURE.md) for current model boundaries. In particular,
+basic `rjtd-export` HTML output is implemented; app-core rich HTML clipboard
+fallbacks are a separate surface.
+
 ## Source
 
 ```text
 https://github.com/edwardkim/rhwp.git
 ```
 
-Current local clone reference:
+Reference snapshot used for these notes:
 
 ```text
 branch: main

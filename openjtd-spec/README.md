@@ -15,7 +15,10 @@ respective rights and terms; this documentation does not license them.
 
 ## RFCs
 
-English originals and Japanese translations are tracked together.
+English originals and Japanese translations are tracked together. Each RFC's
+status and evidence describe its scope; an RFC is not a claim of complete
+format coverage. Current implementation priorities live in the
+[roadmap](../docs/ROADMAP.md).
 
 | RFC | English | 日本語 |
 | --- | --- | --- |
@@ -27,3 +30,4 @@ English originals and Japanese translations are tracked together.
 | 0006 | [DocumentTextPositionTables Initial Mark Offsets](rfc/0006-document-text-position-tables.md) | [DocumentTextPositionTables 初期 Mark offset](rfc/0006-document-text-position-tables.ja.md) |
 | 0007 | [Layout Mark Streams Initial Inventory](rfc/0007-layout-mark-streams.md) | [Layout Mark Streams 初期インベントリ](rfc/0007-layout-mark-streams.ja.md) |
 | 0008 | [Object and Embedded Image Stream Candidates](rfc/0008-object-stream-candidates.md) | [Object and Embedded Image Stream Candidates](rfc/0008-object-stream-candidates.ja.md) |
+| 0009 | [DocumentText Paragraph Record Structure](rfc/0009-document-text-paragraph-record.md) | [DocumentText 段落レコード構造](rfc/0009-document-text-paragraph-record.ja.md) |

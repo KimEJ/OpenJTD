@@ -14,7 +14,9 @@ JTD public specification と RFC 形式の reverse engineering records を管理
 
 ## RFCs
 
-English original と Japanese translation を管理する。
+英語原文と日本語訳を併せて管理する。各 RFC の status と根拠が適用範囲を示し、
+RFC の存在は形式全体への対応を意味しない。現在の実装優先順位は
+[roadmap](../docs/ROADMAP.ja.md) を参照する。
 
 | RFC | English | 日本語 |
 | --- | --- | --- |
@@ -26,3 +28,4 @@ English original と Japanese translation を管理する。
 | 0006 | [DocumentTextPositionTables Initial Mark Offsets](rfc/0006-document-text-position-tables.md) | [DocumentTextPositionTables 初期 Mark offset](rfc/0006-document-text-position-tables.ja.md) |
 | 0007 | [Layout Mark Streams Initial Inventory](rfc/0007-layout-mark-streams.md) | [Layout Mark Streams 初期インベントリ](rfc/0007-layout-mark-streams.ja.md) |
 | 0008 | [Object and Embedded Image Stream Candidates](rfc/0008-object-stream-candidates.md) | [Object and Embedded Image Stream Candidates](rfc/0008-object-stream-candidates.ja.md) |
+| 0009 | [DocumentText Paragraph Record Structure](rfc/0009-document-text-paragraph-record.md) | [DocumentText 段落レコード構造](rfc/0009-document-text-paragraph-record.ja.md) |

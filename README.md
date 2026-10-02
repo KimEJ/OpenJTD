@@ -17,11 +17,11 @@ practical JTD engine that can support faithful layout rendering and editing.
 - Observed `.jttc` `JustCompressedDocument` and `-lh5-` payload support.
 - Embedded `SsmgV.01` / `TextV.01` fragment recovery for files without a named
   `/DocumentText` stream.
-- Minimal Document Model output as plain text, Markdown, JSON, and text-oriented
-  PDF.
+- Text-oriented Document Model output as plain text, Markdown, JSON, basic HTML,
+  and PDF with limited diagnostic layout projections.
 - Diagnostic parsers for `/DocumentTextPositionTables`, `/LineMark`,
   `/PageMark`, `/PaperMark`, and object/control marker research.
-- WASM wrapper support used by early viewer integration experiments.
+- WASM bindings and a static browser viewer with page navigation and a text tab.
 
 ## Why OpenJTD matters
 
@@ -47,6 +47,7 @@ cargo test --workspace
 cargo run -p rjtd-cli -- info path/to/document.jtd
 cargo run -p rjtd-cli -- cat path/to/document.jtd
 cargo run -p rjtd-cli -- export path/to/document.jtd --format md
+cargo run -p rjtd-cli -- export path/to/document.jtd --format html
 cargo run -p rjtd-cli -- export path/to/document.jtd --format json
 cargo run -p rjtd-cli -- export path/to/document.jtd --format pdf -o output.pdf
 ```
@@ -66,7 +67,7 @@ scripts/regenerate-pdf-output.sh
 - [`docs/`](docs/) - charter, architecture, roadmap, and research policy.
 - [`openjtd-samples/`](openjtd-samples/) - redistributable sample/output artifacts.
 - [`rjtd-testdata/`](rjtd-testdata/) - test fixtures.
-- [`openjtd.github.io/`](openjtd.github.io/) - future project site.
+- [`openjtd.github.io/`](openjtd.github.io/) - static WASM viewer and GitHub Pages assets.
 
 ## Documentation
 
@@ -74,8 +75,14 @@ scripts/regenerate-pdf-output.sh
   exporter, and diagnostic command surface.
 - [`openjtd-spec/README.md`](openjtd-spec/README.md) indexes the specification work and
   RFC process.
-- [`docs/CHARTER.md`](docs/CHARTER.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
-  and [`docs/ROADMAP.md`](docs/ROADMAP.md) explain the project direction.
+- [`docs/CHARTER.md`](docs/CHARTER.md) defines the long-term vision and research policy.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) defines engine layers and model boundaries.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) owns the current milestone summary, next
+  priorities, and completion criteria.
+- [`TODO.md`](TODO.md) retains the detailed backlog and historical experiments;
+  completed diagnostic tasks do not imply decoded format semantics.
+- [`rjtd-testdata/README.md`](rjtd-testdata/README.md) explains fixture provenance
+  and the distinction between portable checks and local reference validation.
 
 ## Design Reference
 
@@ -90,8 +97,14 @@ and diagnostic commands may still change.
 
 Text extraction works for observed files, but full paragraph semantics, layout
 fidelity, styles, tables, ruby annotations, images, and native editing behavior
-are incomplete. PDF and SVG output should be treated as text-oriented fallback
-output, not native layout reproduction.
+are incomplete. PDF and SVG combine text-oriented fallback layout with limited
+source- or reference-backed projections; native layout fidelity is not guaranteed.
+Basic body-text editing exists, but structure-preserving editing and saving
+back to JTD remain unfinished.
+
+The next goal is reproducible reading and rendering of horizontal body text and
+a simple table on one page. See the [roadmap](docs/ROADMAP.md#next-priorities) for
+acceptance criteria and the path toward broader layout and editing support.
 
 ## Translations
 

@@ -17,11 +17,11 @@ OpenJTD は、オープンソースの JTD レンダリングエンジン兼エ�
 - 観測済み `.jttc` の `JustCompressedDocument` と `-lh5-` ペイロード対応。
 - 名前付き `/DocumentText` ストリームを持たないファイルに対する埋め込み
   `SsmgV.01` / `TextV.01` フラグメント復元。
-- 最小限の Document Model から、プレーンテキスト、Markdown、JSON、
-  テキスト指向 PDF を出力。
+- テキスト中心の Document Model から、プレーンテキスト、Markdown、JSON、基本 HTML、
+  限定的な診断用レイアウト投影を含む PDF を出力。
 - `/DocumentTextPositionTables`、`/LineMark`、`/PageMark`、`/PaperMark`、
   オブジェクト/制御マーカー調査用の診断パーサー。
-- 初期ビューア統合実験で使う WASM ラッパー。
+- WASM bindings と、ページ移動・テキストタブを持つ静的ブラウザビューア。
 
 ## OpenJTD が重要な理由
 
@@ -47,6 +47,7 @@ cargo test --workspace
 cargo run -p rjtd-cli -- info path/to/document.jtd
 cargo run -p rjtd-cli -- cat path/to/document.jtd
 cargo run -p rjtd-cli -- export path/to/document.jtd --format md
+cargo run -p rjtd-cli -- export path/to/document.jtd --format html
 cargo run -p rjtd-cli -- export path/to/document.jtd --format json
 cargo run -p rjtd-cli -- export path/to/document.jtd --format pdf -o output.pdf
 ```
@@ -66,16 +67,22 @@ scripts/regenerate-pdf-output.sh
 - [`docs/`](docs/) - 憲章、アーキテクチャ、ロードマップ、調査ポリシー。
 - [`openjtd-samples/`](openjtd-samples/) - 再配布可能なサンプル/出力成果物。
 - [`rjtd-testdata/`](rjtd-testdata/) - テストフィクスチャ。
-- [`openjtd.github.io/`](openjtd.github.io/) - 将来のプロジェクトサイト。
+- [`openjtd.github.io/`](openjtd.github.io/) - 静的 WASM ビューアと GitHub Pages 用資材。
 
 ## ドキュメント
 
-- [`rjtd/README.md`](rjtd/README.md) は `rjtd` Rust ワークスペース、CLI、
+- [`rjtd/README.ja.md`](rjtd/README.ja.md) は `rjtd` Rust ワークスペース、CLI、
   エクスポータ、診断コマンド群を説明します。
-- [`openjtd-spec/README.md`](openjtd-spec/README.md) は仕様作業と RFC プロセスの
+- [`openjtd-spec/README.ja.md`](openjtd-spec/README.ja.md) は仕様作業と RFC プロセスの
   索引です。
-- [`docs/CHARTER.md`](docs/CHARTER.md)、[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)、
-  [`docs/ROADMAP.md`](docs/ROADMAP.md) はプロジェクト方針を説明します。
+- [`docs/CHARTER.ja.md`](docs/CHARTER.ja.md) は長期ビジョンと研究方針を定義します。
+- [`docs/ARCHITECTURE.ja.md`](docs/ARCHITECTURE.ja.md) はエンジン層とモデルの境界を定義します。
+- [`docs/ROADMAP.ja.md`](docs/ROADMAP.ja.md) は現在のマイルストーン、次の優先順位、
+  完了条件を管理します。
+- [`TODO.ja.md`](TODO.ja.md) は詳細 backlog と過去の実験を保持します。
+  診断タスクの完了は形式の意味が解読されたことを意味しません。
+- [`rjtd-testdata/README.ja.md`](rjtd-testdata/README.ja.md) は fixture の来歴と、
+  portable な検査・ローカル参照検証の違いを説明します。
 
 ## 設計上の参照
 
@@ -89,9 +96,14 @@ OpenJTD は、リバースエンジニアリングと構成要素の整備段階
 コマンドは今後も変わる可能性があります。
 
 観測済みファイルではテキスト抽出が動作しますが、段落セマンティクス、レイアウト
-再現性、スタイル、表、ルビ、画像、ネイティブ編集挙動は未完成です。PDF と SVG
-出力は、ネイティブレイアウトの再現ではなく、テキスト指向のフォールバック出力
-として扱ってください。
+再現性、スタイル、表、ルビ、画像、ネイティブ編集挙動は未完成です。PDF と SVG は
+テキスト中心の fallback layout と限定的な source/reference-backed projection を
+組み合わせており、native layout の再現精度は保証しません。基本的な本文編集は
+存在しますが、構造を保持した編集と JTD への保存は未完成です。
+
+次の目標は、横書き本文と単純な表を持つ 1 ページ文書の読み取り・描画を再現可能に
+することです。完了条件と、より広いレイアウト・編集対応への道筋は
+[roadmap](docs/ROADMAP.ja.md#next-priorities) を参照してください。
 
 ## 翻訳
 

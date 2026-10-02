@@ -88,6 +88,16 @@ w[len-1]     0x001f  レコードターミネーター / テキストランス�
 001c 0030 000c  0000 [b0] [b1] 00ff 0000  000c 0000 0030 001f
 ```
 
+`w2` と `w8` の繰返し値はレコード長であり、文字サイズではない。2026-09-26 の調査では、
+対応済み envelope（`w6=0x00ff`、`w7=0`）に一致する 12,315 windows をローカル 83 files で
+確認し、すべて `w2=w8=12` だった。固定長 reader は両方の長さの一致を必須とする。
+他の envelope は未解読のまま保持する。
+
+古い model diagnostics の一部はこの値を `fontSizeUnits` と呼び、参照画像で調整した
+row/stroke projection に使っている。この名称と式は旧仮説であり、解読済み font metrics
+ではない。実際の文字サイズの根拠は style property 2 と対応する view-style 既定値であり、
+[RFC 0003](0003-document-text.ja.md#observed-font-size-sources) を参照する。
+
 **`b0`/`b1` はセル境界座標（スケール・単位は decoded:false）。** `sample-table.jtd` の 703 件の分析結果：
 
 - `b0` = セル左端座標（表座標空間）
@@ -139,6 +149,69 @@ RFC 0003 §COM テキストエクスポート観測の「shanai_lan `0x001c/0x00
 ```
 
 `w4=0x0010=16`（後続 `0x0010` レコードのクラスコード）、`w7=0x0001=1` は定数。`w5=0x0002` または `0x0000`。表セクションから通常の単列テキストへの遷移を示すと考えられる。意味は未解読。
+
+## 検証済みの先頭ページ Control-Table Text 配置
+
+統制された source-y corpus では、横書きの先頭ページ control table に限定した
+描画可能な profile を確認した。この profile は一般的な table-candidate 検出より意図的に
+厳しい。次のすべてを必要とする。
+
+- unit 基準の `0x000e` table candidate と安定した column pattern。
+- 各 row に対し、row interval で始まるか直前で終わる 1 個の `0x0010` parent record。
+  すべて同じ非ゼロの `w6` grid extent を持つこと。
+- 各 cell text range の直前で正確に終わる `0x0030` header。
+- parent または row で始まり row interval の終端で終わる選択済み `LineMark` interval。
+- `w21` が妥当な 1/100-mm line pitch である単一の最初の `PageMark` entry。
+- 対応する page margins と、各 cell の一様に解決できる text style。
+
+この profile では、cell text は `0x0030` の `b0` offset を parent `w6` extent 内で
+source margin に対して scale する。各 row baseline は `LineMark` record index と
+`PageMark w21` の積に実際に解決した font size を加える。cell label 直前に保存された
+ASCII space は 1 文字あたり 2 source grid units として位置だけを調整し、新しい可視
+glyph としては描画しない。
+
+許可した 20 の統制文書は、baseline、横方向移動、行単位の縦方向移動、個別 row-height
+変更を含む。`PAGE 01`、`PAGE 01_right_4Tick`、`PAGE 01_down_4Low`、`000_base_a`、
+`013_table_moved_right`、`020_row1_height_plus` の生成 PDF は、各一太郎 PDF に対して
+cell text の X/Y を 0.25 pt 以内で配置する。この根拠には ink width は含まれず、ローカル
+代替 font は label により約 3.9 pt 狭い。source border-paint semantics は未解決であり、
+下記の基本 border projection は明示的な renderer fallback style を使う。
+
+`050_wrapped_one_cell` は除外する。wrap 後に cell header offset が row 間で変わるため、
+単純な row ごとの text placement rule は健全ではない。複数ページ table、merged cell、
+empty/sparse cell、縦書き、mixed object tree は診断専用のままである。
+
+### 2 つの native control table 間の flow text
+
+さらに、先頭ページ横書きでは、完全な control-table projection が 2 つあり、その間に
+`DocumentText` の text run が 1 つだけある場合に限り、狭い flow-text profile を描画できる。
+この run は、同じ非ゼロ個数の先頭 ASCII space を持つ非空 ASCII 行をちょうど 2 行含み、
+最初の table の後の gap に zero-offset `0x0030` header が一意に 1 個あり、各行が別々の
+`LineMark` interval に完全に含まれなければならない。両 interval は対応する `w21` pitch を
+持つ同一の最初の `PageMark` entry に解決される必要がある。renderer は source space を保存し、
+各 baseline を interval の record index、共通 pitch、および解決済み source font size から置く。
+
+`070_two_tables_vertical` はこの profile を満たす。2 個の 2×2 native-table projection が
+`BETWEEN01` と `BETWEEN02` を挟み、それぞれの `LineMark` record は 7 と 9 である。生成 PDF は
+10 個の text run をすべて分離し、一太郎 PDF との差は X が最大 0.51 pt、top position が最大
+0.21 pt だった。この数値は厳しく gated した flow bridge だけを検証するものであり、一般的な
+paragraph layout、whitespace semantics、font ink width を解読したことは意味しない。
+
+### 基本 control-table border projection
+
+対応 profile の縦方向 border 位置は `parent w8 + 1` と各 cell header の `b1 + 1` を
+`bodyWidth / parent w6` で scale する。横方向位置は
+`marginTop + recordIndex * pitch + resolvedFontSize / 2` を使う。最初の境界は最初の非空 row の
+record minus one、内部境界は次の非空 row の record minus one を選ぶ。最後の境界は、parent grid と
+left edge が一致し、source range が対応する `LineMark` interval と一致する連続した空の control row
+だけを追跡する。非 table への遷移で scan を終了し、source gap を飛び越えない。
+
+ローカルの `020_row1_height_plus`、`PAGE 01`、`070_two_tables_vertical` の PDF 比較では、
+測定した border center の差は 0.14 pt 以内だった。これは profile の座標根拠であり、完全な
+border-paint 同等性ではない。現在の SVG/PDF projection は、黒色 0.8 CSS-px line（0.6 PDF pt）を
+renderer fallback として使う。color、thickness、dash pattern、join、corner のはみ出し mark は
+この projection では解読していない。border 出力は `decoded:false` のままで、現在は SVG/PDF に
+含まれる。page-layer tree は table text を公開するが、これらの border line は出力しない。
 
 ## LineMark unit-start との相関
 
