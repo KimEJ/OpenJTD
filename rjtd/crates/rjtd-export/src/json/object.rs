@@ -64,6 +64,8 @@ pub(crate) fn push_object_frame_record_candidate_json(
     output.push_str(&record.height().to_string());
     output.push_str("},\"rowPrefixHex\":");
     push_json_string(output, &hex(record.row_prefix()));
+    output.push_str(",\"rawHex\":");
+    push_json_string(output, &hex(record.raw_bytes()));
     output.push_str(",\"decoded\":false}");
 }
 

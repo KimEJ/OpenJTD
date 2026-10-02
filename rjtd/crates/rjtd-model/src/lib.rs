@@ -115,8 +115,9 @@ pub use table_text_candidate_model::{
 };
 
 use document_text_text_style::{
-    DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS, DocumentTextProperty15ColorCandidate,
-    document_text_property_15_color_candidate,
+    DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS, DocumentTextFontSize,
+    DocumentTextProperty15ColorCandidate, document_default_font_size_px, document_text_font_size,
+    document_text_property_15_color_candidate, document_text_style_resolver,
 };
 #[cfg(test)]
 use rjtd_core::document_text::read_document_text_payload;
@@ -589,6 +590,7 @@ pub struct PageLayout {
     width_px: f32,
     height_px: f32,
     margin_px: f32,
+    source_margins: Option<[f32; 4]>, // left, right, top, bottom
     vertical_wrap_columns_override: Option<usize>,
     landscape: bool,
 }
@@ -599,6 +601,7 @@ impl Default for PageLayout {
             width_px: APP_PAGE_WIDTH_PX,
             height_px: APP_PAGE_HEIGHT_PX,
             margin_px: APP_PAGE_MARGIN_PX,
+            source_margins: None,
             vertical_wrap_columns_override: None,
             landscape: false,
         }
@@ -611,13 +614,18 @@ impl PageLayout {
             width_px,
             height_px,
             margin_px: APP_PAGE_MARGIN_PX,
+            source_margins: None,
             vertical_wrap_columns_override: None,
             landscape: width_px > height_px,
         }
     }
 
     fn with_margin_px(self, margin_px: f32) -> Self {
-        Self { margin_px, ..self }
+        Self {
+            margin_px,
+            source_margins: None,
+            ..self
+        }
     }
 
     fn with_vertical_wrap_columns_override(self, wrap_columns: usize) -> Self {
@@ -635,6 +643,7 @@ impl PageLayout {
                 width_px: self.height_px,
                 height_px: self.width_px,
                 margin_px: self.margin_px,
+                source_margins: self.source_margins,
                 vertical_wrap_columns_override: self.vertical_wrap_columns_override,
                 landscape: false,
             }
@@ -650,7 +659,24 @@ impl PageLayout {
     }
 
     pub fn margin_px(self) -> f32 {
-        self.margin_px
+        self.margin_left_px()
+    }
+
+    pub fn margin_left_px(self) -> f32 {
+        self.source_margins.map_or(self.margin_px, |m| m[0])
+    }
+    pub fn margin_right_px(self) -> f32 {
+        self.source_margins.map_or(self.margin_px, |m| m[1])
+    }
+    pub fn margin_top_px(self) -> f32 {
+        self.source_margins.map_or(self.margin_px, |m| m[2])
+    }
+    pub fn margin_bottom_px(self) -> f32 {
+        self.source_margins.map_or(self.margin_px, |m| m[3])
+    }
+
+    pub(crate) fn has_source_margins(self) -> bool {
+        self.source_margins.is_some()
     }
 
     pub fn landscape(self) -> bool {
@@ -658,11 +684,12 @@ impl PageLayout {
     }
 
     pub fn body_width_px(self) -> f32 {
-        (self.width_px - (self.margin_px * 2.0)).max(APP_DEFAULT_COLUMN_WIDTH_PX)
+        (self.width_px - self.margin_left_px() - self.margin_right_px())
+            .max(APP_DEFAULT_COLUMN_WIDTH_PX)
     }
 
     pub fn body_height_px(self) -> f32 {
-        (self.height_px - (self.margin_px * 2.0)).max(APP_LINE_HEIGHT_PX)
+        (self.height_px - self.margin_top_px() - self.margin_bottom_px()).max(APP_LINE_HEIGHT_PX)
     }
 
     fn wrap_columns(self, writing_mode: WritingMode) -> usize {

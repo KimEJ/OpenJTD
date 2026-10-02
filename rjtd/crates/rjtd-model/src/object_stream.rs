@@ -625,6 +625,8 @@ pub(super) fn push_object_frame_record_candidate_json(
     output.push_str(&record.style_id().to_string());
     output.push_str(",\"rowPrefixHex\":");
     output.push_str(&json_string(&hex_bytes(record.row_prefix())));
+    output.push_str(",\"rawHex\":");
+    output.push_str(&json_string(&hex_bytes(record.raw_bytes())));
     output.push_str(",\"decoded\":false}");
 }
 

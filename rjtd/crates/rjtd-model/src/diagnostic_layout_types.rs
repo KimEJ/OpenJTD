@@ -178,6 +178,17 @@ pub(crate) struct LayoutBoxTextSlot {
     pub(crate) layout_width_pt: Option<u16>,
     pub(crate) inferred_origin_pt: Option<f32>,
     pub(crate) placement_basis: &'static str,
+    pub(crate) frame_source: Option<LayoutBoxFrameSource>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LayoutBoxFrameSource {
+    pub(crate) frame_id: u16,
+    pub(crate) parent_frame_id: u16,
+    pub(crate) raw_word6: u16,
+    pub(crate) record_start: usize,
+    pub(crate) x_mm100: u32,
+    pub(crate) y_mm100: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

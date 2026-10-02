@@ -584,7 +584,7 @@ pub struct ObjectFrameRecordCandidate {
     pub(crate) height: u16,
     pub(crate) corner_radius: u16,
     pub(crate) style_id: u16,
-    pub(crate) row_prefix: Vec<u8>,
+    pub(crate) raw_bytes: Vec<u8>,
 }
 
 impl ObjectFrameRecordCandidate {
@@ -609,7 +609,7 @@ impl ObjectFrameRecordCandidate {
             height: read_be16_at(row, FRAME_RECORD_HEIGHT_OFFSET).unwrap_or_default(),
             corner_radius: read_be16_at(row, FRAME_RECORD_CORNER_RADIUS_OFFSET).unwrap_or_default(),
             style_id: read_be16_at(row, FRAME_RECORD_STYLE_ID_OFFSET).unwrap_or_default(),
-            row_prefix: row[..row.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)].to_vec(),
+            raw_bytes: row.to_vec(),
         }
     }
 
@@ -670,7 +670,11 @@ impl ObjectFrameRecordCandidate {
     }
 
     pub fn row_prefix(&self) -> &[u8] {
-        &self.row_prefix
+        &self.raw_bytes[..self.raw_bytes.len().min(OBJECT_STREAM_PREFIX_PREVIEW_BYTES)]
+    }
+
+    pub fn raw_bytes(&self) -> &[u8] {
+        &self.raw_bytes
     }
 }
 

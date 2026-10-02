@@ -8,12 +8,14 @@ const PROPERTY_SLOT_COUNT: usize = 21;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DocumentTextResolvedStyle {
     values: [Option<DocumentTextStyleTypedValue>; PROPERTY_SLOT_COUNT],
+    invalid_properties: u32,
 }
 
 impl Default for DocumentTextResolvedStyle {
     fn default() -> Self {
         Self {
             values: [None; PROPERTY_SLOT_COUNT],
+            invalid_properties: 0,
         }
     }
 }
@@ -26,6 +28,12 @@ impl DocumentTextResolvedStyle {
     fn apply(&mut self, property_id: u8, value: Option<DocumentTextStyleTypedValue>) {
         if let Some(slot) = self.values.get_mut(usize::from(property_id)) {
             *slot = value;
+            let mask = 1_u32 << property_id;
+            if value.is_some() {
+                self.invalid_properties &= !mask;
+            } else {
+                self.invalid_properties |= mask;
+            }
         }
     }
 }
@@ -104,16 +112,37 @@ impl DocumentTextStyleResolver {
         source_unit_end: usize,
         property_id: u8,
     ) -> Option<DocumentTextStyleTypedValue> {
-        if source_unit_start >= source_unit_end {
+        self.uniform_optional_value_in_range(source_unit_start, source_unit_end, property_id)
+            .flatten()
+    }
+
+    /// Distinguishes a uniformly unset property from mixed or uncovered source ranges.
+    /// Callers may apply document defaults only to the uniformly unset case.
+    pub fn uniform_optional_value_in_range(
+        &self,
+        source_unit_start: usize,
+        source_unit_end: usize,
+        property_id: u8,
+    ) -> Option<Option<DocumentTextStyleTypedValue>> {
+        if source_unit_start >= source_unit_end
+            || property_id == 0
+            || usize::from(property_id) >= PROPERTY_SLOT_COUNT
+        {
             return None;
         }
-        let expected = self.style_at_unit(source_unit_start)?.value(property_id)?;
+        let first_style = self.style_at_unit(source_unit_start)?;
+        let invalid_mask = 1_u32 << property_id;
+        if first_style.invalid_properties & invalid_mask != 0 {
+            return None;
+        }
+        let expected = first_style.value(property_id);
         let mut covered_until = source_unit_start;
         for span in self.spans.iter().filter(|span| {
             span.source_unit_end > source_unit_start && span.source_unit_start < source_unit_end
         }) {
             if span.source_unit_start > covered_until
-                || span.style.value(property_id) != Some(expected)
+                || span.style.invalid_properties & invalid_mask != 0
+                || span.style.value(property_id) != expected
             {
                 return None;
             }

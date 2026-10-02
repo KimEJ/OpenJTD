@@ -32,6 +32,45 @@ fn resolves_persistent_property_state_at_document_text_units() {
     assert!(!resolver.truncated(), "{:?}", resolver.diagnostics());
 }
 
+#[test]
+fn distinguishes_uniformly_unset_properties_from_mixed_or_uncovered_ranges() {
+    let bytes = synthetic_document_text_with_style_section(
+        4,
+        &[
+            0, 0, 0, 0, 2, 0xfe, 2, 2, 0x01, 0xee, 0xff, 0, 0, 0, 0, 0, 1,
+        ],
+    );
+    let resolver = DocumentTextStyleResolver::from_document_text_bytes(&bytes);
+    assert_eq!(
+        resolver.uniform_optional_value_in_range(16, 18, 2),
+        Some(None)
+    );
+    assert_eq!(
+        resolver.uniform_optional_value_in_range(18, 20, 2),
+        Some(Some(DocumentTextStyleTypedValue::U16(494)))
+    );
+    assert_eq!(resolver.uniform_optional_value_in_range(16, 20, 2), None);
+    assert_eq!(resolver.uniform_optional_value_in_range(20, 21, 2), None);
+    assert_eq!(resolver.uniform_value_in_range(16, 18, 2), None);
+    assert_eq!(resolver.uniform_optional_value_in_range(16, 18, 21), None);
+}
+
+#[test]
+fn does_not_treat_malformed_explicit_property_values_as_unset_defaults() {
+    let bytes = synthetic_document_text_with_style_section(
+        3,
+        &[
+            0xfe, 2, 1, 14, 0xff, 0, 0, 0, 0, 0, 1, 0xfe, 2, 2, 0x01, 0xee, 0xff, 0,
+        ],
+    );
+    let resolver = DocumentTextStyleResolver::from_document_text_bytes(&bytes);
+    assert_eq!(resolver.uniform_optional_value_in_range(16, 18, 2), None);
+    assert_eq!(
+        resolver.uniform_optional_value_in_range(18, 19, 2),
+        Some(Some(DocumentTextStyleTypedValue::U16(494)))
+    );
+}
+
 fn synthetic_document_text_with_style_section(
     content_unit_count: u32,
     style_bytes: &[u8],

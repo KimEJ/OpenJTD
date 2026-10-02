@@ -51,6 +51,97 @@ fn document_core_prefers_page_layout_style_over_document_view_styles_page_size()
     );
 }
 
+#[test]
+fn document_core_uses_page_layout_margins_before_view_defaults() {
+    let page = page_layout_style_margins_fixture([2469, 2469, 3175, 3175]);
+    let view = view_style_margins_fixture([2000, 3000, 3000, 3000]);
+    let core = DocumentCore::from_bytes(&cfb_with_streams(&[
+        ("/DocumentText", &document_text_fixture_for("P01")),
+        (PAGE_LAYOUT_STYLE_PATH, &page),
+        (DOCUMENT_VIEW_STYLES_PATH, &view),
+    ]))
+    .unwrap();
+    let layout = core.page_layout();
+    assert!((layout.margin_left_px() - 120.0).abs() < 0.001);
+    assert!((layout.margin_top_px() - 93.316_536).abs() < 0.001);
+    assert!((layout.body_width_px() - 576.0).abs() < 0.01);
+    assert!(core.get_page_def(0).unwrap().contains("\"marginTop\":93.3"));
+    assert!(
+        core.get_page_info(0)
+            .unwrap()
+            .contains("\"marginLeft\":120.0")
+    );
+    assert!(core.render_page_svg(0).unwrap().contains("x=\"120.0\""));
+}
+
+#[test]
+fn document_core_keeps_asymmetric_view_margins_and_rejects_invalid_bounds() {
+    let view = view_style_margins_fixture([5000, 3000, 3000, 3000]);
+    let core = DocumentCore::from_bytes(&cfb_with_streams(&[
+        ("/DocumentText", &document_text_fixture_for("P01")),
+        (DOCUMENT_VIEW_STYLES_PATH, &view),
+    ]))
+    .unwrap();
+    assert!(core.page_layout().margin_top_px() > core.page_layout().margin_left_px());
+    assert!(
+        core.get_page_info(0)
+            .unwrap()
+            .contains("\"marginTop\":189.0")
+    );
+
+    let page = page_layout_style_margins_fixture([2469, 2469, 20000, 20000]);
+    let invalid = DocumentCore::from_bytes(&cfb_with_streams(&[
+        ("/DocumentText", &document_text_fixture_for("P01")),
+        (PAGE_LAYOUT_STYLE_PATH, &page),
+        (DOCUMENT_VIEW_STYLES_PATH, &view),
+    ]))
+    .unwrap();
+    assert_eq!(invalid.page_layout().margin_left_px(), APP_PAGE_MARGIN_PX);
+}
+
+pub(super) fn view_style_margins_fixture(margins: [u16; 4]) -> Vec<u8> {
+    let mut bytes = vec![0; 10];
+    bytes.extend_from_slice(&[0x10, 2, 0, 32, 0, 0xd8]);
+    extend_units(&mut bytes, &margins);
+    bytes.extend_from_slice(&[0; 22]);
+    for code in [0x1006_u16, 0x1007, 0x1008] {
+        bytes.extend_from_slice(&code.to_be_bytes());
+        bytes.extend_from_slice(&[0, 1, 0]);
+    }
+    bytes
+}
+
+pub(super) fn page_layout_style_margins_fixture(margins: [u16; 4]) -> Vec<u8> {
+    let mut bytes = page_layout_style_page_size_fixture(21590, 27940);
+    let offset = bytes
+        .windows(5)
+        .position(|w| w == [0x40, 2, 0, 1, 0])
+        .unwrap();
+    let mut record = vec![0x40, 2, 0, 39, 0xfe, 0x80, 0];
+    extend_units(&mut record, &margins);
+    record.resize(43, 0);
+    bytes.splice(offset..offset + 5, record);
+    let len = read_be16_at(&bytes, 0x116).unwrap() + 38;
+    bytes[0x116..0x118].copy_from_slice(&len.to_be_bytes());
+    bytes
+}
+
+#[test]
+fn preserves_all_frame_record_bytes_beyond_the_diagnostic_prefix() {
+    let mut row = frame_record_fixture(0, 1, (0, 568, 6350, 1704));
+    row[58..60].copy_from_slice(&[0x12, 0x34]);
+    let mut frame = vec![0; 16];
+    frame[14..16].copy_from_slice(&1_u16.to_be_bytes());
+    frame.extend_from_slice(&row);
+    let document = parse_document(&cfb_with_streams(&[
+        ("/DocumentText", &document_text_fixture()),
+        ("/Frame", &frame),
+    ]))
+    .unwrap();
+    assert_eq!(document.object_frame_records()[0].raw_bytes(), row);
+    assert_eq!(document.object_frame_records()[0].row_prefix(), &row[..16]);
+}
+
 pub(super) fn document_view_styles_sequential_fixture(first_code: u16) -> Vec<u8> {
     // Build a minimal sequential style stream with 4 records.
     // The sequential record parser requires >= 4 records to accept a sequence.
@@ -393,6 +484,131 @@ fn parser_builds_model_and_preserves_raw_document_text_stream() {
 }
 
 #[test]
+fn parser_preserves_initial_named_segment_text_in_model_and_render_sources() {
+    let mut text = b"SsmgV.01".to_vec();
+    for word in [0_u16, 1, 0, 0x0100, 0, 3] {
+        text.extend_from_slice(&word.to_be_bytes());
+    }
+    text.extend_from_slice(b"TextV.01");
+    text.extend_from_slice(&8_u32.to_be_bytes());
+    for word in "PAGE 01\n".encode_utf16() {
+        text.extend_from_slice(&word.to_be_bytes());
+    }
+    // A style-tail marker must not become body text or a render source.
+    text.extend_from_slice(&[0, 0x1f, 0, b'X']);
+    let document = parse_document(&cfb_with_document_text(text.clone())).unwrap();
+    assert_eq!(document.raw_streams()[0].bytes(), text);
+
+    let core = DocumentCore::from_document(document);
+    assert_eq!(core.plain_text(), "PAGE 01\n");
+    let svg = core.render_page_svg(0).unwrap();
+    assert!(svg.contains(">PAGE 01</text>"));
+    let layers = core.get_page_layer_tree(0).unwrap();
+    assert!(layers.contains("\"jtdByteRange\":{\"start\":32,\"end\":46}"));
+    assert!(layers.contains("\"jtdUnitRange\":{\"start\":16,\"end\":23}"));
+}
+
+#[test]
+fn text_range_overlap_uses_utf16_units_for_supplementary_characters() {
+    let mut bytes = vec![0, 0x001f];
+    for unit in "A𠮷B".encode_utf16() {
+        bytes.extend_from_slice(&unit.to_be_bytes());
+    }
+    let map = map_document_text(&bytes);
+    let entry = &map.entries()[0];
+
+    assert_eq!(range_text_overlap(entry, 2, 4), "𠮷");
+    assert_eq!(range_text_overlap(entry, 4, 5), "B");
+    assert_eq!(range_text_overlap(entry, 1, 5), "A𠮷B");
+    assert_eq!(range_text_overlap(entry, 5, 6), "");
+}
+
+#[test]
+fn renders_explicit_text_style_sizes_in_svg_and_layer_tree() {
+    let mut bytes = b"SsmgV.01".to_vec();
+    for word in [0_u16, 1, 0, 0x0100, 0, 2] {
+        bytes.extend_from_slice(&word.to_be_bytes());
+    }
+    bytes.extend_from_slice(b"TextV.01");
+    bytes.extend_from_slice(&11_u32.to_be_bytes());
+    for word in "small\nlarge".encode_utf16() {
+        bytes.extend_from_slice(&word.to_be_bytes());
+    }
+    bytes.extend_from_slice(&[
+        0xfe, 2, 2, 0x01, 0x72, 0xff, 0, 0, 0, 0, 0, 5, 0xfe, 2, 2, 0x01, 0xee, 0xff, 0, 0, 0, 0,
+        0, 4,
+    ]);
+    let core = DocumentCore::from_bytes(&cfb_with_document_text(bytes)).unwrap();
+
+    let svg = core.render_page_svg(0).unwrap();
+    assert!(svg.contains("font-size=\"14.0\""), "{svg}");
+    assert!(svg.contains("font-size=\"18.7\""), "{svg}");
+    let layers = core.get_page_layer_tree(0).unwrap();
+    assert!(layers.contains("\"fontSize\":13.984"));
+    assert!(layers.contains("\"fontSize\":18.671"));
+    assert!(layers.contains("\"fontSizeBasis\":\"document-text-style-property-2\""));
+}
+
+#[test]
+fn renders_document_default_font_size_and_restores_it_after_explicit_reset() {
+    let mut text = b"SsmgV.01".to_vec();
+    for word in [0_u16, 1, 0, 0x0100, 0, 2] {
+        text.extend_from_slice(&word.to_be_bytes());
+    }
+    text.extend_from_slice(b"TextV.01");
+    text.extend_from_slice(&17_u32.to_be_bytes());
+    for word in "plain\nlarge\nplain".encode_utf16() {
+        text.extend_from_slice(&word.to_be_bytes());
+    }
+    text.extend_from_slice(&[
+        0, 0, 0, 0, 6, 0xfe, 2, 2, 0x01, 0xee, 0xff, 0, 0, 0, 0, 0, 4, 0xfe, 2, 2, 0, 0, 0xff, 0,
+        0, 0, 0, 0, 5,
+    ]);
+    let mut view = vec![0; 10];
+    view.extend_from_slice(&[0x10, 0x06, 0, 20, 0x1f, 0, 0, 0x01, 0x72]);
+    view.extend_from_slice(&[0; 15]);
+    for code in [0x1007_u16, 0x1008, 0x1009] {
+        view.extend_from_slice(&code.to_be_bytes());
+        view.extend_from_slice(&[0, 1, 0]);
+    }
+    let core = DocumentCore::from_bytes(&cfb_with_streams(&[
+        ("/DocumentText", &text),
+        (DOCUMENT_VIEW_STYLES_PATH, &view),
+    ]))
+    .unwrap();
+    let svg = core.render_page_svg(0).unwrap();
+    assert_eq!(svg.matches("font-size=\"14.0\"").count(), 2, "{svg}");
+    assert_eq!(svg.matches("font-size=\"18.7\"").count(), 1, "{svg}");
+    let layers = core.get_page_layer_tree(0).unwrap();
+    assert_eq!(
+        layers
+            .matches("\"fontSizeBasis\":\"document-view-style-1006-default\"")
+            .count(),
+        2
+    );
+    assert_eq!(
+        layers
+            .matches("\"fontSizeBasis\":\"document-text-style-property-2\"")
+            .count(),
+        1
+    );
+
+    for (offset, value) in [(14, 0x1e), (17, 0xff)] {
+        let mut unsupported = view.clone();
+        unsupported[offset] = value;
+        if offset == 17 {
+            unsupported[18] = 0xfe;
+        }
+        let document = parse_document(&cfb_with_streams(&[
+            ("/DocumentText", &text),
+            (DOCUMENT_VIEW_STYLES_PATH, &unsupported),
+        ]))
+        .unwrap();
+        assert_eq!(document_default_font_size_px(&document), None);
+    }
+}
+
+#[test]
 fn parser_preserves_layout_box_streams_for_box_text_projection() {
     let layout_box = layout_box_record_fixture(50, 120, 320);
     let layout_box_text = layout_box_text_plain_block_fixture("本文テキスト");
@@ -423,6 +639,36 @@ fn parser_preserves_layout_box_streams_for_box_text_projection() {
     assert!(document.raw_streams().iter().any(|stream| stream.name()
         == LAYOUT_BOX_TEXT_POSITION_TABLES_PATH
         && stream.bytes() == layout_box_text_positions));
+}
+
+#[test]
+fn layout_box_control_only_records_do_not_become_visible_title_text() {
+    let words = [
+        0x001c_u16, 0, 14, 0, 0x0030, 0xffff, 0x0507, 0x0012, 6, 0, 14, 0, 0, 0x001f, 0x001c, 1, 7,
+        0, 0, 1, 0x001d, 2, 0x001e, 5, 0, 1, 0x001f,
+    ];
+    let mut bytes = b"TextV.01".to_vec();
+    bytes.extend_from_slice(&(words.len() as u32).to_be_bytes());
+    extend_units(&mut bytes, &words);
+    let blocks = layout_box_text_blocks(&bytes);
+    assert_eq!(blocks.len(), 1);
+    assert!(blocks[0].fragments.is_empty());
+}
+
+#[test]
+fn layout_box_text_preserves_initial_text_and_utf16_source_ranges() {
+    let mut content = "𠮷野\n".encode_utf16().collect::<Vec<_>>();
+    content.extend_from_slice(&[0x001c, 0x0010, 10, 0, 0xffff, 0, 10, 0, 0x0010, 0x001f]);
+    content.extend("body".encode_utf16());
+    let mut bytes = b"TextV.01".to_vec();
+    bytes.extend_from_slice(&(content.len() as u32).to_be_bytes());
+    extend_units(&mut bytes, &content);
+    let blocks = layout_box_text_blocks(&bytes);
+    assert_eq!(blocks[0].fragments.len(), 2);
+    assert_eq!(blocks[0].fragments[0].text, "𠮷野");
+    assert_eq!(blocks[0].fragments[0].source_span.byte_start(), 12);
+    assert_eq!(blocks[0].fragments[0].source_span.unit_start(), 6);
+    assert_eq!(blocks[0].fragments[1].text, "body");
 }
 
 #[test]

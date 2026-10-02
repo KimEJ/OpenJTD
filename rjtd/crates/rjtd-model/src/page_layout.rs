@@ -76,6 +76,84 @@ pub(super) fn page_layout_from_document(document: &Document) -> PageLayout {
         .with_portrait_orientation()
 }
 
+pub(super) fn page_layout_with_source_margins(
+    document: &Document,
+    mut layout: PageLayout,
+) -> PageLayout {
+    let page_style = document
+        .unknown_styles()
+        .iter()
+        .find(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH));
+    let margins = page_style
+        .and_then(|style| {
+            let summary = summarize_style_stream(style.payload());
+            let mut records = summary
+                .records()
+                .iter()
+                .filter(|r| r.code() == PAGE_LAYOUT_STYLE_RECORD_CODE);
+            let record = records.next()?;
+            if records.next().is_some() {
+                return None;
+            }
+            let payload = record
+                .subrecords()
+                .iter()
+                .find(|s| s.code() == 0x4002)?
+                .payload();
+            if payload.len() != 39 || payload.get(..3) != Some(&[0xfe, 0x80, 0]) {
+                return None;
+            }
+            page_margins_at(payload, 3)
+        })
+        .or_else(|| {
+            // An explicit page-layout margin record has authority over the view defaults.
+            if page_style.is_some_and(|style| {
+                summarize_style_stream(style.payload())
+                    .records()
+                    .iter()
+                    .any(|r| r.subrecords().iter().any(|s| s.code() == 0x4002))
+            }) {
+                return None;
+            }
+            let bytes = document
+                .unknown_styles()
+                .iter()
+                .find(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))?
+                .payload();
+            let summary = summarize_style_stream(bytes);
+            let record = summary.records().iter().find(|r| r.code() == 0x1002)?;
+            let start = record.offset().checked_add(4)?;
+            let payload = bytes.get(start..start.checked_add(record.payload_len())?)?;
+            let offset = match (payload.len(), payload.get(..2)) {
+                (32, Some([0, 0xd8])) => 2,
+                (33, Some([0, 0xd9])) if payload.get(2) == Some(&1) => 3,
+                _ => return None,
+            };
+            page_margins_at(payload, offset)
+        });
+    if let Some(margins) = margins
+        && margins[0] + margins[1] < layout.width_px()
+        && margins[2] + margins[3] < layout.height_px()
+    {
+        layout.source_margins = Some(margins);
+    }
+    layout
+}
+
+fn page_margins_at(bytes: &[u8], offset: usize) -> Option<[f32; 4]> {
+    let top = read_be16_at(bytes, offset)?;
+    let bottom = read_be16_at(bytes, offset + 2)?;
+    let left = read_be16_at(bytes, offset + 4)?;
+    let right = read_be16_at(bytes, offset + 6)?;
+    if [top, bottom, left, right]
+        .iter()
+        .any(|value| *value >= 0xfffd)
+    {
+        return None;
+    }
+    Some([left, right, top, bottom].map(|value| hundredth_millimeters_to_css_px(u32::from(value))))
+}
+
 pub(super) fn decoded_page_layout_from_styles(styles: &[UnknownStyle]) -> Option<PageLayout> {
     styles
         .iter()
@@ -745,6 +823,19 @@ pub(super) fn page_layer_tree_json(
     let vertical_placement = vertical_page_text_placement(layout, lines);
     let layout_box_text_projection =
         layout_box_text_projection(&core.document, layout, page_num as usize + 1);
+    let native_control_tables = native_control_table_text_projections(
+        &core.document,
+        layout,
+        page_num as usize + 1,
+        core.writing_mode,
+    );
+    let native_control_flow = native_control_flow_text_projection(
+        &core.document,
+        layout,
+        page_num as usize + 1,
+        core.writing_mode,
+        &native_control_tables,
+    );
 
     if let Some(projection) = &shanai_lan_text_projection {
         output.push(',');
@@ -868,7 +959,51 @@ pub(super) fn page_layer_tree_json(
             push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
         }
     }
+    if let Some(projection) = &native_control_flow {
+        for slot in &projection.slots {
+            let source_id = text_sources.len();
+            output.push(',');
+            push_page_layer_native_control_flow_text_slot_json(
+                &mut output,
+                source_id,
+                slot,
+                &font_family,
+            );
+            let fragment = PageLayerTextFragment {
+                text: slot.text.clone(),
+                paragraph_index: None,
+                char_start: 0,
+                char_end: slot.text.chars().count(),
+                source_span: Some(slot.source_span.clone()),
+                ruby_annotation: None,
+            };
+            push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
+        }
+    }
+    for projection in &native_control_tables {
+        for slot in &projection.slots {
+            let source_id = text_sources.len();
+            output.push(',');
+            push_page_layer_native_control_table_text_slot_json(
+                &mut output,
+                source_id,
+                slot,
+                &font_family,
+            );
+            let fragment = PageLayerTextFragment {
+                text: slot.text.clone(),
+                paragraph_index: None,
+                char_start: 0,
+                char_end: slot.text.chars().count(),
+                source_span: Some(slot.source_span.clone()),
+                ruby_annotation: None,
+            };
+            push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
+        }
+    }
     if shanai_lan_text_projection.is_none() && form_projection.is_none() {
+        let style_resolver = document_text_style_resolver(&core.document);
+        let default_font_size = document_default_font_size_px(&core.document);
         let mut fallback_visual_line_index = 0usize;
         for (line_index, line) in lines.iter().enumerate() {
             if line.text().is_empty() {
@@ -895,7 +1030,7 @@ pub(super) fn page_layer_tree_json(
             };
             let mut x = if core.writing_mode.is_vertical() {
                 layout.width_px() as f64
-                    - layout.margin_px() as f64
+                    - layout.margin_right_px() as f64
                     - ((line_index + 1) as f64 * APP_LINE_HEIGHT_PX as f64)
                     + vertical_placement.x_shift_px as f64
             } else {
@@ -904,7 +1039,7 @@ pub(super) fn page_layer_tree_json(
                     .or_else(|| {
                         fallback_text_origin(layout, &core.document).map(|origin| origin.0 as f64)
                     })
-                    .unwrap_or(layout.margin_px() as f64)
+                    .unwrap_or(layout.margin_left_px() as f64)
             };
             let mut y = if core.writing_mode.is_vertical() {
                 vertical_placement.y_start_px as f64
@@ -917,7 +1052,8 @@ pub(super) fn page_layer_tree_json(
                         })
                     })
                     .unwrap_or(
-                        layout.margin_px() as f64 + line_index as f64 * APP_LINE_HEIGHT_PX as f64,
+                        layout.margin_top_px() as f64
+                            + line_index as f64 * APP_LINE_HEIGHT_PX as f64,
                     )
             };
             let baseline = if core.writing_mode.is_vertical() {
@@ -932,6 +1068,15 @@ pub(super) fn page_layer_tree_json(
                 if fragment.text.is_empty() {
                     continue;
                 }
+                if fragment.source_span.as_ref().is_some_and(|span| {
+                    native_control_table_text_projection_contains(&native_control_tables, span)
+                        || native_control_flow_text_projection_contains(
+                            native_control_flow.as_ref(),
+                            span,
+                        )
+                }) {
+                    continue;
+                }
 
                 let source_id = text_sources.len();
                 if !first_op {
@@ -939,21 +1084,39 @@ pub(super) fn page_layer_tree_json(
                 }
                 first_op = false;
                 let fill_color = fallback_text_fill_color();
+                let font_size = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .and_then(|(resolver, span)| {
+                        document_text_font_size(resolver, span, default_font_size)
+                    });
+                let font_scale = f64::from(
+                    font_size.map_or(APP_FONT_SIZE_PX, |size| size.px) / APP_FONT_SIZE_PX,
+                );
+                let styled_baseline = baseline
+                    + f64::from(
+                        font_size.map_or(APP_FONT_SIZE_PX, |size| size.px) - APP_FONT_SIZE_PX,
+                    );
                 push_page_layer_text_run_json(
                     &mut output,
                     source_id,
-                    PageLayerTextPlacement { x, y, baseline },
+                    PageLayerTextPlacement {
+                        x,
+                        y,
+                        baseline: styled_baseline,
+                    },
                     layout,
                     core.writing_mode,
+                    font_size,
                     &font_family,
                     fill_color,
                     &fragment,
                 );
                 push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
                 if core.writing_mode.is_vertical() {
-                    y += vertical_text_advance_px(&fragment.text);
+                    y += vertical_text_advance_px(&fragment.text) * font_scale;
                 } else {
-                    x += text_width_px(layout, &fragment.text);
+                    x += text_width_px(layout, &fragment.text) * font_scale;
                 }
             }
             if !core.writing_mode.is_vertical() {
@@ -1433,7 +1596,11 @@ pub(super) fn page_frame_projection(
     }
 
     let mut shapes = Vec::new();
+    let containers = linked_text_frame_container_ids(document);
     for record in document.object_frame_records() {
+        if containers.contains(&record.object_id()) {
+            continue;
+        }
         if let Some(shape) = page_frame_shape(record, layout) {
             shapes.push(shape);
         }

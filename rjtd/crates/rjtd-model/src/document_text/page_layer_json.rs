@@ -41,19 +41,22 @@ pub(crate) fn push_page_layer_text_run_json(
     placement: PageLayerTextPlacement,
     layout: PageLayout,
     writing_mode: WritingMode,
+    source_font_size: Option<DocumentTextFontSize>,
     font_family: &str,
     fill_color: &str,
     fragment: &PageLayerTextFragment,
 ) {
+    let font_size = source_font_size.map_or(APP_FONT_SIZE_PX, |size| size.px);
+    let font_scale = f64::from(font_size / APP_FONT_SIZE_PX);
     let (width, height) = if writing_mode.is_vertical() {
         (
-            APP_LINE_HEIGHT_PX as f64,
-            vertical_text_advance_px(&fragment.text),
+            APP_LINE_HEIGHT_PX.max(font_size) as f64,
+            vertical_text_advance_px(&fragment.text) * font_scale,
         )
     } else {
         (
-            text_width_px(layout, &fragment.text),
-            APP_LINE_HEIGHT_PX as f64,
+            text_width_px(layout, &fragment.text) * font_scale,
+            APP_LINE_HEIGHT_PX.max(font_size) as f64,
         )
     };
     output.push_str("{\"type\":\"textRun\",\"bbox\":");
@@ -63,6 +66,13 @@ pub(crate) fn push_page_layer_text_run_json(
     ));
     output.push_str(",\"text\":");
     output.push_str(&json_string(&fragment.text));
+    if let Some(size) = source_font_size {
+        let font_size = size.px;
+        let basis = size.basis;
+        output.push_str(&format!(
+            ",\"fontSize\":{font_size:.3},\"fontSizeBasis\":\"{basis}\""
+        ));
+    }
     if let Some(annotation) = &fragment.ruby_annotation {
         output.push_str(",\"rubyText\":");
         output.push_str(&json_string(annotation));
@@ -81,10 +91,11 @@ pub(crate) fn push_page_layer_text_run_json(
     ));
     push_page_layer_source_span_json(output, source_id, fragment);
     output.push_str(",\"positions\":");
-    push_f64_array_json(
-        output,
-        &text_positions_px_for_mode(layout, writing_mode, &fragment.text),
-    );
+    let positions = text_positions_px_for_mode(layout, writing_mode, &fragment.text)
+        .into_iter()
+        .map(|position| position * font_scale)
+        .collect::<Vec<_>>();
+    push_f64_array_json(output, &positions);
     output.push_str(",\"isParaEnd\":false,\"isLineBreakEnd\":false}");
 }
 
@@ -123,6 +134,101 @@ pub(crate) fn push_page_layer_text_source_json(
     }
     source.push_str("]}");
     output.push(source);
+}
+
+pub(crate) fn push_page_layer_native_control_table_text_slot_json(
+    output: &mut String,
+    source_id: usize,
+    slot: &NativeControlTableTextSlot,
+    font_family: &str,
+) {
+    let fragment = PageLayerTextFragment {
+        text: slot.text.clone(),
+        paragraph_index: None,
+        char_start: 0,
+        char_end: slot.text.chars().count(),
+        source_span: Some(slot.source_span.clone()),
+        ruby_annotation: None,
+    };
+    let width = text_width_px_for_font_size(slot.font_size.px, &slot.text);
+    output.push_str("{\"type\":\"textRun\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":{:.3},\"y\":{:.3},\"width\":{width:.3},\"height\":{:.3}}}",
+        slot.x,
+        slot.baseline_y - slot.font_size.px,
+        slot.font_size.px.max(APP_LINE_HEIGHT_PX),
+    ));
+    output.push_str(",\"text\":");
+    output.push_str(&json_string(&slot.text));
+    output.push_str(&format!(
+        ",\"fontSize\":{:.3},\"fontSizeBasis\":{},\"baseline\":{:.3},\"rotation\":0.000,\"isVertical\":false,\"orientation\":\"horizontal\",\"fontFamily\":{},\"fillColor\":\"#111111\",\"projectionKind\":\"nativeControlTableTextProjection\",\"source\":",
+        slot.font_size.px,
+        json_string(slot.font_size.basis),
+        slot.baseline_y,
+        json_string(font_family),
+    ));
+    push_page_layer_source_span_json(output, source_id, &fragment);
+    output.push_str(",\"positions\":");
+    push_f64_array_json(
+        output,
+        &text_positions_px_for_font_size(slot.font_size.px, &slot.text),
+    );
+    output.push_str(&format!(
+        ",\"tableCandidateIndex\":{},\"rowIndex\":{},\"columnIndex\":{},\"headerOffsetUnits\":{},\"lineMarkRecordIndex\":{},\"pageMarkPitchMm100\":{},\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":true,\"referenceBacked\":false,\"isParaEnd\":false,\"isLineBreakEnd\":false}}",
+        slot.candidate_index,
+        slot.row_index,
+        slot.column_index,
+        slot.header_offset_units,
+        slot.line_mark_record_index,
+        slot.page_mark_pitch_mm100,
+    ));
+}
+
+pub(crate) fn push_page_layer_native_control_flow_text_slot_json(
+    output: &mut String,
+    source_id: usize,
+    slot: &NativeControlFlowTextSlot,
+    font_family: &str,
+) {
+    let fragment = PageLayerTextFragment {
+        text: slot.text.clone(),
+        paragraph_index: None,
+        char_start: 0,
+        char_end: slot.text.chars().count(),
+        source_span: Some(slot.source_span.clone()),
+        ruby_annotation: None,
+    };
+    let width = text_width_px_for_font_size(slot.font_size.px, &slot.text);
+    output.push_str("{\"type\":\"textRun\",\"bbox\":");
+    output.push_str(&format!(
+        "{{\"x\":{:.3},\"y\":{:.3},\"width\":{width:.3},\"height\":{:.3}}}",
+        slot.x,
+        slot.baseline_y - slot.font_size.px,
+        slot.font_size.px.max(APP_LINE_HEIGHT_PX),
+    ));
+    output.push_str(",\"text\":");
+    output.push_str(&json_string(&slot.text));
+    output.push_str(&format!(
+        ",\"fontSize\":{:.3},\"fontSizeBasis\":{},\"baseline\":{:.3},\"rotation\":0.000,\"isVertical\":false,\"orientation\":\"horizontal\",\"fontFamily\":{},\"fillColor\":\"#111111\",\"projectionKind\":\"nativeControlFlowTextProjection\",\"source\":",
+        slot.font_size.px,
+        json_string(slot.font_size.basis),
+        slot.baseline_y,
+        json_string(font_family),
+    ));
+    push_page_layer_source_span_json(output, source_id, &fragment);
+    output.push_str(",\"positions\":");
+    push_f64_array_json(
+        output,
+        &text_positions_px_for_font_size(slot.font_size.px, &slot.text),
+    );
+    output.push_str(&format!(
+        ",\"lineMarkRecordIndex\":{},\"pageMarkPitchMm100\":{},\"leadingAsciiSpaceCount\":{},\"precedingHeaderOffsetUnits\":{},\"precedingHeaderExtentUnits\":{},\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":true,\"referenceBacked\":false,\"isParaEnd\":false,\"isLineBreakEnd\":false}}",
+        slot.line_mark_record_index,
+        slot.page_mark_pitch_mm100,
+        slot.leading_ascii_space_count,
+        slot.preceding_header_offset_units,
+        slot.preceding_header_extent_units,
+    ));
 }
 
 pub(crate) fn push_page_layer_observed_form_text_slot_json(
@@ -230,6 +336,16 @@ pub(crate) fn push_page_layer_layout_box_text_slot_json(
     ));
     output.push_str(",\"text\":");
     output.push_str(&json_string(&slot.text));
+    output.push_str(&format!(",\"fontSize\":{:.3}", slot.font_size));
+    if let Some(frame) = &slot.frame_source {
+        output.push_str(&format!(
+            ",\"frameSource\":{{\"source\":\"/Frame\",\"frameId\":{},\"parentFrameId\":{},\"rawWord6\":{},\"recordByteRange\":{{\"start\":{},\"end\":{}}},\"xMm100\":{},\"yMm100\":{},\"decoded\":false}}",
+            frame.frame_id, frame.parent_frame_id, frame.raw_word6,
+            frame.record_start, frame.record_start + FRAME_RECORD_BYTES,
+            frame.x_mm100, frame.y_mm100,
+        ));
+    }
+
     output.push_str(&format!(
         ",\"baseline\":{:.3},\"rotation\":0.000,\"isVertical\":false,\"orientation\":\"horizontal\",\"fontFamily\":{},\"fillColor\":\"#111111\",\"projectionKind\":{},\"source\":",
         slot.y + slot.font_size,

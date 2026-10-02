@@ -58,6 +58,7 @@ impl DocumentCore {
             }
             writing_mode = hint.writing_mode;
         }
+        page_layout = page_layout_with_source_margins(&document, page_layout);
         Self {
             document,
             pages: Vec::new(),
@@ -211,6 +212,7 @@ impl DocumentCore {
             }
             self.writing_mode = hint.writing_mode;
         }
+        self.page_layout = page_layout_with_source_margins(&self.document, self.page_layout);
         self.refresh_pages();
     }
 
@@ -252,10 +254,10 @@ impl DocumentCore {
             "{{\"width\":{:.1},\"height\":{:.1},\"marginLeft\":{:.1},\"marginRight\":{:.1},\"marginTop\":{:.1},\"marginBottom\":{:.1},\"marginHeader\":0.0,\"marginFooter\":0.0,\"marginGutter\":0.0,\"landscape\":{},\"binding\":0}}",
             layout.width_px(),
             layout.height_px(),
-            layout.margin_px(),
-            layout.margin_px(),
-            layout.margin_px(),
-            layout.margin_px(),
+            layout.margin_left_px(),
+            layout.margin_right_px(),
+            layout.margin_top_px(),
+            layout.margin_bottom_px(),
             layout.landscape()
         ))
     }
@@ -421,7 +423,7 @@ impl DocumentCore {
     pub fn get_page_info(&self, page_num: u32) -> Result<String> {
         self.page_lines(page_num)?;
         let layout = self.page_layout;
-        let body_x = layout.margin_px();
+        let body_x = layout.margin_left_px();
         let body_width = layout.body_width_px();
         let mark_evidence = page_decoration_mark_evidence(&self.document, page_num as usize);
         let mut mark_evidence_json = String::new();
@@ -436,14 +438,14 @@ impl DocumentCore {
             page_num + 1,
             layout.width_px(),
             layout.height_px(),
-            layout.margin_px(),
-            layout.margin_px(),
-            layout.margin_px(),
-            layout.margin_px(),
-            layout.margin_px(),
-            layout.margin_px(),
-            layout.margin_px(),
-            layout.margin_px(),
+            layout.margin_left_px(),
+            layout.margin_right_px(),
+            layout.margin_top_px(),
+            layout.margin_bottom_px(),
+            layout.margin_left_px(),
+            layout.margin_right_px(),
+            layout.margin_top_px(),
+            layout.margin_bottom_px(),
             body_x,
             body_width,
             mark_evidence_json

@@ -421,7 +421,10 @@ fn embedded_document_text(data: &[u8]) -> Option<DocumentTextPayload> {
             continue;
         }
         let fragment = &data[start..end];
-        let text = clean_embedded_text(&extract_document_text(fragment));
+        // A physical-file fragment may cross sector or object boundaries. Its
+        // declared logical length cannot safely truncate salvageable text.
+        let range = text_segment_range(fragment).map(|range| range.start..fragment.len() / 2);
+        let text = clean_embedded_text(&parse_document_text_range(fragment, range).plain_text());
         if text.trim().is_empty() || text_parts.iter().any(|part| part == &text) {
             continue;
         }
@@ -523,37 +526,36 @@ pub fn extract_document_text(data: &[u8]) -> String {
     parse_document_text(data).plain_text()
 }
 
-// SsmgV.01 segment-count field: w[9]=0x0001 means a single raw-text TextV.01 segment
-// with no paragraph records; w[9]=0x0002 is the normal paragraph-record format.
-const SSMG_RAW_TEXT_SEGMENT_COUNT: u16 = 0x0001;
-const SSMG_HEADER_WORDS: usize = 10; // SsmgV.01 (4) + header (4) + segment-count (2)
 const TEXT_SEGMENT_NAME: &[u8; 8] = b"TextV.01";
 
-pub fn parse_document_text(data: &[u8]) -> ParsedDocumentText {
-    // SsmgV.01 w[9]=0x0001: single raw-text segment (no 0x001f paragraph markers).
-    // Layout: SsmgV.01 header (10 words) + TextV.01 name (4 words) + length (2 words) + text.
-    if data.starts_with(DOCUMENT_TEXT_MAGIC) {
-        let units: Vec<u16> = data
-            .chunks_exact(2)
-            .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
-            .collect();
-        if units.get(9) == Some(&SSMG_RAW_TEXT_SEGMENT_COUNT)
-            && data
-                .get(SSMG_HEADER_WORDS * 2..)
-                .is_some_and(|rest| rest.starts_with(TEXT_SEGMENT_NAME))
-        {
-            return parse_raw_text_segment(&units);
-        }
+// Named TextV.01 content starts at unit 16 and may begin with visible text before
+// any record marker. Its u32 length excludes the following style section.
+// Older/fragment streams without this header retain marker-based recovery.
+fn text_segment_range(data: &[u8]) -> Option<std::ops::Range<usize>> {
+    if !data.starts_with(DOCUMENT_TEXT_MAGIC) || data.get(20..28)? != TEXT_SEGMENT_NAME {
+        return None;
     }
+    let length = u32::from_be_bytes(data.get(28..32)?.try_into().ok()?) as usize;
+    Some(16..16usize.saturating_add(length).min(data.len() / 2))
+}
 
+pub fn parse_document_text(data: &[u8]) -> ParsedDocumentText {
+    parse_document_text_range(data, text_segment_range(data))
+}
+
+fn parse_document_text_range(
+    data: &[u8],
+    range: Option<std::ops::Range<usize>>,
+) -> ParsedDocumentText {
     let units = data
         .chunks_exact(2)
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect::<Vec<_>>();
     let mut elements = Vec::new();
     let mut run = String::new();
-    let mut reading_text = false;
-    let mut index = 0;
+    let mut reading_text = range.is_some();
+    let mut index = range.as_ref().map_or(0, |range| range.start);
+    let units = &units[..range.as_ref().map_or(units.len(), |range| range.end)];
 
     while index < units.len() {
         let code = units[index];
@@ -567,9 +569,9 @@ pub fn parse_document_text(data: &[u8]) -> ParsedDocumentText {
         if code == INLINE_TEXT_START {
             push_run(&mut elements, &mut run);
             reading_text = false;
-            if let Some(selector) = inline_text_selector(&units, index) {
-                index = push_inline_segment(&mut elements, &units, index, selector);
-            } else if let Some((segment, next_index)) = read_skipped_inline_segment(&units, index) {
+            if let Some(selector) = inline_text_selector(units, index) {
+                index = push_inline_segment(&mut elements, units, index, selector);
+            } else if let Some((segment, next_index)) = read_skipped_inline_segment(units, index) {
                 elements.push(DocumentTextElement::SkippedInlineText(segment));
                 index = next_index;
             } else {
@@ -582,14 +584,15 @@ pub fn parse_document_text(data: &[u8]) -> ParsedDocumentText {
         }
 
         if reading_text {
-            if is_control_boundary(code) || is_invalid_scalar(code) {
+            if let Some(character) = text_scalar_at(units, index) {
+                run.push(character);
+                index += character.len_utf16() - 1;
+            } else {
                 push_run(&mut elements, &mut run);
                 elements.push(DocumentTextElement::ControlBoundary(
                     DocumentTextControl::new(code),
                 ));
                 reading_text = code == TEXT_ROW_DELIMITER;
-            } else if let Some(character) = char::from_u32(code as u32) {
-                run.push(character);
             }
         }
 
@@ -601,6 +604,16 @@ pub fn parse_document_text(data: &[u8]) -> ParsedDocumentText {
 }
 
 pub fn map_document_text(data: &[u8]) -> DocumentTextMap {
+    map_document_text_range(data, text_segment_range(data))
+}
+
+/// Maps an already delimited TextV.01 content payload, with source offsets
+/// relative to that payload. Leading text does not require a record marker.
+pub fn map_document_text_content(data: &[u8]) -> DocumentTextMap {
+    map_document_text_range(data, Some(0..data.len() / 2))
+}
+
+fn map_document_text_range(data: &[u8], range: Option<std::ops::Range<usize>>) -> DocumentTextMap {
     let units = data
         .chunks_exact(2)
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
@@ -608,8 +621,9 @@ pub fn map_document_text(data: &[u8]) -> DocumentTextMap {
     let mut entries = Vec::new();
     let mut run = String::new();
     let mut run_start = 0usize;
-    let mut reading_text = false;
-    let mut index = 0;
+    let mut reading_text = range.is_some();
+    let mut index = range.as_ref().map_or(0, |range| range.start);
+    let units = &units[..range.as_ref().map_or(units.len(), |range| range.end)];
 
     while index < units.len() {
         let code = units[index];
@@ -623,9 +637,9 @@ pub fn map_document_text(data: &[u8]) -> DocumentTextMap {
         if code == INLINE_TEXT_START {
             push_map_run(&mut entries, &mut run, run_start, index);
             reading_text = false;
-            if let Some(selector) = inline_text_selector(&units, index) {
-                index = push_mapped_inline_segment(&mut entries, &units, index, selector);
-            } else if let Some((segment, next_index)) = read_skipped_inline_segment(&units, index) {
+            if let Some(selector) = inline_text_selector(units, index) {
+                index = push_mapped_inline_segment(&mut entries, units, index, selector);
+            } else if let Some((segment, next_index)) = read_skipped_inline_segment(units, index) {
                 entries.push(DocumentTextMapEntry::new(
                     index,
                     next_index,
@@ -643,15 +657,16 @@ pub fn map_document_text(data: &[u8]) -> DocumentTextMap {
         }
 
         if reading_text {
-            if is_control_boundary(code) || is_invalid_scalar(code) {
-                push_map_run(&mut entries, &mut run, run_start, index);
-                push_map_control(&mut entries, index, code);
-                reading_text = code == TEXT_ROW_DELIMITER;
-            } else if let Some(character) = char::from_u32(code as u32) {
+            if let Some(character) = text_scalar_at(units, index) {
                 if run.is_empty() {
                     run_start = index;
                 }
                 run.push(character);
+                index += character.len_utf16() - 1;
+            } else {
+                push_map_run(&mut entries, &mut run, run_start, index);
+                push_map_control(&mut entries, index, code);
+                reading_text = code == TEXT_ROW_DELIMITER;
             }
         }
 
@@ -660,35 +675,6 @@ pub fn map_document_text(data: &[u8]) -> DocumentTextMap {
 
     push_map_run(&mut entries, &mut run, run_start, units.len());
     DocumentTextMap::new(entries)
-}
-
-// Parse a SsmgV.01 w[9]=0x0001 raw-text segment: TextV.01 header (14..16) gives
-// the word count, then the text follows as plain UTF-16BE with no 0x001f markers.
-fn parse_raw_text_segment(units: &[u16]) -> ParsedDocumentText {
-    // Layout: SSMG_HEADER_WORDS=10 + TextV.01 name (4) + length field (2) = 16 words header
-    const HEADER_WORDS: usize = SSMG_HEADER_WORDS + 4 + 2;
-    let length = match units.get(SSMG_HEADER_WORDS + 4 + 1) {
-        Some(&len) => len as usize,
-        None => return ParsedDocumentText::default(),
-    };
-    let text_start = HEADER_WORDS;
-    let text_end = text_start.saturating_add(length).min(units.len());
-    let mut run = String::new();
-    for &code in &units[text_start..text_end] {
-        if code == 0x0000 {
-            break;
-        }
-        if !is_invalid_scalar(code)
-            && let Some(character) = char::from_u32(code as u32)
-        {
-            run.push(character);
-        }
-    }
-    if run.is_empty() {
-        ParsedDocumentText::default()
-    } else {
-        ParsedDocumentText::new(vec![DocumentTextElement::TextRun(run)])
-    }
 }
 
 fn push_run(elements: &mut Vec<DocumentTextElement>, run: &mut String) {
@@ -702,8 +688,14 @@ fn is_control_boundary(code: u16) -> bool {
     (code < 0x20 && !matches!(code, 0x09 | 0x0a | 0x0d)) || (0x7f..=0x9f).contains(&code)
 }
 
-fn is_invalid_scalar(code: u16) -> bool {
-    (0xd800..=0xdfff).contains(&code) || code == 0xffff
+fn text_scalar_at(units: &[u16], index: usize) -> Option<char> {
+    let code = *units.get(index)?;
+    if is_control_boundary(code) || code == 0xffff {
+        return None;
+    }
+    char::decode_utf16(units[index..].iter().copied())
+        .next()?
+        .ok()
 }
 
 fn inline_text_selector(units: &[u16], index: usize) -> Option<u16> {
@@ -740,11 +732,9 @@ fn push_inline_segment(
             return index + 1;
         }
 
-        if !is_control_boundary(code)
-            && !is_invalid_scalar(code)
-            && let Some(character) = char::from_u32(code as u32)
-        {
+        if let Some(character) = text_scalar_at(units, index) {
             text.push(character);
+            index += character.len_utf16() - 1;
         }
         index += 1;
     }
@@ -779,11 +769,9 @@ fn push_mapped_inline_segment(
             return index + 1;
         }
 
-        if !is_control_boundary(code)
-            && !is_invalid_scalar(code)
-            && let Some(character) = char::from_u32(code as u32)
-        {
+        if let Some(character) = text_scalar_at(units, index) {
             text.push(character);
+            index += character.len_utf16() - 1;
         }
         index += 1;
     }
@@ -856,11 +844,9 @@ fn read_skipped_inline_segment(
             ));
         }
 
-        if !is_control_boundary(code)
-            && !is_invalid_scalar(code)
-            && let Some(character) = char::from_u32(code as u32)
-        {
+        if let Some(character) = text_scalar_at(units, index) {
             text.push(character);
+            index += character.len_utf16() - 1;
         }
         index += 1;
     }
@@ -1241,6 +1227,157 @@ mod tests {
             "should contain 'sto' but got: {text:?}"
         );
         assert!(text.contains('て'), "should contain 'て' but got: {text:?}");
+    }
+
+    fn text_segment_fixture(content: &[u16], segment_count: u16) -> Vec<u8> {
+        let mut bytes = b"SsmgV.01".to_vec();
+        extend_units(&mut bytes, &[0, 1, 0, 0x0100, 0, segment_count]);
+        bytes.extend_from_slice(b"TextV.01");
+        bytes.extend_from_slice(&(content.len() as u32).to_be_bytes());
+        extend_units(&mut bytes, content);
+        bytes
+    }
+
+    #[test]
+    fn preserves_initial_text_before_records_in_a_named_text_segment() {
+        let mut content = "PAGE 01\n".encode_utf16().collect::<Vec<_>>();
+        content.extend_from_slice(&[
+            0x001c, 0x0030, 12, 0, 2, 24, 0x00ff, 0, 12, 0, 0x0030, 0x001f,
+        ]);
+        content.extend("CELL".encode_utf16());
+        let bytes = text_segment_fixture(&content, 3);
+
+        assert_eq!(extract_document_text(&bytes), "PAGE 01\nCELL");
+        let map = map_document_text(&bytes);
+        let title = &map.entries()[0];
+        assert_eq!(title.kind(), DocumentTextMapKind::TextRun);
+        assert_eq!(title.text(), "PAGE 01\n");
+        assert_eq!((title.byte_start(), title.byte_end()), (32, 48));
+        assert_eq!((title.unit_start(), title.unit_end()), (16, 24));
+        let cell = map.entries().last().unwrap();
+        assert_eq!(cell.text(), "CELL");
+        assert_eq!((cell.unit_start(), cell.unit_end()), (36, 40));
+    }
+
+    #[test]
+    fn excludes_style_tail_text_markers_after_the_declared_content() {
+        let mut bytes = text_segment_fixture(&[0x001f, 0x0041], 2);
+        extend_units(&mut bytes, &[0x001f, 0x0042]);
+
+        assert_eq!(extract_document_text(&bytes), "A");
+        let map = map_document_text(&bytes);
+        assert_eq!(map.entries().len(), 1);
+        assert_eq!(map.entries()[0].text(), "A");
+        assert_eq!(map.entries()[0].unit_end(), 18);
+    }
+
+    #[test]
+    fn maps_raw_text_and_uses_the_full_u32_content_length() {
+        let content = vec![0x0041; 65_537];
+        let bytes = text_segment_fixture(&content, 1);
+
+        assert_eq!(extract_document_text(&bytes), "A".repeat(content.len()));
+        let map = map_document_text(&bytes);
+        assert_eq!(map.entries().len(), 1);
+        assert_eq!(map.entries()[0].text().len(), content.len());
+        assert_eq!(map.entries()[0].unit_start(), 16);
+        assert_eq!(map.entries()[0].unit_end(), 16 + content.len());
+    }
+
+    #[test]
+    fn bounds_empty_and_truncated_named_text_segments() {
+        let mut empty = text_segment_fixture(&[], 2);
+        extend_units(&mut empty, &[0x001f, 0x0041]);
+        assert!(parse_document_text(&empty).elements().is_empty());
+        assert!(map_document_text(&empty).entries().is_empty());
+
+        let mut truncated = text_segment_fixture(&[0x0041, 0x0042], 2);
+        truncated.truncate(truncated.len() - 1);
+        assert_eq!(extract_document_text(&truncated), "A");
+        let map = map_document_text(&truncated);
+        assert_eq!(map.entries()[0].text(), "A");
+        assert_eq!(map.entries()[0].unit_end(), 17);
+    }
+
+    #[test]
+    fn preserves_fragment_recovery_beyond_an_untrusted_logical_length() {
+        let mut bytes = text_segment_fixture(&[0x001f, 0x0041], 2);
+        extend_units(&mut bytes, &[0x001c, 0x001f, 0x0042]);
+
+        // Logical streams obey the length, but physical-file salvage cannot
+        // assume that the scanned bytes form a contiguous logical stream.
+        assert_eq!(extract_document_text(&bytes), "A");
+        let recovered = super::embedded_document_text(&bytes).unwrap();
+        assert_eq!(recovered.text(), "AB");
+        assert_eq!(recovered.source_name(), EMBEDDED_DOCUMENT_TEXT_PATH);
+        assert_eq!(recovered.bytes(), bytes);
+    }
+
+    #[test]
+    fn preserves_supplementary_characters_and_utf16_ranges_in_body_text() {
+        let content = "A𠮷B\n".encode_utf16().collect::<Vec<_>>();
+        let bytes = text_segment_fixture(&content, 2);
+
+        assert_eq!(extract_document_text(&bytes), "A𠮷B\n");
+        let map = map_document_text(&bytes);
+        assert_eq!(map.entries().len(), 1);
+        let entry = &map.entries()[0];
+        assert_eq!(entry.text(), "A𠮷B\n");
+        assert_eq!((entry.unit_start(), entry.unit_end()), (16, 21));
+        assert_eq!((entry.byte_start(), entry.byte_end()), (32, 42));
+    }
+
+    #[test]
+    fn preserves_supplementary_characters_in_visible_and_skipped_inline_text() {
+        let mut content = vec![0x001c, 1, 7, 0, 0, 3, 0x001d];
+        content.extend("𠮷野".encode_utf16());
+        content.extend_from_slice(&[0x001e, 0x001c, 1, 7, 0, 1, 0x0082, 0x001d]);
+        content.extend("𠮷よし".encode_utf16());
+        content.push(0x001e);
+        let bytes = text_segment_fixture(&content, 2);
+
+        let parsed = parse_document_text(&bytes);
+        assert_eq!(parsed.plain_text(), "𠮷野");
+        let skipped = parsed
+            .elements()
+            .iter()
+            .find_map(|element| match element {
+                DocumentTextElement::SkippedInlineText(segment) => Some(segment),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(skipped.text(), "𠮷よし");
+        assert!(
+            skipped
+                .raw_bytes()
+                .windows(4)
+                .any(|bytes| bytes == [0xd8, 0x42, 0xdf, 0xb7])
+        );
+        let map = map_document_text(&bytes);
+        let visible = map
+            .entries()
+            .iter()
+            .find(|entry| entry.kind() == DocumentTextMapKind::InlineText)
+            .unwrap();
+        assert_eq!(visible.text(), "𠮷野");
+        let skipped_map = map
+            .entries()
+            .iter()
+            .find(|entry| entry.kind() == DocumentTextMapKind::SkippedInlineText)
+            .unwrap();
+        assert_eq!(skipped_map.text(), skipped.text());
+    }
+
+    #[test]
+    fn does_not_join_surrogate_pairs_across_the_text_segment_boundary() {
+        let mut bytes = text_segment_fixture(&[0x0041, 0xd842], 2);
+        extend_units(&mut bytes, &[0xdfb7, 0x0042]);
+
+        assert_eq!(extract_document_text(&bytes), "A");
+        let map = map_document_text(&bytes);
+        assert_eq!(map.entries()[0].text(), "A");
+        assert_eq!(map.entries()[1].code(), Some(0xd842));
+        assert_eq!(map.entries()[1].unit_end(), 18);
     }
 
     #[test]

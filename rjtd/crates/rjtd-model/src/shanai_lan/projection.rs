@@ -633,16 +633,20 @@ pub(crate) fn shanai_lan_line_header_at(
     bytes: &[u8],
     offset: usize,
 ) -> Option<ShanaiLanLineHeader> {
-    if offset + 24 > bytes.len() || !bytes[offset..].starts_with(&[0x00, 0x1c, 0x00, 0x30]) {
+    let raw = bytes.get(offset..offset.checked_add(24)?)?;
+    if !raw.starts_with(&[0x00, 0x1c, 0x00, 0x30]) {
         return None;
     }
     let mut words = [0u16; 12];
-    for (index, chunk) in bytes[offset..offset + 24].chunks_exact(2).enumerate() {
+    for (index, chunk) in raw.chunks_exact(2).enumerate() {
         words[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
     }
-    if words[2] == 0
+    // Class 0x0030 carries a word count and an echoed count, not a font size.
+    // This reader supports only the observed fixed twelve-word record.
+    if words[2] != 12
         || words[6] != 0x00ff
         || words[7] != 0
+        || words[8] != 12
         || words[9] != 0
         || words[10] != 0x0030
         || words[11] != 0x001f

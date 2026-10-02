@@ -3,6 +3,31 @@ use crate::*;
 use std::fs;
 
 #[test]
+fn cell_header_requires_matching_twelve_word_record_lengths() {
+    let words = [
+        0x001c_u16, 0x0030, 12, 0, 2, 24, 0x00ff, 0, 12, 0, 0x0030, 0x001f,
+    ];
+    let bytes = |words: &[u16]| {
+        words
+            .iter()
+            .flat_map(|word| word.to_be_bytes())
+            .collect::<Vec<_>>()
+    };
+    let header = shanai_lan_line_header_at(&bytes(&words), 0).unwrap();
+    assert_eq!((header.offset_units, header.extent_units), (2, 24));
+    assert_eq!(header.end - header.start, 24);
+    assert!(shanai_lan_line_header_at(&bytes(&words), usize::MAX).is_none());
+
+    for index in [2, 8] {
+        for invalid_length in [0, 11, 14] {
+            let mut malformed = words;
+            malformed[index] = invalid_length;
+            assert!(shanai_lan_line_header_at(&bytes(&malformed), 0).is_none());
+        }
+    }
+}
+
+#[test]
 fn document_core_projects_shanai_lan_fdm_frame_diagnostics() {
     let jpeg_payload = minimal_jpeg_payload();
     let mut vector_payload = Vec::new();

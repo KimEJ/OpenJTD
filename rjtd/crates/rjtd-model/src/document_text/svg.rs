@@ -20,6 +20,17 @@ pub(crate) fn render_text_page_svg(
     ));
     svg.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>");
     let font_family = document_font_family_css(document);
+    let style_resolver = document_text_style_resolver(document);
+    let default_font_size = document_default_font_size_px(document);
+    let native_control_tables =
+        native_control_table_text_projections(document, layout, page_number, writing_mode);
+    let native_control_flow = native_control_flow_text_projection(
+        document,
+        layout,
+        page_number,
+        writing_mode,
+        &native_control_tables,
+    );
     push_page_frame_projection_svg(&mut svg, layout, document, page_number);
     push_page_mark_section_separator_svg(&mut svg, layout, document, page_number);
     push_shanai_lan_sparse_table_borders_svg(&mut svg, layout, document, page_number);
@@ -52,7 +63,7 @@ pub(crate) fn render_text_page_svg(
             }
 
             let mut x =
-                layout.width_px() - layout.margin_px() - (index as f32 * APP_LINE_HEIGHT_PX)
+                layout.width_px() - layout.margin_right_px() - (index as f32 * APP_LINE_HEIGHT_PX)
                     + placement.x_shift_px;
             let mut y = placement.y_start_px;
             if is_centered_ginga_title_page(page_number, line) {
@@ -66,6 +77,14 @@ pub(crate) fn render_text_page_svg(
                     continue;
                 }
                 let fill_color = fallback_text_fill_color();
+                let font_size = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .and_then(|(resolver, span)| {
+                        document_text_font_size(resolver, span, default_font_size)
+                    })
+                    .map(|size| size.px)
+                    .unwrap_or(APP_FONT_SIZE_PX);
 
                 push_svg_text_run(
                     &mut svg,
@@ -73,7 +92,7 @@ pub(crate) fn render_text_page_svg(
                     x,
                     y,
                     &font_family,
-                    APP_FONT_SIZE_PX,
+                    font_size,
                     fill_color,
                     &fragment.text,
                     Some("vertical-rl"),
@@ -88,7 +107,7 @@ pub(crate) fn render_text_page_svg(
                         true,
                     );
                 }
-                y += vertical_text_advance_px(&fragment.text) as f32;
+                y += vertical_text_advance_px(&fragment.text) as f32 * font_size / APP_FONT_SIZE_PX;
             }
         }
         svg.push_str("</g>");
@@ -121,13 +140,13 @@ pub(crate) fn render_text_page_svg(
             let mut x = frame_text_placement
                 .map(|placement| placement.x as f32)
                 .or_else(|| text_origin.map(|origin| origin.0))
-                .unwrap_or_else(|| layout.margin_px());
+                .unwrap_or_else(|| layout.margin_left_px());
             let y = frame_text_placement
                 .map(|placement| placement.baseline as f32)
                 .unwrap_or_else(|| {
                     text_origin
                         .map(|origin| origin.1)
-                        .unwrap_or_else(|| layout.margin_px())
+                        .unwrap_or_else(|| layout.margin_top_px())
                         + APP_FONT_SIZE_PX
                         + (index as f32 * APP_LINE_HEIGHT_PX)
                 });
@@ -144,15 +163,33 @@ pub(crate) fn render_text_page_svg(
                 ) {
                     continue;
                 }
-                let width = text_width_px(layout, &fragment.text) as f32;
+                if fragment.source_span.as_ref().is_some_and(|span| {
+                    native_control_table_text_projection_contains(&native_control_tables, span)
+                        || native_control_flow_text_projection_contains(
+                            native_control_flow.as_ref(),
+                            span,
+                        )
+                }) {
+                    continue;
+                }
+                let font_size = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .and_then(|(resolver, span)| {
+                        document_text_font_size(resolver, span, default_font_size)
+                    })
+                    .map(|size| size.px)
+                    .unwrap_or(APP_FONT_SIZE_PX);
+                let width =
+                    text_width_px(layout, &fragment.text) as f32 * font_size / APP_FONT_SIZE_PX;
                 let fill_color = fallback_text_fill_color();
                 push_svg_text_run(
                     &mut svg,
                     "rjtd-text",
                     x,
-                    y,
+                    y + font_size - APP_FONT_SIZE_PX,
                     &font_family,
-                    APP_FONT_SIZE_PX,
+                    font_size,
                     fill_color,
                     &fragment.text,
                     None,
@@ -172,6 +209,8 @@ pub(crate) fn render_text_page_svg(
             fallback_visual_line_index += 1;
         }
     }
+    push_native_control_flow_text_svg(&mut svg, native_control_flow.as_ref(), &font_family);
+    push_native_control_table_text_svg(&mut svg, &native_control_tables, &font_family);
     if let Some(projection) = layout_box_text_projection(document, layout, page_number) {
         push_layout_box_text_projection_svg(&mut svg, &projection, &font_family);
     }

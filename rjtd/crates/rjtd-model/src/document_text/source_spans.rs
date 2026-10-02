@@ -115,12 +115,11 @@ pub(crate) fn range_text_overlap(entry: &DocumentTextMapEntry, start: usize, end
     if overlap_start >= overlap_end {
         return String::new();
     }
-    entry
-        .text()
-        .chars()
-        .skip(overlap_start.saturating_sub(entry.unit_start()))
-        .take(overlap_end - overlap_start)
-        .collect()
+    text_by_utf16_units(
+        entry.text(),
+        overlap_start - entry.unit_start(),
+        overlap_end - entry.unit_start(),
+    )
 }
 
 pub(crate) fn text_line_break_count(text: &str) -> usize {
