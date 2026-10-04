@@ -124,6 +124,8 @@ pub(crate) struct DocumentTextControlTableCell {
     pub(crate) text: String,
 }
 
+// Compatibility projections derived from the preserved source flow, not native
+// row/cell containers or authority for logical wrapping and merging.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DocumentTextControlTableRow {
     pub(crate) index: usize,
@@ -148,7 +150,7 @@ impl PendingDocumentTextControlCell {
         }
     }
 
-    pub(crate) fn push_text(&mut self, entry: &DocumentTextMapEntry) {
+    pub(crate) fn push_text(&mut self, entry: &DocumentTextFlowEvent) {
         if self.source_start.is_none() {
             self.source_start = Some(entry.unit_start());
         }

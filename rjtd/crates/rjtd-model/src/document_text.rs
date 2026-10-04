@@ -1,5 +1,6 @@
 mod control_table;
 mod counts_json;
+mod flow;
 mod fragments;
 mod layout_box;
 mod page_layer_json;
@@ -10,6 +11,7 @@ mod types;
 
 pub(crate) use control_table::*;
 pub(crate) use counts_json::*;
+pub use flow::*;
 pub(crate) use fragments::*;
 pub(crate) use layout_box::*;
 pub(crate) use page_layer_json::*;

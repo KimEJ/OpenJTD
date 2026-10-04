@@ -155,6 +155,7 @@ pub struct Document {
     object_embedding_frames: Vec<ObjectEmbeddingFrameCandidate>,
     text_count_ranges: Vec<TextCountRange>,
     text_control_boundaries: Vec<TextControlBoundary>,
+    document_text_flow: Option<DocumentTextFlow>,
     text_boundary_candidates: Vec<TextBoundaryCandidate>,
     text_paragraph_boundary_candidates: Vec<TextParagraphBoundaryCandidate>,
     table_candidates: Vec<TableCandidate>,
@@ -178,6 +179,7 @@ impl Document {
             object_embedding_frames: Vec::new(),
             text_count_ranges: Vec::new(),
             text_control_boundaries: Vec::new(),
+            document_text_flow: None,
             text_boundary_candidates: Vec::new(),
             text_paragraph_boundary_candidates: Vec::new(),
             table_candidates: Vec::new(),
@@ -232,6 +234,13 @@ impl Document {
 
     pub fn from_document_text_payload(payload: &DocumentTextPayload) -> Self {
         let map = map_document_text(payload.bytes());
+        Self::from_document_text_payload_with_map(payload, &map)
+    }
+
+    fn from_document_text_payload_with_map(
+        payload: &DocumentTextPayload,
+        map: &DocumentTextMap,
+    ) -> Self {
         let mut spans = DocumentTextSourceSpans::new(map.entries());
         let mut builder = DocumentTextModelBuilder::default();
 
@@ -262,6 +271,11 @@ impl Document {
         for boundary in text_control_boundaries {
             document.push_text_control_boundary(boundary);
         }
+        document.document_text_flow = Some(DocumentTextFlow::from_map(
+            payload.source_name(),
+            payload.bytes(),
+            map,
+        ));
         document
     }
 
@@ -315,6 +329,10 @@ impl Document {
 
     pub fn table_candidates(&self) -> &[TableCandidate] {
         &self.table_candidates
+    }
+
+    pub fn document_text_flow(&self) -> Option<&DocumentTextFlow> {
+        self.document_text_flow.as_ref()
     }
 
     pub fn fonts(&self) -> &[DocumentFont] {
@@ -417,7 +435,7 @@ impl IchitaroParser {
         let payload =
             read_document_text_payload_with_budget(data, budget.decompression_budget_mut())?;
         let map = map_document_text(payload.bytes());
-        let mut document = Document::from_document_text_payload(&payload);
+        let mut document = Document::from_document_text_payload_with_map(&payload, &map);
         for entry in document_text_toc_entries(map.entries()) {
             document.push_toc_entry(entry);
         }
@@ -503,7 +521,7 @@ impl IchitaroParser {
             for candidate in text_boundary_candidates_from_ranges(document.text_count_ranges()) {
                 document.push_text_boundary_candidate(candidate);
             }
-            for candidate in table_candidates_from_text_boundaries(&document, map.entries()) {
+            for candidate in table_candidates_from_text_boundaries(&document) {
                 document.push_table_candidate(candidate);
             }
             for candidate in
@@ -512,18 +530,16 @@ impl IchitaroParser {
                 document.push_text_paragraph_boundary_candidate(candidate);
             }
         }
-        for candidate in table_candidates_from_document_text_controls(
-            map.entries(),
-            document.table_candidates().len(),
-            payload.bytes(),
-        ) {
-            document.push_table_candidate(candidate);
-        }
-        for candidate in sparse_table_candidates_from_document_text_controls(
-            map.entries(),
-            document.table_candidates().len(),
-        ) {
-            document.push_table_candidate(candidate);
+        if let Some(flow) = document.document_text_flow() {
+            let start = document.table_candidates().len();
+            let mut projections = table_candidates_from_document_text_controls(flow, start);
+            projections.extend(sparse_table_candidates_from_document_text_controls(
+                flow,
+                start + projections.len(),
+            ));
+            for candidate in projections {
+                document.push_table_candidate(candidate);
+            }
         }
         Ok(document)
     }

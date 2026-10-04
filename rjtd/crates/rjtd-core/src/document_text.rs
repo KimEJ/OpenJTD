@@ -88,15 +88,27 @@ pub enum DocumentTextElement {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DocumentTextMap {
     entries: Vec<DocumentTextMapEntry>,
+    content_span: Option<DocumentTextSourceSpan>,
 }
 
 impl DocumentTextMap {
-    fn new(entries: Vec<DocumentTextMapEntry>) -> Self {
-        Self { entries }
+    fn new(
+        entries: Vec<DocumentTextMapEntry>,
+        content_span: Option<DocumentTextSourceSpan>,
+    ) -> Self {
+        Self {
+            entries,
+            content_span,
+        }
     }
 
     pub fn entries(&self) -> &[DocumentTextMapEntry] {
         &self.entries
+    }
+
+    /// The declared content boundary, when a named TextV.01 payload is present.
+    pub fn content_span(&self) -> Option<DocumentTextSourceSpan> {
+        self.content_span
     }
 }
 
@@ -616,6 +628,9 @@ pub fn map_document_text_content(data: &[u8]) -> DocumentTextMap {
 }
 
 fn map_document_text_range(data: &[u8], range: Option<std::ops::Range<usize>>) -> DocumentTextMap {
+    let content_span = range
+        .as_ref()
+        .map(|range| DocumentTextSourceSpan::new(range.start, range.end));
     let units = data
         .as_chunks::<2>()
         .0
@@ -678,7 +693,7 @@ fn map_document_text_range(data: &[u8], range: Option<std::ops::Range<usize>>) -
     }
 
     push_map_run(&mut entries, &mut run, run_start, units.len());
-    DocumentTextMap::new(entries)
+    DocumentTextMap::new(entries, content_span)
 }
 
 fn push_run(elements: &mut Vec<DocumentTextElement>, run: &mut String) {

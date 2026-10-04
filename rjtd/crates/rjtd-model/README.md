@@ -89,6 +89,23 @@ authoritative layout or document meaning. Advanced layout, tables, embedded
 objects, styles, and editing APIs can return conservative fallback results.
 The 0.0.1 model is not a lossless round-trip editing contract.
 
+## Source flow and table projections
+
+`Document::document_text_flow()` retains the original logical DocumentText
+payload as ordered text, inline, control, framed-record, and opaque events.
+Each event carries byte/UTF-16 source spans; record and opaque words remain
+available without interpreting their flags as cells or logical rows. Named
+TextV.01 content bounds exclude the style tail. Repeated span declarations and
+line breaks remain distinct rather than being coalesced during source parsing.
+
+Existing `table_candidates()` are derived compatibility/diagnostic views for
+current consumers, not the source representation. Their normalized row/cell
+text does not replace the original events. JSON export exposes the source flow
+as `documentTextFlow` with `decoded:false`. A document constructed without JTD
+payload bytes has no source flow; fallback paragraph edits do not rewrite it.
+Logical wrapping/merging, ruled-line paint semantics, and saving source changes
+still require independent evidence and implementation.
+
 ## License
 
 Apache-2.0.

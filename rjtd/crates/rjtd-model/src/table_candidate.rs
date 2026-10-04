@@ -4,10 +4,10 @@ pub(super) const DIRECT_TABLE_CANDIDATE_SENTINEL: usize = usize::MAX;
 
 pub(super) const SPARSE_TABLE_CANDIDATE_SENTINEL: usize = usize::MAX - 1;
 
-pub(super) fn table_candidates_from_text_boundaries(
-    document: &Document,
-    entries: &[DocumentTextMapEntry],
-) -> Vec<TableCandidate> {
+pub(super) fn table_candidates_from_text_boundaries(document: &Document) -> Vec<TableCandidate> {
+    let Some(flow) = document.document_text_flow() else {
+        return Vec::new();
+    };
     let Some(bounds) = document_text_source_bounds(document) else {
         return Vec::new();
     };
@@ -17,7 +17,7 @@ pub(super) fn table_candidates_from_text_boundaries(
         if candidate.interval_count() <= 1 {
             continue;
         }
-        let intervals = table_candidate_intervals(document, entries, &bounds, candidate);
+        let intervals = table_candidate_intervals(document, flow, &bounds, candidate);
         if intervals.len() <= 1 {
             continue;
         }
@@ -31,11 +31,10 @@ pub(super) fn table_candidates_from_text_boundaries(
 }
 
 pub(super) fn table_candidates_from_document_text_controls(
-    entries: &[DocumentTextMapEntry],
+    flow: &DocumentTextFlow,
     start_index: usize,
-    bytes: &[u8],
 ) -> Vec<TableCandidate> {
-    let rows = document_text_control_table_rows(entries);
+    let rows = document_text_control_table_rows(flow);
     let mut candidates = Vec::new();
     let mut current_rows = Vec::new();
     let mut current_column_count = 0usize;
@@ -51,7 +50,7 @@ pub(super) fn table_candidates_from_document_text_controls(
                         &mut candidates,
                         start_index,
                         &mut current_rows,
-                        bytes,
+                        flow,
                     );
                     current_column_count = 0;
                     empty_gap_count = 0;
@@ -61,15 +60,15 @@ pub(super) fn table_candidates_from_document_text_controls(
         }
 
         let native_single_column = column_count == 1
-            && native_control_table_rows_are_framed(bytes, std::slice::from_ref(&row));
+            && native_control_table_rows_are_framed(flow, std::slice::from_ref(&row));
         if (column_count < 2 && !native_single_column)
-            || control_row_text_precedes_native_table_header(bytes, &row)
+            || control_row_text_precedes_native_table_header(flow, &row)
         {
             push_document_text_control_table_candidate(
                 &mut candidates,
                 start_index,
                 &mut current_rows,
-                bytes,
+                flow,
             );
             current_column_count = 0;
             empty_gap_count = 0;
@@ -93,7 +92,7 @@ pub(super) fn table_candidates_from_document_text_controls(
             &mut candidates,
             start_index,
             &mut current_rows,
-            bytes,
+            flow,
         );
         current_column_count = 0;
         empty_gap_count = 0;
@@ -110,13 +109,13 @@ pub(super) fn table_candidates_from_document_text_controls(
         &mut candidates,
         start_index,
         &mut current_rows,
-        bytes,
+        flow,
     );
     candidates
 }
 
 fn control_row_text_precedes_native_table_header(
-    bytes: &[u8],
+    flow: &DocumentTextFlow,
     row: &DocumentTextControlTableRow,
 ) -> bool {
     let Some(text_end) = row
@@ -128,39 +127,40 @@ fn control_row_text_precedes_native_table_header(
     else {
         return false;
     };
-    let row_end = row.source_end.min(bytes.len() / 2);
     // A plain paragraph can precede a complete native row-header record inside
     // the same control interval. Text before that header is not a table cell.
-    (text_end..row_end).any(|start| native_control_row_header_end(bytes, start, row_end).is_some())
+    let first = flow
+        .events()
+        .partition_point(|event| event.unit_start() < text_end);
+    flow.events()[first..]
+        .iter()
+        .take_while(|event| event.unit_start() < row.source_end)
+        .any(|event| {
+            native_control_row_header_end(flow, event.unit_start(), row.source_end).is_some()
+        })
 }
 
-fn native_control_row_header_end(bytes: &[u8], start: usize, row_end: usize) -> Option<usize> {
-    let offset = start.checked_mul(2)?;
-    if read_be16_at(bytes, offset) != Some(0x001c)
-        || read_be16_at(bytes, offset + 2) != Some(0x0010)
-        || read_be16_at(bytes, offset + 6) != Some(0)
-        || read_be16_at(bytes, offset + 8) != Some(0x008f)
+fn native_control_row_header_end(
+    flow: &DocumentTextFlow,
+    start: usize,
+    row_end: usize,
+) -> Option<usize> {
+    let record = flow.record_at(start)?;
+    let words = record.raw_words();
+    if record.record_class() != Some(0x0010)
+        || words.len() < 13
+        || words[3] != 0
+        || words[4] != 0x008f
+        || words[6] == 0
+        || record.unit_end() > row_end
     {
         return None;
     }
-    let length = read_be16_at(bytes, offset + 4)?;
-    let end = start.checked_add(usize::from(length))?;
-    if length < 13
-        || end > row_end.min(bytes.len() / 2)
-        || read_be16_at(bytes, offset + 12).is_none_or(|extent| extent == 0)
-    {
-        return None;
-    }
-    let tail = (end - 4) * 2;
-    (read_be16_at(bytes, tail) == Some(length)
-        && read_be16_at(bytes, tail + 2) == Some(0)
-        && read_be16_at(bytes, tail + 4) == Some(0x0010)
-        && read_be16_at(bytes, tail + 6) == Some(0x001f))
-    .then_some(end)
+    Some(record.unit_end())
 }
 
 fn native_control_table_rows_are_framed(
-    bytes: &[u8],
+    flow: &DocumentTextFlow,
     rows: &[DocumentTextControlTableRow],
 ) -> bool {
     let columns = rows.first().map_or(0, |row| row.cells.len());
@@ -171,7 +171,7 @@ fn native_control_table_rows_are_framed(
                 return false;
             }
             let Some(parent_end) =
-                native_control_row_header_end(bytes, row.source_start, row.source_end)
+                native_control_row_header_end(flow, row.source_start, row.source_end)
             else {
                 return false;
             };
@@ -182,15 +182,17 @@ fn native_control_table_rows_are_framed(
                 {
                     return false;
                 }
-                let Some(offset) = cell
-                    .source_start
-                    .checked_sub(12)
-                    .and_then(|start| start.checked_mul(2))
-                else {
+                let Some(start) = cell.source_start.checked_sub(12) else {
                     return false;
                 };
-                shanai_lan_line_header_at(bytes, offset)
-                    .is_some_and(|header| header.offset_units < header.extent_units)
+                flow.record_at(start).is_some_and(|record| {
+                    let words = record.raw_words();
+                    record.record_class() == Some(0x0030)
+                        && words.len() == 12
+                        && matches!(words[6], 0 | 0x00ff)
+                        && words[7] == 0
+                        && words[4] < words[5]
+                })
             })
         })
 }
@@ -199,10 +201,10 @@ pub(super) fn push_document_text_control_table_candidate(
     candidates: &mut Vec<TableCandidate>,
     start_index: usize,
     rows: &mut Vec<DocumentTextControlTableRow>,
-    bytes: &[u8],
+    flow: &DocumentTextFlow,
 ) {
     if document_text_control_table_rows_are_plausible(rows)
-        || native_control_table_rows_are_framed(bytes, rows)
+        || native_control_table_rows_are_framed(flow, rows)
     {
         candidates.push(TableCandidate::from_document_text_control_rows(
             start_index + candidates.len(),
@@ -213,10 +215,10 @@ pub(super) fn push_document_text_control_table_candidate(
 }
 
 pub(super) fn sparse_table_candidates_from_document_text_controls(
-    entries: &[DocumentTextMapEntry],
+    flow: &DocumentTextFlow,
     start_index: usize,
 ) -> Vec<TableCandidate> {
-    let rows = sparse_document_text_control_table_rows(entries);
+    let rows = sparse_document_text_control_table_rows(flow);
     let mut candidates = Vec::new();
     let mut current_rows = Vec::new();
 
@@ -261,7 +263,7 @@ pub(super) fn push_sparse_document_text_control_table_candidate(
 
 pub(super) fn table_candidate_intervals(
     document: &Document,
-    entries: &[DocumentTextMapEntry],
+    flow: &DocumentTextFlow,
     bounds: &TextSourceSpan,
     candidate: &TextBoundaryCandidate,
 ) -> Vec<TableCandidateInterval> {
@@ -279,8 +281,7 @@ pub(super) fn table_candidate_intervals(
             if source_start >= source_end {
                 return None;
             }
-            let text =
-                range_visible_text_for_basis(entries, source_start, source_end, candidate.basis());
+            let text = flow.text_for_range(source_start, source_end, candidate.basis());
             Some(TableCandidateInterval::new(
                 0,
                 interval.index,

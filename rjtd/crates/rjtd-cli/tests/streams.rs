@@ -25,3 +25,6 @@ mod text_position;
 mod text_position_count;
 #[path = "streams/text_token.rs"]
 mod text_token;
+
+#[path = "streams/text_flow.rs"]
+mod text_flow;

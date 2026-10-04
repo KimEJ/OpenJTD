@@ -255,7 +255,7 @@ pub(crate) fn sparse_document_text_control_table_rows_are_plausible(
 }
 
 pub(crate) fn sparse_document_text_control_table_rows(
-    entries: &[DocumentTextMapEntry],
+    flow: &DocumentTextFlow,
 ) -> Vec<DocumentTextControlTableRow> {
     let mut rows = Vec::new();
     let mut cells = Vec::new();
@@ -263,16 +263,16 @@ pub(crate) fn sparse_document_text_control_table_rows(
     let mut row_start: Option<usize> = None;
     let mut row_index = 0usize;
 
-    for entry in entries {
+    for entry in flow.events() {
         match entry.kind() {
-            DocumentTextMapKind::TextRun | DocumentTextMapKind::InlineText => {
+            DocumentTextFlowKind::Text | DocumentTextFlowKind::Inline => {
                 if row_start.is_none() {
                     row_start = Some(entry.unit_start());
                 }
                 cell.push_text(entry);
             }
-            DocumentTextMapKind::SkippedInlineText => {}
-            DocumentTextMapKind::ControlBoundary => match entry.code() {
+            DocumentTextFlowKind::SkippedInline | DocumentTextFlowKind::Opaque => {}
+            DocumentTextFlowKind::Control | DocumentTextFlowKind::Record => match entry.code() {
                 Some(TABLE_CELL_DELIMITER_CONTROL) => {
                     if row_start.is_none() {
                         row_start = Some(entry.unit_start());
@@ -346,7 +346,7 @@ pub(crate) fn sparse_document_text_control_table_rows(
 }
 
 pub(crate) fn document_text_control_table_rows(
-    entries: &[DocumentTextMapEntry],
+    flow: &DocumentTextFlow,
 ) -> Vec<DocumentTextControlTableRow> {
     let mut rows = Vec::new();
     let mut cells = Vec::new();
@@ -354,16 +354,16 @@ pub(crate) fn document_text_control_table_rows(
     let mut row_start: Option<usize> = None;
     let mut row_index = 0usize;
 
-    for entry in entries {
+    for entry in flow.events() {
         match entry.kind() {
-            DocumentTextMapKind::TextRun | DocumentTextMapKind::InlineText => {
+            DocumentTextFlowKind::Text | DocumentTextFlowKind::Inline => {
                 if row_start.is_none() {
                     row_start = Some(entry.unit_start());
                 }
                 cell.push_text(entry);
             }
-            DocumentTextMapKind::SkippedInlineText => {}
-            DocumentTextMapKind::ControlBoundary => match entry.code() {
+            DocumentTextFlowKind::SkippedInline | DocumentTextFlowKind::Opaque => {}
+            DocumentTextFlowKind::Control | DocumentTextFlowKind::Record => match entry.code() {
                 Some(TABLE_CELL_DELIMITER_CONTROL) => {
                     if row_start.is_none() {
                         row_start = Some(entry.unit_start());

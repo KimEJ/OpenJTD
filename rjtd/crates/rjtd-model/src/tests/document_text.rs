@@ -254,7 +254,8 @@ fn document_core_renders_ruby_annotations_in_svg_and_layer_tree() {
 fn document_text_control_table_accepts_configured_empty_gap_boundary() {
     let payload = document_text_with_table_row_gap(DOCUMENT_TEXT_CONTROL_TABLE_MAX_EMPTY_GAP_ROWS);
     let map = map_document_text(&payload);
-    let candidates = table_candidates_from_document_text_controls(map.entries(), 0, &payload);
+    let flow = DocumentTextFlow::from_map("/DocumentText", &payload, &map);
+    let candidates = table_candidates_from_document_text_controls(&flow, 0);
 
     assert_eq!(candidates.len(), 1);
     let candidate = &candidates[0];
@@ -274,7 +275,8 @@ fn document_text_control_table_splits_gap_larger_than_boundary() {
     let payload =
         document_text_with_table_row_gap(DOCUMENT_TEXT_CONTROL_TABLE_MAX_EMPTY_GAP_ROWS + 1);
     let map = map_document_text(&payload);
-    let candidates = table_candidates_from_document_text_controls(map.entries(), 0, &payload);
+    let flow = DocumentTextFlow::from_map("/DocumentText", &payload, &map);
+    let candidates = table_candidates_from_document_text_controls(&flow, 0);
 
     assert_eq!(candidates.len(), 2);
     for candidate in &candidates {
@@ -294,7 +296,8 @@ fn document_text_control_table_splits_gap_larger_than_boundary() {
 fn sparse_document_text_controls_preserve_empty_cells_as_table_evidence() {
     let payload = document_text_with_sparse_table_rows();
     let map = map_document_text(&payload);
-    let candidates = sparse_table_candidates_from_document_text_controls(map.entries(), 7);
+    let flow = DocumentTextFlow::from_map("/DocumentText", &payload, &map);
+    let candidates = sparse_table_candidates_from_document_text_controls(&flow, 7);
 
     assert_eq!(candidates.len(), 1);
     let candidate = &candidates[0];

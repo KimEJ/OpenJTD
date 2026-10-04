@@ -1013,9 +1013,8 @@ fn text_only_control_rows_without_native_headers_remain_unproven() {
                 append_sparse_table_row(&mut payload, &["C", "D"][..columns]);
             }
             let map = map_document_text(&payload);
-            assert!(
-                table_candidates_from_document_text_controls(map.entries(), 0, &payload).is_empty()
-            );
+            let flow = DocumentTextFlow::from_map("/DocumentText", &payload, &map);
+            assert!(table_candidates_from_document_text_controls(&flow, 0).is_empty());
         }
     }
 }
@@ -1024,7 +1023,8 @@ fn text_only_control_rows_without_native_headers_remain_unproven() {
 fn document_text_control_two_row_three_column_table_exposes_column_grid_candidate() {
     let payload = document_text_with_two_row_control_table();
     let map = map_document_text(&payload);
-    let candidates = table_candidates_from_document_text_controls(map.entries(), 0, &payload);
+    let flow = DocumentTextFlow::from_map("/DocumentText", &payload, &map);
+    let candidates = table_candidates_from_document_text_controls(&flow, 0);
 
     assert_eq!(candidates.len(), 1);
     let candidate = &candidates[0];

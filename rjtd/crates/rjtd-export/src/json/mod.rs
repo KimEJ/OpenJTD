@@ -6,6 +6,7 @@ pub(crate) mod object;
 pub(crate) mod primitives;
 pub(crate) mod style;
 pub(crate) mod table;
+mod text_flow;
 pub(crate) mod text_layout;
 
 use rjtd_core::style_stream::summarize_style_stream;
@@ -140,7 +141,12 @@ pub fn to_json(document: &Document) -> String {
         }
         push_table_candidate_json(&mut output, candidate);
     }
-    output.push_str("],\"autoTextCandidates\":[");
+    output.push_str("],\"documentTextFlow\":");
+    match document.document_text_flow() {
+        Some(flow) => text_flow::push_document_text_flow_json(&mut output, flow),
+        None => output.push_str("null"),
+    }
+    output.push_str(",\"autoTextCandidates\":[");
     for (index, auto_text) in document.auto_texts().iter().enumerate() {
         if index > 0 {
             output.push(',');

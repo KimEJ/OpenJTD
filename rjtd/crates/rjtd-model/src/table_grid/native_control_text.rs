@@ -471,7 +471,15 @@ fn native_control_table_text_projection(
     let default_font = document_default_font_size_px(document)?;
     let resolver = document_text_style_resolver(document)?;
     let document_text_map = document_text_raw_stream(document).map(map_document_text)?;
-    let sparse_rows = sparse_document_text_control_table_rows(document_text_map.entries());
+    let fallback_flow;
+    let flow = if let Some(flow) = document.document_text_flow() {
+        flow
+    } else {
+        let bytes = document_text_raw_stream(document)?;
+        fallback_flow = DocumentTextFlow::from_map("/DocumentText", bytes, &document_text_map);
+        &fallback_flow
+    };
+    let sparse_rows = sparse_document_text_control_table_rows(flow);
     let first_headers = native_matched_cell_headers(rows.first()?, candidate.intervals().first()?)?;
     let first_offsets = first_headers
         .iter()
@@ -992,7 +1000,8 @@ mod tests {
         assert_eq!(layers.matches("nativeControlFlowTextProjection").count(), 2);
 
         let bytes = document_text_raw_stream(&core.document).unwrap();
-        let rows = sparse_document_text_control_table_rows(map_document_text(bytes).entries());
+        let rows =
+            sparse_document_text_control_table_rows(core.document.document_text_flow().unwrap());
         assert_eq!(
             native_control_table_trailing_empty_row_record(
                 bytes,
