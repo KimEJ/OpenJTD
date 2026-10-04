@@ -26,7 +26,8 @@ fn cat_command_extracts_document_text_runs() {
 #[test]
 #[ignore = "requires local document samples"]
 fn cat_command_extracts_native_ichitaro_paragraphs() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../rjtd-testdata/local-samples/native-fixtures/native-text-001.jtd");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../rjtd-testdata/local-samples/native-fixtures/native-text-001.jtd");
     let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
         .arg("cat")
         .arg(path)
@@ -54,7 +55,8 @@ fn cat_command_extracts_native_ichitaro_paragraphs() {
 #[test]
 #[ignore = "requires local document samples"]
 fn native_control_table_keeps_leading_body_text_out_of_its_rows() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-002.jtd");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-002.jtd");
     let document = rjtd_model::parse_document(&fs::read(&path).unwrap()).unwrap();
     let table = document
         .table_candidates()
@@ -87,7 +89,8 @@ fn native_control_table_keeps_leading_body_text_out_of_its_rows() {
 #[test]
 #[ignore = "requires local document samples"]
 fn native_two_row_text_only_table_has_four_cells() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-003.jtd");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-003.jtd");
     let document = rjtd_model::parse_document(&fs::read(&path).unwrap()).unwrap();
     let table = document
         .table_candidates()
@@ -118,7 +121,8 @@ fn native_two_row_text_only_table_has_four_cells() {
 #[test]
 #[ignore = "requires local document samples"]
 fn native_single_row_table_preserves_cells_and_border() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-004.jtd");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-004.jtd");
     let document = rjtd_model::parse_document(&fs::read(&path).unwrap()).unwrap();
     let table = document
         .table_candidates()
@@ -149,7 +153,8 @@ fn native_single_row_table_preserves_cells_and_border() {
 #[test]
 #[ignore = "requires local document samples"]
 fn native_single_column_table_preserves_two_rows() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-005.jtd");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-005.jtd");
     let document = rjtd_model::parse_document(&fs::read(&path).unwrap()).unwrap();
     let table = document
         .table_candidates()

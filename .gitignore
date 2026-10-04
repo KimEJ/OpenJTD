@@ -35,3 +35,6 @@
 /output/
 
 *.ko.md
+
+# Local document samples
+/rjtd/crates/rjtd-cli/tests/fixtures/native-*.jtd
