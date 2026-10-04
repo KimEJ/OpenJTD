@@ -85,6 +85,37 @@ fn native_control_table_keeps_leading_body_text_out_of_its_rows() {
 }
 
 #[test]
+#[ignore = "requires local document samples"]
+fn native_two_row_text_only_table_has_four_cells() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-003.jtd");
+    let document = rjtd_model::parse_document(&fs::read(&path).unwrap()).unwrap();
+    let table = document
+        .table_candidates()
+        .iter()
+        .find(|candidate| candidate.kind() == "documentTextControlRunTableCandidate")
+        .expect("fully framed native text-only table");
+    assert_eq!(table.interval_count(), 2);
+    let cells = table
+        .intervals()
+        .iter()
+        .flat_map(|row| row.column_segments())
+        .map(|cell| cell.text())
+        .collect::<Vec<_>>();
+    assert_eq!(cells, ["CELL-A", "CELL-B", "CELL-C", "CELL-D"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("page-svg")
+        .arg(path)
+        .arg("0")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let svg = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(svg.matches("rjtd-native-control-table-cell").count(), 4);
+    assert_eq!(svg.matches("BEFORE-TEXT-TABLE").count(), 1);
+    assert_eq!(svg.matches("AFTER-TEXT-TABLE").count(), 1);
+}
+
+#[test]
 fn text_tokens_command_reports_structured_document_text() {
     let path = tiny_cfb_path();
     let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))

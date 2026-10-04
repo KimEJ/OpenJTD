@@ -266,6 +266,13 @@ opaque; other values are not admitted. The local regression requires three
 rows, six ordered cells, and one SVG instance of each surrounding paragraph.
 It does not establish native PDF geometry or font-metric equivalence.
 
+An independent 2×2 text-only probe has no
+numeric cell values. Its complete `0x0010/w4=0x008f` parents and immediate,
+fully framed `0x0030` cell headers admit the short table without the older
+value-marker heuristic. Every non-empty cell range must lie after its parent
+header and inside its row; column counts must agree. Unframed two-row text
+remains unproven. This is candidate admission, not a general geometry decode.
+
 ### Interstitial flow text between two native control tables
 
 One further first-page horizontal profile is renderable only when two complete

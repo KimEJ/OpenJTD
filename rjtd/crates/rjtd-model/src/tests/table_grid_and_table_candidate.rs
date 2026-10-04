@@ -1003,6 +1003,16 @@ fn table_candidate_reports_column_segment_grid_candidate_for_consistent_rows() {
 }
 
 #[test]
+fn text_only_control_rows_without_native_headers_remain_unproven() {
+    let mut payload = b"SsmgV.01".to_vec();
+    extend_units(&mut payload, &[0x001f]);
+    append_sparse_table_row(&mut payload, &["A", "B"]);
+    append_sparse_table_row(&mut payload, &["C", "D"]);
+    let map = map_document_text(&payload);
+    assert!(table_candidates_from_document_text_controls(map.entries(), 0, &payload).is_empty());
+}
+
+#[test]
 fn document_text_control_two_row_three_column_table_exposes_column_grid_candidate() {
     let payload = document_text_with_two_row_control_table();
     let map = map_document_text(&payload);

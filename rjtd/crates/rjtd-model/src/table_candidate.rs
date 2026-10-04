@@ -51,6 +51,7 @@ pub(super) fn table_candidates_from_document_text_controls(
                         &mut candidates,
                         start_index,
                         &mut current_rows,
+                        bytes,
                     );
                     current_column_count = 0;
                     empty_gap_count = 0;
@@ -64,6 +65,7 @@ pub(super) fn table_candidates_from_document_text_controls(
                 &mut candidates,
                 start_index,
                 &mut current_rows,
+                bytes,
             );
             current_column_count = 0;
             empty_gap_count = 0;
@@ -83,7 +85,12 @@ pub(super) fn table_candidates_from_document_text_controls(
             continue;
         }
 
-        push_document_text_control_table_candidate(&mut candidates, start_index, &mut current_rows);
+        push_document_text_control_table_candidate(
+            &mut candidates,
+            start_index,
+            &mut current_rows,
+            bytes,
+        );
         current_column_count = 0;
         empty_gap_count = 0;
 
@@ -95,7 +102,12 @@ pub(super) fn table_candidates_from_document_text_controls(
         }
     }
 
-    push_document_text_control_table_candidate(&mut candidates, start_index, &mut current_rows);
+    push_document_text_control_table_candidate(
+        &mut candidates,
+        start_index,
+        &mut current_rows,
+        bytes,
+    );
     candidates
 }
 
@@ -115,45 +127,79 @@ fn control_row_text_precedes_native_table_header(
     let row_end = row.source_end.min(bytes.len() / 2);
     // A plain paragraph can precede a complete native row-header record inside
     // the same control interval. Text before that header is not a table cell.
-    for start in text_end..row_end {
-        let offset = start * 2;
-        if read_be16_at(bytes, offset) != Some(0x001c)
-            || read_be16_at(bytes, offset + 2) != Some(0x0010)
-            || read_be16_at(bytes, offset + 6) != Some(0)
-            || read_be16_at(bytes, offset + 8) != Some(0x008f)
-        {
-            continue;
-        }
-        let Some(length) = read_be16_at(bytes, offset + 4) else {
-            continue;
-        };
-        let Some(end) = start.checked_add(usize::from(length)) else {
-            continue;
-        };
-        if length < 13
-            || end > row_end
-            || read_be16_at(bytes, offset + 12).is_none_or(|extent| extent == 0)
-        {
-            continue;
-        }
-        let tail = (end - 4) * 2;
-        if read_be16_at(bytes, tail) == Some(length)
-            && read_be16_at(bytes, tail + 2) == Some(0)
-            && read_be16_at(bytes, tail + 4) == Some(0x0010)
-            && read_be16_at(bytes, tail + 6) == Some(0x001f)
-        {
-            return true;
-        }
+    (text_end..row_end).any(|start| native_control_row_header_end(bytes, start, row_end).is_some())
+}
+
+fn native_control_row_header_end(bytes: &[u8], start: usize, row_end: usize) -> Option<usize> {
+    let offset = start.checked_mul(2)?;
+    if read_be16_at(bytes, offset) != Some(0x001c)
+        || read_be16_at(bytes, offset + 2) != Some(0x0010)
+        || read_be16_at(bytes, offset + 6) != Some(0)
+        || read_be16_at(bytes, offset + 8) != Some(0x008f)
+    {
+        return None;
     }
-    false
+    let length = read_be16_at(bytes, offset + 4)?;
+    let end = start.checked_add(usize::from(length))?;
+    if length < 13
+        || end > row_end.min(bytes.len() / 2)
+        || read_be16_at(bytes, offset + 12).is_none_or(|extent| extent == 0)
+    {
+        return None;
+    }
+    let tail = (end - 4) * 2;
+    (read_be16_at(bytes, tail) == Some(length)
+        && read_be16_at(bytes, tail + 2) == Some(0)
+        && read_be16_at(bytes, tail + 4) == Some(0x0010)
+        && read_be16_at(bytes, tail + 6) == Some(0x001f))
+    .then_some(end)
+}
+
+fn native_control_table_rows_are_framed(
+    bytes: &[u8],
+    rows: &[DocumentTextControlTableRow],
+) -> bool {
+    let columns = rows.first().map_or(0, |row| row.cells.len());
+    rows.len() >= 2
+        && columns >= 2
+        && rows.iter().all(|row| {
+            if row.cells.len() != columns {
+                return false;
+            }
+            let Some(parent_end) =
+                native_control_row_header_end(bytes, row.source_start, row.source_end)
+            else {
+                return false;
+            };
+            row.cells.iter().all(|cell| {
+                if cell.text.is_empty()
+                    || cell.source_start < parent_end
+                    || cell.source_end > row.source_end
+                {
+                    return false;
+                }
+                let Some(offset) = cell
+                    .source_start
+                    .checked_sub(12)
+                    .and_then(|start| start.checked_mul(2))
+                else {
+                    return false;
+                };
+                shanai_lan_line_header_at(bytes, offset)
+                    .is_some_and(|header| header.offset_units < header.extent_units)
+            })
+        })
 }
 
 pub(super) fn push_document_text_control_table_candidate(
     candidates: &mut Vec<TableCandidate>,
     start_index: usize,
     rows: &mut Vec<DocumentTextControlTableRow>,
+    bytes: &[u8],
 ) {
-    if document_text_control_table_rows_are_plausible(rows) {
+    if document_text_control_table_rows_are_plausible(rows)
+        || native_control_table_rows_are_framed(bytes, rows)
+    {
         candidates.push(TableCandidate::from_document_text_control_rows(
             start_index + candidates.len(),
             rows,

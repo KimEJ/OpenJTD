@@ -191,6 +191,13 @@ text を保存したまま、この段落を row から除外する。実際の 
 回帰検査は 3 row、順序を保った 6 cell、前後の各段落が SVG に一度ずつ現れることを
 要求する。native PDF の geometry や font metrics の一致を証明するものではない。
 
+数値 cell を持たない独立した 2×2 text-only probe
+である。完全な `0x0010/w4=0x008f` parent と各 cell の直前にある完全な `0x0030`
+header により、旧来の value-marker heuristic を使わず短い table を許可する。
+非空 cell の範囲はすべて parent header の後かつ row 内にあり、column count は
+一致する必要がある。frame を持たない 2-row text は未証明のままである。これは
+candidate の許可条件であり、一般的な geometry の解読ではない。
+
 ### 2 つの native control table 間の flow text
 
 さらに、先頭ページ横書きでは、完全な control-table projection が 2 つあり、その間に
