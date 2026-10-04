@@ -22,6 +22,9 @@ pub(crate) fn render_text_page_svg(
     let font_family = document_font_family_css(document);
     let style_resolver = document_text_style_resolver(document);
     let default_font_size = document_default_font_size_px(document);
+    let shanai_lan_text_projection =
+        shanai_lan_document_text_projection(document, layout, page_number);
+    let form_projection = observed_form_text_projection(document, layout, page_number);
     let native_control_tables =
         native_control_table_text_projections(document, layout, page_number, writing_mode);
     let native_control_flow = native_control_flow_text_projection(
@@ -31,6 +34,15 @@ pub(crate) fn render_text_page_svg(
         writing_mode,
         &native_control_tables,
     );
+    let native_rule_flow = native_rule_flow_text_projection(
+        document,
+        layout,
+        page_number,
+        writing_mode,
+        &native_control_tables,
+        native_control_flow.as_ref(),
+    )
+    .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
     push_page_frame_projection_svg(&mut svg, layout, document, page_number);
     push_page_mark_section_separator_svg(&mut svg, layout, document, page_number);
     push_shanai_lan_sparse_table_borders_svg(&mut svg, layout, document, page_number);
@@ -50,10 +62,10 @@ pub(crate) fn render_text_page_svg(
     let fdm_vector_primitives_rendered =
         push_fdm_vector_primitive_svg(&mut svg, layout, document, page_number);
 
-    if let Some(projection) = shanai_lan_document_text_projection(document, layout, page_number) {
-        push_shanai_lan_text_projection_svg(&mut svg, &projection, &font_family);
-    } else if let Some(projection) = observed_form_text_projection(document, layout, page_number) {
-        push_observed_form_text_projection_svg(&mut svg, &projection, &font_family);
+    if let Some(projection) = &shanai_lan_text_projection {
+        push_shanai_lan_text_projection_svg(&mut svg, projection, &font_family);
+    } else if let Some(projection) = &form_projection {
+        push_observed_form_text_projection_svg(&mut svg, projection, &font_family);
     } else if writing_mode.is_vertical() {
         let placement = vertical_page_text_placement(layout, lines);
         svg.push_str("<g writing-mode=\"vertical-rl\" glyph-orientation-vertical=\"auto\">");
@@ -166,6 +178,7 @@ pub(crate) fn render_text_page_svg(
                     lines,
                     page_number,
                     &fragment,
+                    native_rule_flow.as_ref(),
                 ) {
                     continue;
                 }
@@ -173,6 +186,10 @@ pub(crate) fn render_text_page_svg(
                     native_control_table_text_projection_contains(&native_control_tables, span)
                         || native_control_flow_text_projection_contains(
                             native_control_flow.as_ref(),
+                            span,
+                        )
+                        || native_control_flow_text_projection_contains(
+                            native_rule_flow.as_ref(),
                             span,
                         )
                 }) {
@@ -222,6 +239,7 @@ pub(crate) fn render_text_page_svg(
         }
     }
     push_native_control_flow_text_svg(&mut svg, native_control_flow.as_ref(), &font_family);
+    push_native_control_flow_text_svg(&mut svg, native_rule_flow.as_ref(), &font_family);
     push_native_control_table_text_svg(&mut svg, &native_control_tables, &font_family);
     if let Some(projection) = layout_box_text_projection(document, layout, page_number) {
         push_layout_box_text_projection_svg(&mut svg, &projection, &font_family);
@@ -236,7 +254,14 @@ pub(crate) fn render_text_page_svg(
         page_number,
         &font_family,
     );
-    push_table_grid_candidate_svg(&mut svg, layout, document, lines, page_number);
+    push_table_grid_candidate_svg(
+        &mut svg,
+        layout,
+        document,
+        lines,
+        page_number,
+        native_rule_flow.as_ref(),
+    );
     push_image_payload_diagnostic_svg(&mut svg, layout, document, page_number);
     if !fdm_vector_primitives_rendered {
         push_fdm_command_diagnostic_svg(&mut svg, layout, document, page_number);

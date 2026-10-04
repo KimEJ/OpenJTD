@@ -7,9 +7,10 @@ pub(crate) fn push_page_layer_table_grid_candidate_json(
     document: &Document,
     lines: &[PageTextLine],
     overlay_index: usize,
-    candidate: &TableCandidate,
-    grid: &TableCandidateColumnGridCandidate,
+    candidate_grid: (&TableCandidate, &TableCandidateColumnGridCandidate),
+    source_flow_rendered: bool,
 ) {
+    let (candidate, grid) = candidate_grid;
     let reference_layout =
         reference_table_grid_overlay_layout(layout, document, candidate, grid.column_count());
     let source_layout = table_grid_source_derived_layout_candidate(
@@ -25,16 +26,24 @@ pub(crate) fn push_page_layer_table_grid_candidate_json(
         .filter(|layout| table_grid_source_derived_layout_is_renderable(layout))
         .map(TableGridRenderLayout::from_source_derived);
     let source_render_layout_present = source_render_layout.is_some();
-    let render_layout = source_render_layout.or_else(|| {
-        reference_layout
-            .as_ref()
-            .map(TableGridRenderLayout::from_reference)
-    });
+    let render_layout = source_render_layout
+        .or_else(|| {
+            reference_layout
+                .as_ref()
+                .map(TableGridRenderLayout::from_reference)
+        })
+        .filter(|_| !source_flow_rendered);
     let reference_projection = render_layout
         .as_ref()
         .is_some_and(|layout| layout.reference_backed);
-    let reference_fallback_admission =
-        table_grid_reference_layout_visible_fallback_admission(document, candidate);
+    let reference_fallback_admission = if source_flow_rendered {
+        TableGridReferenceFallbackAdmission {
+            allowed: false,
+            blocked_reason: Some("source-flow-text-placement-suppresses-table-fallback"),
+        }
+    } else {
+        table_grid_reference_layout_visible_fallback_admission(document, candidate)
+    };
     let (
         x,
         y,
@@ -87,6 +96,9 @@ pub(crate) fn push_page_layer_table_grid_candidate_json(
     ));
     output.push_str(",\"source\":\"tableCandidate\",\"projectionKind\":");
     output.push_str(&json_string(projection_kind));
+    output.push_str(&format!(
+        ",\"renderSuppressedBySourceFlow\":{source_flow_rendered}"
+    ));
     output.push_str(",\"referenceBacked\":");
     output.push_str(if reference_projection {
         "true"

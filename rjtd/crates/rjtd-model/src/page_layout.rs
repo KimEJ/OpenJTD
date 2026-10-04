@@ -838,6 +838,15 @@ pub(super) fn page_layer_tree_json(
         core.writing_mode,
         &native_control_tables,
     );
+    let native_rule_flow = native_rule_flow_text_projection(
+        &core.document,
+        layout,
+        page_num as usize + 1,
+        core.writing_mode,
+        &native_control_tables,
+        native_control_flow.as_ref(),
+    )
+    .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
 
     if let Some(projection) = &shanai_lan_text_projection {
         output.push(',');
@@ -961,7 +970,10 @@ pub(super) fn page_layer_tree_json(
             push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
         }
     }
-    if let Some(projection) = &native_control_flow {
+    for projection in [native_control_flow.as_ref(), native_rule_flow.as_ref()]
+        .into_iter()
+        .flatten()
+    {
         for slot in &projection.slots {
             let source_id = text_sources.len();
             output.push(',');
@@ -970,6 +982,7 @@ pub(super) fn page_layer_tree_json(
                 source_id,
                 slot,
                 &font_family,
+                projection.projection_kind,
             );
             let fragment = PageLayerTextFragment {
                 text: slot.text.clone(),
@@ -1076,6 +1089,10 @@ pub(super) fn page_layer_tree_json(
                             native_control_flow.as_ref(),
                             span,
                         )
+                        || native_control_flow_text_projection_contains(
+                            native_rule_flow.as_ref(),
+                            span,
+                        )
                 }) {
                     continue;
                 }
@@ -1151,8 +1168,11 @@ pub(super) fn page_layer_tree_json(
                 &core.document,
                 lines,
                 overlay_index,
-                candidate,
-                &grid,
+                (candidate, &grid),
+                native_control_flow_text_projection_overlaps_candidate(
+                    native_rule_flow.as_ref(),
+                    candidate,
+                ),
             );
             overlay_index += 1;
         }

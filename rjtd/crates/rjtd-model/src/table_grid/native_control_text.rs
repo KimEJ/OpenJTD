@@ -32,13 +32,11 @@ pub(crate) struct NativeControlTableTextSlot {
     pub(crate) page_mark_pitch_mm100: u16,
 }
 
-/// Source-backed placement for the short plain-text run between two complete
-/// native control-table projections. The constraints are intentionally narrow:
-/// a pair of verified tables, one interstitial ASCII text run, and exact
-/// `/LineMark` coverage on the first page. It keeps the source spaces because
-/// they are part of the observed horizontal placement in this profile.
+/// Source-backed first-page horizontal text placement. Interstitial runs and
+/// physical ruled spans share slots, but retain their distinct admission rules.
 #[derive(Debug, Clone)]
 pub(crate) struct NativeControlFlowTextProjection {
+    pub(crate) projection_kind: &'static str,
     pub(crate) slots: Vec<NativeControlFlowTextSlot>,
 }
 
@@ -54,6 +52,8 @@ pub(crate) struct NativeControlFlowTextSlot {
     pub(crate) leading_ascii_space_count: usize,
     pub(crate) preceding_header_offset_units: u16,
     pub(crate) preceding_header_extent_units: u16,
+    pub(crate) raw_span_flags: [u16; 2],
+    pub(crate) text_length_px: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -220,10 +220,180 @@ pub(crate) fn native_control_flow_text_projection(
                 leading_ascii_space_count: line.leading_ascii_space_count,
                 preceding_header_offset_units: header.offset_units,
                 preceding_header_extent_units: header.extent_units,
+                raw_span_flags: [header.raw_words[6], header.raw_words[7]],
+                text_length_px: None,
             })
         })
         .collect::<Option<Vec<_>>>()?;
-    Some(NativeControlFlowTextProjection { slots })
+    Some(NativeControlFlowTextProjection {
+        projection_kind: "nativeControlFlowTextProjection",
+        slots,
+    })
+}
+
+/// Place physical text runs from source events without synthesizing logical
+/// rows or interpreting the opaque span continuation flags.
+pub(crate) fn native_rule_flow_text_projection(
+    document: &Document,
+    layout: PageLayout,
+    page_number: usize,
+    writing_mode: WritingMode,
+    tables: &[NativeControlTableTextProjection],
+    interstitial: Option<&NativeControlFlowTextProjection>,
+) -> Option<NativeControlFlowTextProjection> {
+    if page_number != 1 || writing_mode.is_vertical() || !layout.has_source_margins() {
+        return None;
+    }
+    let flow = document.document_text_flow()?;
+    let intervals = shanai_lan_line_mark_intervals(document);
+    let page_mark = document.page_marks().first()?;
+    let resolver = document_text_style_resolver(document)?;
+    let default_font = document_default_font_size_px(document)?;
+    let mut parent = None;
+    let mut declaration = None;
+    let mut slots = Vec::new();
+    for event in flow.events() {
+        match event.kind() {
+            DocumentTextFlowKind::Record => {
+                let words = event.raw_words();
+                match event.record_class() {
+                    Some(0x0010) => {
+                        parent = (words.len() >= 13
+                            && words[3] == 0
+                            && words[4] == 0x008f
+                            && words[6] > 0)
+                            .then_some((event.unit_start(), words[6]));
+                        declaration = None;
+                    }
+                    Some(0x0030) => {
+                        declaration = (words.len() == 12 && words[4] < words[5]).then_some(event);
+                    }
+                    _ => {
+                        parent = None;
+                        declaration = None;
+                    }
+                }
+            }
+            DocumentTextFlowKind::Control => {
+                parent = None;
+                declaration = None;
+            }
+            DocumentTextFlowKind::Text => {
+                let (Some((parent_start, grid_extent)), Some(header)) = (parent, declaration)
+                else {
+                    continue;
+                };
+                declaration = None;
+                if header.unit_end() != event.unit_start() || !event.text().is_ascii() {
+                    continue;
+                }
+                let words = header.raw_words();
+                if words[5] > grid_extent {
+                    continue;
+                }
+                let parts = source_text_parts(event.text(), Some(event.source_span()));
+                let parts = parts
+                    .iter()
+                    .filter(|part| !part.text.is_empty())
+                    .collect::<Vec<_>>();
+                let [part] = parts.as_slice() else {
+                    continue;
+                };
+                if !part.text.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
+                    continue;
+                }
+                let span = part.source_span.as_ref()?;
+                if native_control_table_text_projection_contains(tables, span)
+                    || native_control_flow_text_projection_contains(interstitial, span)
+                {
+                    continue;
+                }
+                let containing = intervals
+                    .iter()
+                    .filter(|interval| {
+                        interval.unit_start == parent_start
+                            && interval.unit_start <= span.unit_start()
+                            && span.unit_end() <= interval.unit_end
+                    })
+                    .collect::<Vec<_>>();
+                let [interval] = containing.as_slice() else {
+                    continue;
+                };
+                let Some(page) = table_grid_page_mark_entry_for_line_mark_record(
+                    Some(page_mark),
+                    interval.record_index,
+                ) else {
+                    continue;
+                };
+                if page.line_start() != Some(0) || page.index() != Some(0) {
+                    continue;
+                }
+                let Some(pitch_mm100) = page_mark
+                    .entries()
+                    .get(page.row_index())
+                    .and_then(|entry| entry.u16_fields().get(21))
+                    .copied()
+                else {
+                    continue;
+                };
+                let pitch = hundredth_millimeters_to_css_px(u32::from(pitch_mm100));
+                if !(APP_FONT_SIZE_PX..=APP_LINE_HEIGHT_PX * 1.25).contains(&pitch) {
+                    continue;
+                }
+                let Some(font_size) = document_text_font_size(&resolver, span, Some(default_font))
+                else {
+                    continue;
+                };
+                let leading = part.text.chars().take_while(|c| *c == ' ').count();
+                let text = part.text.trim_start_matches(' ');
+                if text.is_empty() {
+                    continue;
+                }
+                let unit_px = layout.body_width_px() / f32::from(grid_extent);
+                let text_length_px = match words[6] {
+                    0 => None,
+                    3 if leading == 0 && !text.ends_with(' ') && text.len() > 1 => {
+                        Some(f32::from(words[5] - words[4]) * unit_px)
+                    }
+                    0x00ff if words[7] == 0 => None,
+                    _ => return None,
+                };
+                let x = layout.margin_left_px()
+                    + (f32::from(words[4]) + leading as f32 * 2.0) * unit_px;
+                let baseline_y =
+                    layout.margin_top_px() + interval.record_index as f32 * pitch + font_size.px;
+                if !x.is_finite()
+                    || !baseline_y.is_finite()
+                    || x > layout.width_px()
+                    || baseline_y > layout.height_px()
+                {
+                    continue;
+                }
+                slots.push(NativeControlFlowTextSlot {
+                    text: text.to_string(),
+                    x,
+                    baseline_y,
+                    font_size,
+                    source_span: span
+                        .subspan_by_units(leading, span.unit_end() - span.unit_start()),
+                    line_mark_record_index: interval.record_index,
+                    page_mark_pitch_mm100: pitch_mm100,
+                    leading_ascii_space_count: leading,
+                    preceding_header_offset_units: words[4],
+                    preceding_header_extent_units: words[5],
+                    raw_span_flags: [words[6], words[7]],
+                    text_length_px,
+                });
+            }
+            _ => {
+                declaration = None;
+            }
+        }
+    }
+    (!slots.is_empty()).then_some(NativeControlFlowTextProjection {
+        projection_kind: "nativeRuleFlowTextProjection",
+        slots,
+    })
 }
 
 pub(crate) fn native_control_flow_text_projection_contains(
@@ -235,6 +405,18 @@ pub(crate) fn native_control_flow_text_projection_contains(
             slot.source_span.unit_start() < span.unit_end()
                 && span.unit_start() < slot.source_span.unit_end()
         })
+    })
+}
+
+pub(crate) fn native_control_flow_text_projection_overlaps_candidate(
+    projection: Option<&NativeControlFlowTextProjection>,
+    candidate: &TableCandidate,
+) -> bool {
+    projection.is_some_and(|projection| {
+        projection
+            .slots
+            .iter()
+            .any(|slot| table_candidate_overlaps_source_span(candidate, &slot.source_span))
     })
 }
 
@@ -302,30 +484,38 @@ pub(crate) fn push_native_control_flow_text_svg(
     let Some(projection) = projection else {
         return;
     };
-    svg.push_str(
-        "<g class=\"rjtd-native-control-flow-text\" data-projection-kind=\"nativeControlFlowTextProjection\" data-source-backed=\"true\" data-reference-backed=\"false\" data-decoded=\"false\" data-geometry-decoded=\"false\">",
-    );
+    let class = if projection.projection_kind == "nativeRuleFlowTextProjection" {
+        "rjtd-native-rule-flow-text"
+    } else {
+        "rjtd-native-control-flow-text"
+    };
+    svg.push_str(&format!("<g class=\"{class}\" data-projection-kind=\"{}\" data-source-backed=\"true\" data-reference-backed=\"false\" data-decoded=\"false\" data-geometry-decoded=\"false\">", projection.projection_kind));
     for slot in &projection.slots {
         svg.push_str(&format!(
-            "<g data-line-mark-record-index=\"{}\" data-page-mark-pitch-mm100=\"{}\" data-leading-ascii-space-count=\"{}\" data-preceding-header-offset-units=\"{}\" data-preceding-header-extent-units=\"{}\" data-font-size-basis=\"{}\">",
+            "<g data-line-mark-record-index=\"{}\" data-page-mark-pitch-mm100=\"{}\" data-leading-ascii-space-count=\"{}\" data-preceding-header-offset-units=\"{}\" data-preceding-header-extent-units=\"{}\" data-font-size-basis=\"{}\" data-span-raw-word6=\"{}\" data-span-raw-word7=\"{}\">",
             slot.line_mark_record_index,
             slot.page_mark_pitch_mm100,
             slot.leading_ascii_space_count,
             slot.preceding_header_offset_units,
             slot.preceding_header_extent_units,
             slot.font_size.basis,
+            slot.raw_span_flags[0], slot.raw_span_flags[1],
         ));
-        push_svg_text_run(
-            svg,
-            "rjtd-text rjtd-native-control-flow-line",
-            slot.x,
-            slot.baseline_y,
-            font_family,
-            slot.font_size.px,
-            fallback_text_fill_color(),
-            &slot.text,
-            None,
-        );
+        if let Some(width) = slot.text_length_px {
+            svg.push_str(&format!("<text class=\"rjtd-text rjtd-native-control-flow-line\" x=\"{:.3}\" y=\"{:.3}\" font-family=\"{}\" font-size=\"{:.3}\" fill=\"{}\" letter-spacing=\"0\" xml:space=\"preserve\" textLength=\"{width:.3}\" lengthAdjust=\"spacing\">{}</text>", slot.x, slot.baseline_y, escape_xml(font_family), slot.font_size.px, fallback_text_fill_color(), escape_xml(&svg_visual_text(&slot.text))));
+        } else {
+            push_svg_text_run(
+                svg,
+                "rjtd-text rjtd-native-control-flow-line",
+                slot.x,
+                slot.baseline_y,
+                font_family,
+                slot.font_size.px,
+                fallback_text_fill_color(),
+                &slot.text,
+                None,
+            );
+        }
         svg.push_str("</g>");
     }
     svg.push_str("</g>");
@@ -743,6 +933,148 @@ fn native_parent_row_header(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flow_text_rendering_retains_distributed_extent_and_raw_flags() {
+        let projection = NativeControlFlowTextProjection {
+            projection_kind: "nativeRuleFlowTextProjection",
+            slots: vec![NativeControlFlowTextSlot {
+                text: "A B".into(),
+                x: 20.0,
+                baseline_y: 40.0,
+                font_size: DocumentTextFontSize {
+                    px: 14.0,
+                    basis: "test",
+                },
+                source_span: TextSourceSpan::new(48, 54, 24, 27),
+                line_mark_record_index: 2,
+                page_mark_pitch_mm100: 592,
+                leading_ascii_space_count: 0,
+                preceding_header_offset_units: 2,
+                preceding_header_extent_units: 78,
+                raw_span_flags: [3, 2],
+                text_length_px: Some(120.0),
+            }],
+        };
+        let mut svg = String::new();
+        push_native_control_flow_text_svg(&mut svg, Some(&projection), "A&B");
+        assert!(svg.contains("font-family=\"A&amp;B\""));
+        assert!(svg.contains("textLength=\"120.000\" lengthAdjust=\"spacing\""));
+        assert!(svg.contains("data-span-raw-word6=\"3\" data-span-raw-word7=\"2\""));
+        assert!(svg.contains("data-decoded=\"false\""));
+        let mut json = String::new();
+        push_page_layer_native_control_flow_text_slot_json(
+            &mut json,
+            0,
+            &projection.slots[0],
+            "A&B",
+            projection.projection_kind,
+        );
+        assert!(json.contains(
+            "\"textLength\":120.000,\"lengthAdjust\":\"spacing\",\"positionsDecoded\":false"
+        ));
+        assert!(json.contains("\"spanRawWord6\":3,\"spanRawWord7\":2"));
+        assert!(json.contains("\"positions\":[0.000,56.150,112.300,120.000]"));
+        assert!(json.contains("\"geometryDecoded\":false"));
+    }
+
+    #[test]
+    #[ignore = "requires local source-y probe corpus"]
+    fn native_rule_flow_keeps_inherited_spacing_unproven() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../rjtd-testdata/local-samples/ichitaro-source-y-probe/corpus/baseline-sweep/050_wrapped_one_cell.jtd");
+        let document = parse_document(&std::fs::read(path).unwrap()).unwrap();
+        let layout =
+            page_layout_with_source_margins(&document, page_layout_from_document(&document));
+        let projection = native_rule_flow_text_projection(
+            &document,
+            layout,
+            1,
+            WritingMode::Horizontal,
+            &[],
+            None,
+        );
+        // Inherited automatic spacing is not the same as explicit left alignment.
+        assert!(projection.is_none());
+    }
+
+    #[test]
+    #[ignore = "requires local document samples"]
+    fn native_rule_flow_places_explicit_left_and_distributed_wrapped_spans() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../rjtd-testdata/local-samples/native-fixtures");
+        for (name, flag) in [
+            ("wrap-align-left-007.jtd", 0),
+            ("wrap-align-default-007.jtd", 3),
+        ] {
+            let document = parse_document(&std::fs::read(root.join(name)).unwrap()).unwrap();
+            let layout =
+                page_layout_with_source_margins(&document, page_layout_from_document(&document));
+            for (test_layout, page, mode) in [
+                (layout, 2, WritingMode::Horizontal),
+                (layout, 1, WritingMode::VerticalRl),
+                (PageLayout::default(), 1, WritingMode::Horizontal),
+            ] {
+                assert!(native_rule_flow_text_projection(
+                    &document, test_layout, page, mode, &[], None,
+                ).is_none());
+            }
+            let projection = native_rule_flow_text_projection(
+                &document,
+                layout,
+                1,
+                WritingMode::Horizontal,
+                &[],
+                None,
+            )
+            .unwrap();
+            assert_eq!(projection.slots.len(), 4, "{name}");
+            assert!(projection.slots.iter().all(|slot| {
+                slot.source_span.unit_end() - slot.source_span.unit_start()
+                    == slot.text.encode_utf16().count()
+            }));
+            let long: Vec<_> = projection
+                .slots
+                .iter()
+                .filter(|slot| slot.text != "CELL-B")
+                .collect();
+            assert_eq!(long.len(), 3);
+            assert!(long.iter().all(|slot| slot.raw_span_flags[0] == flag));
+            assert_eq!(long[0].raw_span_flags[1], 2);
+            assert_eq!(long[2].raw_span_flags[1], 0);
+            assert!(
+                long.windows(2)
+                    .all(|pair| pair[1].baseline_y > pair[0].baseline_y)
+            );
+            assert!(
+                long.iter()
+                    .all(|slot| (slot.x - 90.36 * 4.0 / 3.0).abs() < 0.3)
+            );
+            assert!(
+                long.iter()
+                    .all(|slot| slot.text_length_px.is_some() == (flag == 3))
+            );
+            let core = DocumentCore::from_document(document);
+            let svg = core.render_page_svg(0).unwrap();
+            assert_eq!(svg.matches(">CELL-A LONG").count(), 1);
+            assert_eq!(svg.matches(">CELL-B</text>").count(), 1);
+            assert_eq!(svg.matches("END-A</text>").count(), 1);
+            assert!(!svg.contains("rjtd-column-grid-candidate"));
+            assert_eq!(
+                svg.matches("lengthAdjust=\"spacing\"").count(),
+                if flag == 3 { 3 } else { 0 }
+            );
+            let layers = core.get_page_layer_tree(0).unwrap();
+            assert_eq!(layers.matches("nativeRuleFlowTextProjection").count(), 4);
+            if flag == 3 {
+                assert!(layers.contains("\"renderSuppressedBySourceFlow\":true"));
+            }
+            assert_eq!(
+                layers.matches("\"textLength\"").count(),
+                if flag == 3 { 3 } else { 0 }
+            );
+        }
+    }
 
     #[test]
     fn trailing_empty_rows_preserve_the_boundary_at_a_non_table_transition() {

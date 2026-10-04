@@ -189,6 +189,7 @@ pub(crate) fn push_page_layer_native_control_flow_text_slot_json(
     source_id: usize,
     slot: &NativeControlFlowTextSlot,
     font_family: &str,
+    projection_kind: &str,
 ) {
     let fragment = PageLayerTextFragment {
         text: slot.text.clone(),
@@ -198,7 +199,10 @@ pub(crate) fn push_page_layer_native_control_flow_text_slot_json(
         source_span: Some(slot.source_span.clone()),
         ruby_annotation: None,
     };
-    let width = text_width_px_for_font_size(slot.font_size.px, &slot.text);
+    let width = slot
+        .text_length_px
+        .map(f64::from)
+        .unwrap_or_else(|| text_width_px_for_font_size(slot.font_size.px, &slot.text));
     output.push_str("{\"type\":\"textRun\",\"bbox\":");
     output.push_str(&format!(
         "{{\"x\":{:.3},\"y\":{:.3},\"width\":{width:.3},\"height\":{:.3}}}",
@@ -209,18 +213,33 @@ pub(crate) fn push_page_layer_native_control_flow_text_slot_json(
     output.push_str(",\"text\":");
     output.push_str(&json_string(&slot.text));
     output.push_str(&format!(
-        ",\"fontSize\":{:.3},\"fontSizeBasis\":{},\"baseline\":{:.3},\"rotation\":0.000,\"isVertical\":false,\"orientation\":\"horizontal\",\"fontFamily\":{},\"fillColor\":\"#111111\",\"projectionKind\":\"nativeControlFlowTextProjection\",\"source\":",
+        ",\"fontSize\":{:.3},\"fontSizeBasis\":{},\"baseline\":{:.3},\"rotation\":0.000,\"isVertical\":false,\"orientation\":\"horizontal\",\"fontFamily\":{},\"fillColor\":\"#111111\",\"projectionKind\":{},\"spanRawWord6\":{},\"spanRawWord7\":{},\"source\":",
         slot.font_size.px,
         json_string(slot.font_size.basis),
         slot.baseline_y,
         json_string(font_family),
+        json_string(projection_kind), slot.raw_span_flags[0], slot.raw_span_flags[1],
     ));
     push_page_layer_source_span_json(output, source_id, &fragment);
+    if let Some(width) = slot.text_length_px {
+        output.push_str(&format!(
+            ",\"textLength\":{width:.3},\"lengthAdjust\":\"spacing\",\"positionsDecoded\":false"
+        ));
+    }
     output.push_str(",\"positions\":");
-    push_f64_array_json(
-        output,
-        &text_positions_px_for_font_size(slot.font_size.px, &slot.text),
-    );
+    let mut positions = text_positions_px_for_font_size(slot.font_size.px, &slot.text);
+    // Layer positions remain estimated; keep their final extent consistent
+    // with the spacing-only SVG projection without claiming decoded metrics.
+    if let Some(width) = slot.text_length_px
+        && positions.len() > 2
+    {
+        let gaps = positions.len() - 2;
+        let extra_per_gap = (f64::from(width) - positions[gaps + 1]) / gaps as f64;
+        for (index, position) in positions.iter_mut().enumerate() {
+            *position += index.min(gaps) as f64 * extra_per_gap;
+        }
+    }
+    push_f64_array_json(output, &positions);
     output.push_str(&format!(
         ",\"lineMarkRecordIndex\":{},\"pageMarkPitchMm100\":{},\"leadingAsciiSpaceCount\":{},\"precedingHeaderOffsetUnits\":{},\"precedingHeaderExtentUnits\":{},\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":true,\"referenceBacked\":false,\"isParaEnd\":false,\"isLineBreakEnd\":false}}",
         slot.line_mark_record_index,

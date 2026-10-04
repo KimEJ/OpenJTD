@@ -7,6 +7,7 @@ pub(crate) fn push_table_grid_candidate_svg(
     document: &Document,
     lines: &[PageTextLine],
     page_number: usize,
+    source_flow: Option<&NativeControlFlowTextProjection>,
 ) {
     if page_number != 1 {
         return;
@@ -15,6 +16,9 @@ pub(crate) fn push_table_grid_candidate_svg(
     let form_projection_present =
         observed_form_text_projection(document, layout, page_number).is_some();
     for candidate in document.table_candidates() {
+        if native_control_flow_text_projection_overlaps_candidate(source_flow, candidate) {
+            continue;
+        }
         let Some(grid) = candidate.column_segment_grid_candidate() else {
             continue;
         };

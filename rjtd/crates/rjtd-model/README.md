@@ -106,6 +106,15 @@ payload bytes has no source flow; fallback paragraph edits do not rewrite it.
 Logical wrapping/merging, ruled-line paint semantics, and saving source changes
 still require independent evidence and implementation.
 
+A bounded first-page horizontal ASCII projection places physical ruled spans
+directly from source events, LineMark intervals, PageMark pitch, and source
+margins. Explicit left/distributed alignment can be shown without rebuilding
+logical table rows; distributed spans retain their source extent as SVG
+`textLength`/`lengthAdjust="spacing"` and layer-tree metadata. Overlapping table
+fallbacks remain diagnostics instead of painting the same text twice. Raw span
+flags and `decoded:false` remain visible. Inherited wrapped automatic spacing,
+glyph metrics, and ruled borders are not established by this projection.
+
 ## License
 
 Apache-2.0.
