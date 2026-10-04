@@ -1085,7 +1085,13 @@ pub(super) fn page_layer_tree_json(
                     output.push(',');
                 }
                 first_op = false;
-                let fill_color = fallback_text_fill_color();
+                let source_color = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .and_then(|(resolver, span)| document_text_foreground_color(resolver, span));
+                let fill_color = source_color
+                    .as_deref()
+                    .unwrap_or(fallback_text_fill_color());
                 let font_size = style_resolver
                     .as_ref()
                     .zip(fragment.source_span.as_ref())

@@ -84,6 +84,28 @@ fn font_size_mm100_to_px(size_mm100: u16) -> Option<f32> {
     Some(hundredth_millimeters_to_css_px(u32::from(size_mm100)))
 }
 
+pub(crate) fn document_text_foreground_color(
+    resolver: &DocumentTextStyleResolver,
+    source_span: &TextSourceSpan,
+) -> Option<String> {
+    let DocumentTextStyleTypedValue::U32(bgr) =
+        resolver.uniform_value_in_range(source_span.unit_start(), source_span.unit_end(), 15)?
+    else {
+        return None;
+    };
+    // Native black/red/blue and existing green/navy probes agree on BGR24.
+    // Automatic-color and unknown high-byte states keep the renderer fallback.
+    if bgr & 0xff00_0000 != 0 {
+        return None;
+    }
+    Some(format!(
+        "#{:02x}{:02x}{:02x}",
+        bgr & 0xff,
+        (bgr >> 8) & 0xff,
+        (bgr >> 16) & 0xff
+    ))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DocumentTextProperty15ColorCandidate {
     pub(crate) packed_bgr: u32,

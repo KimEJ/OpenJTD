@@ -76,7 +76,13 @@ pub(crate) fn render_text_page_svg(
                 if fragment.text.is_empty() {
                     continue;
                 }
-                let fill_color = fallback_text_fill_color();
+                let source_color = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .and_then(|(resolver, span)| document_text_foreground_color(resolver, span));
+                let fill_color = source_color
+                    .as_deref()
+                    .unwrap_or(fallback_text_fill_color());
                 let font_size = style_resolver
                     .as_ref()
                     .zip(fragment.source_span.as_ref())
@@ -182,7 +188,13 @@ pub(crate) fn render_text_page_svg(
                     .unwrap_or(APP_FONT_SIZE_PX);
                 let width =
                     text_width_px(layout, &fragment.text) as f32 * font_size / APP_FONT_SIZE_PX;
-                let fill_color = fallback_text_fill_color();
+                let source_color = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .and_then(|(resolver, span)| document_text_foreground_color(resolver, span));
+                let fill_color = source_color
+                    .as_deref()
+                    .unwrap_or(fallback_text_fill_color());
                 push_svg_text_run(
                     &mut svg,
                     "rjtd-text",

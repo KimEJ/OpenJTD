@@ -184,6 +184,75 @@ fn native_single_column_table_preserves_two_rows() {
 }
 
 #[test]
+#[ignore = "requires local document samples"]
+fn native_body_text_preserves_explicit_foreground_colors() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../rjtd-testdata/local-samples/native-fixtures/native-colors-006.jtd");
+    let document = rjtd_model::parse_document(&fs::read(&path).unwrap()).unwrap();
+    let bytes = document
+        .raw_streams()
+        .iter()
+        .find(|stream| stream.name() == "/DocumentText")
+        .unwrap()
+        .bytes();
+    let map = rjtd_core::document_text::map_document_text(bytes);
+    let resolver =
+        rjtd_core::document_text::DocumentTextStyleResolver::from_document_text_bytes(bytes);
+    for (label, bgr) in [
+        ("BLACK-TEXT", 0),
+        ("RED-TEXT", 255),
+        ("BLUE-TEXT", 0x00ff0000),
+    ] {
+        let entry = map
+            .entries()
+            .iter()
+            .find(|entry| entry.text().contains(label))
+            .unwrap();
+        let start = entry.unit_start()
+            + entry.text()[..entry.text().find(label).unwrap()]
+                .encode_utf16()
+                .count();
+        let end = start + label.encode_utf16().count();
+        assert_eq!(
+            resolver.uniform_value_in_range(start, end, 15),
+            Some(rjtd_core::document_text::DocumentTextStyleTypedValue::U32(
+                bgr
+            )),
+            "{label}"
+        );
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("page-svg")
+        .arg(path)
+        .arg("0")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let svg = String::from_utf8(output.stdout).unwrap();
+    for (label, color) in [
+        ("BLACK-TEXT", "#000000"),
+        ("RED-TEXT", "#ff0000"),
+        ("BLUE-TEXT", "#0000ff"),
+    ] {
+        let element = svg
+            .split("<text ")
+            .find(|element| element.contains(label))
+            .unwrap();
+        assert!(
+            element.contains(&format!("fill=\"{color}\"")),
+            "{label}: {element}"
+        );
+    }
+    assert_eq!(svg.matches("BLACK-TEXT").count(), 1);
+    let layers = rjtd_model::DocumentCore::from_document(document)
+        .get_page_layer_tree(0)
+        .unwrap();
+    for color in ["#000000", "#ff0000", "#0000ff"] {
+        assert!(layers.contains(&format!("\"fillColor\":\"{color}\"")));
+    }
+}
+
+#[test]
 fn text_tokens_command_reports_structured_document_text() {
     let path = tiny_cfb_path();
     let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
