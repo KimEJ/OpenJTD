@@ -261,8 +261,10 @@ counterexample to control-only grouping: its `BEFORE-TABLE` paragraph shares a
 but all its visible text ends before that header starts. The control-run table
 candidate excludes that paragraph while preserving the source text. Its actual
 cell headers also contain `w6=0`, alongside the previously observed `0x00ff`,
-with the same twelve-word count, echoed count, and terminator. This word remains
-opaque; other values are not admitted. The local regression requires three
+with the same twelve-word count, echoed count, and terminator. For logical
+control-table candidate admission, this word remains opaque; other values are
+not admitted by that path. The separate physical-span projection below has its
+own explicit-alignment admission. The local regression requires three
 rows, six ordered cells, and one SVG instance of each surrounding paragraph.
 It does not establish native PDF geometry or font-metric equivalence.
 
@@ -303,6 +305,43 @@ projections bracket `BETWEEN01` and `BETWEEN02`, whose `LineMark` records are
 0.51 pt in X and 0.21 pt in top position against the Ichitaro PDF. Those
 figures validate only this tightly gated flow bridge; they do not decode
 generic paragraph layout, whitespace semantics, or font ink widths.
+
+### Physical ruled-flow spans and explicit alignment
+
+A controlled one-row, two-column pair keeps the same first-cell text on three
+physical lines while changing only its explicit cell alignment. Each line
+retains its own framed `0x0030` declaration; repeated declarations do not imply
+additional logical rows or cells. The first-cell declarations share `b0=2`,
+`b1=78`, and parent grid extent 160 in both variants:
+
+| Setting | `w6` | `w7`, successive physical lines |
+| --- | ---: | --- |
+| `左寄せ` (left) | 0 | 2, 2, 0 |
+| `均等` (distributed) | 3 | 2, 2, 0 |
+
+This associates `w6` with explicit alignment in this profile. The unchanged
+`w7` sequence is a continuation-related candidate, not proof of justification,
+logical-cell identity, or a complete flag schema. Inherited `w6=0x00ff` remains
+distinct: the wrapped counterexample above has spacing that explicit left
+alignment does not reproduce.
+
+The model now retains ordered `DocumentTextFlow` events and raw flags before
+deriving table views. A bounded first-page horizontal ASCII projection uses an
+immediate parent/declaration, exact `LineMark` containment, first `PageMark`
+pitch, source margins, and uniform source font size to place physical spans.
+Explicit distributed spans without edge whitespace use
+`(b1-b0) * bodyWidth / parentGridExtent` as SVG `textLength` with
+`lengthAdjust="spacing"`; explicit left spans retain natural spacing. This does
+not reconstruct logical table rows. Overlapping table fallbacks stop painting,
+but their candidates remain diagnostics in the layer tree. Raw flags,
+`decoded:false`, and estimated glyph-position labels remain visible.
+
+Both variants pass the local source-span/order/duplicate-render checks, and
+their generated PDFs preserve line anchors and the distributed extent. Exact
+glyph metrics and ruled borders are not established. The inherited wrapped
+`0x00ff` profile is still rejected by this projection pending independent
+spacing evidence; distributed character spacing must not stand in for English
+word justification.
 
 ### Basic control-table border projection
 
@@ -433,8 +472,11 @@ between `0x001c` and `0x001f` do not decode as valid Unicode text (they are
 control-range values). The parser effectively skips the header by stopping on
 `0x001c` as a boundary, then resuming on `0x001f`.
 
-No change to the parser is warranted until paragraph-record semantics (indent
-levels, style references, column/cell geometry) are proven. The `decoded:false`
+The model additionally preserves complete length/echo/class/terminator frames
+as ordered `DocumentTextFlow` record events, bounded by named TextV.01 content.
+Unknown gaps and raw record words remain available; framing is not a decode of
+indent levels, style references, logical cells, or border paint. Table candidates
+are derived views and do not replace the source events. The `decoded:false`
 principle applies.
 
 ## Trailing TextV.01 Style Event Section
@@ -459,8 +501,8 @@ Unknown IDs and width mismatches remain raw evidence. This event stream is
 separate from, and must not be confused with, the `0x001c/0x0010 w4=0x008f`
 table-row header family described above.
 
-In `shanai_lan`, property 15 has a source-range correlation with label color.
-When one value covers a label fragment's complete source range, the observed
+The `shanai_lan` label probes and controlled body contrast associate property 15
+with text color. When one value covers a text fragment's complete source range, the observed
 `0x00BBGGRR` values map as follows:
 
 | Property 15 value | CSS color | Observed use |
@@ -468,14 +510,20 @@ When one value covers a label fragment's complete source range, the observed
 | `0x00008000` | `#008000` | diagram title |
 | `0x00800000` | `#000080` | blue device and server labels |
 | `0x00660000` | `#000066` | dark-blue NAS label |
+| `0x00000000` | `#000000` | controlled black body text |
+| `0x000000ff` | `#ff0000` | controlled red body text |
+| `0x00ff0000` | `#0000ff` | controlled blue body text |
 | `0xffffffff` | default | automatic/default color sentinel |
 
 This proves the packed-color encoding for those ranges, but not a universal
 property role. In the cross-sample `hyo` fixture, property 15 also occurs over
 non-text/control ranges associated with table state. Therefore the renderer
-uses it only as a decoded-false color candidate for uniform, exact text ranges
-inside the `shanai_lan` projection. It does not apply property 15 globally, and
-a fragment that crosses a property-state boundary keeps the default fill.
+uses it as a source color for uniform, exact text ranges in the supported body
+SVG/layer paths and as a decoded-false candidate in the `shanai_lan` projection.
+It does not reinterpret control/table-state ranges as colors. Mixed, uncovered,
+or unsupported high-byte values retain the default fill. The controlled body
+contrast verifies the three raw values and their SVG/layer colors, not general
+style inheritance or border color.
 
 ## 0x000e and 0x000a Control Codes
 

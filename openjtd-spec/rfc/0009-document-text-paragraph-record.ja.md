@@ -187,7 +187,9 @@ grouping に対する構造的な反例を追加する。`BEFORE-TABLE` 段落�
 text はすべてその header の開始前に終わる。control-run table candidate は source
 text を保存したまま、この段落を row から除外する。実際の cell header では、既存の
 `0x00ff` に加えて `w6=0` も観測し、12-word count、echoed count、terminator は
-同じである。この word の意味は未解読のままで、他の値は許可しない。local の
+同じである。論理 control-table candidate の許可経路ではこの word は未解読のままで、
+他の値は許可しない。下記の別の物理 span projection は明示的な alignment に対して
+独立した許可条件を持つ。local の
 回帰検査は 3 row、順序を保った 6 cell、前後の各段落が SVG に一度ずつ現れることを
 要求する。native PDF の geometry や font metrics の一致を証明するものではない。
 
@@ -225,6 +227,37 @@ frame のない 1-column text は table candidate にしない。geometry と pa
 10 個の text run をすべて分離し、一太郎 PDF との差は X が最大 0.51 pt、top position が最大
 0.21 pt だった。この数値は厳しく gated した flow bridge だけを検証するものであり、一般的な
 paragraph layout、whitespace semantics、font ink width を解読したことは意味しない。
+
+### 物理 ruled-flow span と明示的な文字揃え
+
+統制した 1-row、2-column の対照 pair では、最初の cell の text と 3 行の物理表示を
+保ち、明示的な cell alignment だけを変更した。各行は frame を持つ独立した `0x0030`
+declaration を保持する。同じ declaration の繰返しは論理 row/cell の追加を意味しない。
+両 variant の最初の cell は `b0=2`、`b1=78`、parent grid extent 160 を共有する。
+
+| 設定 | `w6` | 各物理行の `w7` |
+| --- | ---: | --- |
+| `左寄せ` | 0 | 2, 2, 0 |
+| `均等` | 3 | 2, 2, 0 |
+
+この profile では `w6` と明示的な alignment の対応を観測できる。変化しない `w7`
+sequence は continuation 関連の候補であり、justification、論理 cell identity、完全な
+flag schema の証明ではない。継承値 `w6=0x00ff` は別扱いとする。前述の wrapped
+counterexample の spacing は明示的な左寄せでは再現できない。
+
+model は table view を導出する前に、順序付き `DocumentTextFlow` events と raw flags を
+保存する。先頭ページ横書き ASCII の限定 projection は、直前の parent/declaration、
+正確な `LineMark` containment、最初の `PageMark` pitch、source margins、一様な source
+font size を使い物理 span を配置する。両端に空白がない明示的な均等 span は
+`(b1-b0) * bodyWidth / parentGridExtent` を SVG `textLength` とし、
+`lengthAdjust="spacing"` を使う。左寄せは natural spacing を保つ。論理 table row を
+再構成するものではない。重なる table fallback は描画を止めるが、候補は layer tree の
+診断に残す。raw flags、`decoded:false`、推定 glyph-position の表示を維持する。
+
+両 variant は local の source-span/order/重複描画検査を通過し、生成 PDF は line anchor と
+均等 extent を保持した。厳密な glyph metrics と ruled border は証明していない。
+継承された wrapped `0x00ff` profile は、独立した spacing 根拠が得られるまでこの
+projection で拒否する。均等な文字間 spacing を欧文の単語間 justification の代用にしない。
 
 ### 基本 control-table border projection
 
@@ -325,7 +358,11 @@ law-document draft サンプル `sample-draft.jtd`（解析済み LineMark レ�
 
 `rjtd-core/src/document_text.rs` の `parse_document_text` 関数は現在ストリームをビッグエンディアン UTF-16 として読み取り、`0x001c` を単純な `ControlBoundary` として扱う。`0x001c` が現れると次の `0x001f` まで新しいテキストランを開始しない。これはテキスト抽出としては機能している。なぜならヘッダーワードは有効な Unicode テキストとして解読されないからである（制御範囲の値）。パーサーは実質的に `0x001c` を境界として停止し、`0x001f` で再開することでヘッダーをスキップしている。
 
-段落レコードの意味（インデントレベル、スタイル参照、列/セルのジオメトリ）が証明されるまで、パーサーの変更は不要。`decoded:false` の原則を適用する。
+model は named TextV.01 content 内の完全な length/echo/class/terminator frame を
+順序付き `DocumentTextFlow` record event として保存する。unknown gap と raw words は
+保持し、frame の認識をインデント、style reference、論理 cell、border paint の解読と
+同一視しない。table candidate は派生 view であり source event を置き換えない。
+`decoded:false` の原則を適用する。
 
 ## 末尾の TextV.01 スタイルイベントセクション
 
@@ -339,16 +376,27 @@ law-document draft サンプル `sample-draft.jtd`（解析済み LineMark レ�
 
 property changes は persistent state を構成する。value は change unit 自体に適用され、別の change で置き換えられるまで後続 run events に引き継がれる。現在観測済みの typed widths は property IDs 4〜7/9〜12 が 1 byte、1〜3/8/13/14/18/19 が 2 bytes、15〜17/20 が 4 bytes である。unknown IDs と width mismatch は raw evidence のまま保存する。この event stream は前述の `0x001c/0x0010 w4=0x008f` table-row header family とは別構造であり、混同してはならない。
 
-`shanai_lan` では property 15 と label color の source-range correlation が確認された。単一 value が label fragment の exact source range 全体を cover する場合、観測された `0x00BBGGRR` values は次のように対応する。
+`shanai_lan` の label probe と統制した body 対照は property 15 と text color の対応を示す。
+単一 value が text fragment の exact source range 全体を cover する場合、観測された
+`0x00BBGGRR` values は次のように対応する。
 
 | Property 15 value | CSS color | 観測された用途 |
 |------------------:|-----------|----------------|
 | `0x00008000` | `#008000` | diagram title |
 | `0x00800000` | `#000080` | blue device/server labels |
 | `0x00660000` | `#000066` | dark-blue NAS label |
+| `0x00000000` | `#000000` | 統制した黒の body text |
+| `0x000000ff` | `#ff0000` | 統制した赤の body text |
+| `0x00ff0000` | `#0000ff` | 統制した青の body text |
 | `0xffffffff` | default | automatic/default color sentinel |
 
-これは該当 ranges の packed-color encoding を証明するが、property role の universal semantics は証明しない。cross-sample `hyo` では property 15 が table state に関連する non-text/control ranges にも現れる。そのため renderer は `shanai_lan` projection 内の uniform exact text ranges に限り decoded-false color candidate として使用する。property 15 を global に適用せず、property-state boundary をまたぐ fragment は default fill のままにする。
+これは該当 ranges の packed-color encoding を証明するが、property role の universal
+semantics は証明しない。cross-sample `hyo` では property 15 が table state に関連する
+non-text/control ranges にも現れる。そのため、対応する body SVG/layer path の uniform
+exact text ranges に source color として適用し、`shanai_lan` projection では decoded-false
+candidate として使う。control/table-state ranges を color として解釈しない。mixed、
+uncovered、未対応 high-byte value は default fill を保つ。body 対照は 3 個の raw value と
+SVG/layer color を検証するが、一般的な style inheritance や border color は証明しない。
 
 ## 0x000e と 0x000a 制御コード
 
