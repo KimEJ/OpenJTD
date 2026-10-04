@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 
 use super::support::*;
@@ -20,6 +21,34 @@ fn cat_command_extracts_document_text_runs() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8(output.stdout).unwrap(), "銀河鉄道\n");
+}
+
+#[test]
+#[ignore = "requires local document samples"]
+fn cat_command_extracts_native_ichitaro_paragraphs() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../rjtd-testdata/local-samples/native-fixtures/native-text-001.jtd");
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("cat")
+        .arg(path)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // This case checks paragraph text, not native indentation or page geometry.
+    let paragraphs = stdout.lines().map(str::trim_start).collect::<Vec<_>>();
+    assert_eq!(
+        paragraphs,
+        [
+            "OpenJTD Native Roundtrip 001",
+            "これはOpenJTDのネイティブ作成確認用文書です。",
+            "文書末尾確認 END-001",
+        ]
+    );
 }
 
 #[test]
