@@ -33,6 +33,7 @@ pub(super) fn table_candidates_from_text_boundaries(
 pub(super) fn table_candidates_from_document_text_controls(
     entries: &[DocumentTextMapEntry],
     start_index: usize,
+    bytes: &[u8],
 ) -> Vec<TableCandidate> {
     let rows = document_text_control_table_rows(entries);
     let mut candidates = Vec::new();
@@ -58,7 +59,7 @@ pub(super) fn table_candidates_from_document_text_controls(
             continue;
         }
 
-        if column_count < 2 {
+        if column_count < 2 || control_row_text_precedes_native_table_header(bytes, &row) {
             push_document_text_control_table_candidate(
                 &mut candidates,
                 start_index,
@@ -96,6 +97,55 @@ pub(super) fn table_candidates_from_document_text_controls(
 
     push_document_text_control_table_candidate(&mut candidates, start_index, &mut current_rows);
     candidates
+}
+
+fn control_row_text_precedes_native_table_header(
+    bytes: &[u8],
+    row: &DocumentTextControlTableRow,
+) -> bool {
+    let Some(text_end) = row
+        .cells
+        .iter()
+        .filter(|cell| !cell.text.is_empty())
+        .map(|cell| cell.source_end)
+        .max()
+    else {
+        return false;
+    };
+    let row_end = row.source_end.min(bytes.len() / 2);
+    // A plain paragraph can precede a complete native row-header record inside
+    // the same control interval. Text before that header is not a table cell.
+    for start in text_end..row_end {
+        let offset = start * 2;
+        if read_be16_at(bytes, offset) != Some(0x001c)
+            || read_be16_at(bytes, offset + 2) != Some(0x0010)
+            || read_be16_at(bytes, offset + 6) != Some(0)
+            || read_be16_at(bytes, offset + 8) != Some(0x008f)
+        {
+            continue;
+        }
+        let Some(length) = read_be16_at(bytes, offset + 4) else {
+            continue;
+        };
+        let Some(end) = start.checked_add(usize::from(length)) else {
+            continue;
+        };
+        if length < 13
+            || end > row_end
+            || read_be16_at(bytes, offset + 12).is_none_or(|extent| extent == 0)
+        {
+            continue;
+        }
+        let tail = (end - 4) * 2;
+        if read_be16_at(bytes, tail) == Some(length)
+            && read_be16_at(bytes, tail + 2) == Some(0)
+            && read_be16_at(bytes, tail + 4) == Some(0x0010)
+            && read_be16_at(bytes, tail + 6) == Some(0x001f)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 pub(super) fn push_document_text_control_table_candidate(

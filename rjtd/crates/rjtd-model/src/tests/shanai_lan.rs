@@ -18,6 +18,16 @@ fn cell_header_requires_matching_twelve_word_record_lengths() {
     assert_eq!(header.end - header.start, 24);
     assert!(shanai_lan_line_header_at(&bytes(&words), usize::MAX).is_none());
 
+    let mut native = words;
+    native[6] = 0;
+    let header = shanai_lan_line_header_at(&bytes(&native), 0).unwrap();
+    assert_eq!(header.raw_words[6], 0);
+    assert_eq!((header.offset_units, header.extent_units), (2, 24));
+    for unobserved in [1, 0xffff] {
+        native[6] = unobserved;
+        assert!(shanai_lan_line_header_at(&bytes(&native), 0).is_none());
+    }
+
     for index in [2, 8] {
         for invalid_length in [0, 11, 14] {
             let mut malformed = words;

@@ -515,6 +515,7 @@ impl IchitaroParser {
         for candidate in table_candidates_from_document_text_controls(
             map.entries(),
             document.table_candidates().len(),
+            payload.bytes(),
         ) {
             document.push_table_candidate(candidate);
         }

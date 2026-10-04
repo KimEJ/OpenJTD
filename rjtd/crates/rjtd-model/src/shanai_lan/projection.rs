@@ -642,9 +642,10 @@ pub(crate) fn shanai_lan_line_header_at(
         words[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
     }
     // Class 0x0030 carries a word count and an echoed count, not a font size.
-    // This reader supports only the observed fixed twelve-word record.
+    // Native cell-text records also carry zero at word 6. Preserve that opaque
+    // field while requiring the same complete fixed twelve-word framing.
     if words[2] != 12
-        || words[6] != 0x00ff
+        || !matches!(words[6], 0 | 0x00ff)
         || words[7] != 0
         || words[8] != 12
         || words[9] != 0

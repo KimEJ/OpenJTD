@@ -181,6 +181,16 @@ cell text の X/Y を 0.25 pt 以内で配置する。この根拠には ink wid
 単純な row ごとの text placement rule は健全ではない。複数ページ table、merged cell、
 empty/sparse cell、縦書き、mixed object tree は診断専用のままである。
 
+3-row、2-column probe は control のみの
+grouping に対する構造的な反例を追加する。`BEFORE-TABLE` 段落は最初の完全な
+`0x0010` / `w4=0x008f` row header と同じ `0x000e` interval に入るが、可視
+text はすべてその header の開始前に終わる。control-run table candidate は source
+text を保存したまま、この段落を row から除外する。実際の cell header では、既存の
+`0x00ff` に加えて `w6=0` も観測し、12-word count、echoed count、terminator は
+同じである。この word の意味は未解読のままで、他の値は許可しない。local の
+回帰検査は 3 row、順序を保った 6 cell、前後の各段落が SVG に一度ずつ現れることを
+要求する。native PDF の geometry や font metrics の一致を証明するものではない。
+
 ### 2 つの native control table 間の flow text
 
 さらに、先頭ページ横書きでは、完全な control-table projection が 2 つあり、その間に

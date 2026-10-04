@@ -255,6 +255,17 @@ after wrapping, so a simple per-row text placement rule would not be sound.
 Multi-page tables, merged cells, empty/sparse cells, vertical writing, and
 mixed object trees remain diagnostic-only.
 
+A three-row, two-column probe adds a structural
+counterexample to control-only grouping: its `BEFORE-TABLE` paragraph shares a
+`0x000e` interval with the first complete `0x0010` / `w4=0x008f` row header,
+but all its visible text ends before that header starts. The control-run table
+candidate excludes that paragraph while preserving the source text. Its actual
+cell headers also contain `w6=0`, alongside the previously observed `0x00ff`,
+with the same twelve-word count, echoed count, and terminator. This word remains
+opaque; other values are not admitted. The local regression requires three
+rows, six ordered cells, and one SVG instance of each surrounding paragraph.
+It does not establish native PDF geometry or font-metric equivalence.
+
 ### Interstitial flow text between two native control tables
 
 One further first-page horizontal profile is renderable only when two complete
