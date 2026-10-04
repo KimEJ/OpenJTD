@@ -116,6 +116,37 @@ fn native_two_row_text_only_table_has_four_cells() {
 }
 
 #[test]
+#[ignore = "requires local document samples"]
+fn native_single_row_table_preserves_cells_and_border() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../rjtd-testdata/local-samples/native-fixtures/native-table-004.jtd");
+    let document = rjtd_model::parse_document(&fs::read(&path).unwrap()).unwrap();
+    let table = document
+        .table_candidates()
+        .iter()
+        .find(|candidate| candidate.kind() == "documentTextControlRunTableCandidate")
+        .expect("fully framed single native row");
+    assert_eq!(table.interval_count(), 1);
+    let cells = table.intervals()[0]
+        .column_segments()
+        .iter()
+        .map(|cell| cell.text())
+        .collect::<Vec<_>>();
+    assert_eq!(cells, ["LEFT", "RIGHT"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))
+        .arg("page-svg")
+        .arg(path)
+        .arg("0")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let svg = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(svg.matches("rjtd-native-control-table-cell").count(), 2);
+    assert_eq!(svg.matches("rjtd-native-control-table-border").count(), 1);
+    assert_eq!(svg.matches("BEFORE-ONE-ROW").count(), 1);
+    assert_eq!(svg.matches("AFTER-ONE-ROW").count(), 1);
+}
+
+#[test]
 fn text_tokens_command_reports_structured_document_text() {
     let path = tiny_cfb_path();
     let output = Command::new(env!("CARGO_BIN_EXE_rjtd"))

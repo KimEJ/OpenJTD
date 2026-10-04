@@ -477,6 +477,9 @@ impl TableCandidate {
             non_empty += 1;
         }
         non_empty > 1
+            || (non_empty == 1
+                && self.is_document_text_control_run_candidate()
+                && self.max_column_segment_count() >= 2)
     }
 
     pub fn is_cell_like(&self) -> bool {

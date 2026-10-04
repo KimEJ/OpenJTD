@@ -273,6 +273,12 @@ value-marker heuristic. Every non-empty cell range must lie after its parent
 header and inside its row; column counts must agree. Unframed two-row text
 remains unproven. This is candidate admission, not a general geometry decode.
 
+A single-row 1×2 probe uses the same complete
+parent/cell framing. It admits one multi-column row as a control-table candidate;
+unframed single-row text is still rejected. Single-row border projection requires
+the verified trailing empty-row record, giving explicit source boundaries rather
+than inferring a height from a second row. Native PDF geometry remains unproven.
+
 ### Interstitial flow text between two native control tables
 
 One further first-page horizontal profile is renderable only when two complete

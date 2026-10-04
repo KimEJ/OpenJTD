@@ -198,6 +198,12 @@ header により、旧来の value-marker heuristic を使わず短い table を
 一致する必要がある。frame を持たない 2-row text は未証明のままである。これは
 candidate の許可条件であり、一般的な geometry の解読ではない。
 
+同じ完全な parent/cell frame を持つ 1×2 probe
+である。複数 column を持つ 1 row を control-table candidate として許可するが、
+frame のない 1-row text は引き続き拒否する。1-row border projection は検証済みの
+末尾 empty-row record を必要とし、2 row 目から高さを推測せず source の境界を使う。
+native PDF geometry の一致は未証明のままである。
+
 ### 2 つの native control table 間の flow text
 
 さらに、先頭ページ横書きでは、完全な control-table projection が 2 つあり、その間に

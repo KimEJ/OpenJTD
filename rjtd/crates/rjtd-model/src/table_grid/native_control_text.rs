@@ -603,7 +603,8 @@ fn native_control_table_border_projection(
         .filter(|slot| slot.column_index == 0)
         .collect::<Vec<_>>();
     rows.sort_by_key(|slot| slot.row_index);
-    if rows.len() < 2
+    if rows.is_empty()
+        || (rows.len() == 1 && trailing_empty_row_record.is_none())
         || rows
             .windows(2)
             .any(|pair| pair[0].line_mark_record_index >= pair[1].line_mark_record_index)

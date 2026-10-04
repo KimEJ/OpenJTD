@@ -160,7 +160,7 @@ fn native_control_table_rows_are_framed(
     rows: &[DocumentTextControlTableRow],
 ) -> bool {
     let columns = rows.first().map_or(0, |row| row.cells.len());
-    rows.len() >= 2
+    !rows.is_empty()
         && columns >= 2
         && rows.iter().all(|row| {
             if row.cells.len() != columns {
