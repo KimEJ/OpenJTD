@@ -1,15 +1,43 @@
-# rhwp Compatibility Reference
+# rhwp の参照と連携範囲
 
-OpenJTD は現在の Rust implementation として `rjtd` を使う。`rjtd` は独自 architecture
-を新しく設計するより、rhwp の構造と開発方式をできるだけ参考にする。
+OpenJTD は `rjtd` で JTD 固有のエンジンを開発する。rhwp は独立した HWP/HWPX
+エンジンであり、読み取り専用の設計参考と、選択可能な連携先として扱う。
+rhwp Studio API の完全な parity は OpenJTD の完了条件ではない。
 
-そのため、最上位ワークスペースに `rhwp/` をローカル参照リポジトリとして置く。
+この文書は rhwp の参照・連携方針を管理する。任意の `rhwp/` checkout は
+JTD エンジンの実行時依存ではない。
 
 この文書は参照方針と蓄積した実装・研究メモを保持する。サンプル数と投影の測定値は
 記録当時の実験を示し、最新の互換性認証ではない。現在の範囲と優先順位は
 [roadmap](ROADMAP.ja.md)、モデルの境界は [architecture](ARCHITECTURE.ja.md) を参照する。
 特に、基本的な `rjtd-export` HTML 出力は実装済みであり、app-core の rich HTML clipboard
 fallback とは別の surface である。
+
+## 連携範囲
+
+layer 分離、原本・未知データの保存、model を経由する export、回帰検証は有用な設計
+先例として参照する。内部モデルは JTD の原本根拠に従う。HWP の
+section/paragraph/control/cell address は、JTD の text flow や罫線領域に必須の表現ではない。
+
+リポジトリのビューアが使う動作済みの browser contract は維持する。
+`HwpDocument` の生成、`setFileName`、`pageCount`、`renderPageSvg`、`plainText`、
+`free` が該当する。この wrapper 名の維持は HWP parsing、完全な Studio 連携、
+構造を保持した JTD 編集への対応を意味しない。
+
+既存の高度な互換メソッドには既定値、no-op、未対応操作がある。例えば table の生成と
+cell-text 編集は `ok:false`、`convertToEditable` は `converted:false` を返す。
+HWP/HWPX 出力は空の byte 列で、検証結果も未実装を示す。したがってメソッド coverage は
+JTD 機能の完成度ではない。利用者と置換時の挙動を確認するまでは既存 interface を維持し、
+Studio の全メソッド一覧に合わせるためだけの新しい stub は追加しない。
+
+エディタ UI の再利用は選択肢である。JTD 固有の編集意味、原本 record の変更、未知データの
+保存、保存・再読込はエンジンの責任として残る。具体的な連携が必要になった時は次を行う。
+
+1. 利用者と必要な操作を特定し、read/render と JTD に保存する編集を区別する。
+2. 対応済みの JTD model 操作に小さな adapter を設け、利用者固有の address を
+   エンジンの原本表現へ持ち込まない。
+3. 対応する操作を end to end で検証する。編集には未知データを保持した実際の
+   編集・保存・再読込を要求し、関数名の一致や fallback 応答だけで完了としない。
 
 ## Source
 
@@ -26,7 +54,8 @@ commit: bc38ff55
 
 ## Clone Note
 
-rhwp リポジトリには Git LFS files が含まれる。現在 GitHub LFS budget の制限により大容量 PDF smudge が失敗する可能性があるため、source structure 参照目的の clone では LFS download を skip する。
+source の参照だけを目的とする checkout では Git LFS payload の download を skip する。
+JTD エンジンは参照プロジェクトの sample PDF を必要としない。
 
 ```sh
 GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/edwardkim/rhwp.git rhwp
@@ -36,19 +65,23 @@ GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/edwardkim/rhwp.git rhwp
 
 - `rhwp/` は read-only reference repository として使う。
 - rjtd implementation は `rhwp/` code を copy しない。
-- structure、layer separation、test method、API philosophy をまず比較する。
+- 適用できる layer 分離・保存・検証の pattern を比較し、model の意味と挙動は
+  JTD の原本根拠で決める。
 - rjtd の実際の implementation code は `rjtd/` 以下に置く。
 - `rhwp/` は外部 reference repository として扱う。
 
 ## Dependency And Implementation Policy
 
-rjtd は dependency selection と direct implementation scope の両方で rhwp 方式に従う。
+rjtd は新しい仕組みを追加する前に、既存の utility と dependency を再利用する。
+類似する課題では `rhwp/Cargo.toml` と実装を先例として確認し、JTD の原本根拠、resource
+limit、保存要件に適合するか判断する。先例は必須の選択ではなく、先例がないことも JTD
+固有の実装を止める理由にはならない。新しい dependency は rhwp での使用有無にかかわらず、
+明示的な承認を必要とする。
 
-- 新しい dependency や implementation method が必要な場合、まず `rhwp/Cargo.toml` と rhwp implementation を確認する。
-- rhwp が同じ task category ですでに使う crate があれば、rjtd もその crate と approach を優先する。
-- rhwp が同じ task category を直接実装している場合、rjtd も新 dependency を追加せず direct implementation を優先する。
-- rhwp に dependency も direct implementation precedent もない完全に別の問題の場合だけ、実装を止めて明示的な判断を求める。
-- 便利さだけを理由に rhwp にない新 dependency を追加しない。
+## 記録された実装根拠
+
+以下の dependency 選択と実装メモは記録当時の作業を示す。参照のために保持するものであり、
+完全互換の checklist や HWP document model を再現する義務ではない。
 
 現在 rhwp で確認された関連 dependency patterns:
 
@@ -64,7 +97,7 @@ JTTC に関する現在の結論:
 
 - local `.jttc` sample の `/JSCompDocument` には `JustCompressedDocument` と `-lh5-` marker が見える。
 - rhwp には LHA/LZH/LH5 系 dependency はない。
-- したがって rjtd は別途決定なしに LHA/LZH dependency を追加しない。
+- 新しい LHA/LZH dependency も、他の追加と同じく明示的な承認を必要とする。
 - rjtd は観察済みの single `-lh5-` member profile だけを直接実装し、`.jttc` inner CFB の `/DocumentText` を読む。
 - 現在の実装は LHA header checksum と CRC verification、multi-member archive、他の LHA method をまだ support しない。
 
@@ -151,7 +184,7 @@ Application core / PDF に関する現在の結論:
 - `rjtd text-boundary-paragraph-like-discriminators <file>` はこれらの rows を bucket ごとに要約する。current sweep では dual layout exactness は paragraph-like rows だけに現れ、`iwata_file` では同じ rows だけが nonzero chosen `TCntV.01` spans を持つ strict candidates である。app-core は将来これを decoded-false evidence として expose できるが、coordinate target が説明されるまで real paragraphs を rebuild してはならない。
 - model/export/app-core JSON は、この stricter evidence を decoded-false `textParagraphBoundaryCandidates` として expose するようになった。保存 rule は strict unit `0x001c` single candidate、nonzero chosen `TCntV.01` span、`line-word-value` と `page-be32-field` の両方に row-local exact endpoint evidence があること。61-sample JSON export sweep は 0 failures で、合計 10 candidates が保存され、すべて `iwata_file` 由来である。`getValidationWarnings` は decoded paragraph records ではなく diagnostic-only data として報告する。
 - `rjtd text-paragraph-boundary-targets <file>` は preserved candidates を concrete `/LineMark` word indexes と `/PageMark` raw row fields へ trace する。初回 sweep では一部の exact endpoints が non-unique であるため、rjtd はこれらを real paragraph/layout objects へ promote する前に semantic target となる line/page fields を特定しなければならない。
-- full-layout PDF support は rhwp と同じ architecture を続ける。JTD streams をまず model objects に decode し、model から page/layer/paint tree を作り、SVG pages を render して既存の `usvg`/`svg2pdf`/`pdf-writer` 経路で PDF を assemble する。tables、images、SVG/vector objects、shapes は exporter が raw stream を直接読むのではなく model/control/layer objects として recover する必要がある。
+- full-layout PDF support は model-first pipeline を維持する。JTD streams をまず model objects に decode し、model から page/layer/paint tree を作り、SVG pages を render して既存の `usvg`/`svg2pdf`/`pdf-writer` 経路で PDF を assemble する。tables、images、SVG/vector objects、shapes は exporter が raw stream を直接読むのではなく model/control/layer objects として recover する必要がある。
 - `rjtd object-stream-candidates <file>` は non-text visual/object stream evidence を `decoded=false` で inventory する。object/image/shape/table path hints、`SO\0\0` markers、image signatures、SVG signatures、payload prefixes を出す。current 61-sample sweep では candidates を持つ files 43、embedded image signature files 17 を見つけたが、named table-path candidate は 0 である。したがって table recovery は `/DocumentText` control ranges と layout/style streams から進め、image recovery は `/EmbedItems/Embedding */Contents` candidates から始める。
 - parser/export/app-core JSON は同じ evidence を decoded-false `objectStreamCandidates` として保存する。`getDocumentInfo` は candidate count と rows を report し、`getValidationWarnings` は `JtdObjectStreamCandidateDiagnosticOnly` を report する。61-sample JSON export sweep は 0 failures で、43 files に 933 candidates を保存するため、future image/shape/table renderer path は model-first のまま維持される。
 - `/VisualList` streams も decoded-false object stream candidates として保存し、`visual-list-path` evidence を付ける。PDF-reference `fax02.jtt` sample では、observed BMDV header (`120x169`, `8bpp`, RLE length `2216`) を model metadata に decode し、long horizontal raster runs、title-band hatch、static `FAX:`/`TEL:` form labels、DocumentText-derived form text slots を decoded-false `visualListRasterDiagnostic`/`visualListFormProjection` geometry として SVG/PDF と `getPageLayerTree` に project する。full BMDV/vector semantics はまだ主張しない。

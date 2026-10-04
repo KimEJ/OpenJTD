@@ -86,8 +86,9 @@ scripts/regenerate-pdf-output.sh
 
 ## 設計上の参照
 
-OpenJTD のリポジトリ構成とエンジン境界は、JTD 向けに調整しつつ `rhwp` の構造を
-参考にしています。
+OpenJTD のリポジトリ構成とエンジン境界は `rhwp` を参考にしています。内部モデルは JTD の
+原本根拠に従い、rhwp Studio の完全互換を必須のマイルストーンにはしません。
+[rhwp の参照・連携範囲](docs/RHWP-COMPATIBILITY.ja.md) を参照してください。
 
 ## プロジェクト状況
 

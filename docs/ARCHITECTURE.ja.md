@@ -1,7 +1,8 @@
 # Architecture
 
-OpenJTD は現在、`rjtd` Rust ツール群を通じて JTD エンジンを構築している。`rjtd` は
-rhwp 風の階層化された文書エンジンアーキテクチャに従う。
+OpenJTD は `rjtd` Rust ツール群を通じて JTD 固有のエンジンを構築する。原本解析、model の
+所有、出力を階層に分離しても、他の形式の document model を採用する義務はない。
+adapter 方針は [rhwp の参照・連携範囲](RHWP-COMPATIBILITY.ja.md) を参照する。
 
 ```text
 Document File
@@ -30,6 +31,8 @@ Document Model
 - Stream code は byte-level の stream access を扱う。
 - Record code は typed record と unknown record boundaries を decode する。
 - Model code は semantic document structures を所有する。
+- model の意味は JTD の原本根拠で決める。利用者固有の編集 address は原本解釈ではなく
+  adapter 境界で扱う。
 - Export code は document model だけを consume する。
 
 Exporter は raw container、stream、record data を直接読んではならない。

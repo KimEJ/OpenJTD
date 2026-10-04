@@ -5,9 +5,11 @@ browsers.
 
 `rjtd-wasm` is the browser binding layer of
 [OpenJTD](https://github.com/KimEJ/OpenJTD). Its `HwpDocument` wrapper mirrors
-the application-facing shape used by the rhwp Studio integration where OpenJTD
-has equivalent behavior, while all implementation remains original OpenJTD
-code.
+part of the rhwp-shaped application API, while all implementation remains
+original OpenJTD code. The existing wrapper name and working viewer contract
+are retained, not a promise of complete rhwp Studio integration. The
+[integration scope](../../../docs/RHWP-COMPATIBILITY.md) defines the adapter
+boundary.
 
 ## Developer preview
 

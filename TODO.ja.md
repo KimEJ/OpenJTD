@@ -8,6 +8,9 @@
 サンプル数と測定値は記録当時の実験を示し、後の checkout 全体を再検証した結果ではない。
 M1–M4 は元の ID を維持し、M5 は公開仕様、M6 は WASM ビューアとする。
 
+rhwp 形状の API 項目は既存の互換作業を記録するもので、Studio の全メソッドを網羅する義務ではない。
+新しい連携作業は [rhwp の参照・連携範囲](docs/RHWP-COMPATIBILITY.ja.md) に従う。
+
 ## M1: Container Explorer
 
 Goal: 最初の実行可能マイルストーンとして `rjtd streams <file.jtd>` を実装する。
@@ -16,8 +19,8 @@ Status: CFB entry inventory は実装済み。壊れた FAT ファイルに対�
 
 これを最初に行う理由:
 
-- rjtd は rhwp の階層的な解析順序に従う必要がある。
-- rhwp は header、record、body text、model、renderer、exporter より前に CFB container 層から binary parsing を始める。
+- JTD の解読に安定した下位層の根拠を使うため、stream、record、model、renderer の前に
+  container access を実装する。
 - text extraction を試す前に、JTD 構造を観察し文書化する必要がある。
 - exporter は raw file data を直接読んではならず、以降の作業は安定した下位層に依存する。
 

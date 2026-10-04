@@ -10,6 +10,10 @@ into decoded semantics. Sample counts and measurements describe the recorded
 experiment, not a fresh verification of every later checkout. M1–M4 retain
 their original IDs; M5 is the public specification and M6 is the WASM viewer.
 
+rhwp-shaped API entries record existing compatibility work, not a requirement
+to cover every Studio method. New integration work follows the
+[rhwp reference and integration scope](docs/RHWP-COMPATIBILITY.md).
+
 ## M1: Container Explorer
 
 Goal: implement `rjtd streams <file.jtd>` as the first executable milestone.
@@ -18,8 +22,8 @@ Status: implemented for CFB entry inventory, including a rhwp-style lenient fall
 
 Why this comes first:
 
-- rjtd must follow rhwp's layered parsing order.
-- rhwp starts binary parsing from the CFB container layer before header, record, body text, model, renderer, or exporter work.
+- Container access comes before stream, record, model, and renderer work so JTD
+  decoding uses stable lower-layer evidence.
 - JTD structure should be observed and documented before text extraction is attempted.
 - Exporters must never read raw file data directly; all later work depends on stable lower layers.
 

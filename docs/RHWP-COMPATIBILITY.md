@@ -1,10 +1,11 @@
-# rhwp Compatibility Reference
+# rhwp Reference and Integration Scope
 
-OpenJTD uses `rjtd` as its current Rust implementation. `rjtd` takes as much as
-possible from rhwp's structure and development approach instead of designing a
-separate architecture from scratch.
+OpenJTD develops a JTD-native engine in `rjtd`. rhwp is an independent HWP/HWPX
+engine used as a read-only design reference and a possible integration target.
+Full rhwp Studio API parity is not an OpenJTD acceptance criterion.
 
-The top-level workspace therefore keeps `rhwp/` as a local reference repository.
+This document owns the rhwp reference and integration policy. The optional
+`rhwp/` checkout is not a runtime dependency of the JTD engine.
 
 This document retains reference policy and accumulated implementation/research
 notes. Sample counts and projection measurements describe their recorded
@@ -13,6 +14,38 @@ experiments, not a fresh compatibility certification. Use the
 [architecture](ARCHITECTURE.md) for current model boundaries. In particular,
 basic `rjtd-export` HTML output is implemented; app-core rich HTML clipboard
 fallbacks are a separate surface.
+
+## Integration Scope
+
+Layer separation, preservation of original and unknown data, model-based
+export, and regression testing remain useful design precedents. JTD source
+evidence determines the internal model; HWP section/paragraph/control/cell
+addresses are not a required representation of JTD text flow or ruled regions.
+
+Keep the working browser contract used by the repository viewer: construction
+of `HwpDocument`, `setFileName`, `pageCount`, `renderPageSvg`, `plainText`, and
+`free`. Retaining that wrapper name does not imply HWP parsing, complete Studio
+integration, or structure-preserving JTD editing.
+
+The existing advanced compatibility methods include defaults, no-op responses,
+and unsupported operations. For example, table creation and cell-text editing
+return `ok:false`, `convertToEditable` reports `converted:false`, and HWP/HWPX
+export returns empty bytes with an unimplemented verification result. Method
+coverage is therefore not a measure of JTD feature completion. Preserve these
+existing interfaces until their consumers and replacement behavior are reviewed;
+do not add new stubs solely to match the full Studio method list.
+
+Editor UI reuse is optional. JTD editing semantics, original-record mutation,
+unknown-data preservation, and saving/reopening remain engine responsibilities.
+When a concrete integration is needed:
+
+1. Identify the consumer and the operations it actually needs; distinguish
+   read/render operations from edits that must persist to JTD.
+2. Implement a small adapter over supported JTD model operations, keeping
+   consumer-specific addressing outside the engine's source representation.
+3. Verify the supported interaction end to end. Editing requires an actual
+   edit/save/reopen check with preserved unknown data; matching function names
+   or returning a fallback response is not sufficient.
 
 ## Source
 
@@ -29,7 +62,8 @@ commit: bc38ff55
 
 ## Clone Note
 
-The rhwp repository includes Git LFS files. Because large PDF smudging can currently fail due to GitHub LFS budget limits, clones used only for source-structure reference should skip LFS downloads.
+For a source-only reference checkout, skip Git LFS payload downloads. The JTD
+engine does not require the reference project's sample PDFs.
 
 ```sh
 GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/edwardkim/rhwp.git rhwp
@@ -39,19 +73,25 @@ GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/edwardkim/rhwp.git rhwp
 
 - Use `rhwp/` as a read-only reference repository.
 - Do not copy `rhwp/` code into rjtd.
-- Compare structure, layer separation, testing style, and API philosophy first.
+- Compare applicable layering, preservation, and testing patterns; use JTD
+  evidence to decide model semantics and behavior.
 - Keep actual rjtd implementation code under `rjtd/`.
 - Treat `rhwp/` as an external reference repository.
 
 ## Dependency And Implementation Policy
 
-rjtd follows the rhwp approach for both dependency selection and direct implementation scope.
+rjtd reuses its existing utilities and dependencies before adding new machinery.
+For a comparable task, inspect `rhwp/Cargo.toml` and its implementation as a
+precedent, then evaluate the approach against JTD source evidence, resource
+limits, and preservation requirements. A precedent is not a mandatory choice;
+its absence does not block a JTD-specific implementation. New dependencies
+require explicit approval, regardless of whether rhwp uses them.
 
-- If a new dependency or implementation approach is needed, first inspect `rhwp/Cargo.toml` and the rhwp implementation.
-- If rhwp already uses a crate for the same task category, rjtd should prefer that crate and approach.
-- If rhwp directly implements the same task category, rjtd should prefer direct implementation instead of adding a new dependency.
-- Only pause and request an explicit decision when the problem has neither an rhwp dependency nor a direct-implementation precedent.
-- Do not add a dependency that rhwp does not use purely for convenience.
+## Recorded Implementation Evidence
+
+The following dependency choices and implementation notes describe recorded
+work. They are retained for reference, not as a full-compatibility checklist or
+a requirement to reproduce the HWP document model.
 
 Relevant dependency patterns currently confirmed in rhwp:
 
@@ -67,7 +107,7 @@ Current JTTC conclusions:
 
 - Local `.jttc` samples show a `JustCompressedDocument` marker and `-lh5-` marker inside `/JSCompDocument`.
 - rhwp has no LHA/LZH/LH5 dependency.
-- Therefore rjtd does not add an LHA/LZH dependency without a separate decision.
+- New LHA/LZH dependencies require the same explicit approval as other additions.
 - rjtd directly implements only the observed single `-lh5-` member profile to read `/DocumentText` from the inner CFB of `.jttc` files.
 - The current implementation does not yet support LHA header checksums, CRC verification, multi-member archives, or other LHA methods.
 
@@ -163,7 +203,7 @@ Current application core / PDF conclusions:
 - `rjtd text-boundary-paragraph-like-discriminators <file>` summarizes those rows by bucket. The current sweep shows dual layout exactness only on paragraph-like rows, and in `iwata_file` those same rows are the only strict candidates with nonzero chosen `TCntV.01` spans. App-core can surface this as decoded-false evidence later, but must not rebuild real paragraphs until the coordinate target is explained.
 - Model/export/app-core JSON now surfaces that stricter evidence as decoded-false `textParagraphBoundaryCandidates`. The preservation rule is strict unit `0x001c` single candidate, nonzero chosen `TCntV.01` span, and dual row-local exact endpoint evidence from both `line-word-value` and `page-be32-field`. A 61-sample JSON export sweep succeeds with 0 failures and preserves 10 candidates total, all in `iwata_file`; `getValidationWarnings` reports them as diagnostic-only data rather than decoded paragraph records.
 - `rjtd text-paragraph-boundary-targets <file>` now traces those preserved candidates back to concrete `/LineMark` word indexes and `/PageMark` raw row fields. The first sweep shows some exact endpoints are non-unique, so rjtd must identify semantically eligible line/page fields before promoting these candidates into real paragraph or layout objects.
-- Full-layout PDF support should continue to follow rhwp's architecture: decode JTD streams into model objects first, build a page/layer/paint tree from the model, render SVG pages, then assemble PDF through the existing `usvg`/`svg2pdf`/`pdf-writer` path. Tables, images, SVG/vector objects, and shapes should therefore be recovered as model/control/layer objects, not injected directly by the exporter.
+- Full-layout PDF support retains the model-first pipeline: decode JTD streams into model objects first, build a page/layer/paint tree from the model, render SVG pages, then assemble PDF through the existing `usvg`/`svg2pdf`/`pdf-writer` path. Tables, images, SVG/vector objects, and shapes should therefore be recovered as model/control/layer objects, not injected directly by the exporter.
 - `rjtd object-stream-candidates <file>` now inventories non-text visual/object stream evidence with `decoded=false`: object/image/shape/table path hints, `SO\0\0` markers, image signatures, SVG signatures, and payload prefixes. The current 61-sample sweep finds 43 files with candidates and 17 files with embedded image signatures, but 0 named table-path candidates; table recovery should therefore proceed through `/DocumentText` control ranges and layout/style streams, while image recovery can start from `/EmbedItems/Embedding */Contents` candidates.
 - Parser/export/app-core JSON now preserves that same evidence as decoded-false `objectStreamCandidates`; `getDocumentInfo` reports the candidate count and rows, while `getValidationWarnings` reports `JtdObjectStreamCandidateDiagnosticOnly`. A 61-sample JSON export sweep succeeds with 0 failures and preserves 933 candidates in 43 files, keeping the future image/shape/table renderer path model-first.
 - `/VisualList` streams are also preserved as decoded-false object stream candidates with `visual-list-path` evidence. For the PDF-reference `fax02.jtt` sample, rjtd now decodes the observed BMDV header (`120x169`, `8bpp`, RLE length `2216`) into model metadata and projects long horizontal raster runs, the title-band hatch, static `FAX:`/`TEL:` form labels, and DocumentText-derived form text slots into SVG/PDF and `getPageLayerTree` as decoded-false `visualListRasterDiagnostic`/`visualListFormProjection` geometry. Full BMDV/vector semantics remain unclaimed.

@@ -18,23 +18,17 @@ OpenJTD は、日本のワードプロセッサ「一太郎 (Ichitaro)」で使�
 
 ## Foundational Principle
 
-### Follow rhwp
+### JTD 固有のエンジン
 
-OpenJTD は可能な限り rhwp プロジェクトの構造と思想を参考にする。
-
-rhwp は HWP/HWPX 文書のための現代的な Rust ベース文書エンジンである。
-
-`rjtd` は rhwp の構造を JTD 領域の参考にする。
-
-したがって、プロジェクト構造、layer 分離方式、data model 設計方式、test strategy はまず rhwp を参照する。
-
-新しい構造を設計するより、検証済みの構造を再利用する。
+OpenJTD の model、描画、編集、原本保存は JTD の原本根拠に従う。他のエンジンから
+適用できる layer 分離・保存・検証の pattern を参照しても、その形式固有の model を
+前提にはしない。
 
 ## Relationship with rhwp
 
-OpenJTD は rhwp の競合プロジェクトではない。
-
-むしろ同じ思想を共有する姉妹プロジェクト (sister project) である。
+rhwp は HWP/HWPX 文書向けの独立した Rust エンジンである。OpenJTD は JTD/JTT/JTTC
+エンジンを開発する。rhwp は設計参考と任意の連携先であり、必須の document model や
+エディタ API 全体の契約ではない。
 
 ```text
 rhwp
@@ -48,29 +42,16 @@ OpenJTD
  └─ Ichitaro ecosystem
 ```
 
-長期的には次のような共通エコシステムを検討する。
-
-```text
-Document Ecosystem
- ├─ rhwp
- ├─ OpenJTD
- ├─ common-document-model
- ├─ common-renderer
- ├─ common-exporter
- └─ common-viewer
-```
-
-今後の目標は次の通り。
-
-- HWP ↔ JTD 共通 API
-- 文書フォーマット共通 IR
-- 共通 Viewer
-- 共通 Exporter
-- Apache Tika plugin
+外部エディタ UI、ビューア、exporter、検索用ツールは、具体的な利用者が必要とする時に
+小さな adapter を通じて対応済みの JTD 機能を使える。JTD の編集・保存・再読込は
+エンジンの責任として残る。共通 IR、HWP/HWPX 変換、完全な Studio parity は忠実な JTD
+エンジンの前提ではない。[rhwp の連携範囲](RHWP-COMPATIBILITY.ja.md) が参照と adapter の
+境界を定義する。
 
 ## Architecture Policy
 
-`rjtd` engine は rhwp と同じく次の階層を維持する。
+`rjtd` engine は解析、model の所有、出力を次の階層に分離する。この境界は、外部エディタの
+API 形状にかかわらず JTD の原本保存を守る。
 
 ```text
 Document File
@@ -118,7 +99,7 @@ openjtd-workspace/
 └── openjtd.github.io
 ```
 
-最上位の `docs` は、プロジェクト憲章、エコシステム計画、rhwp 継承ポリシー、長期ロードマップを含む。
+最上位の `docs` は、プロジェクト憲章、architecture、rhwp の参照・連携方針、長期 roadmap を含む。
 
 `rhwp` は、`rjtd` の構造、API 思想、test strategy を比較するための local external
 reference clone である。
@@ -127,7 +108,8 @@ reference clone である。
 
 ## rjtd Engine Repository Structure
 
-Rust エンジンリポジトリは rhwp の構造をできるだけ維持する。
+Rust workspace は parser、model、exporter、CLI、browser binding の責任を分離し、
+JTD の実装要件を支える。
 
 ```text
 rjtd/
@@ -145,9 +127,8 @@ rjtd/
 └── tools
 ```
 
-現在使っていない crate もあらかじめ作成する。
-
-これはプロジェクトの成長方向を固定するためである。
+実装した責任に独立した境界が必要になった時だけ新しい crate を追加する。
+参照プロジェクトの将来の module 配置を再現するためには追加しない。
 
 ## Document Model First
 

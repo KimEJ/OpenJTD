@@ -29,19 +29,16 @@ named `Candidate`, `Unknown`, or `Diagnostic`, and JSON fields marked
 semantics. All public APIs and command output schemas may change in later
 0.0.x releases.
 
-## Foundational Principle: Follow rhwp
+## JTD Native Engine and Design References
 
-The `rjtd` engine takes inspiration from the structure and philosophy of the
-rhwp project wherever possible.
-
-rhwp is a modern Rust-based document engine for HWP/HWPX documents. `rjtd` uses
-its structure as a reference for the JTD domain.
-
-Therefore, project structure, layer separation, data model design, and test strategy should first be compared with rhwp. Reuse a proven structure instead of inventing a new one.
+JTD source evidence governs the engine's model and behavior. rhwp provides
+useful layering, preservation, and testing precedents, not a required HWP
+document model or complete editor API contract. See the
+[rhwp reference and integration scope](../docs/RHWP-COMPATIBILITY.md).
 
 ## Architecture Policy
 
-`rjtd` keeps the same layered architecture as rhwp.
+`rjtd` separates source parsing, model ownership, and output through these layers.
 
 ```text
 Document File
@@ -70,6 +67,8 @@ Every feature must be implemented through these layers. No exporter may read sou
 layer diagnostics, and basic body-text editing, search, selection, clipboard,
 and snapshots. Source byte/unit spans are retained where parsed. The
 `rjtd-wasm::HwpDocument` wrapper exposes a rhwp-shaped browser API.
+Its existing name and working viewer calls are retained; complete Studio API
+coverage is not a JTD feature-completion target.
 
 Many advanced formatting, table/cell, object, header/footer, and note methods
 still return defaults, no-hit results, or no-op results. Some setting methods
@@ -285,4 +284,4 @@ cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 
 `style-records` prints preserved style stream summaries and record candidates, including family, header candidates, record layout, offsets, codes, payload lengths, and conservative labels. `style-candidates` lists labeled `/TextLayoutStyle` candidates as stable per-document rows for cross-sample correlation. `text-layout-style-records` prints all `/TextLayoutStyle` records with payload digests and previews. `document-view-style-groups` prints `/DocumentViewStyles` group record payload lengths, digests, and short previews. `text-position-style-context` compares `TCntV.01` tail fields against text/page style candidate IDs, record indexes, and `/DocumentViewStyles` group records; `text-position-style-summary` aggregates those hits per tail field; `text-position-count-tail-field-roles` compares tail fields and adjacent pairs against document-text unit/text hits. Parsed `TextRun` values preserve `/DocumentText` byte/UTF-16 source spans, and valid `TCntV.01` entries are preserved as decoded-false `textCountRanges` with byte/unit `documentTextOverlaps` in model JSON and app-core document info. These are reverse-engineering diagnostics, not decoded paragraph style assignments yet.
 
-`export` parses through the `DocumentParser` entry point, consumes `ParsedDocumentText` to build a minimal `Document` model, preserves the raw text source in the model, preserves skipped inline text as `UnknownObject` payloads, promotes observed ruby base/phonetic pairs to `Inline::Ruby`, preserves observed style/layout streams as named `UnknownStyle` entries, and then emits JSON, Markdown, plain text, basic HTML, or native PDF. Plain text, Markdown, and PDF output use the visible ruby base text, while JSON keeps the annotation text, style stream names, observed style stream family/header summaries, neutral record boundary candidates with conservative label candidates, and raw payloads. PDF export requires `-o`/`--output` and follows rhwp's native pipeline direction: `DocumentCore` renders text SVG pages and `rjtd-export` converts them with `svg2pdf` plus `pdf-writer`. For observed `.jttc`, the preserved `/DocumentText` and style streams come from the decompressed inner CFB. For embedded samples, the preserved source is `/EmbeddedDocumentText`. If a document has preserved raw streams but no extractable text yet, PDF/SVG output shows a visible diagnostic notice instead of a silent blank page. Basic HTML emits paragraphs and ruby markup; full layout and rich clipboard semantics remain unfinished.
+`export` parses through the `DocumentParser` entry point, consumes `ParsedDocumentText` to build a minimal `Document` model, preserves the raw text source in the model, preserves skipped inline text as `UnknownObject` payloads, promotes observed ruby base/phonetic pairs to `Inline::Ruby`, preserves observed style/layout streams as named `UnknownStyle` entries, and then emits JSON, Markdown, plain text, basic HTML, or native PDF. Plain text, Markdown, and PDF output use the visible ruby base text, while JSON keeps the annotation text, style stream names, observed style stream family/header summaries, neutral record boundary candidates with conservative label candidates, and raw payloads. PDF export requires `-o`/`--output` and uses the model-based SVG-to-PDF path: `DocumentCore` renders text SVG pages and `rjtd-export` converts them with `svg2pdf` plus `pdf-writer`. For observed `.jttc`, the preserved `/DocumentText` and style streams come from the decompressed inner CFB. For embedded samples, the preserved source is `/EmbeddedDocumentText`. If a document has preserved raw streams but no extractable text yet, PDF/SVG output shows a visible diagnostic notice instead of a silent blank page. Basic HTML emits paragraphs and ruby markup; full layout and rich clipboard semantics remain unfinished.

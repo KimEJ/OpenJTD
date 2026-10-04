@@ -1,7 +1,9 @@
 # Architecture
 
-OpenJTD currently builds its JTD engine through the `rjtd` Rust toolset. `rjtd`
-follows the rhwp-style layered document engine architecture.
+OpenJTD builds its JTD-native engine through the `rjtd` Rust toolset. The layers
+separate source parsing, model ownership, and output; their use does not require
+adopting another format's document model. See the
+[rhwp reference and integration scope](RHWP-COMPATIBILITY.md) for adapter policy.
 
 ```text
 Document File
@@ -30,6 +32,8 @@ Document Model
 - Stream code handles byte-level stream access.
 - Record code decodes typed and unknown record boundaries.
 - Model code owns semantic document structures.
+- JTD source evidence determines model semantics; consumer-specific editing
+  addresses belong at the adapter boundary, not in source interpretation.
 - Export code consumes only the document model.
 
 Exporters must not read raw container, stream, or record data directly.

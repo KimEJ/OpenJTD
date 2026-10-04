@@ -106,8 +106,9 @@ wrap、merged/sparse cell、一般的な page assignment は未完成である�
    不正入力向けの実行可能な fuzz target も追加する。現在の `rjtd/fuzz/` は placeholder
    だけである。
 4. **構造を保持した編集と保存を実装する。** 対応する編集能力を明示し、変更時にも未知
-   データを保持する。編集・保存・再読込の検証を完了条件とする。完全な rhwp Studio parity、
-   共通形式 IR、HWP/HWPX 出力は長期作業に位置づける。
+   データを保持する。編集・保存・再読込の検証を完了条件とする。外部エディタ連携は、利用者と
+   対応する操作が決まった時に [rhwp の連携範囲](RHWP-COMPATIBILITY.ja.md) に従う。
+   完全な Studio parity、共通形式 IR、HWP/HWPX 出力は前提や完了条件にはしない。
 
 ## Verification Boundary
 

@@ -26,18 +26,15 @@ release scope は [CHANGELOG.md](CHANGELOG.md)、必須の公開順序は
 fields は、final semantics を主張せず reverse-engineering evidence を保持する。
 public API と command output schema は後続の 0.0.x release で変更され得る。
 
-## Foundational Principle: Follow rhwp
+## JTD 固有のエンジンと設計参考
 
-`rjtd` engine は可能な限り rhwp プロジェクトの構造と思想を参考にする。
-
-rhwp は HWP/HWPX documents のための現代的な Rust-based document engine である。`rjtd`
-はその構造を JTD 領域の参考にする。
-
-したがって、project structure、layer separation、data model design、test strategy はまず rhwp を参照する。新しい構造を設計するより、検証済みの構造を再利用する。
+エンジンの model と挙動は JTD の原本根拠に従う。rhwp は layer 分離・保存・検証の有用な
+先例であり、必須の HWP document model やエディタ API 全体の契約ではない。
+[rhwp の参照・連携範囲](../docs/RHWP-COMPATIBILITY.ja.md) を参照する。
 
 ## Architecture Policy
 
-`rjtd` は rhwp と同じく次の階層を維持する。
+`rjtd` は原本解析、model の所有、出力を次の階層に分離する。
 
 ```text
 Document File
@@ -66,6 +63,8 @@ Document Model
 基本的な本文編集・検索・選択・clipboard・snapshot を提供する。解析できた箇所の
 source byte/unit span を保持する。`rjtd-wasm::HwpDocument` は rhwp 形状の browser API
 を公開する。
+既存の名前と動作済みのビューア呼出しは維持するが、Studio API 全体の coverage は
+JTD 機能の完了目標ではない。
 
 高度な書式、表・セル、オブジェクト、header/footer、note の多くのメソッドは、既定値、
 no-hit、no-op を返す。設定メソッドの一部は decoded JTD settings を保存せず成功を返す。
@@ -276,4 +275,4 @@ cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 
 `style-records` は preserved style stream summaries と record candidates を family、header candidates、record layout、offsets、codes、payload lengths、conservative labels 付きで出力する。`style-candidates` は cross-sample correlation 用に labeled `/TextLayoutStyle` candidates を stable per-document rows として列挙する。`text-layout-style-records` は all `/TextLayoutStyle` records を payload digests と previews 付きで出力する。`document-view-style-groups` は `/DocumentViewStyles` group record payload lengths、digests、short previews を出力する。`text-position-style-context` は `TCntV.01` tail fields を text/page style candidate IDs、record indexes、`/DocumentViewStyles` group records と比較し、`text-position-style-summary` はそれらの hits を tail field ごとに aggregate し、`text-position-count-tail-field-roles` は tail fields と adjacent pairs を document-text unit/text hits と比較する。parsed `TextRun` values は `/DocumentText` byte/UTF-16 source span を保存し、valid `TCntV.01` entries は model JSON と app-core document info で byte/unit `documentTextOverlaps` 付き decoded-false `textCountRanges` として保存される。これらは reverse-engineering diagnostics であり、decoded paragraph style assignments ではまだない。
 
-`export` は `DocumentParser` entry point 経由で parse し、`ParsedDocumentText` を consume して minimal `Document` model を構築する。raw text source を model に保存し、skipped inline text を `UnknownObject` payloads として保存し、observed ruby base/phonetic pairs を `Inline::Ruby` に promote し、observed style/layout streams を named `UnknownStyle` entries として保存したうえで、JSON、Markdown、plain text、基本 HTML、native PDF を出力する。plain text、Markdown、PDF は visible ruby base text を使い、JSON は annotation text、style stream names、observed style stream family/header summaries、conservative label candidates 付き neutral record boundary candidates、raw payloads を保持する。PDF export には `-o`/`--output` が必要で、rhwp の native pipeline direction に従う: `DocumentCore` が text SVG pages を render し、`rjtd-export` が `svg2pdf` と `pdf-writer` で変換する。観察済み `.jttc` では decompressed inner CFB 由来の `/DocumentText` と style streams が保存される。embedded samples では source は `/EmbeddedDocumentText` として保存される。preserved raw streams はあるが extractable text がまだない document では、PDF/SVG output は silent blank page ではなく visible diagnostic notice を表示する。基本 HTML は段落とルビ markup を出力する。完全な layout と rich clipboard semantics は未完成。
+`export` は `DocumentParser` entry point 経由で parse し、`ParsedDocumentText` を consume して minimal `Document` model を構築する。raw text source を model に保存し、skipped inline text を `UnknownObject` payloads として保存し、observed ruby base/phonetic pairs を `Inline::Ruby` に promote し、observed style/layout streams を named `UnknownStyle` entries として保存したうえで、JSON、Markdown、plain text、基本 HTML、native PDF を出力する。plain text、Markdown、PDF は visible ruby base text を使い、JSON は annotation text、style stream names、observed style stream family/header summaries、conservative label candidates 付き neutral record boundary candidates、raw payloads を保持する。PDF export には `-o`/`--output` が必要で、model を経由する SVG-to-PDF 経路を使う: `DocumentCore` が text SVG pages を render し、`rjtd-export` が `svg2pdf` と `pdf-writer` で変換する。観察済み `.jttc` では decompressed inner CFB 由来の `/DocumentText` と style streams が保存される。embedded samples では source は `/EmbeddedDocumentText` として保存される。preserved raw streams はあるが extractable text がまだない document では、PDF/SVG output は silent blank page ではなく visible diagnostic notice を表示する。基本 HTML は段落とルビ markup を出力する。完全な layout と rich clipboard semantics は未完成。

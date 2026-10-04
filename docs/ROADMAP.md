@@ -118,8 +118,10 @@ reproduction failures. No complete-fidelity claim is made for any format.
    `rjtd/fuzz/` directory is only a placeholder.
 4. **Build structure-preserving editing and save.** Expose supported editing
    capabilities explicitly and preserve unknown data through mutations.
-   Completion requires edit/save/reopen checks. Full rhwp Studio parity,
-   common-format IR, and HWP/HWPX export remain longer-term work.
+   Completion requires edit/save/reopen checks. External editor integration
+   follows the [rhwp integration scope](RHWP-COMPATIBILITY.md) when a consumer
+   and supported operations are identified. Full Studio parity, common-format
+   IR, and HWP/HWPX export are not prerequisites or completion criteria.
 
 ## Verification Boundary
 

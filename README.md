@@ -87,7 +87,9 @@ scripts/regenerate-pdf-output.sh
 ## Design Reference
 
 OpenJTD's repository layout and engine boundaries take inspiration from the
-`rhwp` project structure, adapted for JTD.
+`rhwp` project. JTD source evidence governs its internal model; full rhwp Studio
+compatibility is not a required milestone. See the
+[rhwp reference and integration scope](docs/RHWP-COMPATIBILITY.md).
 
 ## Project Status
 

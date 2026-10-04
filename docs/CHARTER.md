@@ -18,24 +18,17 @@ practical JTD engine that can support faithful layout rendering and editing.
 
 ## Foundational Principle
 
-### Follow rhwp
+### JTD Native Engine
 
-OpenJTD takes inspiration from the structure and philosophy of the rhwp project
-wherever possible.
-
-rhwp is a modern Rust-based document engine for HWP/HWPX documents.
-
-`rjtd` uses rhwp's structure as a reference for the JTD domain.
-
-Therefore, project structure, layer separation, data model design, and test strategy should first be compared with rhwp.
-
-Reuse a proven structure instead of inventing a new one.
+JTD source evidence governs OpenJTD's model, rendering, editing, and file
+preservation. Reuse applicable layering, preservation, and testing patterns
+from other engines without making their format-specific model a prerequisite.
 
 ## Relationship with rhwp
 
-OpenJTD is not a competitor to rhwp.
-
-It is a sister project that shares the same philosophy.
+rhwp is an independent Rust engine for HWP/HWPX documents. OpenJTD develops
+the JTD/JTT/JTTC engine; rhwp is a design reference and optional integration
+target, not a mandatory document model or complete editor API contract.
 
 ```text
 rhwp
@@ -49,29 +42,18 @@ OpenJTD
  └─ Ichitaro ecosystem
 ```
 
-In the long term, the following shared ecosystem should be considered.
-
-```text
-Document Ecosystem
- ├─ rhwp
- ├─ OpenJTD
- ├─ common-document-model
- ├─ common-renderer
- ├─ common-exporter
- └─ common-viewer
-```
-
-Future goals include:
-
-- HWP ↔ JTD common API
-- Common document-format IR
-- Common Viewer
-- Common Exporter
-- Apache Tika plugin
+External editor UIs, viewers, exporters, and indexing tools can consume
+supported JTD capabilities through focused adapters when a concrete consumer
+needs them. JTD editing and save/reopen behavior remain engine responsibilities.
+Shared IR, HWP/HWPX conversion, and full Studio parity are not prerequisites for
+a faithful JTD engine. The [rhwp integration scope](RHWP-COMPATIBILITY.md)
+defines the reference and adapter boundaries.
 
 ## Architecture Policy
 
-The `rjtd` engine keeps the same layered architecture as rhwp.
+The `rjtd` engine separates parsing, model ownership, and output through these
+layers. The boundaries protect JTD source preservation independently of an
+external editor's API shape.
 
 ```text
 Document File
@@ -119,7 +101,8 @@ openjtd-workspace/
 └── openjtd.github.io
 ```
 
-The top-level `docs` directory contains the project charter, ecosystem planning, rhwp inheritance policy, and long-term roadmap.
+The top-level `docs` directory contains the project charter, architecture,
+rhwp reference and integration policy, and long-term roadmap.
 
 `rhwp` is a local external reference clone used to compare `rjtd`'s structure,
 API philosophy, and test strategy.
@@ -128,7 +111,8 @@ The `rjtd` directory contains the Rust toolset and engine implementation.
 
 ## rjtd Engine Repository Structure
 
-The Rust engine repository keeps the rhwp structure as closely as possible.
+The Rust workspace separates parser, model, exporter, CLI, and browser binding
+responsibilities. Its structure supports JTD implementation needs.
 
 ```text
 rjtd/
@@ -146,9 +130,8 @@ rjtd/
 └── tools
 ```
 
-Crates that are not currently used are still created early.
-
-This fixes the intended growth direction of the project.
+Add a new crate only when implemented responsibilities need a separate boundary,
+not to reproduce the reference project's future module layout.
 
 ## Document Model First
 
