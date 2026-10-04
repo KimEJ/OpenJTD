@@ -60,7 +60,11 @@ pub(super) fn table_candidates_from_document_text_controls(
             continue;
         }
 
-        if column_count < 2 || control_row_text_precedes_native_table_header(bytes, &row) {
+        let native_single_column = column_count == 1
+            && native_control_table_rows_are_framed(bytes, std::slice::from_ref(&row));
+        if (column_count < 2 && !native_single_column)
+            || control_row_text_precedes_native_table_header(bytes, &row)
+        {
             push_document_text_control_table_candidate(
                 &mut candidates,
                 start_index,
@@ -94,7 +98,7 @@ pub(super) fn table_candidates_from_document_text_controls(
         current_column_count = 0;
         empty_gap_count = 0;
 
-        if column_count >= 2 {
+        if column_count >= 2 || native_single_column {
             current_column_count = column_count;
             current_rows.push(row);
         } else if column_count == 0 {
@@ -161,7 +165,7 @@ fn native_control_table_rows_are_framed(
 ) -> bool {
     let columns = rows.first().map_or(0, |row| row.cells.len());
     !rows.is_empty()
-        && columns >= 2
+        && columns >= 1
         && rows.iter().all(|row| {
             if row.cells.len() != columns {
                 return false;

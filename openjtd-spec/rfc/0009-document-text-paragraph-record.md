@@ -279,6 +279,12 @@ unframed single-row text is still rejected. Single-row border projection require
 the verified trailing empty-row record, giving explicit source boundaries rather
 than inferring a height from a second row. Native PDF geometry remains unproven.
 
+A 2×1 single-column probe supplies a counterexample to the
+old minimum-column heuristic. A one-column control row is admitted only with
+the complete native parent/cell framing used above. Its two cells and source
+border project through the existing narrow profile; unframed one-column text
+does not become a table candidate. Geometry and paint semantics stay undecoded.
+
 ### Interstitial flow text between two native control tables
 
 One further first-page horizontal profile is renderable only when two complete

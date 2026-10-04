@@ -204,6 +204,12 @@ frame のない 1-row text は引き続き拒否する。1-row border projection
 末尾 empty-row record を必要とし、2 row 目から高さを推測せず source の境界を使う。
 native PDF geometry の一致は未証明のままである。
 
+2×1 probe は旧来の最小 column 数 heuristic に対する
+反例である。1-column control row は前述の完全な native parent/cell frame を
+持つ場合に限り許可する。既存の狭い profile で 2 cell と source border を描画するが、
+frame のない 1-column text は table candidate にしない。geometry と paint の
+意味は未解読のままである。
+
 ### 2 つの native control table 間の flow text
 
 さらに、先頭ページ横書きでは、完全な control-table projection が 2 つあり、その間に

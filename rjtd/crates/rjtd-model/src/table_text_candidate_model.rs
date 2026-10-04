@@ -561,7 +561,9 @@ impl TableCandidate {
             .map(|segment| segment.kind())
             .collect::<Vec<_>>();
 
-        if pattern.len() < 2 {
+        if pattern.is_empty()
+            || (pattern.len() < 2 && !self.is_document_text_control_run_candidate())
+        {
             return None;
         }
 
