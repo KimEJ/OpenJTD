@@ -168,6 +168,7 @@ pub(crate) fn render_text_page_svg(
             );
             let mut x = frame_text_placement
                 .map(|placement| placement.x as f32)
+                .or_else(|| native_paragraph_line_x(document, layout, line))
                 .or_else(|| text_origin.map(|origin| origin.0))
                 .unwrap_or_else(|| layout.margin_left_px());
             let y = frame_text_placement

@@ -1066,6 +1066,9 @@ pub(super) fn page_layer_tree_json(
                 frame_text_placement
                     .map(|placement| placement.x)
                     .or_else(|| {
+                        native_paragraph_line_x(&core.document, layout, line).map(f64::from)
+                    })
+                    .or_else(|| {
                         fallback_text_origin(layout, &core.document).map(|origin| origin.0 as f64)
                     })
                     .unwrap_or(layout.margin_left_px() as f64)

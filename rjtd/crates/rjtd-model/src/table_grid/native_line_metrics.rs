@@ -132,6 +132,7 @@ pub(crate) fn native_rule_line_placement(
             return None;
         }
         top += advance;
+        top += native_paragraph_after_space(document, interval.unit_start, interval.unit_end)?;
     }
     (top.is_finite() && top < layout.height_px()).then_some((page, top, base_mm100))
 }

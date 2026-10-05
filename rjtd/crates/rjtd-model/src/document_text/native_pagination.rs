@@ -21,16 +21,28 @@ pub(crate) fn native_page_line_plan(
     {
         return None;
     }
-    if !native_rule_grid_admitted(document, layout, writing_mode) {
+    if writing_mode.is_vertical() || !layout.has_source_margins() {
         return None;
     }
     let flow = document.document_text_flow()?;
+    let has_rules = flow
+        .events()
+        .iter()
+        .any(|event| native_rule_parent_offset(event).is_some());
+    if has_rules && !native_rule_grid_admitted(document, layout, writing_mode) {
+        return None;
+    }
     if flow.events().iter().any(|event| match event.kind() {
         DocumentTextFlowKind::Text => event
             .text()
             .chars()
             .any(|c| c != '\n' && !native_rule_character_supported(c)),
-        DocumentTextFlowKind::Record => !matches!(event.record_class(), Some(0x0010 | 0x0030)),
+        DocumentTextFlowKind::Record => {
+            !(native_rule_parent_offset(event).is_some()
+                || native_rule_fixed_pitch(event).is_some()
+                || native_paragraph_attributes(event).is_some()
+                || (has_rules && event.record_class() == Some(0x0030)))
+        }
         DocumentTextFlowKind::Control => event.code() != Some(0x000e),
         _ => true,
     }) {

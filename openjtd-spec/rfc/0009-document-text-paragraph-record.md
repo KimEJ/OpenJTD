@@ -582,6 +582,42 @@ geometry/paint stay candidate / `decoded:false`. Mixed visible fonts, other
 paragraph attributes, shrinking-font behavior, and exact glyph metrics are not
 generalized by these controlled examples.
 
+### Standalone first-line, continuing-line, and after-space candidates
+
+The controlled no-indent, first-line 10mm, continuing-line 10mm, and after100%
+paragraph documents each retain six physical LineMark lines. The first two
+indent variants use a length17 `0010` record with `w3..w10`:
+
+```text
+0000 0026 0005 0001 [continuing] 0000 [first] 0000
+```
+
+The observed unit selector1 and value1000 correspond to the native 10mm UI
+setting. Only zero right fields are admitted; unknown unit/right values remain
+undecoded. A record ending at the first paragraph text's source start governs
+that paragraph only. Later paragraph source starts without that adjacent record
+use default indentation, rather than inheriting a previous paragraph's setting.
+The source line's character start distinguishes its first and continuing lines.
+
+The after-space sample has length25 with `w3..w18`:
+
+```text
+0000 0022 0002 0000 0000 0023 0002 0000 03e8
+0026 0005 0001 0000 0000 0000 0000
+```
+
+The controlled UI before0%/after100% maps to modes0 and values0/1000. The bounded
+renderer adds `documentFont * after / 1000` after the paragraph's final physical
+line. Native print quantization and font metrics leave about0.2pt difference in
+the after-space comparison; no reference-coordinate correction is applied.
+Other before/right/unit forms and general percentage semantics are not decoded.
+
+Plain horizontal text with known paragraph or fixed-pitch records can use the
+same source-page plan without requiring ruled bands. Physical wrapping and
+paragraph/character/source addressing are retained, with candidate page assignment
+and `decoded:false` metadata. This preserves native six-line boundaries instead
+of rewrapping the first paragraph or inserting a fallback blank paragraph line.
+
 ## Correlation with LineMark unit-start
 
 The `sample-academic.jtd` sample (25 parsed LineMark records) shows exact correspondence

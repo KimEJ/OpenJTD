@@ -153,7 +153,7 @@ retain their source text/range without advancing the surrounding body fallback.
 Table fallbacks overlapping either physical-flow or control-table text stay
 diagnostic-only, so mixed sparse projections do not repaint cells.
 
-Simple horizontal ruled documents with uniform visible-run font sizes can
+Simple horizontal text or ruled documents with uniform visible-run font sizes can
 use a bounded source pagination plan:
 LineMark ranges split the existing paragraph text runs, and active fixed84
 PageMark ranges assign the physical lines to pages. Paragraph/character addresses
@@ -173,6 +173,14 @@ Padding spaces remain source text but do not make an otherwise uniform visible
 font range mixed. Larger table/body fonts, local cell breaks, and surrounding
 body text share the same source metric helper; arbitrary mixed runs remain
 unproven. This does not establish exact native glyph advances.
+
+Standalone paragraph candidates distinguish first-line and continuing-line
+indentation from framed source attributes. The supported zero-right-indent
+profile applies each indent only to its paragraph's physical lines. A controlled
+after-space percentage uses document font height as a bounded em-based advance;
+it is not a general spacing or native print-quantization decoder. Text without
+ruled bands can use the same source line plan when all source records are known.
+Raw attributes, unknown values, and `decoded:false` evidence remain available.
 
 ## License
 

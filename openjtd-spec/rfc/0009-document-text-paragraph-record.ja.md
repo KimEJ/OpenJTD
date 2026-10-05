@@ -444,6 +444,36 @@ paddingの旧fontによって最初の拡大cellをmixedとして拒否するこ
 同じ累積metricを使う。raw PageMark pitch/unknown fieldは保持し、geometry/paintはcandidate/
 `decoded:false`。混合visible font、他paragraph attribute、縮小font挙動やglyph metricは一般化しない。
 
+### Standalone first/continuing indentとafter-space candidate
+
+統制したindent0、first-line10mm、continuing-line10mm、after100%の文書は各物理LineMark6行を
+保持する。indent対照のlength17 `0010` recordは`w3..w10`が次のとおり。
+
+```text
+0000 0026 0005 0001 [continuing] 0000 [first] 0000
+```
+
+観測unit selector1/value1000はnative UIの10mm設定に対応する。right field0だけを許可し、
+未知unit/rightは未解読。最初のparagraph textのsource startに隣接して終わるrecordが、その
+paragraphだけに適用される。隣接recordのない後paragraphはdefault indentとし、前paragraphの
+設定を継承しない。source lineのcharacter startでfirst/continuingを区別する。
+
+after-space例のlength25は`w3..w18`が次のとおり。
+
+```text
+0000 0022 0002 0000 0000 0023 0002 0000 03e8
+0026 0005 0001 0000 0000 0000 0000
+```
+
+UIのbefore0%/after100%はmode0/value0/1000に対応する。限定rendererはparagraph最後の物理行後に
+`documentFont * after / 1000`を加える。after-space比較にはnative print量子化/font metricsによる
+約0.2pt差があり、reference座標補正はしない。他before/right/unitや一般percentage意味は未解読。
+
+既知paragraph/fixed-pitch recordのplain横書きtextはruled bandなしで同じsource-page planを使う。
+物理wrapとparagraph/character/source addressingを保持し、candidate page assignmentと
+`decoded:false`を示す。最初のparagraphを再wrapしたりfallback blank lineを加えたりせず、native6行を
+保持する。
+
 ## LineMark unit-start との相関
 
 `sample-academic.jtd` サンプル（解析済み LineMark レコード 25 件）では、LineMark の `unit-start` 値と `/DocumentText` の `0x001c` レコード位置の間に明確な対応関係がある：
