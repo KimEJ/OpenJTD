@@ -3,7 +3,7 @@
 Command-line inspection and export tools for Ichitaro JTD documents.
 
 `rjtd-cli` installs the `rjtd` executable from the
-[OpenJTD](https://github.com/KimEJ/OpenJTD) Rust workspace. It combines
+[OpenJTD](https://github.com/OpenJTD/rjtd) Rust workspace. It combines
 `rjtd-core`, `rjtd-model`, and `rjtd-export` for end-user inspection and
 developer-focused format diagnostics.
 

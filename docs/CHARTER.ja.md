@@ -253,17 +253,23 @@ OpenJTD は最終的に次の三つを提供する。
 
 ## GitHub Organization Model
 
-初期 GitHub organization には次の構造を推奨する。現在のワークスペース最上位ディレクトリも、この構成をあらかじめ反映している。
+OpenJTD は共同研究の名称である。共同で検証できる知識と独立した実装を、次の
+リポジトリに分けて管理する。
 
 ```text
-openjtd/
-├── docs
-├── rjtd
-├── openjtd-spec
-├── openjtd-samples
-├── rjtd-testdata
-└── openjtd.github.io
+OpenJTD/
+├── community       # 共同方針と議論。初期は非公開
+├── spec            # 公開 RFC・観察・検証基準
+├── corpus          # 再配布可能な入力と公開 manifest
+├── corpus-private  # 共同研究者への共有が許可された入力
+└── rjtd            # 独立した Rust 実装
 ```
 
-特に `openjtd-spec` を `rjtd` code と同格のプロジェクトとして扱う原則を organization
-structure にも反映する。
+rjtd と Tika JTD+ は、それぞれ独立した実装目標を維持する。共有する形式知識は、
+どちらの engine にも依存せず役立つものとする。共同で著作した資料は Apache-2.0 を
+既定とし、外部文書は元の条件を維持して個別に出所と共有根拠を記録する。
+
+初期試行として RFC 0001 と RFC 0003、および日本語訳を
+[spec](https://github.com/OpenJTD/spec) に移入する。共同研究方針・根拠ラベル・corpus
+形式は共同レビュー用の草案である。ローカル研究記録・fixtures・viewer source は
+本実装リポジトリに残し、許可のないローカル入力を共有 corpus に移さない。

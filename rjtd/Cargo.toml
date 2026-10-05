@@ -14,8 +14,8 @@ version = "0.0.1"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
-repository = "https://github.com/KimEJ/OpenJTD"
-homepage = "https://kimej.github.io/OpenJTD/"
+repository = "https://github.com/OpenJTD/rjtd"
+homepage = "https://openjtd.github.io/rjtd/"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

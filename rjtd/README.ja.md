@@ -8,7 +8,9 @@ OpenJTD の Rust ツール群と document-engine workspace
 で使われる JTD 文書形式を解析・処理し、現在の parser、model、export、CLI、WASM、
 app-core integration components を提供する。
 
-このフォルダは、OpenJTD 全体の中で Rust implementation workspace に相当する。
+このフォルダは `OpenJTD/rjtd` の実装 workspace である。OpenJTD は共同研究の名称であり、
+rjtd と Tika JTD+ は独立した実装を維持する。共同 RFC review は
+[OpenJTD/spec](https://github.com/OpenJTD/spec) で行う。
 
 プロジェクト全体の憲章とエコシステム計画は、上位の [docs/CHARTER.ja.md](../docs/CHARTER.ja.md) に従う。
 

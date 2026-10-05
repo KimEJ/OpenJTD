@@ -14,7 +14,9 @@ The [deployment workflow](../.github/workflows/deploy-viewer.yml) is the source
 of truth for the build and asset-copy steps. It builds with
 `wasm-pack build --target web rjtd/crates/rjtd-wasm`, replaces `pkg/` with the
 generated package, includes distribution notices, and publishes to GitHub Pages
-from `main`. Workflow dispatch is also restricted to `main` for the build.
+from `main` to <https://openjtd.github.io/rjtd/>. Workflow dispatch is also
+restricted to `main` for the build. GitHub Pages URLs do not redirect after
+a repository transfer, so the former personal-account viewer URL is obsolete.
 
 `pkg/` is generated output. A source checkout alone may not contain a runnable
 viewer until the WASM package is built and copied. Earlier Cloudflare deployment

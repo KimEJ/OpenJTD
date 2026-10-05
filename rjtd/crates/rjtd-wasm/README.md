@@ -4,7 +4,7 @@ WebAssembly bindings for parsing and rendering Ichitaro JTD documents in
 browsers.
 
 `rjtd-wasm` is the browser binding layer of
-[OpenJTD](https://github.com/KimEJ/OpenJTD). Its `HwpDocument` wrapper mirrors
+[OpenJTD](https://github.com/OpenJTD/rjtd). Its `HwpDocument` wrapper mirrors
 part of the rhwp-shaped application API, while all implementation remains
 original OpenJTD code. The existing wrapper name and working viewer contract
 are retained, not a promise of complete rhwp Studio integration. The

@@ -1,13 +1,23 @@
-# OpenJTD
+# rjtd
 
-Open-source JTD rendering engine and editor project for Ichitaro documents
+Independent Rust JTD rendering engine and editor project for Ichitaro documents
 (`.jtd`, `.jtt`, and `.jttc`).
 
-OpenJTD aims to become an open-source JTD rendering engine and editor. The
-current phase focuses on `rjtd`, a Rust toolset that builds the components
+`rjtd` is an independent implementation within the OpenJTD research ecosystem.
+OpenJTD is the shared umbrella for JTD research, specifications, and validation
+materials; rjtd and Tika JTD+ retain their own implementation goals. The
+current phase focuses on a Rust toolset that builds the components
 needed to get there: container inspection, text extraction, document modeling,
 export, and viewer integration. The longer-term technical milestone is a
 practical JTD engine that can support faithful layout rendering and editing.
+
+Shared work lives in [OpenJTD/spec](https://github.com/OpenJTD/spec) and
+[OpenJTD/corpus](https://github.com/OpenJTD/corpus). Organization policy
+discussions use `community`, which remains private during initial setup;
+`corpus-private` holds only material permitted for collaborator sharing.
+The initial shared policy and manifest formats are drafts for joint review.
+This repository's implementation, release flow, and local research records
+remain independent.
 
 ## Current rjtd Components
 

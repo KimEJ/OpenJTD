@@ -3,7 +3,7 @@
 Low-level parsers and diagnostics for Ichitaro JTD compound documents.
 
 `rjtd-core` is the container and stream layer of
-[OpenJTD](https://github.com/KimEJ/OpenJTD). Higher-level document semantics
+[OpenJTD](https://github.com/OpenJTD/rjtd). Higher-level document semantics
 live in `rjtd-model`; end-user exports live in `rjtd-export` and `rjtd-cli`.
 
 ## Developer preview

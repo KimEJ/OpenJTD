@@ -2,9 +2,15 @@
 
 This space manages the public JTD specification and RFC-style reverse-engineering records.
 
-`openjtd-spec` is the project-level specification space for OpenJTD. It is kept
-as a peer to the `rjtd` Rust toolset because the public format knowledge should
-remain useful beyond one implementation.
+Shared specification work now lives in [OpenJTD/spec](https://github.com/OpenJTD/spec).
+RFC 0001 and RFC 0003, with their Japanese translations, were imported there
+as unchanged historical drafts for the initial trial. See the
+[import ledger](https://github.com/OpenJTD/spec/blob/main/IMPORTS.md).
+
+This directory retains the implementation-local research records and remaining
+RFCs. New joint review of the imported RFCs takes place in the shared repository;
+retaining these historical copies does not imply that their claims have been
+jointly accepted or independently reproduced.
 
 ## License Boundary
 
