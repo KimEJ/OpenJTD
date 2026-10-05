@@ -249,12 +249,11 @@ pub(crate) fn native_rule_flow_text_projection(
     tables: &[NativeControlTableTextProjection],
     interstitial: Option<&NativeControlFlowTextProjection>,
 ) -> Option<NativeControlFlowTextProjection> {
-    if page_number != 1 || writing_mode.is_vertical() || !layout.has_source_margins() {
+    if writing_mode.is_vertical() || !layout.has_source_margins() {
         return None;
     }
     let flow = document.document_text_flow()?;
     let intervals = shanai_lan_line_mark_intervals(document);
-    let page_mark = document.page_marks().first()?;
     let resolver = document_text_style_resolver(document)?;
     let default_font = document_default_font_size_px(document)?;
     let english_justification = document.english_justification_candidate();
@@ -329,23 +328,14 @@ pub(crate) fn native_rule_flow_text_projection(
                 let [interval] = containing.as_slice() else {
                     continue;
                 };
-                let Some(page) = table_grid_page_mark_entry_for_line_mark_record(
-                    Some(page_mark),
-                    interval.record_index,
-                ) else {
-                    continue;
-                };
-                if page.line_start() != Some(0) || page.index() != Some(0) {
-                    continue;
-                }
-                let Some(pitch_mm100) = page_mark
-                    .entries()
-                    .get(page.row_index())
-                    .and_then(|entry| entry.u16_fields().get(21))
-                    .copied()
+                let Some((page, top, pitch_mm100)) =
+                    native_rule_line_placement(document, layout, interval.record_index)
                 else {
                     continue;
                 };
+                if page != page_number {
+                    continue;
+                }
                 let pitch = hundredth_millimeters_to_css_px(u32::from(pitch_mm100));
                 if !(APP_FONT_SIZE_PX..=APP_LINE_HEIGHT_PX * 1.25).contains(&pitch) {
                     continue;
@@ -423,8 +413,7 @@ pub(crate) fn native_rule_flow_text_projection(
                 } else {
                     None
                 };
-                let baseline_y =
-                    layout.margin_top_px() + interval.record_index as f32 * pitch + font_size.px;
+                let baseline_y = top + font_size.px;
                 if !x.is_finite()
                     || !baseline_y.is_finite()
                     || x > layout.width_px()
@@ -473,9 +462,14 @@ pub(crate) fn native_rule_flow_text_projection(
     })
 }
 
-fn native_rule_text_supported(text: &str) -> bool {
-    text.chars().all(|character| character.is_ascii_graphic() || character == ' '
-        || matches!(character, '\u{3000}'..='\u{30ff}' | '\u{3400}'..='\u{9fff}' | '\u{ff01}'..='\u{ffef}'))
+pub(crate) fn native_rule_text_supported(text: &str) -> bool {
+    text.chars().all(native_rule_character_supported)
+}
+
+pub(crate) fn native_rule_character_supported(character: char) -> bool {
+    character.is_ascii_graphic()
+        || character == ' '
+        || matches!(character, '\u{3000}'..='\u{30ff}' | '\u{3400}'..='\u{9fff}' | '\u{ff01}'..='\u{ffef}')
 }
 
 pub(crate) fn native_control_flow_text_projection_contains(

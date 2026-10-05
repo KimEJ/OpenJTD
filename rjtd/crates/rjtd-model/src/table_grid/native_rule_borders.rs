@@ -1,7 +1,7 @@
 use crate::*;
 use rjtd_core::document_text::DocumentTextStyleTypedValue;
 
-/// Nominal first-page ruled bands, not logical cells or printer corner glyphs.
+/// Nominal source-page ruled bands, not logical cells or printer corner glyphs.
 #[derive(Debug, Clone)]
 pub(crate) struct NativeRuleBorderSegment {
     pub(crate) points: [f32; 4],
@@ -22,7 +22,62 @@ pub(crate) fn native_rule_border_projection(
     page_number: usize,
     writing_mode: WritingMode,
 ) -> Option<Vec<NativeRuleBorderSegment>> {
-    if page_number != 1 || writing_mode.is_vertical() || !layout.has_source_margins() {
+    native_rule_border_projection_inner(document, layout, Some(page_number), writing_mode)
+}
+
+pub(crate) fn native_rule_grid_admitted(
+    document: &Document,
+    layout: PageLayout,
+    writing_mode: WritingMode,
+) -> bool {
+    native_rule_border_projection_inner(document, layout, None, writing_mode).is_some()
+}
+
+pub(crate) fn native_rule_line_placement(
+    document: &Document,
+    layout: PageLayout,
+    record_index: usize,
+) -> Option<(usize, f32, u16)> {
+    let mark = document.page_marks().first()?;
+    if mark.family() != "fixed84" {
+        return None;
+    }
+    let entries = mark
+        .entries()
+        .iter()
+        .filter(|entry| {
+            entry
+                .line_start()
+                .zip(entry.line_end())
+                .is_some_and(|(start, end)| {
+                    start as usize <= record_index && record_index <= end as usize
+                })
+        })
+        .collect::<Vec<_>>();
+    let [entry] = entries.as_slice() else {
+        return None;
+    };
+    if entry.flags() != Some(0x10000) {
+        return None;
+    }
+    let page = (entry.index()? as usize).checked_add(1)?;
+    let local = record_index.checked_sub(entry.line_start()? as usize)?;
+    let pitch_mm100 = *entry.u16_fields().get(21)?;
+    let pitch = hundredth_millimeters_to_css_px(u32::from(pitch_mm100));
+    if !(APP_FONT_SIZE_PX..=APP_LINE_HEIGHT_PX * 1.25).contains(&pitch) {
+        return None;
+    }
+    let top = layout.margin_top_px() + local as f32 * pitch;
+    (top.is_finite() && top < layout.height_px()).then_some((page, top, pitch_mm100))
+}
+
+fn native_rule_border_projection_inner(
+    document: &Document,
+    layout: PageLayout,
+    page_number: Option<usize>,
+    writing_mode: WritingMode,
+) -> Option<Vec<NativeRuleBorderSegment>> {
+    if writing_mode.is_vertical() || !layout.has_source_margins() {
         return None;
     }
     let flow = document.document_text_flow()?;
@@ -70,7 +125,14 @@ pub(crate) fn native_rule_border_projection(
         return None;
     }
     let intervals = shanai_lan_line_mark_intervals(document);
-    let page_mark = document.page_marks().first()?;
+    if let Some(requested) = page_number
+        && !intervals.iter().any(|interval| {
+            native_rule_line_placement(document, layout, interval.record_index)
+                .is_some_and(|(page, _, _)| page == requested)
+        })
+    {
+        return None;
+    }
     let resolver = document_text_style_resolver(document)?;
     if resolver.truncated() || !resolver.diagnostics().is_empty() {
         return None;
@@ -133,18 +195,8 @@ pub(crate) fn native_rule_border_projection(
             return None;
         }
         previous_record = Some(interval.record_index);
-        let page = table_grid_page_mark_entry_for_line_mark_record(
-            Some(page_mark),
-            interval.record_index,
-        )?;
-        if page.index() != Some(0) || page.line_start() != Some(0) {
-            return None;
-        }
-        let pitch_mm100 = *page_mark
-            .entries()
-            .get(page.row_index())?
-            .u16_fields()
-            .get(21)?;
+        let (page, top, pitch_mm100) =
+            native_rule_line_placement(document, layout, interval.record_index)?;
         let pitch = hundredth_millimeters_to_css_px(u32::from(pitch_mm100));
         if !(APP_FONT_SIZE_PX..=APP_LINE_HEIGHT_PX * 1.25).contains(&pitch)
             || previous_pitch.is_some_and(|previous| previous != pitch_mm100)
@@ -152,15 +204,19 @@ pub(crate) fn native_rule_border_projection(
             return None;
         }
         previous_pitch = Some(pitch_mm100);
-        let y = layout.margin_top_px() + interval.record_index as f32 * pitch + font / 2.0;
-        if y - pitch / 2.0 < layout.margin_top_px() || y + pitch / 2.0 > layout.height_px() {
+        let y = top + font / 2.0;
+        if y - pitch / 2.0 < 0.0 || y + pitch / 2.0 > layout.height_px() {
             return None;
         }
         for (column, state) in pattern.into_iter().enumerate() {
             let source_unit = row.unit_start() + 9 + column * 4;
             let x = layout.margin_left_px() + centers[column] as f32 * unit_px;
             for (bit, direction, points) in [
-                (1, "up", [x, y - pitch / 2.0, x, y]),
+                (
+                    1,
+                    "up",
+                    [x, (y - pitch / 2.0).max(layout.margin_top_px()), x, y],
+                ),
                 (2, "down", [x, y, x, y + pitch / 2.0]),
                 (
                     4,
@@ -181,13 +237,16 @@ pub(crate) fn native_rule_border_projection(
                         2 => 2,
                         _ => 3,
                     };
-                    segments.push(native_rule_border_segment(
+                    let segment = native_rule_border_segment(
                         &resolver,
                         source_unit,
                         property,
                         direction,
                         points,
-                    )?);
+                    )?;
+                    if page_number == Some(page) {
+                        segments.push(segment);
+                    }
                 }
             }
         }

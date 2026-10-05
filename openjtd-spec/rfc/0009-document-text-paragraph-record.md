@@ -436,7 +436,7 @@ zero otherwise. Junction strips
 occupy two source grid units, inter-junction run lengths remain fixed across
 bands, and each junction center is its strip start plus one. This is nominal
 physical rule geometry, not logical-cell reconstruction or a general topology
-decoder. Exact source `LineMark` starts and first-page pitch bound placement.
+decoder. Exact source `LineMark` starts and active page pitch bound placement.
 
 Each complete four-word strip is `[junction,0,right-run-state,run-length]`.
 The final junction can have an explicit `[0,right-padding-length]` run, or end
@@ -472,7 +472,7 @@ The renderer uses 0.8/2.56 CSS-px thin/thick widths and a 3.2/3.2 CSS-px dash
 pattern as bounded paint approximations. Native prints show 0.6/1.92 pt widths
 and 2.4 pt dashes, but the UI exposes presets rather than numeric units: these
 measurements do not establish a source length-unit decoder. Joins, dash phase,
-corner glyph clipping, other presets, logical merge ownership, and multipage paint remain
+corner glyph clipping, other presets, logical merge ownership, and general multipage paint remain
 unproven. SVG/PDF retain `paint-decoded:false` and do not duplicate the older
 black-border fallback. The basic 2x2 layer JSON retains all 30 directional stroke candidates,
 including hidden strokes, raw preset/transparency/color, and source unit.
@@ -518,6 +518,34 @@ claim decoded tracking, punctuation adjustments, mixed Japanese/English
 justification, or exact native glyph metrics. The existing ASCII-only word
 spacing candidate remains separate. Unknown scripts and controls remain in
 source evidence rather than being promoted by this bounded projection.
+
+### Physical source pagination around ruled bands
+
+The controlled near-bottom, whole-table-on-page-two, and cross-page examples
+have respectively 40/53/44 physical LineMark records and 1/2/2 native pages.
+Their cell-text records are 33/35/37, 46/48/50, and 37/39/41. Active fixed84
+PageMark entries provide inclusive ranges 0..39 and 40..79. Selected-page
+placement uses `recordIndex - lineStart`; zero-pitch trailing capacity entries
+do not establish blank pages. This fixes source pagination, not just page count.
+
+The model plan maps original text-run source spans into those intervals while
+retaining paragraph indices and character ranges. Noncontiguous cell fragments
+and empty rule bands remain physical source lines, not logical table rows.
+The observed final interval includes one terminal unit beyond named content;
+the marker is not painted. Body/rule baselines use page-local pitch. An upward
+rule at a page's first line is clipped to the source top margin. The cross-page
+print has no closing horizontal rule on page one; the next boundary belongs to
+page two, so none is invented on page one.
+
+Complete source coverage, matching ordered paragraph spans, uniform document-default
+font sizes, ASCII/Japanese text,
+known rule/control records, and unique active page ranges are required. Edited
+or spanless text, Unknown/Ruby/inline content, other scripts, per-page layout
+styles, and unsupported framing keep fallback pagination. Page/line budget
+preflight uses the same plan before page text allocation. Layer text exposes
+global `lineMarkRecordIndex`, candidate page assignment, and `decoded:false` /
+`positionsDecoded:false`. Raw source/marks/unknown data stay intact. General
+section pagination, native glyph metrics, and Japanese tracking remain unproven.
 
 ## Correlation with LineMark unit-start
 

@@ -440,6 +440,9 @@ pub(crate) fn page_construction_shape(
     layout: PageLayout,
     writing_mode: WritingMode,
 ) -> Result<PageOutputShape> {
+    if let Some(plan) = native_page_line_plan(document, layout, writing_mode) {
+        return Ok(native_page_output_shape(&plan));
+    }
     let normal = page_output_shape(document, layout, writing_mode)?;
     if !writing_mode.is_vertical() {
         return Ok(normal);

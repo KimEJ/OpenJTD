@@ -45,6 +45,7 @@ pub(crate) fn push_page_layer_text_run_json(
     font_family: &str,
     fill_color: &str,
     fragment: &PageLayerTextFragment,
+    native_line_mark_index: Option<usize>,
 ) {
     let font_size = source_font_size.map_or(APP_FONT_SIZE_PX, |size| size.px);
     let font_scale = f64::from(font_size / APP_FONT_SIZE_PX);
@@ -96,6 +97,9 @@ pub(crate) fn push_page_layer_text_run_json(
         .map(|position| position * font_scale)
         .collect::<Vec<_>>();
     push_f64_array_json(output, &positions);
+    if let Some(record) = native_line_mark_index {
+        output.push_str(&format!(",\"lineMarkRecordIndex\":{record},\"pageAssignmentCandidate\":true,\"decoded\":false,\"geometryDecoded\":false,\"positionsDecoded\":false"));
+    }
     output.push_str(",\"isParaEnd\":false,\"isLineBreakEnd\":false}");
 }
 

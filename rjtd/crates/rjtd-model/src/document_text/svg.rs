@@ -172,6 +172,12 @@ pub(crate) fn render_text_page_svg(
                 .unwrap_or_else(|| layout.margin_left_px());
             let y = frame_text_placement
                 .map(|placement| placement.baseline as f32)
+                .or_else(|| {
+                    line.native_line_mark_index
+                        .and_then(|record| native_rule_line_placement(document, layout, record))
+                        .filter(|(page, _, _)| *page == page_number)
+                        .map(|(_, top, _)| top + APP_FONT_SIZE_PX)
+                })
                 .unwrap_or_else(|| {
                     text_origin
                         .map(|origin| origin.1)
@@ -221,6 +227,9 @@ pub(crate) fn render_text_page_svg(
                     .source_span
                     .as_ref()
                     .and_then(|span| {
+                        if line.native_line_mark_index.is_some() {
+                            return None;
+                        }
                         native_rule_body_top_y(
                             document,
                             layout,

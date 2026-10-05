@@ -1136,16 +1136,23 @@ pub(super) fn page_layer_tree_json(
                     + f64::from(
                         font_size.map_or(APP_FONT_SIZE_PX, |size| size.px) - APP_FONT_SIZE_PX,
                     );
-                let native_body_top = fragment.source_span.as_ref().and_then(|span| {
-                    native_rule_body_top_y(
-                        &core.document,
-                        layout,
-                        native_rule_flow.is_some()
-                            || native_rule_borders.is_some()
-                            || !native_control_tables.is_empty(),
-                        span,
-                    )
-                });
+                let native_body_top = line
+                    .native_line_mark_index
+                    .and_then(|record| native_rule_line_placement(&core.document, layout, record))
+                    .filter(|(page, _, _)| *page == page_num as usize + 1)
+                    .map(|(_, top, _)| top)
+                    .or_else(|| {
+                        fragment.source_span.as_ref().and_then(|span| {
+                            native_rule_body_top_y(
+                                &core.document,
+                                layout,
+                                native_rule_flow.is_some()
+                                    || native_rule_borders.is_some()
+                                    || !native_control_tables.is_empty(),
+                                span,
+                            )
+                        })
+                    });
                 push_page_layer_text_run_json(
                     &mut output,
                     source_id,
@@ -1164,6 +1171,7 @@ pub(super) fn page_layer_tree_json(
                     &font_family,
                     fill_color,
                     &fragment,
+                    line.native_line_mark_index,
                 );
                 push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
                 if core.writing_mode.is_vertical() {

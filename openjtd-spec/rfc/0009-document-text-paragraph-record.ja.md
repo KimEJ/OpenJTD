@@ -334,7 +334,7 @@ junction の source unit における contextual property は次のとおり。
 直後の run は右 bit があれば`14`、なければ0となる。
 junction strip は source grid2単位を占め、band 間の run length は一定、center は
 strip start＋1となる。nominal な物理 rule geometry であり、論理 cell の再構成や一般的な
-topology decoder ではない。正確な source LineMark start と先頭ページ pitch に限定する。
+topology decoder ではない。正確な source LineMark start とactive page pitch に限定する。
 
 完全な4-word stripは`[junction,0,right-run-state,run-length]`。最後のjunctionは
 明示的な`[0,right-padding-length]`runを持つか、2-word`[junction,0]`だけで`ffff,0`に続く。
@@ -363,7 +363,7 @@ active stroke での意味は許可しない。color は既存 BGR24 mapping、u
 renderer の細線/太線幅は0.8/2.56 CSS-px、dash pattern は3.2/3.2 CSS-px の限定した近似値。
 native 印刷では0.6/1.92pt 幅と2.4pt dash を観測したが、UI は数値単位でなく preset を
 示すため source length unit の解読とは主張しない。join、dash phase、corner glyph clipping、
-他 preset、論理的なセル結合の ownership、複数ページ paint は未証明。SVG/PDF は`paint-decoded:false`を保持し、
+他 preset、論理的なセル結合の ownership、一般的な複数ページ paint は未証明。SVG/PDF は`paint-decoded:false`を保持し、
 従来の黒色 border fallback を重複描画しない。基本2x2の layer JSON は非表示を含む方向別 stroke30件、
 raw preset/transparency/color/source unit を保持する。内部縦線の非表示は8候補を抑制し、
 content/geometry/table candidate を変えない。前後 text は正確な source LineMark interval
@@ -396,6 +396,27 @@ paragraph境界とはしない。`w7=2`でも自動word spacingを抑制し、�
 自然な代替font paintはtracking、句読点調整、日本語/英語混在justificationやnative glyph metrics
 の解読を主張しない。従来のASCII-only word spacing candidateとは分離する。未知script/controlは
 source evidenceに保持し、この限定projectionには昇格しない。
+
+### Ruled band前後の物理source pagination
+
+統制したページ下端、全表2ページ目、ページ跨ぎの例は、物理LineMark40/53/44件、native page
+1/2/2件を持つ。cell text recordは33/35/37、46/48/50、37/39/41。active fixed84 PageMarkは
+inclusive範囲0..39/40..79を示す。対象page位置は`recordIndex - lineStart`を使い、pitch0の
+予約capacityをblank pageと扱わない。page数だけの補正でなくsource paginationを修正する。
+
+model planは元text-run source spanをintervalへ対応させ、paragraph indexとcharacter rangeを
+保持する。非連続cell fragmentと空rule bandは物理行であり、論理table rowを作らない。
+最後のintervalはnamed content後の終端1単位を含むが、そのmarkerをtextとして描画しない。
+body/rule baselineはpage-local pitchを使い、page最初の行の上向きruleはsource top marginでclip。
+跨ぎnative印刷には1ページ目を閉じる横線がない。次の境界を2ページ目へ置き、横線を捏造しない。
+
+完全なsource coverage、ordered paragraph spanの一致、均一なdocument-default font size、
+ASCII/日本語、既知rule/control、一意の
+active page rangeが必要。編集済み/spanなしtext、Unknown/Ruby/inline、他script、page別layout
+styleや未知frameはfallbackを保つ。page/line予算preflightも同じplanでpage text allocation前に
+予約する。layerはglobal`lineMarkRecordIndex`、candidate page assignment、`decoded:false`/
+`positionsDecoded:false`を示す。raw source/marks/unknown dataは保持する。一般section pagination、
+native glyph metrics、日本語trackingは未証明である。
 
 ## LineMark unit-start との相関
 

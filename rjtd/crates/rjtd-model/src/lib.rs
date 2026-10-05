@@ -874,6 +874,7 @@ pub struct PageTextLine {
     paragraph_index: Option<usize>,
     char_start: usize,
     char_end: usize,
+    native_line_mark_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -959,6 +960,7 @@ impl PageTextLine {
             paragraph_index,
             char_start,
             char_end,
+            native_line_mark_index: None,
         }
     }
 

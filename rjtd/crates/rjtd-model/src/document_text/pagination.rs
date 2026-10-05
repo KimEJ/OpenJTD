@@ -6,6 +6,9 @@ pub(crate) fn paginate_document_text(
     layout: PageLayout,
     writing_mode: WritingMode,
 ) -> Vec<Vec<PageTextLine>> {
+    if let Some(plan) = native_page_line_plan(document, layout, writing_mode) {
+        return native_pages_from_plan(document, &plan);
+    }
     let wrap_columns = layout.wrap_columns(writing_mode);
     let lines_per_page = layout.lines_per_page(writing_mode);
     let forced_breaks = projected_page_breaks(document);

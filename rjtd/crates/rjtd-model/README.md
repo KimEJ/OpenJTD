@@ -129,13 +129,13 @@ Unknown style profiles, wrapped `0x00ff` alignment, single-word tracking, and
 full font-metric equivalence remain unproven. Exact first/last text-run
 LineMark intervals keep surrounding body text outside the admitted ruled flow.
 
-A separate, bounded first-page ruled-band projection reads directional paint at
+A separate, bounded ruled-band projection reads directional paint at
 the source junction units. Up/down/right use style properties 1/2/3 for presets,
 4/5/6 for visibility, and 15/16/17 for BGR24 colors. Transparent strokes remain
 in layer evidence without being painted or deleting text/cell candidates.
 Thin, thick-preset, and dashed-preset sizes are renderer approximations, not
 decoded source units; geometry/paint stay `decoded:false`. Unknown values,
-other junction patterns, logical merge ownership, and multipage rules are not admitted. Exact
+other junction patterns and logical merge ownership are not admitted. Exact
 surrounding LineMark positions also prevent body text overlapping this grid.
 Column counts and integer width remainders come from the source strips, not
 equal division of the body width. Both an explicit final blank run and a bare
@@ -152,6 +152,17 @@ tracking and exact native font advances remain unproven. Whitespace-only spans
 retain their source text/range without advancing the surrounding body fallback.
 Table fallbacks overlapping either physical-flow or control-table text stay
 diagnostic-only, so mixed sparse projections do not repaint cells.
+
+Simple horizontal ruled documents with uniform document-default font sizes can
+use a bounded source pagination plan:
+LineMark ranges split the existing paragraph text runs, and active fixed84
+PageMark ranges assign the physical lines to pages. Paragraph/character addresses
+and noncontiguous cell source fragments remain intact. Body text and rules use
+page-local line indices; capacity-only entries do not create blank pages.
+Native page/line counts are reserved before page text is cloned. Missing or
+edited source spans, unknown/inline content, unsupported scripts, or per-page
+layout-style streams retain the previous fallback. Metadata stays candidate /
+`decoded:false`; exact font tracking and general section pagination are unproven.
 
 ## License
 
