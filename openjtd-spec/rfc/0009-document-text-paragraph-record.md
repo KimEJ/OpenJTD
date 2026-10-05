@@ -537,7 +537,7 @@ rule at a page's first line is clipped to the source top margin. The cross-page
 print has no closing horizontal rule on page one; the next boundary belongs to
 page two, so none is invented on page one.
 
-Complete source coverage, matching ordered paragraph spans, uniform document-default
+Complete source coverage, matching ordered paragraph spans, uniform visible-run
 font sizes, ASCII/Japanese text,
 known rule/control records, and unique active page ranges are required. Edited
 or spanless text, Unknown/Ruby/inline content, other scripts, per-page layout
@@ -546,6 +546,41 @@ preflight uses the same plan before page text allocation. Layer text exposes
 global `lineMarkRecordIndex`, candidate page assignment, and `decoded:false` /
 `positionsDecoded:false`. Raw source/marks/unknown data stay intact. General
 section pagination, native glyph metrics, and Japanese tracking remain unproven.
+
+### Cumulative font height and fixed source-line pitch
+
+Controlled 10.5pt/14pt table and body runs use font sizes 370/494 mm100 units.
+The default line advance uses `max(documentDefaultFont, visibleLineFonts)` plus
+PageMark gap word14. Word19 retains the document default; it is distinct from
+the first body font in words10/13 when only the body is enlarged. With default
+370 and gap222, base advance is592. A line containing494 adds124 units to every
+following line on that page. Three enlarged table text lines therefore add372
+units before the following body; enlarging only the first body line adds124.
+These are source-derived advances, not fitted PDF coordinates.
+
+Fixed 10mm line pitch is stored in a framed `0010/0020` prefix:
+
+```text
+w3..w9: 0000 0020 0004 0008 03e8 0008 03e8
+```
+
+The repeated attributes must agree. A standalone length16 record ends with
+`ffff,0` before its footer. A composite record embeds `008f` at word10 and shifts
+the usual ruled fields/style-unit positions by six words; the original frame is
+not rewritten. The local outgoing advance becomes1000, while subsequent plain
+bands retain592. This applies to the initial body line or the explicit-break cell
+line carrying the prefix, not the entire table. PageMark word20=8/word21=1000
+can describe the first body line and must not override later ruled bands.
+
+Leading source grid padding is excluded only when resolving visible font size;
+raw text/ranges and whitespace-only spans remain intact. This avoids rejecting
+the first enlarged cell because its padding still carries the old font. Rule
+vertical halves meet at neighboring source-line midpoints when advances differ.
+SVG/layer/body and legacy control-table placement consume the same cumulative
+metrics. Raw PageMark pitch metadata and unknown fields remain available, and
+geometry/paint stay candidate / `decoded:false`. Mixed visible fonts, other
+paragraph attributes, shrinking-font behavior, and exact glyph metrics are not
+generalized by these controlled examples.
 
 ## Correlation with LineMark unit-start
 

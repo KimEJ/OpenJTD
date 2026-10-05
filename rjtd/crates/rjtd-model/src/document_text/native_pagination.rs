@@ -49,9 +49,8 @@ pub(crate) fn native_page_line_plan(
                 return None;
             };
             let span = run.source_span()?;
-            if document_text_font_size(&resolver, span, Some(default_font))?.px != default_font {
-                return None;
-            }
+            let visible_span = native_rule_visible_span(run.text(), span);
+            document_text_font_size(&resolver, &visible_span, Some(default_font))?;
             if span.unit_end() - span.unit_start() != run.text().chars().count()
                 || flow.text_for_range(
                     span.unit_start(),

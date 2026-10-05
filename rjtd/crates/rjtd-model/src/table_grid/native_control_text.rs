@@ -267,11 +267,10 @@ pub(crate) fn native_rule_flow_text_projection(
                 let words = event.raw_words();
                 match event.record_class() {
                     Some(0x0010) => {
-                        parent = (words.len() >= 13
-                            && words[3] == 0
-                            && words[4] == 0x008f
-                            && words[6] > 0)
-                            .then_some((event.unit_start(), words[6]));
+                        parent = native_rule_parent_offset(event)
+                            .and_then(|offset| words.get(6 + offset).copied())
+                            .filter(|extent| *extent > 0)
+                            .map(|extent| (event.unit_start(), extent));
                         declaration = None;
                     }
                     Some(0x0030) => {
@@ -340,7 +339,9 @@ pub(crate) fn native_rule_flow_text_projection(
                 if !(APP_FONT_SIZE_PX..=APP_LINE_HEIGHT_PX * 1.25).contains(&pitch) {
                     continue;
                 }
-                let Some(font_size) = document_text_font_size(&resolver, span, Some(default_font))
+                let visible_span = native_rule_visible_span(&part.text, span);
+                let Some(font_size) =
+                    document_text_font_size(&resolver, &visible_span, Some(default_font))
                 else {
                     continue;
                 };
@@ -442,7 +443,12 @@ pub(crate) fn native_rule_flow_text_projection(
                     source_span: span
                         .subspan_by_units(source_trim, source_trim + text.encode_utf16().count()),
                     line_mark_record_index: interval.record_index,
-                    page_mark_pitch_mm100: pitch_mm100,
+                    page_mark_pitch_mm100: *table_grid_page_mark_entry_for_line_mark_record(
+                        document.page_marks().first(),
+                        interval.record_index,
+                    )?
+                    .u16_fields()
+                    .get(21)?,
                     leading_ascii_space_count: leading,
                     preceding_header_offset_units: words[4],
                     preceding_header_extent_units: words[5],
@@ -663,23 +669,8 @@ pub(crate) fn native_rule_body_top_y(
     let [interval] = hits.as_slice() else {
         return None;
     };
-    let page_mark = document.page_marks().first()?;
-    let page =
-        table_grid_page_mark_entry_for_line_mark_record(Some(page_mark), interval.record_index)?;
-    if page.index() != Some(0) || page.line_start() != Some(0) {
-        return None;
-    }
-    let pitch = *page_mark
-        .entries()
-        .get(page.row_index())?
-        .u16_fields()
-        .get(21)?;
-    let pitch = hundredth_millimeters_to_css_px(u32::from(pitch));
-    if !(APP_FONT_SIZE_PX..=APP_LINE_HEIGHT_PX * 1.25).contains(&pitch) {
-        return None;
-    }
-    let top = layout.margin_top_px() + interval.record_index as f32 * pitch;
-    (top.is_finite() && top < layout.height_px()).then_some(top)
+    let (page, top, _) = native_rule_line_placement(document, layout, interval.record_index)?;
+    (page == 1).then_some(top)
 }
 
 fn native_flow_preceding_header(
@@ -874,7 +865,6 @@ fn native_control_table_text_projection(
                 return None;
             }
             let span = TextSourceSpan::new(start * 2, end * 2, start, end);
-            let font_size = document_text_font_size(&resolver, &span, Some(default_font))?;
             let raw_text =
                 table_grid_segment_source_raw_text(Some(&document_text_map), candidate, segment)
                     .unwrap_or_else(|| segment.text().to_string());
@@ -885,11 +875,13 @@ fn native_control_table_text_projection(
             if raw_text.trim_matches(' ') != segment.text() {
                 return None;
             }
+            let visible_span = native_rule_visible_span(&raw_text, &span);
+            let font_size = document_text_font_size(&resolver, &visible_span, Some(default_font))?;
             let x = layout.margin_left_px()
                 + (f32::from(header.offset_units) + leading_spaces as f32 * 2.0) * unit_px;
-            let baseline_y = layout.margin_top_px()
-                + resolved.interval.record_index as f32 * pitch
-                + font_size.px;
+            let (_, top, _) =
+                native_rule_line_placement(document, layout, resolved.interval.record_index)?;
+            let baseline_y = top + font_size.px;
             if !x.is_finite()
                 || !baseline_y.is_finite()
                 || x > layout.width_px()

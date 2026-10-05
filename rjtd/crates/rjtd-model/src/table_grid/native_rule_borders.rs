@@ -33,44 +33,6 @@ pub(crate) fn native_rule_grid_admitted(
     native_rule_border_projection_inner(document, layout, None, writing_mode).is_some()
 }
 
-pub(crate) fn native_rule_line_placement(
-    document: &Document,
-    layout: PageLayout,
-    record_index: usize,
-) -> Option<(usize, f32, u16)> {
-    let mark = document.page_marks().first()?;
-    if mark.family() != "fixed84" {
-        return None;
-    }
-    let entries = mark
-        .entries()
-        .iter()
-        .filter(|entry| {
-            entry
-                .line_start()
-                .zip(entry.line_end())
-                .is_some_and(|(start, end)| {
-                    start as usize <= record_index && record_index <= end as usize
-                })
-        })
-        .collect::<Vec<_>>();
-    let [entry] = entries.as_slice() else {
-        return None;
-    };
-    if entry.flags() != Some(0x10000) {
-        return None;
-    }
-    let page = (entry.index()? as usize).checked_add(1)?;
-    let local = record_index.checked_sub(entry.line_start()? as usize)?;
-    let pitch_mm100 = *entry.u16_fields().get(21)?;
-    let pitch = hundredth_millimeters_to_css_px(u32::from(pitch_mm100));
-    if !(APP_FONT_SIZE_PX..=APP_LINE_HEIGHT_PX * 1.25).contains(&pitch) {
-        return None;
-    }
-    let top = layout.margin_top_px() + local as f32 * pitch;
-    (top.is_finite() && top < layout.height_px()).then_some((page, top, pitch_mm100))
-}
-
 fn native_rule_border_projection_inner(
     document: &Document,
     layout: PageLayout,
@@ -84,22 +46,23 @@ fn native_rule_border_projection_inner(
     let rows = flow
         .events()
         .iter()
-        .filter(|event| event.record_class() == Some(0x0010))
+        .filter(|event| native_rule_parent_offset(event).is_some())
         .collect::<Vec<_>>();
     if rows.len() < 3 {
         return None;
     }
     let top = rows.first()?;
-    let grid_extent = top.raw_words().get(6).copied()?;
-    let left = top.raw_words().get(8).copied()?;
+    let top_offset = native_rule_parent_offset(top)?;
+    let grid_extent = top.raw_words().get(6 + top_offset).copied()?;
+    let left = top.raw_words().get(8 + top_offset).copied()?;
     let words = top.raw_words();
     let strip_end = words.len().checked_sub(6)?;
-    let strips = words.get(9..strip_end)?;
+    let strips = words.get(9 + top_offset..strip_end)?;
     if grid_extent == 0
         || strips.len() < 6
         || !matches!(strips.len() % 4, 0 | 2)
         || words.get(strip_end..strip_end + 2)? != [0xffff, 0]
-        || words[5] as usize + 12 != words.len()
+        || words[5 + top_offset] as usize + 12 + top_offset != words.len()
     {
         return None;
     }
@@ -147,17 +110,20 @@ fn native_rule_border_projection_inner(
     let mut previous_pitch = None;
     for (row_index, row) in rows.iter().enumerate() {
         let words = row.raw_words();
-        if words.len() != top.raw_words().len()
-            || words[3..9] != [0, 0x8f, top.raw_words()[5], grid_extent, 0, left]
-            || words[strip_end..strip_end + 2] != [0xffff, 0]
+        let offset = native_rule_parent_offset(row)?;
+        let row_strip_end = words.len().checked_sub(6)?;
+        if words.len() - offset != top.raw_words().len() - top_offset
+            || words[4 + offset..9 + offset]
+                != [0x8f, top.raw_words()[5 + top_offset], grid_extent, 0, left]
+            || words[row_strip_end..row_strip_end + 2] != [0xffff, 0]
         {
             return None;
         }
         let mut pattern = Vec::with_capacity(centers.len());
         for (column, length) in lengths.iter().enumerate() {
             let last = column + 1 == centers.len();
-            let offset = 9 + column * 4;
-            let state = words[offset];
+            let strip_offset = 9 + offset + column * 4;
+            let state = words[strip_offset];
             pattern.push(state);
             let supported = if row_index == 0 {
                 state == if last { 0x12 } else { 0x16 }
@@ -169,10 +135,10 @@ fn native_rule_border_projection_inner(
                 matches!(state, 0x13 | 0x17)
             };
             if !supported
-                || words[offset + 1] != 0
+                || words[strip_offset + 1] != 0
                 || ((terminal_has_run || !last)
-                    && (words[offset + 2] != if state & 4 != 0 { 0x14 } else { 0 }
-                        || words[offset + 3] != *length))
+                    && (words[strip_offset + 2] != if state & 4 != 0 { 0x14 } else { 0 }
+                        || words[strip_offset + 3] != *length))
             {
                 return None;
             }
@@ -205,19 +171,44 @@ fn native_rule_border_projection_inner(
         }
         previous_pitch = Some(pitch_mm100);
         let y = top + font / 2.0;
+        let previous_y = interval
+            .record_index
+            .checked_sub(1)
+            .and_then(|record| native_rule_line_placement(document, layout, record))
+            .filter(|(owner, _, _)| *owner == page)
+            .map(|(_, top, _)| top + font / 2.0);
+        let next_y = native_rule_line_placement(document, layout, interval.record_index + 1)
+            .filter(|(owner, _, _)| *owner == page)
+            .map(|(_, top, _)| top + font / 2.0);
         if y - pitch / 2.0 < 0.0 || y + pitch / 2.0 > layout.height_px() {
             return None;
         }
         for (column, state) in pattern.into_iter().enumerate() {
-            let source_unit = row.unit_start() + 9 + column * 4;
+            let source_unit = row.unit_start() + 9 + offset + column * 4;
             let x = layout.margin_left_px() + centers[column] as f32 * unit_px;
             for (bit, direction, points) in [
                 (
                     1,
                     "up",
-                    [x, (y - pitch / 2.0).max(layout.margin_top_px()), x, y],
+                    [
+                        x,
+                        previous_y
+                            .map_or(y - pitch / 2.0, |previous| (previous + y) / 2.0)
+                            .max(layout.margin_top_px()),
+                        x,
+                        y,
+                    ],
                 ),
-                (2, "down", [x, y, x, y + pitch / 2.0]),
+                (
+                    2,
+                    "down",
+                    [
+                        x,
+                        y,
+                        x,
+                        next_y.map_or(y + pitch / 2.0, |next| (next + y) / 2.0),
+                    ],
+                ),
                 (
                     4,
                     "right",

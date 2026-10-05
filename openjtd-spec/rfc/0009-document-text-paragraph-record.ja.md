@@ -410,13 +410,39 @@ model planは元text-run source spanをintervalへ対応させ、paragraph index
 body/rule baselineはpage-local pitchを使い、page最初の行の上向きruleはsource top marginでclip。
 跨ぎnative印刷には1ページ目を閉じる横線がない。次の境界を2ページ目へ置き、横線を捏造しない。
 
-完全なsource coverage、ordered paragraph spanの一致、均一なdocument-default font size、
+完全なsource coverage、ordered paragraph spanの一致、均一なvisible-run font size、
 ASCII/日本語、既知rule/control、一意の
 active page rangeが必要。編集済み/spanなしtext、Unknown/Ruby/inline、他script、page別layout
 styleや未知frameはfallbackを保つ。page/line予算preflightも同じplanでpage text allocation前に
 予約する。layerはglobal`lineMarkRecordIndex`、candidate page assignment、`decoded:false`/
 `positionsDecoded:false`を示す。raw source/marks/unknown dataは保持する。一般section pagination、
 native glyph metrics、日本語trackingは未証明である。
+
+### Font heightと固定source-line pitchの累積
+
+統制した10.5pt/14ptのtable/body runはfont370/494mm100を使う。既定advanceは
+`max(documentDefaultFont, visibleLineFonts)`＋PageMark word14のgap。word19は文書defaultで、
+bodyだけ大きくした場合のword10/13とは別。default370＋gap222ならbase592、494のtext lineは
+後続行に124単位を加える。表3行の拡大なら後bodyまで372単位、最初のbodyだけなら124。
+PDF座標へ合わせる補正でなくsource値からのadvanceである。
+
+固定10mmはframed `0010/0020` prefixに保存される。
+
+```text
+w3..w9: 0000 0020 0004 0008 03e8 0008 03e8
+```
+
+繰り返しattributeの一致が必要。standalone length16はfooter前に`ffff,0`、compositeは
+word10に`008f`を含み、ruled field/style unitの位置が6wordずれる。元frameは書き換えない。
+その行のoutgoing advanceは1000、後続plain bandは592を保持する。prefixのある最初のbody
+または明示改行cell行に適用し、表全体へ適用しない。PageMark word20=8/word21=1000は
+最初のbodyを示す場合があり、後続ruled bandをoverrideしてはならない。
+
+先頭grid paddingはvisible font解決時だけ除き、raw text/rangeとwhitespace-only spanは保持。
+paddingの旧fontによって最初の拡大cellをmixedとして拒否することを避ける。異なるadvanceの
+縦rule halvesは隣のsource行とのmidpointで接続する。SVG/layer/bodyと既存control-tableは
+同じ累積metricを使う。raw PageMark pitch/unknown fieldは保持し、geometry/paintはcandidate/
+`decoded:false`。混合visible font、他paragraph attribute、縮小font挙動やglyph metricは一般化しない。
 
 ## LineMark unit-start との相関
 

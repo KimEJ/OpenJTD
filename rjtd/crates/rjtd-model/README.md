@@ -153,7 +153,7 @@ retain their source text/range without advancing the surrounding body fallback.
 Table fallbacks overlapping either physical-flow or control-table text stay
 diagnostic-only, so mixed sparse projections do not repaint cells.
 
-Simple horizontal ruled documents with uniform document-default font sizes can
+Simple horizontal ruled documents with uniform visible-run font sizes can
 use a bounded source pagination plan:
 LineMark ranges split the existing paragraph text runs, and active fixed84
 PageMark ranges assign the physical lines to pages. Paragraph/character addresses
@@ -163,6 +163,16 @@ Native page/line counts are reserved before page text is cloned. Missing or
 edited source spans, unknown/inline content, unsupported scripts, or per-page
 layout-style streams retain the previous fallback. Metadata stays candidate /
 `decoded:false`; exact font tracking and general section pagination are unproven.
+
+Native line positions accumulate source advances instead of multiplying one
+pitch by the record index. The bounded default uses the larger of the document
+font and visible text fonts plus the retained PageMark gap. A repeated fixed-
+pitch `0010/0020` prefix overrides only its source line. Prefixes can be standalone
+or wrap a ruled parent; original words and style-unit offsets stay intact.
+Padding spaces remain source text but do not make an otherwise uniform visible
+font range mixed. Larger table/body fonts, local cell breaks, and surrounding
+body text share the same source metric helper; arbitrary mixed runs remain
+unproven. This does not establish exact native glyph advances.
 
 ## License
 
