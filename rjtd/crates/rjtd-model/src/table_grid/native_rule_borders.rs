@@ -1,7 +1,7 @@
 use crate::*;
 use rjtd_core::document_text::DocumentTextStyleTypedValue;
 
-/// Nominal first-page two-column rule strokes, not logical cells or printer corner glyphs.
+/// Nominal first-page ruled bands, not logical cells or printer corner glyphs.
 #[derive(Debug, Clone)]
 pub(crate) struct NativeRuleBorderSegment {
     pub(crate) points: [f32; 4],
@@ -37,19 +37,36 @@ pub(crate) fn native_rule_border_projection(
     let top = rows.first()?;
     let grid_extent = top.raw_words().get(6).copied()?;
     let left = top.raw_words().get(8).copied()?;
-    let lengths = [
-        top.raw_words().get(12).copied()?,
-        top.raw_words().get(16).copied()?,
-    ];
-    if grid_extent == 0 || lengths.contains(&0) {
+    let words = top.raw_words();
+    let strip_end = words.len().checked_sub(6)?;
+    let strips = words.get(9..strip_end)?;
+    if grid_extent == 0
+        || strips.len() < 6
+        || !matches!(strips.len() % 4, 0 | 2)
+        || words.get(strip_end..strip_end + 2)? != [0xffff, 0]
+        || words[5] as usize + 12 != words.len()
+    {
         return None;
     }
-    let centers = [
-        u32::from(left) + 1,
-        u32::from(left) + 3 + u32::from(lengths[0]),
-        u32::from(left) + 5 + u32::from(lengths[0]) + u32::from(lengths[1]),
-    ];
-    if centers[2] + 3 != u32::from(grid_extent) {
+    let terminal_has_run = strips.len().is_multiple_of(4);
+    let mut lengths = strips
+        .chunks_exact(4)
+        .map(|strip| strip[3])
+        .collect::<Vec<_>>();
+    if !terminal_has_run {
+        lengths.push(0);
+    }
+    let mut cursor = u32::from(left);
+    let mut centers = Vec::with_capacity(lengths.len());
+    for (index, length) in lengths.iter().enumerate() {
+        if *length == 0 && (terminal_has_run || index + 1 != lengths.len()) {
+            return None;
+        }
+        centers.push(cursor.checked_add(1)?);
+        cursor = cursor.checked_add(2 + u32::from(*length))?;
+    }
+    // The final strip's run is unused right padding, not another cell width.
+    if cursor.checked_add(u32::from(terminal_has_run))? != u32::from(grid_extent) {
         return None;
     }
     let intervals = shanai_lan_line_mark_intervals(document);
@@ -68,40 +85,35 @@ pub(crate) fn native_rule_border_projection(
     let mut previous_pitch = None;
     for (row_index, row) in rows.iter().enumerate() {
         let words = row.raw_words();
-        if words.len() != 27 {
-            return None;
-        }
-        let pattern = [words[9], words[13], words[17]];
-        let supported_pattern = if row_index == 0 {
-            pattern == [0x16, 0x16, 0x12]
-        } else if row_index + 1 == rows.len() {
-            pattern == [0x15, 0x15, 0x11]
-        } else {
-            matches!(pattern[0], 0x13 | 0x17)
-                && matches!(pattern[1], 0x13 | 0x17)
-                && pattern[2] == 0x13
-        };
-        if !supported_pattern
-            || words[3..9] != [0, 0x8f, 15, grid_extent, 0, left]
-            || words[9..23]
-                != [
-                    pattern[0],
-                    0,
-                    if pattern[0] & 4 != 0 { 0x14 } else { 0 },
-                    lengths[0],
-                    pattern[1],
-                    0,
-                    if pattern[1] & 4 != 0 { 0x14 } else { 0 },
-                    lengths[1],
-                    pattern[2],
-                    0,
-                    0,
-                    1,
-                    0xffff,
-                    0,
-                ]
+        if words.len() != top.raw_words().len()
+            || words[3..9] != [0, 0x8f, top.raw_words()[5], grid_extent, 0, left]
+            || words[strip_end..strip_end + 2] != [0xffff, 0]
         {
             return None;
+        }
+        let mut pattern = Vec::with_capacity(centers.len());
+        for (column, length) in lengths.iter().enumerate() {
+            let last = column + 1 == centers.len();
+            let offset = 9 + column * 4;
+            let state = words[offset];
+            pattern.push(state);
+            let supported = if row_index == 0 {
+                state == if last { 0x12 } else { 0x16 }
+            } else if row_index + 1 == rows.len() {
+                state == if last { 0x11 } else { 0x15 }
+            } else if last {
+                state == 0x13
+            } else {
+                matches!(state, 0x13 | 0x17)
+            };
+            if !supported
+                || words[offset + 1] != 0
+                || ((terminal_has_run || !last)
+                    && (words[offset + 2] != if state & 4 != 0 { 0x14 } else { 0 }
+                        || words[offset + 3] != *length))
+            {
+                return None;
+            }
         }
         let matches = intervals
             .iter()
@@ -276,6 +288,102 @@ pub(crate) fn native_rule_border_layer_json(segment: &NativeRuleBorderSegment) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires private native column-count pairs"]
+    fn native_rule_borders_keep_column_widths_and_right_remainders() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../rjtd-testdata/local-samples/native-fixtures");
+        for (name, rows, columns, count, end_unit) in [
+            ("native-table-005", 2, 1, 19, 159),
+            ("table-3x3", 3, 3, 60, 157),
+            ("table-2x5", 2, 5, 63, 151),
+            ("table-1x3", 1, 3, 22, 157),
+            ("table-4x2", 4, 2, 58, 157),
+        ] {
+            let document =
+                parse_document(&std::fs::read(root.join(format!("{name}.jtd"))).unwrap()).unwrap();
+            let layout =
+                page_layout_with_source_margins(&document, page_layout_from_document(&document));
+            let segments =
+                native_rule_border_projection(&document, layout, 1, WritingMode::Horizontal)
+                    .unwrap();
+            assert_eq!(segments.len(), count, "{name}");
+            let right = segments
+                .iter()
+                .map(|segment| segment.points[2])
+                .max_by(f32::total_cmp)
+                .unwrap();
+            let expected =
+                layout.margin_left_px() + end_unit as f32 * layout.body_width_px() / 160.0;
+            assert!((right - expected).abs() < 0.001, "{name}");
+            let top = document
+                .document_text_flow()
+                .unwrap()
+                .events()
+                .iter()
+                .find(|event| event.record_class() == Some(0x0010))
+                .unwrap();
+            let mut malformed_bytes = document_text_raw_stream(&document).unwrap().to_vec();
+            let run_unit = top.unit_start() + 12;
+            let original_length = top.raw_words()[12];
+            malformed_bytes[run_unit * 2..run_unit * 2 + 2]
+                .copy_from_slice(&(original_length + 1).to_be_bytes());
+            let mut malformed = document.clone();
+            malformed.document_text_flow = Some(DocumentTextFlow::from_map(
+                "/DocumentText",
+                &malformed_bytes,
+                &map_document_text(&malformed_bytes),
+            ));
+            assert!(
+                native_rule_border_projection(&malformed, layout, 1, WritingMode::Horizontal)
+                    .is_none()
+            );
+            let core = DocumentCore::from_document(document);
+            let svg = core.render_page_svg(0).unwrap();
+            assert!(!svg.contains("rjtd-column-grid-candidate"), "{name}");
+            assert_eq!(
+                svg.matches("rjtd-native-control-table-cell").count(),
+                rows * columns,
+                "{name}"
+            );
+            let layers = core.get_page_layer_tree(0).unwrap();
+            let trailing = core
+                .document
+                .document_text_flow()
+                .unwrap()
+                .events()
+                .iter()
+                .rfind(|event| event.kind() == DocumentTextFlowKind::Text)
+                .unwrap();
+            let after_text = format!(
+                "\"text\":{}",
+                json_string(trailing.text().trim_end_matches(['\r', '\n']))
+            );
+            let after = layers
+                .split("{\"type\":\"textRun\",\"bbox\":")
+                .find(|part| part.starts_with("{\"x\":") && part.contains(&after_text))
+                .unwrap();
+            let y = native_rule_body_top_y(&core.document, layout, true, trailing.source_span())
+                .unwrap();
+            assert!(
+                after.starts_with(&format!(
+                    "{{\"x\":{:.3},\"y\":{y:.3}",
+                    layout.margin_left_px()
+                )),
+                "{name}"
+            );
+            assert!(
+                segments.iter().all(|segment| y > segment.points[3]),
+                "{name}"
+            );
+            assert_eq!(
+                layers.matches("nativeRuleBorderProjection").count(),
+                count,
+                "{name}"
+            );
+        }
+    }
 
     #[test]
     fn rule_paint_is_contextual_and_rejects_unknown_or_malformed_values() {

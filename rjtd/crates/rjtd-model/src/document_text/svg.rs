@@ -224,7 +224,9 @@ pub(crate) fn render_text_page_svg(
                         native_rule_body_top_y(
                             document,
                             layout,
-                            native_rule_flow.is_some() || native_rule_borders.is_some(),
+                            native_rule_flow.is_some()
+                                || native_rule_borders.is_some()
+                                || !native_control_tables.is_empty(),
                             span,
                         )
                     })

@@ -412,7 +412,7 @@ marks are not decoded by this projection. Border output remains `decoded:false`
 and currently belongs to SVG/PDF; the page-layer tree exposes the table text
 but does not emit these border lines.
 
-### Directional rule paint in a controlled two-column profile
+### Directional rule paint in a controlled strip profile
 
 The black-base, transparent, thick-preset, red, dashed-preset, and one-transparent-
 edge native pairs retain identical content records, `LineMark`, and `PageMark`.
@@ -427,15 +427,39 @@ contextual properties are:
 
 These meanings apply to the junction context, not ordinary text: property 2
 also supplies font size in text runs. The profile has at least three consecutive
-physical parent records, each length 27 and subtype `0x008f`. The top/bottom
-junction states are `[16,16,12]` / `[15,15,11]` (hex). Internal bands have `13` or
-`17` at the first two junctions and `13` at the last. Bits 1/2/4 select
+physical parent records, each subtype `0x008f` and length `w5 + 12`. In each
+top/bottom band, all but the last junction are `16` / `15` (hex), and the last
+is `12` / `11`. Internal bands have `13` or `17` before the last junction and
+`13` at the last. Bits 1/2/4 select
 up/down/right strokes. A following run is `14` when the right bit is set and
 zero otherwise. Junction strips
 occupy two source grid units, inter-junction run lengths remain fixed across
 bands, and each junction center is its strip start plus one. This is nominal
 physical rule geometry, not logical-cell reconstruction or a general topology
 decoder. Exact source `LineMark` starts and first-page pitch bound placement.
+
+Each complete four-word strip is `[junction,0,right-run-state,run-length]`.
+The final junction can have an explicit `[0,right-padding-length]` run, or end
+as a two-word `[junction,0]` pair directly before `ffff,0`. Widths and optional
+right padding must remain identical across bands and exactly cover the parent
+extent: add two grid units per junction and each run length; the explicit-tail
+profile includes one additional terminal unit. Padding is not divided into
+equal-width cells or stretched to the right body margin.
+
+| Controlled columns | Interior run lengths | Final blank run | Junction centers |
+|-------------------:|----------------------|-----------------|------------------|
+| 1 | 156 | absent | 1, 159 |
+| 2 | 76, 76 | 1 | 1, 79, 157 |
+| 3 | 50, 50, 50 | 1 | 1, 53, 105, 157 |
+| 5 | 28, 28, 28, 28, 28 | 7 | 1, 31, 61, 91, 121, 151 |
+
+All four examples have parent extent 160 and left offset zero. The five-column
+table is physically narrower because its terminal padding is seven units, not
+because the renderer assigns a special layout to its file name. Wrong strip
+counts, zero interior lengths, inconsistent widths, and extent mismatches reject
+the profile. The existing first-page control-table text projection can enable
+exact surrounding body `LineMark` positions even when no physical-flow text
+slots remain; otherwise its trailing body could overlap the last table row.
 
 Unset/reset presets (`0`/`ffff`) keep thin fallback paint; preset 3 selects the
 observed thick solid and preset 4 the observed dash. Transparency 1 hides a

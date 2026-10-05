@@ -315,7 +315,7 @@ renderer fallback として使う。color、thickness、dash pattern、join、co
 この projection では解読していない。border 出力は `decoded:false` のままで、現在は SVG/PDF に
 含まれる。page-layer tree は table text を公開するが、これらの border line は出力しない。
 
-### 統制した 2-column profile の方向別 rule paint
+### 統制した strip profile の方向別 rule paint
 
 黒色基本、透明、太線 preset、赤色、点線 preset、内部縦線だけ透明の native 対照は
 content record、`LineMark`、`PageMark` が同一で、末尾 style event だけが変化する。
@@ -328,13 +328,31 @@ junction の source unit における contextual property は次のとおり。
 | 右   | 3 | 6 | 17 |
 
 この意味は junction context に限定する。通常 text の property 2 は font size を表す。
-対応 profile は連続した物理 parent record3件以上、各 length27/subtype`0x008f` から成り、
-上端/下端 junction state は `[16,16,12]` / `[15,15,11]`（hex）である。内部 band は
-最初の二つが`13`または`17`、最後が`13`。bit1/2/4 が上/下/右 stroke を選ぶ。
+対応 profile は連続した物理 parent record3件以上、各 length`w5 + 12`/subtype`0x008f`から成る。
+上端/下端の最後以外の junction は`16` / `15`（hex）、最後は`12` / `11`。
+内部 band は最後以外が`13`または`17`、最後が`13`。bit1/2/4 が上/下/右 stroke を選ぶ。
 直後の run は右 bit があれば`14`、なければ0となる。
 junction strip は source grid2単位を占め、band 間の run length は一定、center は
 strip start＋1となる。nominal な物理 rule geometry であり、論理 cell の再構成や一般的な
 topology decoder ではない。正確な source LineMark start と先頭ページ pitch に限定する。
+
+完全な4-word stripは`[junction,0,right-run-state,run-length]`。最後のjunctionは
+明示的な`[0,right-padding-length]`runを持つか、2-word`[junction,0]`だけで`ffff,0`に続く。
+幅と右paddingはband間で一致し、各junction2grid単位とrun lengthの合計がparent extentを
+満たす必要がある。明示tailのprofileには終端1単位を加える。paddingを等幅セルへ分配したり、
+右body marginまで表を引き伸ばしたりしない。
+
+| 統制した列数 | 内部run lengths | 最後のblank run | Junction centers |
+|-------------:|-----------------|-----------------|------------------|
+| 1 | 156 | なし | 1, 159 |
+| 2 | 76, 76 | 1 | 1, 79, 157 |
+| 3 | 50, 50, 50 | 1 | 1, 53, 105, 157 |
+| 5 | 28, 28, 28, 28, 28 | 7 | 1, 31, 61, 91, 121, 151 |
+
+これらはparent extent160/left offset0。5列の表は最後のpaddingが7単位なので狭く、
+file nameによる特別なlayoutではない。不正strip数、内部length0、幅不一致、extent不一致は
+profileを拒否する。既存の先頭ページcontrol-table text projectionも、physical-flow text slotが
+残らない場合の正確な前後body LineMark位置を有効にする。これがないと後続bodyが最後の表行に重なる。
 
 unset/reset preset（`0`/`ffff`）は細線 fallback、preset3 は太い実線、preset4 は点線を
 選ぶ。transparency1 は非表示、0/unset は表示。`80` は非アクティブな横線終端に現れ、

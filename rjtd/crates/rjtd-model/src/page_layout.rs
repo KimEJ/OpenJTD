@@ -1140,7 +1140,9 @@ pub(super) fn page_layer_tree_json(
                     native_rule_body_top_y(
                         &core.document,
                         layout,
-                        native_rule_flow.is_some() || native_rule_borders.is_some(),
+                        native_rule_flow.is_some()
+                            || native_rule_borders.is_some()
+                            || !native_control_tables.is_empty(),
                         span,
                     )
                 });

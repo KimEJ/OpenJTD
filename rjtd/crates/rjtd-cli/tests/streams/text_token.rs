@@ -181,7 +181,10 @@ fn native_single_column_table_preserves_two_rows() {
     assert!(output.status.success());
     let svg = String::from_utf8(output.stdout).unwrap();
     assert_eq!(svg.matches("rjtd-native-control-table-cell").count(), 2);
-    assert_eq!(svg.matches("rjtd-native-control-table-border").count(), 1);
+    assert_eq!(svg.matches("rjtd-native-rule-borders").count(), 1);
+    assert_eq!(svg.matches("data-direction=").count(), 19);
+    assert!(!svg.contains("rjtd-native-control-table-border"));
+    assert!(!svg.contains("rjtd-column-grid-candidate"));
     assert_eq!(svg.matches("BEFORE-ONE-COLUMN").count(), 1);
     assert_eq!(svg.matches("AFTER-ONE-COLUMN").count(), 1);
 }

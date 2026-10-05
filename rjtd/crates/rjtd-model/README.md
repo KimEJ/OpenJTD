@@ -129,7 +129,7 @@ Unknown style profiles, wrapped `0x00ff` alignment, single-word tracking, and
 full font-metric equivalence remain unproven. Exact first/last text-run
 LineMark intervals keep surrounding body text outside the admitted ruled flow.
 
-A separate, bounded two-column first-page rule projection reads directional paint at
+A separate, bounded first-page ruled-band projection reads directional paint at
 the source junction units. Up/down/right use style properties 1/2/3 for presets,
 4/5/6 for visibility, and 15/16/17 for BGR24 colors. Transparent strokes remain
 in layer evidence without being painted or deleting text/cell candidates.
@@ -137,6 +137,10 @@ Thin, thick-preset, and dashed-preset sizes are renderer approximations, not
 decoded source units; geometry/paint stay `decoded:false`. Unknown values,
 other junction patterns, logical merge ownership, and multipage rules are not admitted. Exact
 surrounding LineMark positions also prevent body text overlapping this grid.
+Column counts and integer width remainders come from the source strips, not
+equal division of the body width. Both an explicit final blank run and a bare
+terminal junction are admitted. The existing control-table text projection also
+enables exact first/last body-line positions when it owns all cell text.
 
 Physical bands may have differing horizontal boundaries or additional text
 lines. Source states suppress the partial boundary in a vertically merged
