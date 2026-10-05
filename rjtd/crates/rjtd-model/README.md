@@ -109,7 +109,10 @@ still require independent evidence and implementation.
 A bounded first-page horizontal ASCII projection places physical ruled spans
 directly from source events, LineMark intervals, PageMark pitch, and source
 margins. Explicit left/distributed alignment can be shown without rebuilding
-logical table rows; distributed spans retain their source extent as SVG
+logical rows. Explicit center/right spans use source midpoint/end anchors and
+SVG's font-aware `text-anchor`; layer JSON separates `anchorX` from estimated
+bbox/glyph positions. This remains a first-page horizontal ASCII profile, not
+logical-cell reconstruction. Distributed spans retain their source extent as SVG
 `textLength`/`lengthAdjust="spacing"` and layer-tree metadata. Overlapping table
 fallbacks remain diagnostics instead of painting the same text twice. Raw span
 flags and `decoded:false` remain visible. Inherited wrapped automatic spacing,

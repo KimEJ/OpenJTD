@@ -203,15 +203,29 @@ pub(crate) fn push_page_layer_native_control_flow_text_slot_json(
         .text_length_px
         .map(f64::from)
         .unwrap_or_else(|| text_width_px_for_font_size(slot.font_size.px, &slot.text));
+    let bbox_x = f64::from(slot.x)
+        - match slot.text_anchor {
+            "middle" => width / 2.0,
+            "end" => width,
+            _ => 0.0,
+        };
     output.push_str("{\"type\":\"textRun\",\"bbox\":");
     output.push_str(&format!(
         "{{\"x\":{:.3},\"y\":{:.3},\"width\":{width:.3},\"height\":{:.3}}}",
-        slot.x,
+        bbox_x,
         slot.baseline_y - slot.font_size.px,
         slot.font_size.px.max(APP_LINE_HEIGHT_PX),
     ));
     output.push_str(",\"text\":");
     output.push_str(&json_string(&slot.text));
+    output.push_str(&format!(
+        ",\"textAnchor\":{},\"anchorX\":{:.3}",
+        json_string(slot.text_anchor),
+        slot.x
+    ));
+    if slot.text_length_px.is_none() && slot.word_justification_width_px.is_none() {
+        output.push_str(",\"positionsDecoded\":false");
+    }
     output.push_str(&format!(
         ",\"fontSize\":{:.3},\"fontSizeBasis\":{},\"baseline\":{:.3},\"rotation\":0.000,\"isVertical\":false,\"orientation\":\"horizontal\",\"fontFamily\":{},\"fillColor\":\"#111111\",\"projectionKind\":{},\"spanRawWord6\":{},\"spanRawWord7\":{},\"source\":",
         slot.font_size.px,

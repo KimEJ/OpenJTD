@@ -44,6 +44,7 @@ pub(crate) struct NativeControlFlowTextProjection {
 pub(crate) struct NativeControlFlowTextSlot {
     pub(crate) text: String,
     pub(crate) x: f32,
+    pub(crate) text_anchor: &'static str,
     pub(crate) baseline_y: f32,
     pub(crate) font_size: DocumentTextFontSize,
     pub(crate) source_span: TextSourceSpan,
@@ -213,6 +214,7 @@ pub(crate) fn native_control_flow_text_projection(
             (baseline_y <= layout.height_px()).then_some(NativeControlFlowTextSlot {
                 text: line.text,
                 x: layout.margin_left_px(),
+                text_anchor: "start",
                 baseline_y,
                 font_size,
                 source_span: line.source_span,
@@ -366,14 +368,22 @@ pub(crate) fn native_rule_flow_text_projection(
                 let unit_px = layout.body_width_px() / f32::from(grid_extent);
                 let text_length_px = match words[6] {
                     0 => None,
+                    1 | 2 if leading == 0 && !text.ends_with(' ') && matches!(words[7], 0 | 2) => {
+                        None
+                    }
                     3 if leading == 0 && !text.ends_with(' ') && text.len() > 1 => {
                         Some(f32::from(words[5] - words[4]) * unit_px)
                     }
                     0x00ff if words[7] == 0 => None,
                     _ => return None,
                 };
-                let x = layout.margin_left_px()
-                    + (f32::from(words[4]) + leading as f32 * 2.0) * unit_px;
+                let left = layout.margin_left_px() + f32::from(words[4]) * unit_px;
+                let right = layout.margin_left_px() + f32::from(words[5]) * unit_px;
+                let (x, text_anchor) = match words[6] {
+                    1 => ((left + right) / 2.0, "middle"),
+                    2 => (right, "end"),
+                    _ => (left + leading as f32 * 2.0 * unit_px, "start"),
+                };
                 let word_justification_width_px = if word_justification {
                     // Repeated padding and single-word fallback tracking are not decoded.
                     if !text.contains(' ') || text.contains("  ") {
@@ -399,6 +409,7 @@ pub(crate) fn native_rule_flow_text_projection(
                 slots.push(NativeControlFlowTextSlot {
                     text: text.to_string(),
                     x,
+                    text_anchor,
                     baseline_y,
                     font_size,
                     source_span: span.subspan_by_units(leading, leading + text.len()),
@@ -519,8 +530,9 @@ pub(crate) fn push_native_control_flow_text_svg(
     };
     svg.push_str(&format!("<g class=\"{class}\" data-projection-kind=\"{}\" data-source-backed=\"true\" data-reference-backed=\"false\" data-decoded=\"false\" data-geometry-decoded=\"false\">", projection.projection_kind));
     for slot in &projection.slots {
+        let text_anchor = slot.text_anchor;
         svg.push_str(&format!(
-            "<g data-line-mark-record-index=\"{}\" data-page-mark-pitch-mm100=\"{}\" data-leading-ascii-space-count=\"{}\" data-preceding-header-offset-units=\"{}\" data-preceding-header-extent-units=\"{}\" data-font-size-basis=\"{}\" data-span-raw-word6=\"{}\" data-span-raw-word7=\"{}\">",
+            "<g text-anchor=\"{text_anchor}\" data-line-mark-record-index=\"{}\" data-page-mark-pitch-mm100=\"{}\" data-leading-ascii-space-count=\"{}\" data-preceding-header-offset-units=\"{}\" data-preceding-header-extent-units=\"{}\" data-font-size-basis=\"{}\" data-span-raw-word6=\"{}\" data-span-raw-word7=\"{}\">",
             slot.line_mark_record_index,
             slot.page_mark_pitch_mm100,
             slot.leading_ascii_space_count,
@@ -1129,6 +1141,7 @@ mod tests {
             slots: vec![NativeControlFlowTextSlot {
                 text: "A B".into(),
                 x: 20.0,
+                text_anchor: "start",
                 baseline_y: 40.0,
                 font_size: DocumentTextFontSize {
                     px: 14.0,
@@ -1165,6 +1178,84 @@ mod tests {
         assert!(json.contains("\"spanRawWord6\":3,\"spanRawWord7\":2"));
         assert!(json.contains("\"positions\":[0.000,56.150,112.300,120.000]"));
         assert!(json.contains("\"geometryDecoded\":false"));
+
+        for (anchor, bbox_x) in [("middle", "8.450"), ("end", "-3.100")] {
+            let mut aligned = projection.clone();
+            aligned.slots[0].text_anchor = anchor;
+            aligned.slots[0].text_length_px = None;
+            let mut svg = String::new();
+            push_native_control_flow_text_svg(&mut svg, Some(&aligned), "A&B", &BTreeMap::new());
+            assert!(svg.contains(&format!("text-anchor=\"{anchor}\"")));
+            let mut json = String::new();
+            push_page_layer_native_control_flow_text_slot_json(
+                &mut json,
+                0,
+                &aligned.slots[0],
+                "A&B",
+                aligned.projection_kind,
+            );
+            assert!(json.contains(&format!("\"textAnchor\":\"{anchor}\",\"anchorX\":20.000")));
+            assert!(json.contains(&format!("\"bbox\":{{\"x\":{bbox_x}")));
+            assert_eq!(json.matches("\"positionsDecoded\":false").count(), 1);
+        }
+    }
+
+    #[test]
+    #[ignore = "requires private native alignment pairs"]
+    fn native_rule_flow_anchors_center_and_right_without_reconstructing_rows() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../rjtd-testdata/local-samples/native-fixtures");
+        for (name, flag, anchor) in [
+            ("table-align-center.jtd", 1, "middle"),
+            ("table-align-right.jtd", 2, "end"),
+        ] {
+            let doc = parse_document(&std::fs::read(root.join(name)).unwrap()).unwrap();
+            let layout = page_layout_with_source_margins(&doc, page_layout_from_document(&doc));
+            let projection = native_rule_flow_text_projection(
+                &doc,
+                layout,
+                1,
+                WritingMode::Horizontal,
+                &[],
+                None,
+            )
+            .unwrap();
+            assert_eq!(projection.slots.len(), 4);
+            let long = projection
+                .slots
+                .iter()
+                .filter(|slot| slot.text != "CELL-B")
+                .collect::<Vec<_>>();
+            assert_eq!(long.len(), 3);
+            let unit = layout.body_width_px() / 160.0;
+            let source_x = layout.margin_left_px() + if flag == 1 { 40.0 } else { 78.0 } * unit;
+            assert!(long.iter().all(|slot| slot.raw_span_flags[0] == flag
+                && slot.text_anchor == anchor
+                && (slot.x - source_x).abs() < 0.001
+                && slot.word_justification_width_px.is_none()
+                && slot.text_length_px.is_none()));
+            assert!(
+                long.windows(2)
+                    .all(|pair| pair[0].baseline_y < pair[1].baseline_y)
+            );
+            let core = DocumentCore::from_document(doc);
+            let svg = core.render_page_svg(0).unwrap();
+            assert_eq!(svg.matches(&format!("text-anchor=\"{anchor}\"")).count(), 3);
+            assert_eq!(svg.matches(">CELL-A LONG").count(), 1);
+            assert_eq!(svg.matches(">CELL-B</text>").count(), 1);
+            assert!(!svg.contains("rjtd-column-grid-candidate"));
+            assert!(!svg.contains("lengthAdjust=\"spacing\""));
+            assert!(!svg.contains("data-word-justification-width"));
+            assert!(core.page_word_justification_targets(0).unwrap().is_empty());
+            let layers = core.get_page_layer_tree(0).unwrap();
+            assert_eq!(
+                layers
+                    .matches(&format!("\"textAnchor\":\"{anchor}\""))
+                    .count(),
+                3
+            );
+            assert_eq!(layers.matches("nativeRuleFlowTextProjection").count(), 4);
+        }
     }
 
     #[test]

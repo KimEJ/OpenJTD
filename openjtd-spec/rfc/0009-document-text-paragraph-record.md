@@ -317,7 +317,20 @@ additional logical rows or cells. The first-cell declarations share `b0=2`,
 | Setting | `w6` | `w7`, successive physical lines |
 | --- | ---: | --- |
 | `左寄せ` (left) | 0 | 2, 2, 0 |
+| `中央揃え` (center) | 1 | 2, 2, 0 |
+| `右寄せ` (right) | 2 | 2, 2, 0 |
 | `均等` (distributed) | 3 | 2, 2, 0 |
+
+An additional center/right pair preserves the same `b0=2`, `b1=78`, grid extent
+160, three physical lines, and second-cell text. Center uses
+`marginLeft + (b0+b1)/2 * bodyWidth/gridExtent`; right uses
+`marginLeft + b1 * bodyWidth/gridExtent`. SVG `text-anchor="middle"` or `"end"`
+lets the paint backend use its real font advances. Each generated PDF's three
+center midpoints or right endpoints agree with the native pair within 0.3 pt;
+this does not establish equal glyph widths. The layer tree keeps `textAnchor`
+and `anchorX` separate from its estimated bbox/positions with `decoded:false`.
+This admission excludes edge whitespace, unknown continuation flags, other
+writing modes, and logical-row reconstruction.
 
 This associates `w6` with explicit alignment in this profile. The unchanged
 `w7` sequence is a continuation-related candidate, not proof of justification,

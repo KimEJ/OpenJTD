@@ -238,7 +238,17 @@ declaration を保持する。同じ declaration の繰返しは論理 row/cell 
 | 設定 | `w6` | 各物理行の `w7` |
 | --- | ---: | --- |
 | `左寄せ` | 0 | 2, 2, 0 |
+| `中央揃え` | 1 | 2, 2, 0 |
+| `右寄せ` | 2 | 2, 2, 0 |
 | `均等` | 3 | 2, 2, 0 |
+
+追加の中央/右寄せ pair は `b0=2`、`b1=78`、grid extent160、物理3行、2番目のcell textを
+保つ。中央は `marginLeft + (b0+b1)/2 * bodyWidth/gridExtent`、右は
+`marginLeft + b1 * bodyWidth/gridExtent` を使う。SVG `text-anchor="middle"` / `"end"`
+により paint backend が実際の font advance を使う。生成 PDF の3個の中央 midpoint または
+右 endpoint は native pair と0.3pt以内で一致したが、glyph width の一致は証明しない。
+layer tree は `textAnchor` / `anchorX` を推定 bbox/positions と区別し `decoded:false` を保つ。
+両端空白、unknown continuation flags、他の writing mode、論理 row 再構成は許可しない。
 
 この profile では `w6` と明示的な alignment の対応を観測できる。変化しない `w7`
 sequence は continuation 関連の候補であり、justification、論理 cell identity、完全な
