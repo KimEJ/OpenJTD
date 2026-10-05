@@ -115,6 +115,17 @@ fallbacks remain diagnostics instead of painting the same text twice. Raw span
 flags and `decoded:false` remain visible. Inherited wrapped automatic spacing,
 glyph metrics, and ruled borders are not established by this projection.
 
+The controlled western-style `0x100b` profile exposes an
+`english_justification_candidate()` independently of cell flags. In the
+supported left-aligned ASCII flow, nonfinal lines can request word-only spacing
+to their source extent. `render_page_svg_with_text_widths()` accepts actual font
+advances from a paint backend; PDF uses its existing SVG font engine and the
+viewer supplies browser text measurements through the optional WASM adapter.
+Unmeasured SVG/layer output retains explicit unresolved-spacing metadata.
+Unknown style profiles, wrapped `0x00ff` alignment, single-word tracking, and
+full font-metric equivalence remain unproven. Exact first/last text-run
+LineMark intervals keep surrounding body text outside the admitted ruled flow.
+
 ## License
 
 Apache-2.0.

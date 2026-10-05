@@ -54,6 +54,7 @@ pub(crate) struct NativeControlFlowTextSlot {
     pub(crate) preceding_header_extent_units: u16,
     pub(crate) raw_span_flags: [u16; 2],
     pub(crate) text_length_px: Option<f32>,
+    pub(crate) word_justification_width_px: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -222,6 +223,7 @@ pub(crate) fn native_control_flow_text_projection(
                 preceding_header_extent_units: header.extent_units,
                 raw_span_flags: [header.raw_words[6], header.raw_words[7]],
                 text_length_px: None,
+                word_justification_width_px: None,
             })
         })
         .collect::<Option<Vec<_>>>()?;
@@ -249,6 +251,7 @@ pub(crate) fn native_rule_flow_text_projection(
     let page_mark = document.page_marks().first()?;
     let resolver = document_text_style_resolver(document)?;
     let default_font = document_default_font_size_px(document)?;
+    let english_justification = document.english_justification_candidate();
     let mut parent = None;
     let mut declaration = None;
     let mut slots = Vec::new();
@@ -345,7 +348,18 @@ pub(crate) fn native_rule_flow_text_projection(
                     continue;
                 };
                 let leading = part.text.chars().take_while(|c| *c == ' ').count();
+                let contextual_spacing = words[6] == 0 && words[7] == 2;
+                let word_justification = if contextual_spacing {
+                    english_justification?
+                } else {
+                    false
+                };
                 let text = part.text.trim_start_matches(' ');
+                let text = if word_justification {
+                    text.trim_end_matches(' ')
+                } else {
+                    text
+                };
                 if text.is_empty() {
                     continue;
                 }
@@ -360,6 +374,19 @@ pub(crate) fn native_rule_flow_text_projection(
                 };
                 let x = layout.margin_left_px()
                     + (f32::from(words[4]) + leading as f32 * 2.0) * unit_px;
+                let word_justification_width_px = if word_justification {
+                    // Repeated padding and single-word fallback tracking are not decoded.
+                    if !text.contains(' ') || text.contains("  ") {
+                        return None;
+                    }
+                    let width = (f32::from(words[5] - words[4]) - leading as f32 * 2.0) * unit_px;
+                    if !width.is_finite() || width <= 0.0 {
+                        return None;
+                    }
+                    Some(width)
+                } else {
+                    None
+                };
                 let baseline_y =
                     layout.margin_top_px() + interval.record_index as f32 * pitch + font_size.px;
                 if !x.is_finite()
@@ -374,8 +401,7 @@ pub(crate) fn native_rule_flow_text_projection(
                     x,
                     baseline_y,
                     font_size,
-                    source_span: span
-                        .subspan_by_units(leading, span.unit_end() - span.unit_start()),
+                    source_span: span.subspan_by_units(leading, leading + text.len()),
                     line_mark_record_index: interval.record_index,
                     page_mark_pitch_mm100: pitch_mm100,
                     leading_ascii_space_count: leading,
@@ -383,6 +409,7 @@ pub(crate) fn native_rule_flow_text_projection(
                     preceding_header_extent_units: words[5],
                     raw_span_flags: [words[6], words[7]],
                     text_length_px,
+                    word_justification_width_px,
                 });
             }
             _ => {
@@ -480,6 +507,7 @@ pub(crate) fn push_native_control_flow_text_svg(
     svg: &mut String,
     projection: Option<&NativeControlFlowTextProjection>,
     font_family: &str,
+    measured_widths: &BTreeMap<usize, f32>,
 ) {
     let Some(projection) = projection else {
         return;
@@ -503,18 +531,17 @@ pub(crate) fn push_native_control_flow_text_svg(
         ));
         if let Some(width) = slot.text_length_px {
             svg.push_str(&format!("<text class=\"rjtd-text rjtd-native-control-flow-line\" x=\"{:.3}\" y=\"{:.3}\" font-family=\"{}\" font-size=\"{:.3}\" fill=\"{}\" letter-spacing=\"0\" xml:space=\"preserve\" textLength=\"{width:.3}\" lengthAdjust=\"spacing\">{}</text>", slot.x, slot.baseline_y, escape_xml(font_family), slot.font_size.px, fallback_text_fill_color(), escape_xml(&svg_visual_text(&slot.text))));
+        } else if let Some(width) = slot.word_justification_width_px {
+            let unit = slot.source_span.unit_start();
+            let spacing = measured_widths
+                .get(&unit)
+                .and_then(|natural| english_word_spacing_px(width, *natural, &slot.text));
+            let spacing_attr = spacing
+                .map(|value| format!(" word-spacing=\"{value:.6}\""))
+                .unwrap_or_default();
+            svg.push_str(&format!("<text id=\"rjtd-word-spacing-{unit}\" class=\"rjtd-text rjtd-native-control-flow-line\" x=\"{:.3}\" y=\"{:.3}\" font-family=\"{}\" font-size=\"{:.3}\" fill=\"{}\" letter-spacing=\"0\" xml:space=\"preserve\" data-source-unit-start=\"{unit}\" data-word-justification-width=\"{width:.6}\" data-word-spacing-resolved=\"{}\"{spacing_attr}>{}</text>", slot.x, slot.baseline_y, escape_xml(font_family), slot.font_size.px, fallback_text_fill_color(), spacing.is_some(), escape_xml(&slot.text)));
         } else {
-            push_svg_text_run(
-                svg,
-                "rjtd-text rjtd-native-control-flow-line",
-                slot.x,
-                slot.baseline_y,
-                font_family,
-                slot.font_size.px,
-                fallback_text_fill_color(),
-                &slot.text,
-                None,
-            );
+            svg.push_str(&format!("<text class=\"rjtd-text rjtd-native-control-flow-line\" x=\"{:.3}\" y=\"{:.3}\" font-family=\"{}\" font-size=\"{:.3}\" fill=\"{}\" letter-spacing=\"0\" xml:space=\"preserve\">{}</text>", slot.x, slot.baseline_y, escape_xml(font_family), slot.font_size.px, fallback_text_fill_color(), escape_xml(&svg_visual_text(&slot.text))));
         }
         svg.push_str("</g>");
     }
@@ -527,6 +554,73 @@ struct NativeControlFlowSourceLine {
     source_span: TextSourceSpan,
     leading_ascii_space_count: usize,
     line_mark_record_index: usize,
+}
+
+fn english_word_spacing_px(target: f32, natural: f32, text: &str) -> Option<f32> {
+    let spaces = text.bytes().filter(|byte| *byte == b' ').count();
+    if !target.is_finite()
+        || !natural.is_finite()
+        || natural <= 0.0
+        || target < natural
+        || spaces == 0
+    {
+        return None;
+    }
+    Some((target - natural) / spaces as f32)
+}
+
+/// Exact first/last text-run line positions around an admitted ruled flow only.
+pub(crate) fn native_rule_body_top_y(
+    document: &Document,
+    layout: PageLayout,
+    projection: Option<&NativeControlFlowTextProjection>,
+    span: &TextSourceSpan,
+) -> Option<f32> {
+    projection?;
+    let flow = document.document_text_flow()?;
+    let mut text = flow
+        .events()
+        .iter()
+        .filter(|event| event.kind() == DocumentTextFlowKind::Text);
+    let first = text.clone().next()?;
+    let last = text.next_back()?;
+    let event = if span.unit_start() == first.unit_start() {
+        first
+    } else if span.unit_start() == last.unit_start() {
+        last
+    } else {
+        return None;
+    };
+    if !event.text().is_ascii() {
+        return None;
+    }
+    let intervals = shanai_lan_line_mark_intervals(document);
+    let hits = intervals
+        .iter()
+        .filter(|interval| {
+            interval.unit_start == span.unit_start() && span.unit_end() <= interval.unit_end
+        })
+        .collect::<Vec<_>>();
+    let [interval] = hits.as_slice() else {
+        return None;
+    };
+    let page_mark = document.page_marks().first()?;
+    let page =
+        table_grid_page_mark_entry_for_line_mark_record(Some(page_mark), interval.record_index)?;
+    if page.index() != Some(0) || page.line_start() != Some(0) {
+        return None;
+    }
+    let pitch = *page_mark
+        .entries()
+        .get(page.row_index())?
+        .u16_fields()
+        .get(21)?;
+    let pitch = hundredth_millimeters_to_css_px(u32::from(pitch));
+    if !(APP_FONT_SIZE_PX..=APP_LINE_HEIGHT_PX * 1.25).contains(&pitch) {
+        return None;
+    }
+    let top = layout.margin_top_px() + interval.record_index as f32 * pitch;
+    (top.is_finite() && top < layout.height_px()).then_some(top)
 }
 
 fn native_flow_preceding_header(
@@ -935,6 +1029,100 @@ mod tests {
     use super::*;
 
     #[test]
+    fn english_word_spacing_uses_measured_advances_not_character_stretching() {
+        assert_eq!(english_word_spacing_px(120.0, 60.0, "A B C"), Some(30.0));
+        assert_eq!(english_word_spacing_px(60.0, 60.0, "A B C"), Some(0.0));
+        for natural in [0.0, -1.0, f32::NAN, f32::INFINITY, 121.0] {
+            assert_eq!(english_word_spacing_px(120.0, natural, "A B C"), None);
+        }
+        assert_eq!(english_word_spacing_px(120.0, 60.0, "ABC"), None);
+    }
+
+    #[test]
+    #[ignore = "requires private native input pairs"]
+    fn native_english_justification_changes_word_spacing_without_changing_source_flow() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../rjtd-testdata/local-samples/native-fixtures");
+        let on =
+            parse_document(&std::fs::read(root.join("wrap-auto-on-008.jtd")).unwrap()).unwrap();
+        let off =
+            parse_document(&std::fs::read(root.join("wrap-auto-off-008.jtd")).unwrap()).unwrap();
+        assert_eq!(on.document_text_flow(), off.document_text_flow());
+        assert_eq!(on.english_justification_candidate(), Some(true));
+        assert_eq!(off.english_justification_candidate(), Some(false));
+        for (doc, enabled) in [(on, true), (off, false)] {
+            let core = DocumentCore::from_document(doc);
+            let targets = core.page_word_justification_targets(0).unwrap();
+            assert_eq!(targets.len(), if enabled { 2 } else { 0 });
+            let raw = core.render_page_svg(0).unwrap();
+            assert_eq!(
+                raw.matches("data-word-spacing-resolved=\"false\"").count(),
+                targets.len()
+            );
+            assert!(!raw.contains("lengthAdjust=\"spacing\""));
+            let widths = targets
+                .iter()
+                .map(|(unit, width)| (*unit, width - 20.0))
+                .collect();
+            let measured = core.render_page_svg_with_text_widths(0, &widths).unwrap();
+            assert_eq!(measured.matches(" word-spacing=\"").count(), targets.len());
+            assert_eq!(
+                measured
+                    .matches("data-word-spacing-resolved=\"true\"")
+                    .count(),
+                targets.len()
+            );
+            assert_eq!(measured.matches(">CELL-B</text>").count(), 1);
+            assert_eq!(measured.matches("END-A</text>").count(), 1);
+            let layers = core.get_page_layer_tree(0).unwrap();
+            assert_eq!(
+                layers.matches("\"wordJustificationWidth\"").count(),
+                targets.len()
+            );
+            let projection = native_rule_flow_text_projection(
+                &core.document,
+                core.page_layout,
+                1,
+                WritingMode::Horizontal,
+                &[],
+                None,
+            )
+            .unwrap();
+            let after = core
+                .document
+                .document_text_flow()
+                .unwrap()
+                .events()
+                .iter()
+                .rfind(|event| event.kind() == DocumentTextFlowKind::Text)
+                .unwrap();
+            let after_top = native_rule_body_top_y(
+                &core.document,
+                core.page_layout,
+                Some(&projection),
+                after.source_span(),
+            )
+            .unwrap();
+            assert!(
+                projection
+                    .slots
+                    .iter()
+                    .all(|slot| after_top > slot.baseline_y)
+            );
+            assert_eq!(
+                native_rule_body_top_y(&core.document, core.page_layout, None, after.source_span()),
+                None
+            );
+            assert_eq!(
+                core.page_word_justification_targets(1)
+                    .unwrap_or_default()
+                    .len(),
+                0
+            );
+        }
+    }
+
+    #[test]
     fn flow_text_rendering_retains_distributed_extent_and_raw_flags() {
         let projection = NativeControlFlowTextProjection {
             projection_kind: "nativeRuleFlowTextProjection",
@@ -954,10 +1142,11 @@ mod tests {
                 preceding_header_extent_units: 78,
                 raw_span_flags: [3, 2],
                 text_length_px: Some(120.0),
+                word_justification_width_px: None,
             }],
         };
         let mut svg = String::new();
-        push_native_control_flow_text_svg(&mut svg, Some(&projection), "A&B");
+        push_native_control_flow_text_svg(&mut svg, Some(&projection), "A&B", &BTreeMap::new());
         assert!(svg.contains("font-family=\"A&amp;B\""));
         assert!(svg.contains("textLength=\"120.000\" lengthAdjust=\"spacing\""));
         assert!(svg.contains("data-span-raw-word6=\"3\" data-span-raw-word7=\"2\""));

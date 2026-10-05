@@ -331,7 +331,8 @@ immediate parent/declaration, exact `LineMark` containment, first `PageMark`
 pitch, source margins, and uniform source font size to place physical spans.
 Explicit distributed spans without edge whitespace use
 `(b1-b0) * bodyWidth / parentGridExtent` as SVG `textLength` with
-`lengthAdjust="spacing"`; explicit left spans retain natural spacing. This does
+`lengthAdjust="spacing"`; explicit left spans do not use distributed character
+stretching. Their English word spacing also depends on the document style below. This does
 not reconstruct logical table rows. Overlapping table fallbacks stop painting,
 but their candidates remain diagnostics in the layer tree. Raw flags,
 `decoded:false`, and estimated glyph-position labels remain visible.
@@ -342,6 +343,41 @@ glyph metrics and ruled borders are not established. The inherited wrapped
 `0x00ff` profile is still rejected by this projection pending independent
 spacing evidence; distributed character spacing must not stand in for English
 word justification.
+
+### Document-default English justification
+
+A controlled ON/OFF pair leaves `/DocumentText` byte-identical, including the
+first cell's `w6=0` and `w7=2,2,0` sequence. Thus these cell flags alone cannot
+determine English justification. Its `/DocumentViewStyles` default `0x100b`
+record changes between these complete payloads:
+
+```text
+ON:  02 02 58 00    04 00 00 00 08
+OFF: 02 02 58 40 00 04 00 00 00 08
+```
+
+The bounded model candidate recognizes only these profiles and a unique
+record. Unknown masks, values, duplicate records, and other envelopes stay
+unproven; this is not a complete optional-field schema. Raw style bytes remain
+preserved and JSON reports `englishJustificationCandidate` with `decoded:false`.
+
+The native PDFs justify the two nonfinal physical lines when ON and leave the
+last line unchanged. For the admitted multiword ASCII flow, source span width
+minus leading grid padding determines the requested advance extent. The paint
+backend measures the natural font advance, and the model divides the positive
+remaining width among interior ASCII spaces. It emits SVG `word-spacing`, not
+distributed `textLength`. PDF and browser adapters supply their own font
+measurements to the same model rule. Without measurements, SVG/layer evidence
+explicitly remains unresolved rather than claiming decoded glyph positions.
+
+An exact first/last text-run match to a first-page `LineMark` interval also
+places the surrounding body baseline using source pitch, avoiding flattened
+paragraph-order placement over the wrapped lines. This does not decode general
+paragraph or page assignment. The ON/OFF regression covers unchanged source
+flow, two spacing requests versus none, unchanged final-line behavior, and
+separate surrounding text. Substitute-font metrics, single-word tracking,
+wrapped inherited `0x00ff`, other writing modes, and ruled paint remain outside
+this admission.
 
 ### Basic control-table border projection
 

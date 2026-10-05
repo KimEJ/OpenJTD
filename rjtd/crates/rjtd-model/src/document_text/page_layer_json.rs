@@ -226,6 +226,9 @@ pub(crate) fn push_page_layer_native_control_flow_text_slot_json(
             ",\"textLength\":{width:.3},\"lengthAdjust\":\"spacing\",\"positionsDecoded\":false"
         ));
     }
+    if let Some(width) = slot.word_justification_width_px {
+        output.push_str(&format!(",\"wordJustificationWidth\":{width:.6},\"wordSpacingResolved\":false,\"positionsDecoded\":false"));
+    }
     output.push_str(",\"positions\":");
     let mut positions = text_positions_px_for_font_size(slot.font_size.px, &slot.text);
     // Layer positions remain estimated; keep their final extent consistent

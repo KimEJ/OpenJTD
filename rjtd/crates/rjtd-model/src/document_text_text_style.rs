@@ -27,25 +27,50 @@ pub(crate) struct DocumentTextFontSize {
     pub(crate) basis: &'static str,
 }
 
-pub(crate) fn document_default_font_size_px(document: &Document) -> Option<f32> {
-    let bytes = document
+impl Document {
+    /// Bounded western-style candidate; unknown records remain in unknown_styles.
+    /// Absence of the optional off value is enabled only in this observed profile.
+    pub fn english_justification_candidate(&self) -> Option<bool> {
+        let payload = document_view_style_payload(self, 0x100b)?;
+        match payload {
+            [2, 2, 0x58, 0, 4, 0, 0, 0, 8] => Some(true),
+            [2, 2, 0x58, 0x40, 0, 4, 0, 0, 0, 8] => Some(false),
+            _ => None,
+        }
+    }
+}
+
+fn document_view_style_payload(document: &Document, code: u16) -> Option<&[u8]> {
+    let styles = document
         .unknown_styles()
         .iter()
-        .find(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))?
-        .payload();
+        .filter(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))
+        .collect::<Vec<_>>();
+    let [style] = styles.as_slice() else {
+        return None;
+    };
+    let bytes = style.payload();
     let summary = summarize_style_stream(bytes);
     if summary.record_layout() != StyleStreamRecordLayout::Sequential {
         return None;
     }
-    let record = summary
+    let records = summary
         .records()
         .iter()
-        .find(|record| record.code() == 0x1006)?;
-    if !matches!(record.payload_len(), 20 | 21) {
+        .filter(|record| record.code() == code)
+        .collect::<Vec<_>>();
+    let [record] = records.as_slice() else {
+        return None;
+    };
+    let start = record.offset().checked_add(4)?;
+    bytes.get(start..start.checked_add(record.payload_len())?)
+}
+
+pub(crate) fn document_default_font_size_px(document: &Document) -> Option<f32> {
+    let payload = document_view_style_payload(document, 0x1006)?;
+    if !matches!(payload.len(), 20 | 21) {
         return None;
     }
-    let start = record.offset().checked_add(4)?;
-    let payload = bytes.get(start..start.checked_add(record.payload_len())?)?;
     if payload.get(..3) != Some(&[0x1f, 0, 0]) {
         return None;
     }
@@ -142,6 +167,53 @@ mod tests {
     use super::{document_text_font_size, document_text_property_15_color_candidate};
     use crate::TextSourceSpan;
     use rjtd_core::document_text::DocumentTextStyleResolver;
+
+    #[test]
+    fn distinguishes_supported_english_justification_profiles_without_guessing_other_flags() {
+        use crate::{Document, UnknownStyle};
+        let candidate = |payload: &[u8], duplicate: bool| {
+            let mut bytes = vec![0; 32];
+            let records = [
+                (0x100b_u16, payload),
+                (0x1007, &[1][..]),
+                (0x1008, &[2][..]),
+                (0x1009, &[3][..]),
+            ];
+            for (code, value) in records {
+                bytes.extend(code.to_be_bytes());
+                bytes.extend((value.len() as u16).to_be_bytes());
+                bytes.extend(value);
+            }
+            if duplicate {
+                bytes.extend(0x100b_u16.to_be_bytes());
+                bytes.extend((payload.len() as u16).to_be_bytes());
+                bytes.extend(payload);
+            }
+            let original = bytes.clone();
+            let mut doc = Document::from_plain_text("A B");
+            doc.push_unknown_style(UnknownStyle::from_stream("/DocumentViewStyles", bytes));
+            let value = doc.english_justification_candidate();
+            assert_eq!(doc.unknown_styles()[0].payload(), original);
+            value
+        };
+        assert_eq!(
+            candidate(&[2, 2, 0x58, 0, 4, 0, 0, 0, 8], false),
+            Some(true)
+        );
+        assert_eq!(
+            candidate(&[2, 2, 0x58, 0x40, 0, 4, 0, 0, 0, 8], false),
+            Some(false)
+        );
+        assert_eq!(
+            candidate(&[2, 2, 0x58, 0x40, 1, 4, 0, 0, 0, 8], false),
+            None
+        );
+        assert_eq!(candidate(&[2, 2, 0x58, 0, 4, 0, 0, 0, 8], true), None);
+        assert_eq!(
+            Document::from_plain_text("A B").english_justification_candidate(),
+            None
+        );
+    }
 
     #[test]
     fn resolves_explicit_font_size_without_treating_resets_or_mixed_ranges_as_sizes() {

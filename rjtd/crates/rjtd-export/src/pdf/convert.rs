@@ -3,7 +3,10 @@ use super::patch::ensure_pdf_form_xobject_form_types;
 use super::safety::{scrub_embedded_pdf_eof_markers, validate_pdf_preview_safety};
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn svgs_to_pdf(svg_pages: &[String]) -> Result<Vec<u8>, String> {
+pub(crate) fn svgs_to_pdf(
+    svg_pages: &[String],
+    core: Option<&rjtd_model::DocumentCore>,
+) -> Result<Vec<u8>, String> {
     if svg_pages.is_empty() {
         return Err("no pages to export".to_string());
     }
@@ -29,10 +32,30 @@ pub(crate) fn svgs_to_pdf(svg_pages: &[String]) -> Result<Vec<u8>, String> {
 
     let mut page_datas = Vec::new();
 
-    for svg in svg_pages {
+    for (page, svg) in svg_pages.iter().enumerate() {
         let svg_with_fallback = add_font_fallbacks(svg);
-        let tree = usvg::Tree::from_str(&svg_with_fallback, &options)
+        let mut tree = usvg::Tree::from_str(&svg_with_fallback, &options)
             .map_err(|error| format!("SVG parse failed: {error}"))?;
+        if let Some(core) = core {
+            let mut widths = std::collections::BTreeMap::new();
+            for (unit, _) in core
+                .page_word_justification_targets(page as u32)
+                .map_err(|e| e.to_string())?
+            {
+                if let Some(usvg::Node::Text(text)) =
+                    tree.node_by_id(&format!("rjtd-word-spacing-{unit}"))
+                {
+                    widths.insert(unit, text.bounding_box().width());
+                }
+            }
+            if !widths.is_empty() {
+                let resolved = core
+                    .render_page_svg_with_text_widths(page as u32, &widths)
+                    .map_err(|e| e.to_string())?;
+                tree = usvg::Tree::from_str(&add_font_fallbacks(&resolved), &options)
+                    .map_err(|error| format!("Font-measured SVG parse failed: {error}"))?;
+            }
+        }
         let (chunk, svg_ref) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default())
             .map_err(|error| format!("SVG chunk conversion failed: {error:?}"))?;
         let dpi_ratio = 72.0 / 96.0;

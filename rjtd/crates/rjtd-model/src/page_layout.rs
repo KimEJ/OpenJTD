@@ -1122,13 +1122,20 @@ pub(super) fn page_layer_tree_json(
                     + f64::from(
                         font_size.map_or(APP_FONT_SIZE_PX, |size| size.px) - APP_FONT_SIZE_PX,
                     );
+                let native_body_top = fragment.source_span.as_ref().and_then(|span| {
+                    native_rule_body_top_y(&core.document, layout, native_rule_flow.as_ref(), span)
+                });
                 push_page_layer_text_run_json(
                     &mut output,
                     source_id,
                     PageLayerTextPlacement {
                         x,
-                        y,
-                        baseline: styled_baseline,
+                        y: native_body_top.map(f64::from).unwrap_or(y),
+                        baseline: native_body_top
+                            .map(|top| {
+                                f64::from(top + font_size.map_or(APP_FONT_SIZE_PX, |size| size.px))
+                            })
+                            .unwrap_or(styled_baseline),
                     },
                     layout,
                     core.writing_mode,

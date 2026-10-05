@@ -1,6 +1,7 @@
 use super::*;
 use crate::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_text_page_svg(
     lines: &[PageTextLine],
     page_number: usize,
@@ -9,6 +10,7 @@ pub(crate) fn render_text_page_svg(
     writing_mode: WritingMode,
     document: &Document,
     decoration: Option<&PageDecoration>,
+    measured_widths: &BTreeMap<usize, f32>,
 ) -> String {
     let mut svg = String::new();
     svg.push_str(&format!(
@@ -205,6 +207,14 @@ pub(crate) fn render_text_page_svg(
                     .unwrap_or(APP_FONT_SIZE_PX);
                 let width =
                     text_width_px(layout, &fragment.text) as f32 * font_size / APP_FONT_SIZE_PX;
+                let baseline = fragment
+                    .source_span
+                    .as_ref()
+                    .and_then(|span| {
+                        native_rule_body_top_y(document, layout, native_rule_flow.as_ref(), span)
+                    })
+                    .map(|top| top + font_size)
+                    .unwrap_or(y + font_size - APP_FONT_SIZE_PX);
                 let source_color = style_resolver
                     .as_ref()
                     .zip(fragment.source_span.as_ref())
@@ -216,7 +226,7 @@ pub(crate) fn render_text_page_svg(
                     &mut svg,
                     "rjtd-text",
                     x,
-                    y + font_size - APP_FONT_SIZE_PX,
+                    baseline,
                     &font_family,
                     font_size,
                     fill_color,
@@ -238,8 +248,18 @@ pub(crate) fn render_text_page_svg(
             fallback_visual_line_index += 1;
         }
     }
-    push_native_control_flow_text_svg(&mut svg, native_control_flow.as_ref(), &font_family);
-    push_native_control_flow_text_svg(&mut svg, native_rule_flow.as_ref(), &font_family);
+    push_native_control_flow_text_svg(
+        &mut svg,
+        native_control_flow.as_ref(),
+        &font_family,
+        measured_widths,
+    );
+    push_native_control_flow_text_svg(
+        &mut svg,
+        native_rule_flow.as_ref(),
+        &font_family,
+        measured_widths,
+    );
     push_native_control_table_text_svg(&mut svg, &native_control_tables, &font_family);
     if let Some(projection) = layout_box_text_projection(document, layout, page_number) {
         push_layout_box_text_projection_svg(&mut svg, &projection, &font_family);

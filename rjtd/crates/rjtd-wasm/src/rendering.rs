@@ -7,6 +7,27 @@ impl HwpDocument {
     pub fn render_page_svg(&self, page_num: u32) -> Result<String, JsValue> {
         self.core.render_page_svg(page_num).map_err(js_error)
     }
+    #[wasm_bindgen(js_name = renderPageSvgWithTextWidths)]
+    pub fn render_page_svg_with_text_widths(
+        &self,
+        page_num: u32,
+        units: Vec<u32>,
+        widths: Vec<f32>,
+    ) -> Result<String, JsValue> {
+        if units.len() != widths.len() {
+            return Err(JsValue::from_str(
+                "Text measurement arrays have different lengths",
+            ));
+        }
+        let measurements = units
+            .into_iter()
+            .zip(widths)
+            .map(|(unit, width)| (unit as usize, width))
+            .collect();
+        self.core
+            .render_page_svg_with_text_widths(page_num, &measurements)
+            .map_err(js_error)
+    }
     #[wasm_bindgen(js_name = renderPageHtml)]
     pub fn render_page_html(&self, page_num: u32) -> Result<String, JsValue> {
         self.core.render_page_html(page_num).map_err(js_error)

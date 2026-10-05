@@ -146,6 +146,11 @@ pub fn to_json(document: &Document) -> String {
         Some(flow) => text_flow::push_document_text_flow_json(&mut output, flow),
         None => output.push_str("null"),
     }
+    output.push_str(",\"englishJustificationCandidate\":");
+    match document.english_justification_candidate() {
+        Some(enabled) => output.push_str(&format!("{{\"enabled\":{enabled},\"source\":\"/DocumentViewStyles\",\"recordCode\":4107,\"decoded\":false}}")),
+        None => output.push_str("null"),
+    }
     output.push_str(",\"autoTextCandidates\":[");
     for (index, auto_text) in document.auto_texts().iter().enumerate() {
         if index > 0 {

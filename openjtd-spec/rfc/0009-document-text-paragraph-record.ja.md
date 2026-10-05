@@ -250,7 +250,8 @@ model は table view を導出する前に、順序付き `DocumentTextFlow` eve
 正確な `LineMark` containment、最初の `PageMark` pitch、source margins、一様な source
 font size を使い物理 span を配置する。両端に空白がない明示的な均等 span は
 `(b1-b0) * bodyWidth / parentGridExtent` を SVG `textLength` とし、
-`lengthAdjust="spacing"` を使う。左寄せは natural spacing を保つ。論理 table row を
+`lengthAdjust="spacing"` を使う。左寄せは均等な文字間 stretching を使わないが、欧文の
+単語間 spacing は下記の文書 style にも依存する。論理 table row を
 再構成するものではない。重なる table fallback は描画を止めるが、候補は layer tree の
 診断に残す。raw flags、`decoded:false`、推定 glyph-position の表示を維持する。
 
@@ -258,6 +259,35 @@ font size を使い物理 span を配置する。両端に空白がない明示�
 均等 extent を保持した。厳密な glyph metrics と ruled border は証明していない。
 継承された wrapped `0x00ff` profile は、独立した spacing 根拠が得られるまでこの
 projection で拒否する。均等な文字間 spacing を欧文の単語間 justification の代用にしない。
+
+### 文書既定の欧文 justification
+
+統制した ON/OFF pair では `/DocumentText` の全 bytes が同一であり、最初の cell の
+`w6=0` と `w7=2,2,0` sequence も変わらない。cell flags だけでは欧文 justification を
+決定できない。`/DocumentViewStyles` の既定 `0x100b` record は次の完全 payload に変わる。
+
+```text
+ON:  02 02 58 00    04 00 00 00 08
+OFF: 02 02 58 40 00 04 00 00 00 08
+```
+
+限定した model candidate はこの profile と一意の record だけを認識する。unknown mask、
+value、重複 record、他の envelope は未証明であり、完全な optional-field schema ではない。
+raw style bytes を保存し、JSON は `englishJustificationCandidate` を `decoded:false` で示す。
+
+native PDF は ON のとき末尾以外の物理2行を justify し、最後の行は変えない。対応する
+multiword ASCII flow では source span width から先頭 grid padding を引き、要求する advance
+extent を求める。paint backend が natural font advance を測定し、model が正の残り幅を内部
+ASCII space に配分する。均等 `textLength` ではなく SVG `word-spacing` を出力する。PDF と
+browser adapter は実際の font measurement を同じ model rule に渡す。未測定の場合は
+SVG/layer を明示的に unresolved とし、解読済み glyph position と主張しない。
+
+先頭/末尾 text run が先頭ページの `LineMark` interval と正確に一致する場合、前後の body
+baseline も source pitch から置き、flattened paragraph order による wrapped line 上への
+重なりを避ける。一般的な paragraph/page assignment の解読ではない。ON/OFF 回帰は同一の
+source flow、spacing request2件と0件、最後の行が不変であること、前後textの分離を対象とする。
+代替 font metrics、single-word tracking、wrapped 継承値 `0x00ff`、他の writing mode、ruled
+paint はこの許可範囲に含めない。
 
 ### 基本 control-table border projection
 

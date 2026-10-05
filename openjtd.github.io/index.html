@@ -402,6 +402,19 @@ function renderPage() {
   const svgContainer = document.getElementById('svg-container');
   try {
     svgContainer.innerHTML = doc.renderPageSvg(currentPage);
+    const renderedDoc = doc, page = currentPage;
+    if (typeof doc.renderPageSvgWithTextWidths === 'function') {
+      document.fonts.ready.then(() => {
+        if (doc !== renderedDoc || currentPage !== page || currentTab !== 'svg') return;
+        const runs = [...svgContainer.querySelectorAll('text[data-word-justification-width]')];
+        if (!runs.length) return;
+        const units = Uint32Array.from(runs, run => Number(run.dataset.sourceUnitStart));
+        const widths = Float32Array.from(runs, run => run.getComputedTextLength());
+        svgContainer.innerHTML = renderedDoc.renderPageSvgWithTextWidths(page, units, widths);
+      }).catch(error => {
+        if (doc === renderedDoc && currentPage === page) setStatus(`エラー: ${error}`);
+      });
+    }
   } catch (e) {
     svgContainer.innerHTML = `<p style="color:#c00;padding:16px">レンダリングエラー: ${e}</p>`;
   }

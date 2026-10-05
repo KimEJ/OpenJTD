@@ -416,6 +416,15 @@ impl DocumentCore {
     }
 
     pub fn render_page_svg(&self, page_num: u32) -> Result<String> {
+        self.render_page_svg_with_text_widths(page_num, &BTreeMap::new())
+    }
+
+    /// Font advances supplied by the paint backend, not reference-PDF coordinates.
+    pub fn render_page_svg_with_text_widths(
+        &self,
+        page_num: u32,
+        widths: &BTreeMap<usize, f32>,
+    ) -> Result<String> {
         let index = page_num as usize;
         let lines = self.page_lines(page_num)?;
         let decoration = self.page_decoration(index);
@@ -428,7 +437,46 @@ impl DocumentCore {
             self.writing_mode,
             &self.document,
             decoration.as_ref(),
+            widths,
         ))
+    }
+
+    /// Source widths requesting English word justification. Glyph metrics remain backend-owned.
+    pub fn page_word_justification_targets(&self, page_num: u32) -> Result<Vec<(usize, f32)>> {
+        self.page_lines(page_num)?;
+        let page = page_num as usize + 1;
+        let tables = native_control_table_text_projections(
+            &self.document,
+            self.page_layout,
+            page,
+            self.writing_mode,
+        );
+        let interstitial = native_control_flow_text_projection(
+            &self.document,
+            self.page_layout,
+            page,
+            self.writing_mode,
+            &tables,
+        );
+        Ok(native_rule_flow_text_projection(
+            &self.document,
+            self.page_layout,
+            page,
+            self.writing_mode,
+            &tables,
+            interstitial.as_ref(),
+        )
+        .map(|projection| {
+            projection
+                .slots
+                .into_iter()
+                .filter_map(|slot| {
+                    slot.word_justification_width_px
+                        .map(|width| (slot.source_span.unit_start(), width))
+                })
+                .collect()
+        })
+        .unwrap_or_default())
     }
 
     pub fn render_page_svg_native(&self, page_num: u32) -> Result<String> {

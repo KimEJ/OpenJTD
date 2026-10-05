@@ -458,7 +458,7 @@ fn exports_pdf_does_not_apply_layout_hints_from_filename_only() {
 #[test]
 fn embeds_svg_chunk_with_preview_safe_page_wrapper_contract() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80"><rect width="120" height="80" fill="#fff"/><circle cx="60" cy="40" r="24" fill="#123456"/></svg>"##;
-    let pdf = svgs_to_pdf(&[svg.to_string()]).unwrap();
+    let pdf = svgs_to_pdf(&[svg.to_string()], None).unwrap();
     let pdf_text = String::from_utf8_lossy(&pdf);
 
     assert!(pdf.starts_with(b"%PDF-1.4"));

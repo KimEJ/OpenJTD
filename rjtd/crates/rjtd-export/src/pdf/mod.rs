@@ -33,5 +33,5 @@ pub fn to_pdf_with_file_name(document: &Document, file_name: &str) -> Result<Vec
         );
     }
 
-    svgs_to_pdf(&svg_pages)
+    svgs_to_pdf(&svg_pages, Some(&core))
 }
