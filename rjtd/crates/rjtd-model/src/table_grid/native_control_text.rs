@@ -45,6 +45,8 @@ pub(crate) struct NativeControlFlowTextSlot {
     pub(crate) text: String,
     pub(crate) x: f32,
     pub(crate) text_anchor: &'static str,
+    pub(crate) alignment_basis: &'static str,
+    pub(crate) explicit_line_break: bool,
     pub(crate) baseline_y: f32,
     pub(crate) font_size: DocumentTextFontSize,
     pub(crate) source_span: TextSourceSpan,
@@ -215,6 +217,8 @@ pub(crate) fn native_control_flow_text_projection(
                 text: line.text,
                 x: layout.margin_left_px(),
                 text_anchor: "start",
+                alignment_basis: "interstitial-source-line-candidate",
+                explicit_line_break: false,
                 baseline_y,
                 font_size,
                 source_span: line.source_span,
@@ -257,6 +261,7 @@ pub(crate) fn native_rule_flow_text_projection(
     let mut parent = None;
     let mut declaration = None;
     let mut slots = Vec::new();
+    let mut hard_break_continuations = BTreeMap::new();
     for event in flow.events() {
         match event.kind() {
             DocumentTextFlowKind::Record => {
@@ -289,7 +294,7 @@ pub(crate) fn native_rule_flow_text_projection(
                     continue;
                 };
                 declaration = None;
-                if header.unit_end() != event.unit_start() || !event.text().is_ascii() {
+                if header.unit_end() != event.unit_start() {
                     continue;
                 }
                 let words = header.raw_words();
@@ -304,7 +309,7 @@ pub(crate) fn native_rule_flow_text_projection(
                 let [part] = parts.as_slice() else {
                     continue;
                 };
-                if !part.text.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
+                if !native_rule_text_supported(&part.text) {
                     continue;
                 }
                 let span = part.source_span.as_ref()?;
@@ -350,13 +355,27 @@ pub(crate) fn native_rule_flow_text_projection(
                     continue;
                 };
                 let leading = part.text.chars().take_while(|c| *c == ' ').count();
-                let contextual_spacing = words[6] == 0 && words[7] == 2;
+                let whitespace_only = leading == part.text.chars().count();
+                let track = (grid_extent, words[4], words[5]);
+                let inherited_after_break = words[6] == 0x00ff
+                    && hard_break_continuations
+                        .get(&track)
+                        .is_some_and(|previous| *previous + 1 == interval.record_index);
+                let contextual_spacing = words[6] == 0
+                    && words[7] == 2
+                    && !part.break_after
+                    && !whitespace_only
+                    && part.text.is_ascii();
                 let word_justification = if contextual_spacing {
                     english_justification?
                 } else {
                     false
                 };
-                let text = part.text.trim_start_matches(' ');
+                let text = if whitespace_only {
+                    part.text.as_str()
+                } else {
+                    part.text.trim_start_matches(' ')
+                };
                 let text = if word_justification {
                     text.trim_end_matches(' ')
                 } else {
@@ -374,7 +393,7 @@ pub(crate) fn native_rule_flow_text_projection(
                     3 if leading == 0 && !text.ends_with(' ') && text.len() > 1 => {
                         Some(f32::from(words[5] - words[4]) * unit_px)
                     }
-                    0x00ff if words[7] == 0 => None,
+                    0x00ff if words[7] == 0 || (words[7] == 2 && inherited_after_break) => None,
                     _ => return None,
                 };
                 let left = layout.margin_left_px() + f32::from(words[4]) * unit_px;
@@ -382,7 +401,14 @@ pub(crate) fn native_rule_flow_text_projection(
                 let (x, text_anchor) = match words[6] {
                     1 => ((left + right) / 2.0, "middle"),
                     2 => (right, "end"),
-                    _ => (left + leading as f32 * 2.0 * unit_px, "start"),
+                    _ => (
+                        left + if whitespace_only {
+                            0.0
+                        } else {
+                            leading as f32 * 2.0 * unit_px
+                        },
+                        "start",
+                    ),
                 };
                 let word_justification_width_px = if word_justification {
                     // Repeated padding and single-word fallback tracking are not decoded.
@@ -406,13 +432,26 @@ pub(crate) fn native_rule_flow_text_projection(
                 {
                     continue;
                 }
+                if part.break_after && (words[6] == 0 || inherited_after_break) {
+                    hard_break_continuations.insert(track, interval.record_index);
+                } else {
+                    hard_break_continuations.remove(&track);
+                }
+                let source_trim = if whitespace_only { 0 } else { leading };
                 slots.push(NativeControlFlowTextSlot {
                     text: text.to_string(),
                     x,
                     text_anchor,
+                    alignment_basis: if inherited_after_break {
+                        "preceding-explicit-break-left-candidate"
+                    } else {
+                        "raw-span-flag-candidate"
+                    },
+                    explicit_line_break: part.break_after,
                     baseline_y,
                     font_size,
-                    source_span: span.subspan_by_units(leading, leading + text.len()),
+                    source_span: span
+                        .subspan_by_units(source_trim, source_trim + text.encode_utf16().count()),
                     line_mark_record_index: interval.record_index,
                     page_mark_pitch_mm100: pitch_mm100,
                     leading_ascii_space_count: leading,
@@ -434,6 +473,11 @@ pub(crate) fn native_rule_flow_text_projection(
     })
 }
 
+fn native_rule_text_supported(text: &str) -> bool {
+    text.chars().all(|character| character.is_ascii_graphic() || character == ' '
+        || matches!(character, '\u{3000}'..='\u{30ff}' | '\u{3400}'..='\u{9fff}' | '\u{ff01}'..='\u{ffef}'))
+}
+
 pub(crate) fn native_control_flow_text_projection_contains(
     projection: Option<&NativeControlFlowTextProjection>,
     span: &TextSourceSpan,
@@ -446,16 +490,21 @@ pub(crate) fn native_control_flow_text_projection_contains(
     })
 }
 
-pub(crate) fn native_control_flow_text_projection_overlaps_candidate(
-    projection: Option<&NativeControlFlowTextProjection>,
+pub(crate) fn native_control_text_projections_overlap_candidate(
+    tables: &[NativeControlTableTextProjection],
+    flows: [Option<&NativeControlFlowTextProjection>; 2],
     candidate: &TableCandidate,
 ) -> bool {
-    projection.is_some_and(|projection| {
-        projection
-            .slots
-            .iter()
-            .any(|slot| table_candidate_overlaps_source_span(candidate, &slot.source_span))
-    })
+    tables
+        .iter()
+        .flat_map(|table| &table.slots)
+        .any(|slot| table_candidate_overlaps_source_span(candidate, &slot.source_span))
+        || flows.into_iter().flatten().any(|projection| {
+            projection
+                .slots
+                .iter()
+                .any(|slot| table_candidate_overlaps_source_span(candidate, &slot.source_span))
+        })
 }
 
 pub(crate) fn push_native_control_table_text_svg(
@@ -532,7 +581,9 @@ pub(crate) fn push_native_control_flow_text_svg(
     for slot in &projection.slots {
         let text_anchor = slot.text_anchor;
         svg.push_str(&format!(
-            "<g text-anchor=\"{text_anchor}\" data-line-mark-record-index=\"{}\" data-page-mark-pitch-mm100=\"{}\" data-leading-ascii-space-count=\"{}\" data-preceding-header-offset-units=\"{}\" data-preceding-header-extent-units=\"{}\" data-font-size-basis=\"{}\" data-span-raw-word6=\"{}\" data-span-raw-word7=\"{}\">",
+            "<g text-anchor=\"{text_anchor}\" data-alignment-basis=\"{}\" data-explicit-line-break=\"{}\" data-line-mark-record-index=\"{}\" data-page-mark-pitch-mm100=\"{}\" data-leading-ascii-space-count=\"{}\" data-preceding-header-offset-units=\"{}\" data-preceding-header-extent-units=\"{}\" data-font-size-basis=\"{}\" data-span-raw-word6=\"{}\" data-span-raw-word7=\"{}\">",
+            slot.alignment_basis,
+            slot.explicit_line_break,
             slot.line_mark_record_index,
             slot.page_mark_pitch_mm100,
             slot.leading_ascii_space_count,
@@ -1043,6 +1094,192 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ruled_horizontal_text_keeps_utf16_spans_and_explicit_breaks() {
+        let text = "日本語 ABC\n";
+        assert!(native_rule_text_supported(text.trim_end_matches('\n')));
+        assert!(!native_rule_text_supported("ABC\tDEF"));
+        assert!(!native_rule_text_supported("ABC\u{202e}DEF"));
+        let span = TextSourceSpan::new(
+            200,
+            200 + text.encode_utf16().count() * 2,
+            100,
+            100 + text.encode_utf16().count(),
+        );
+        let parts = source_text_parts(text, Some(&span));
+        assert!(parts[0].break_after);
+        assert_eq!(parts[0].source_span.as_ref().unwrap().unit_end(), 107);
+    }
+
+    #[test]
+    #[ignore = "requires private native empty, merge and line-flow pairs"]
+    fn native_rule_flow_preserves_empty_spans_merge_boundaries_and_physical_lines() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../rjtd-testdata/local-samples/native-fixtures");
+        for (name, texts, stroke_count) in [
+            ("table-empty-cells", vec!["R01C02", "R02C01"], 30),
+            ("table-space-only", vec!["  ", "A2", "B1", "B2"], 30),
+            ("table-merge-vertical", vec!["A1", "A2", "B1", "B2"], 29),
+            (
+                "table-hard-linebreak",
+                vec!["TEXT-A", "A2", "TEXT-B", "B1", "B2"],
+                36,
+            ),
+            (
+                "table-wrap-japanese",
+                vec![
+                    "CELL-A 日本語の自動折り返しを確認しま",
+                    "CELL-B",
+                    "す。句読点「括弧」と数字123を含む文章",
+                    "です。折り返しを比較します。 END-A",
+                ],
+                28,
+            ),
+            (
+                "table-row-grow-auto",
+                vec![
+                    "R01C01",
+                    "R01C02",
+                    "R02C01",
+                    "R02C02",
+                    "R03C01",
+                    "R03C02",
+                    "R04C01",
+                    "R04C02",
+                    "AUTO-GROW-LINE-2",
+                    "AUTO-GROW-LINE-3",
+                ],
+                70,
+            ),
+        ] {
+            let document =
+                parse_document(&std::fs::read(root.join(format!("{name}.jtd"))).unwrap()).unwrap();
+            let layout =
+                page_layout_with_source_margins(&document, page_layout_from_document(&document));
+            let flow = native_rule_flow_text_projection(
+                &document,
+                layout,
+                1,
+                WritingMode::Horizontal,
+                &[],
+                None,
+            )
+            .unwrap_or_else(|| panic!("rejected {name}"));
+            assert_eq!(
+                flow.slots
+                    .iter()
+                    .map(|slot| slot.text.as_str())
+                    .collect::<Vec<_>>(),
+                texts,
+                "{name}"
+            );
+            assert!(
+                flow.slots
+                    .iter()
+                    .all(|slot| slot.word_justification_width_px.is_none()),
+                "{name}"
+            );
+            assert!(
+                flow.slots.iter().all(|slot| slot.source_span.unit_end()
+                    - slot.source_span.unit_start()
+                    == slot.text.encode_utf16().count()),
+                "{name}"
+            );
+            let borders =
+                native_rule_border_projection(&document, layout, 1, WritingMode::Horizontal)
+                    .unwrap();
+            assert_eq!(borders.len(), stroke_count, "{name}");
+            if name == "table-space-only" {
+                let blank = &flow.slots[0];
+                assert_eq!(blank.source_span.unit_start(), 109);
+                assert_eq!(blank.source_span.unit_end(), 111);
+            }
+            if name == "table-merge-vertical" {
+                let middle_unit = document
+                    .document_text_flow()
+                    .unwrap()
+                    .events()
+                    .iter()
+                    .filter(|event| event.record_class() == Some(0x0010))
+                    .nth(2)
+                    .unwrap()
+                    .unit_start();
+                assert!(
+                    !borders
+                        .iter()
+                        .any(|segment| segment.source_unit == middle_unit + 9
+                            && segment.direction == "right")
+                );
+                assert!(
+                    borders
+                        .iter()
+                        .any(|segment| segment.source_unit == middle_unit + 13
+                            && segment.direction == "right")
+                );
+            }
+            if name == "table-hard-linebreak" {
+                assert!(flow.slots[0].explicit_line_break);
+                assert_eq!(flow.slots[0].line_mark_record_index, 2);
+                assert_eq!(flow.slots[2].line_mark_record_index, 3);
+                assert_eq!(flow.slots[3].line_mark_record_index, 5);
+            }
+            if name == "table-row-grow-auto" {
+                assert_eq!(flow.slots[8].raw_span_flags, [0xff, 2]);
+                assert!(flow.slots[8].explicit_line_break);
+                assert_eq!(flow.slots[9].raw_span_flags, [0xff, 0]);
+                assert!(
+                    flow.slots[8..]
+                        .iter()
+                        .all(|slot| slot.alignment_basis
+                            == "preceding-explicit-break-left-candidate")
+                );
+            }
+            let core = DocumentCore::from_document(document);
+            let svg = core.render_page_svg(0).unwrap();
+            assert!(!svg.contains("rjtd-column-grid-candidate"), "{name}");
+            for text in &texts {
+                assert_eq!(
+                    svg.matches(&format!(">{text}</text>")).count(),
+                    1,
+                    "{name}: {text}"
+                );
+            }
+            let layers = core.get_page_layer_tree(0).unwrap();
+            let after = layers
+                .split("{\"type\":\"textRun\",\"bbox\":")
+                .find(|part| {
+                    part.starts_with("{\"x\":") && part.contains("\"text\":\"  BODY-AFTER\"")
+                        || part.starts_with("{\"x\":")
+                            && part.contains("\"text\":\"  AFTER-WRAP-ALIGN\"")
+                })
+                .unwrap();
+            assert!(
+                after.starts_with(&format!("{{\"x\":{:.3}", layout.margin_left_px())),
+                "{name}"
+            );
+            assert_eq!(
+                layers.matches("nativeRuleBorderProjection").count(),
+                stroke_count,
+                "{name}"
+            );
+            let trailing = core
+                .document
+                .document_text_flow()
+                .unwrap()
+                .events()
+                .iter()
+                .rfind(|event| event.kind() == DocumentTextFlowKind::Text)
+                .unwrap();
+            let after_top =
+                native_rule_body_top_y(&core.document, layout, true, trailing.source_span())
+                    .unwrap();
+            assert!(
+                borders.iter().all(|segment| after_top > segment.points[3]),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
     fn english_word_spacing_uses_measured_advances_not_character_stretching() {
         assert_eq!(english_word_spacing_px(120.0, 60.0, "A B C"), Some(30.0));
         assert_eq!(english_word_spacing_px(60.0, 60.0, "A B C"), Some(0.0));
@@ -1145,6 +1382,8 @@ mod tests {
                 text: "A B".into(),
                 x: 20.0,
                 text_anchor: "start",
+                alignment_basis: "raw-span-flag-candidate",
+                explicit_line_break: false,
                 baseline_y: 40.0,
                 font_size: DocumentTextFontSize {
                     px: 14.0,

@@ -106,12 +106,12 @@ payload bytes has no source flow; fallback paragraph edits do not rewrite it.
 Logical wrapping/merging, ruled-line paint semantics, and saving source changes
 still require independent evidence and implementation.
 
-A bounded first-page horizontal ASCII projection places physical ruled spans
+A bounded first-page horizontal ASCII/Japanese projection places physical ruled spans
 directly from source events, LineMark intervals, PageMark pitch, and source
 margins. Explicit left/distributed alignment can be shown without rebuilding
 logical rows. Explicit center/right spans use source midpoint/end anchors and
 SVG's font-aware `text-anchor`; layer JSON separates `anchorX` from estimated
-bbox/glyph positions. This remains a first-page horizontal ASCII profile, not
+bbox/glyph positions. This remains a first-page horizontal text profile, not
 logical-cell reconstruction. Distributed spans retain their source extent as SVG
 `textLength`/`lengthAdjust="spacing"` and layer-tree metadata. Overlapping table
 fallbacks remain diagnostics instead of painting the same text twice. Raw span
@@ -129,14 +129,25 @@ Unknown style profiles, wrapped `0x00ff` alignment, single-word tracking, and
 full font-metric equivalence remain unproven. Exact first/last text-run
 LineMark intervals keep surrounding body text outside the admitted ruled flow.
 
-A separate, bounded 2x2 first-page rule projection reads directional paint at
+A separate, bounded two-column first-page rule projection reads directional paint at
 the source junction units. Up/down/right use style properties 1/2/3 for presets,
 4/5/6 for visibility, and 15/16/17 for BGR24 colors. Transparent strokes remain
 in layer evidence without being painted or deleting text/cell candidates.
 Thin, thick-preset, and dashed-preset sizes are renderer approximations, not
 decoded source units; geometry/paint stay `decoded:false`. Unknown values,
-other row patterns, merging, and multipage rules are not admitted. Exact
+other junction patterns, logical merge ownership, and multipage rules are not admitted. Exact
 surrounding LineMark positions also prevent body text overlapping this grid.
+
+Physical bands may have differing horizontal boundaries or additional text
+lines. Source states suppress the partial boundary in a vertically merged
+example; no logical rowspan is invented. Explicit cell line breaks disable
+automatic word spacing, and a following inherited-left span is admitted only
+when the previous physical line in the same grid/span ends with an explicit
+break. Japanese text uses UTF-16 source lengths, not UTF-8 byte lengths; its
+tracking and exact native font advances remain unproven. Whitespace-only spans
+retain their source text/range without advancing the surrounding body fallback.
+Table fallbacks overlapping either physical-flow or control-table text stay
+diagnostic-only, so mixed sparse projections do not repaint cells.
 
 ## License
 

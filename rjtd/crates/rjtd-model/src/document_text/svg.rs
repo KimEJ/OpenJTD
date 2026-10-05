@@ -47,7 +47,7 @@ pub(crate) fn render_text_page_svg(
     .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
     let native_rule_borders =
         native_rule_border_projection(document, layout, page_number, writing_mode)
-            .filter(|_| native_rule_flow.is_some() || !native_control_tables.is_empty());
+            .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
     if let Some(segments) = &native_rule_borders {
         for table in &mut native_control_tables {
             table.border = None;
@@ -189,7 +189,8 @@ pub(crate) fn render_text_page_svg(
                     lines,
                     page_number,
                     &fragment,
-                    native_rule_flow.as_ref(),
+                    &native_control_tables,
+                    [native_rule_flow.as_ref(), native_control_flow.as_ref()],
                 ) {
                     continue;
                 }
@@ -294,7 +295,8 @@ pub(crate) fn render_text_page_svg(
         document,
         lines,
         page_number,
-        native_rule_flow.as_ref(),
+        &native_control_tables,
+        [native_rule_flow.as_ref(), native_control_flow.as_ref()],
     );
     push_image_payload_diagnostic_svg(&mut svg, layout, document, page_number);
     if !fdm_vector_primitives_rendered {

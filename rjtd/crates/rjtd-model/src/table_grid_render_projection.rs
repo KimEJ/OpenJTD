@@ -364,7 +364,8 @@ pub(crate) fn fragment_overlaps_rendered_table_projection(
     lines: &[PageTextLine],
     page_number: usize,
     fragment: &PageLayerTextFragment,
-    source_flow: Option<&NativeControlFlowTextProjection>,
+    source_tables: &[NativeControlTableTextProjection],
+    source_flows: [Option<&NativeControlFlowTextProjection>; 2],
 ) -> bool {
     if page_number != 1 {
         return false;
@@ -373,7 +374,7 @@ pub(crate) fn fragment_overlaps_rendered_table_projection(
         return false;
     };
     document.table_candidates().iter().any(|candidate| {
-        !native_control_flow_text_projection_overlaps_candidate(source_flow, candidate)
+        !native_control_text_projections_overlap_candidate(source_tables, source_flows, candidate)
             && table_grid_candidate_is_rendered(layout, document, lines, page_number, candidate)
             && table_candidate_overlaps_source_span(candidate, span)
     })

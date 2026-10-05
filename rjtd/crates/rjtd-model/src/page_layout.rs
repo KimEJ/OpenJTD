@@ -854,7 +854,7 @@ pub(super) fn page_layer_tree_json(
         page_num as usize + 1,
         core.writing_mode,
     )
-    .filter(|_| native_rule_flow.is_some() || !native_control_tables.is_empty());
+    .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
     if let Some(segments) = &native_rule_borders {
         for segment in segments {
             output.push(',');
@@ -1195,8 +1195,9 @@ pub(super) fn page_layer_tree_json(
                 lines,
                 overlay_index,
                 (candidate, &grid),
-                native_control_flow_text_projection_overlaps_candidate(
-                    native_rule_flow.as_ref(),
+                native_control_text_projections_overlap_candidate(
+                    &native_control_tables,
+                    [native_rule_flow.as_ref(), native_control_flow.as_ref()],
                     candidate,
                 ),
             );

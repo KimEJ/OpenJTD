@@ -412,7 +412,7 @@ marks are not decoded by this projection. Border output remains `decoded:false`
 and currently belongs to SVG/PDF; the page-layer tree exposes the table text
 but does not emit these border lines.
 
-### Directional rule paint in a controlled 2x2 profile
+### Directional rule paint in a controlled two-column profile
 
 The black-base, transparent, thick-preset, red, dashed-preset, and one-transparent-
 edge native pairs retain identical content records, `LineMark`, and `PageMark`.
@@ -426,10 +426,12 @@ contextual properties are:
 | Right     | 3 | 6 | 17 |
 
 These meanings apply to the junction context, not ordinary text: property 2
-also supplies font size in text runs. The regular profile has five consecutive
-physical parent records, each length 27 and subtype `0x008f`. Its three junction
-states are `[16,16,12]`, `[13,13,13]`, `[17,17,13]`, `[13,13,13]`, and `[15,15,11]`
-(hex). Bits 1/2/4 select up/down/right strokes in this profile. Junction strips
+also supplies font size in text runs. The profile has at least three consecutive
+physical parent records, each length 27 and subtype `0x008f`. The top/bottom
+junction states are `[16,16,12]` / `[15,15,11]` (hex). Internal bands have `13` or
+`17` at the first two junctions and `13` at the last. Bits 1/2/4 select
+up/down/right strokes. A following run is `14` when the right bit is set and
+zero otherwise. Junction strips
 occupy two source grid units, inter-junction run lengths remain fixed across
 bands, and each junction center is its strip start plus one. This is nominal
 physical rule geometry, not logical-cell reconstruction or a general topology
@@ -446,14 +448,52 @@ The renderer uses 0.8/2.56 CSS-px thin/thick widths and a 3.2/3.2 CSS-px dash
 pattern as bounded paint approximations. Native prints show 0.6/1.92 pt widths
 and 2.4 pt dashes, but the UI exposes presets rather than numeric units: these
 measurements do not establish a source length-unit decoder. Joins, dash phase,
-corner glyph clipping, other presets, merged cells, and multipage paint remain
+corner glyph clipping, other presets, logical merge ownership, and multipage paint remain
 unproven. SVG/PDF retain `paint-decoded:false` and do not duplicate the older
-black-border fallback. Layer JSON retains all 30 directional stroke candidates,
+black-border fallback. The basic 2x2 layer JSON retains all 30 directional stroke candidates,
 including hidden strokes, raw preset/transparency/color, and source unit.
 Hiding the internal vertical edge suppresses eight candidates without changing
 the source content, geometry, or table candidates. Surrounding first/last text
 uses its exact source `LineMark` interval so the trailing body does not overlap
 the first row even when text is owned by the older control-table projection.
+
+### Empty spans, partial boundaries, and explicit cell line breaks
+
+Controlled empty-cell, space-only, vertical-merge, explicit-break, Japanese-wrap,
+and automatic-row-growth samples share this two-column parent family. Truly
+empty spans have consecutive `0030` declarations without a text event. A
+space-only span retains its actual spaces and exact source range as a physical
+text slot; it does not advance the unrelated body fallback's X position.
+The ordered source flow preserves both cases distinctly. Source table/flow
+placements suppress overlapping table fallbacks through the same guard, while
+keeping their candidate evidence in the layer tree.
+
+The vertical-merge example changes only the left middle junction `17` to `13`
+and its following run `14` to zero. Only that horizontal stroke is omitted;
+the right middle boundary and original text order remain. This does not infer
+logical rowspan, merged-cell editing ownership, or removal of either text run.
+The native merge also leaves an LF after the first left text and an LF-only
+boundary span; these are retained as separate source-flow evidence.
+The explicit-break case adds a vertical-only physical band; the native row-growth
+example has 11 physical bands for four logical rows, not a multipage long table.
+Rule placement follows the actual band count and boundaries rather than an
+alternating-row assumption. Border admission does not require nonempty text.
+
+A source LF at the end of a cell text part is retained in source flow and exposed
+as `isLineBreakEnd` in the projected text layer, not as a paragraph boundary.
+It suppresses automatic word spacing even with `w7=2`: the explicit-break
+native print uses natural spacing. An inherited `w6=ff,w7=2` span is admitted
+as a left-alignment candidate only when the immediately preceding physical line
+in the same grid/span has known-left alignment and ends with an explicit LF.
+The raw flags and `preceding-explicit-break-left-candidate` basis remain visible.
+Automatic inherited wrapping without this predecessor still rejects projection.
+
+Horizontal Japanese text now retains each source physical line and uses UTF-16
+unit counts for trimmed source spans. Its natural fallback font paint does not
+claim decoded tracking, punctuation adjustments, mixed Japanese/English
+justification, or exact native glyph metrics. The existing ASCII-only word
+spacing candidate remains separate. Unknown scripts and controls remain in
+source evidence rather than being promoted by this bounded projection.
 
 ## Correlation with LineMark unit-start
 

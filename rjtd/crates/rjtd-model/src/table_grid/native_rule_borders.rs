@@ -1,7 +1,7 @@
 use crate::*;
 use rjtd_core::document_text::DocumentTextStyleTypedValue;
 
-/// Nominal first-page 2x2 rule strokes, not logical cells or printer corner glyphs.
+/// Nominal first-page two-column rule strokes, not logical cells or printer corner glyphs.
 #[derive(Debug, Clone)]
 pub(crate) struct NativeRuleBorderSegment {
     pub(crate) points: [f32; 4],
@@ -31,16 +31,10 @@ pub(crate) fn native_rule_border_projection(
         .iter()
         .filter(|event| event.record_class() == Some(0x0010))
         .collect::<Vec<_>>();
-    let [top, first, middle, second, bottom] = rows.as_slice() else {
+    if rows.len() < 3 {
         return None;
-    };
-    let patterns = [
-        [0x16, 0x16, 0x12],
-        [0x13, 0x13, 0x13],
-        [0x17, 0x17, 0x13],
-        [0x13, 0x13, 0x13],
-        [0x15, 0x15, 0x11],
-    ];
+    }
+    let top = rows.first()?;
     let grid_extent = top.raw_words().get(6).copied()?;
     let left = top.raw_words().get(8).copied()?;
     let lengths = [
@@ -72,23 +66,32 @@ pub(crate) fn native_rule_border_projection(
     let mut segments = Vec::new();
     let mut previous_record = None;
     let mut previous_pitch = None;
-    for (row_index, (row, pattern)) in [top, first, middle, second, bottom]
-        .into_iter()
-        .zip(patterns)
-        .enumerate()
-    {
+    for (row_index, row) in rows.iter().enumerate() {
         let words = row.raw_words();
-        if words.len() != 27
+        if words.len() != 27 {
+            return None;
+        }
+        let pattern = [words[9], words[13], words[17]];
+        let supported_pattern = if row_index == 0 {
+            pattern == [0x16, 0x16, 0x12]
+        } else if row_index + 1 == rows.len() {
+            pattern == [0x15, 0x15, 0x11]
+        } else {
+            matches!(pattern[0], 0x13 | 0x17)
+                && matches!(pattern[1], 0x13 | 0x17)
+                && pattern[2] == 0x13
+        };
+        if !supported_pattern
             || words[3..9] != [0, 0x8f, 15, grid_extent, 0, left]
             || words[9..23]
                 != [
                     pattern[0],
                     0,
-                    if row_index % 2 == 0 { 0x14 } else { 0 },
+                    if pattern[0] & 4 != 0 { 0x14 } else { 0 },
                     lengths[0],
                     pattern[1],
                     0,
-                    if row_index % 2 == 0 { 0x14 } else { 0 },
+                    if pattern[1] & 4 != 0 { 0x14 } else { 0 },
                     lengths[1],
                     pattern[2],
                     0,

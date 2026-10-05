@@ -219,9 +219,11 @@ pub(crate) fn push_page_layer_native_control_flow_text_slot_json(
     output.push_str(",\"text\":");
     output.push_str(&json_string(&slot.text));
     output.push_str(&format!(
-        ",\"textAnchor\":{},\"anchorX\":{:.3}",
+        ",\"textAnchor\":{},\"anchorX\":{:.3},\"alignmentBasis\":{},\"sourceWhitespaceOnly\":{}",
         json_string(slot.text_anchor),
-        slot.x
+        slot.x,
+        json_string(slot.alignment_basis),
+        slot.text.chars().all(|character| character == ' '),
     ));
     if slot.text_length_px.is_none() && slot.word_justification_width_px.is_none() {
         output.push_str(",\"positionsDecoded\":false");
@@ -258,12 +260,13 @@ pub(crate) fn push_page_layer_native_control_flow_text_slot_json(
     }
     push_f64_array_json(output, &positions);
     output.push_str(&format!(
-        ",\"lineMarkRecordIndex\":{},\"pageMarkPitchMm100\":{},\"leadingAsciiSpaceCount\":{},\"precedingHeaderOffsetUnits\":{},\"precedingHeaderExtentUnits\":{},\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":true,\"referenceBacked\":false,\"isParaEnd\":false,\"isLineBreakEnd\":false}}",
+        ",\"lineMarkRecordIndex\":{},\"pageMarkPitchMm100\":{},\"leadingAsciiSpaceCount\":{},\"precedingHeaderOffsetUnits\":{},\"precedingHeaderExtentUnits\":{},\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":true,\"referenceBacked\":false,\"isParaEnd\":false,\"isLineBreakEnd\":{}}}",
         slot.line_mark_record_index,
         slot.page_mark_pitch_mm100,
         slot.leading_ascii_space_count,
         slot.preceding_header_offset_units,
         slot.preceding_header_extent_units,
+        slot.explicit_line_break,
     ));
 }
 
