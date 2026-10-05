@@ -315,6 +315,42 @@ renderer fallback として使う。color、thickness、dash pattern、join、co
 この projection では解読していない。border 出力は `decoded:false` のままで、現在は SVG/PDF に
 含まれる。page-layer tree は table text を公開するが、これらの border line は出力しない。
 
+### 統制した 2x2 profile の方向別 rule paint
+
+黒色基本、透明、太線 preset、赤色、点線 preset、内部縦線だけ透明の native 対照は
+content record、`LineMark`、`PageMark` が同一で、末尾 style event だけが変化する。
+junction の source unit における contextual property は次のとおり。
+
+| 方向 | Preset | Transparency | BGR24 color |
+|------|-------:|-------------:|------------:|
+| 上   | 1 | 4 | 15 |
+| 下   | 2 | 5 | 16 |
+| 右   | 3 | 6 | 17 |
+
+この意味は junction context に限定する。通常 text の property 2 は font size を表す。
+対応 profile は連続した物理 parent record5件、各 length27/subtype`0x008f` から成り、
+三つの junction state は `[16,16,12]`、`[13,13,13]`、`[17,17,13]`、`[13,13,13]`、
+`[15,15,11]`（hex）である。この profile の bit1/2/4 が上/下/右 stroke を選ぶ。
+junction strip は source grid2単位を占め、band 間の run length は一定、center は
+strip start＋1となる。nominal な物理 rule geometry であり、論理 cell の再構成や一般的な
+topology decoder ではない。正確な source LineMark start と先頭ページ pitch に限定する。
+
+unset/reset preset（`0`/`ffff`）は細線 fallback、preset3 は太い実線、preset4 は点線を
+選ぶ。transparency1 は非表示、0/unset は表示。`80` は非アクティブな横線終端に現れ、
+active stroke での意味は許可しない。color は既存 BGR24 mapping、unset/`ffffffff` は黒を
+保持する。unknown value、幅不正、切断された style section、source gap、他の row pattern
+はこの profile を拒否する。
+
+renderer の細線/太線幅は0.8/2.56 CSS-px、dash pattern は3.2/3.2 CSS-px の限定した近似値。
+native 印刷では0.6/1.92pt 幅と2.4pt dash を観測したが、UI は数値単位でなく preset を
+示すため source length unit の解読とは主張しない。join、dash phase、corner glyph clipping、
+他 preset、セル結合、複数ページ paint は未証明。SVG/PDF は`paint-decoded:false`を保持し、
+従来の黒色 border fallback を重複描画しない。layer JSON は非表示を含む方向別 stroke30件、
+raw preset/transparency/color/source unit を保持する。内部縦線の非表示は8候補を抑制し、
+content/geometry/table candidate を変えない。前後 text は正確な source LineMark interval
+を使い、既存 control-table projection が text を所有していても後続 body が最初の行に
+重なることを避ける。
+
 ## LineMark unit-start との相関
 
 `sample-academic.jtd` サンプル（解析済み LineMark レコード 25 件）では、LineMark の `unit-start` 値と `/DocumentText` の `0x001c` レコード位置の間に明確な対応関係がある：

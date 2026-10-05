@@ -848,6 +848,20 @@ pub(super) fn page_layer_tree_json(
     )
     .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
 
+    let native_rule_borders = native_rule_border_projection(
+        &core.document,
+        layout,
+        page_num as usize + 1,
+        core.writing_mode,
+    )
+    .filter(|_| native_rule_flow.is_some() || !native_control_tables.is_empty());
+    if let Some(segments) = &native_rule_borders {
+        for segment in segments {
+            output.push(',');
+            output.push_str(&native_rule_border_layer_json(segment));
+        }
+    }
+
     if let Some(projection) = &shanai_lan_text_projection {
         output.push(',');
         push_page_layer_shanai_lan_text_style_evidence_summary_json(
@@ -1123,7 +1137,12 @@ pub(super) fn page_layer_tree_json(
                         font_size.map_or(APP_FONT_SIZE_PX, |size| size.px) - APP_FONT_SIZE_PX,
                     );
                 let native_body_top = fragment.source_span.as_ref().and_then(|span| {
-                    native_rule_body_top_y(&core.document, layout, native_rule_flow.as_ref(), span)
+                    native_rule_body_top_y(
+                        &core.document,
+                        layout,
+                        native_rule_flow.is_some() || native_rule_borders.is_some(),
+                        span,
+                    )
                 });
                 push_page_layer_text_run_json(
                     &mut output,

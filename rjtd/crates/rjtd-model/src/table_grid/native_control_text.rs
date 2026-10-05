@@ -585,10 +585,12 @@ fn english_word_spacing_px(target: f32, natural: f32, text: &str) -> Option<f32>
 pub(crate) fn native_rule_body_top_y(
     document: &Document,
     layout: PageLayout,
-    projection: Option<&NativeControlFlowTextProjection>,
+    admitted_rule_placement: bool,
     span: &TextSourceSpan,
 ) -> Option<f32> {
-    projection?;
+    if !admitted_rule_placement {
+        return None;
+    }
     let flow = document.document_text_flow()?;
     let mut text = flow
         .events()
@@ -1108,13 +1110,9 @@ mod tests {
                 .iter()
                 .rfind(|event| event.kind() == DocumentTextFlowKind::Text)
                 .unwrap();
-            let after_top = native_rule_body_top_y(
-                &core.document,
-                core.page_layout,
-                Some(&projection),
-                after.source_span(),
-            )
-            .unwrap();
+            let after_top =
+                native_rule_body_top_y(&core.document, core.page_layout, true, after.source_span())
+                    .unwrap();
             assert!(
                 projection
                     .slots
@@ -1122,7 +1120,12 @@ mod tests {
                     .all(|slot| after_top > slot.baseline_y)
             );
             assert_eq!(
-                native_rule_body_top_y(&core.document, core.page_layout, None, after.source_span()),
+                native_rule_body_top_y(
+                    &core.document,
+                    core.page_layout,
+                    false,
+                    after.source_span()
+                ),
                 None
             );
             assert_eq!(

@@ -129,6 +129,15 @@ Unknown style profiles, wrapped `0x00ff` alignment, single-word tracking, and
 full font-metric equivalence remain unproven. Exact first/last text-run
 LineMark intervals keep surrounding body text outside the admitted ruled flow.
 
+A separate, bounded 2x2 first-page rule projection reads directional paint at
+the source junction units. Up/down/right use style properties 1/2/3 for presets,
+4/5/6 for visibility, and 15/16/17 for BGR24 colors. Transparent strokes remain
+in layer evidence without being painted or deleting text/cell candidates.
+Thin, thick-preset, and dashed-preset sizes are renderer approximations, not
+decoded source units; geometry/paint stay `decoded:false`. Unknown values,
+other row patterns, merging, and multipage rules are not admitted. Exact
+surrounding LineMark positions also prevent body text overlapping this grid.
+
 ## License
 
 Apache-2.0.

@@ -412,6 +412,49 @@ marks are not decoded by this projection. Border output remains `decoded:false`
 and currently belongs to SVG/PDF; the page-layer tree exposes the table text
 but does not emit these border lines.
 
+### Directional rule paint in a controlled 2x2 profile
+
+The black-base, transparent, thick-preset, red, dashed-preset, and one-transparent-
+edge native pairs retain identical content records, `LineMark`, and `PageMark`.
+Only the trailing style events change. At junction source units, the observed
+contextual properties are:
+
+| Direction | Preset | Transparency | BGR24 color |
+|-----------|-------:|-------------:|------------:|
+| Up        | 1 | 4 | 15 |
+| Down      | 2 | 5 | 16 |
+| Right     | 3 | 6 | 17 |
+
+These meanings apply to the junction context, not ordinary text: property 2
+also supplies font size in text runs. The regular profile has five consecutive
+physical parent records, each length 27 and subtype `0x008f`. Its three junction
+states are `[16,16,12]`, `[13,13,13]`, `[17,17,13]`, `[13,13,13]`, and `[15,15,11]`
+(hex). Bits 1/2/4 select up/down/right strokes in this profile. Junction strips
+occupy two source grid units, inter-junction run lengths remain fixed across
+bands, and each junction center is its strip start plus one. This is nominal
+physical rule geometry, not logical-cell reconstruction or a general topology
+decoder. Exact source `LineMark` starts and first-page pitch bound placement.
+
+Unset/reset presets (`0`/`ffff`) keep thin fallback paint; preset 3 selects the
+observed thick solid and preset 4 the observed dash. Transparency 1 hides a
+stroke, 0/unset leaves it visible. Value `80` occurs at inactive horizontal ends;
+its active-stroke meaning is not admitted. Colors use the existing BGR24 mapping,
+with unset/`ffffffff` retaining black. Unsupported values, malformed widths,
+truncated style sections, source gaps, and other row patterns reject the profile.
+
+The renderer uses 0.8/2.56 CSS-px thin/thick widths and a 3.2/3.2 CSS-px dash
+pattern as bounded paint approximations. Native prints show 0.6/1.92 pt widths
+and 2.4 pt dashes, but the UI exposes presets rather than numeric units: these
+measurements do not establish a source length-unit decoder. Joins, dash phase,
+corner glyph clipping, other presets, merged cells, and multipage paint remain
+unproven. SVG/PDF retain `paint-decoded:false` and do not duplicate the older
+black-border fallback. Layer JSON retains all 30 directional stroke candidates,
+including hidden strokes, raw preset/transparency/color, and source unit.
+Hiding the internal vertical edge suppresses eight candidates without changing
+the source content, geometry, or table candidates. Surrounding first/last text
+uses its exact source `LineMark` interval so the trailing body does not overlap
+the first row even when text is owned by the older control-table projection.
+
 ## Correlation with LineMark unit-start
 
 The `sample-academic.jtd` sample (25 parsed LineMark records) shows exact correspondence

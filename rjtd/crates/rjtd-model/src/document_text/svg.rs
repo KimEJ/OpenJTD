@@ -27,7 +27,7 @@ pub(crate) fn render_text_page_svg(
     let shanai_lan_text_projection =
         shanai_lan_document_text_projection(document, layout, page_number);
     let form_projection = observed_form_text_projection(document, layout, page_number);
-    let native_control_tables =
+    let mut native_control_tables =
         native_control_table_text_projections(document, layout, page_number, writing_mode);
     let native_control_flow = native_control_flow_text_projection(
         document,
@@ -45,6 +45,15 @@ pub(crate) fn render_text_page_svg(
         native_control_flow.as_ref(),
     )
     .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
+    let native_rule_borders =
+        native_rule_border_projection(document, layout, page_number, writing_mode)
+            .filter(|_| native_rule_flow.is_some() || !native_control_tables.is_empty());
+    if let Some(segments) = &native_rule_borders {
+        for table in &mut native_control_tables {
+            table.border = None;
+        }
+        push_native_rule_borders_svg(&mut svg, segments);
+    }
     push_page_frame_projection_svg(&mut svg, layout, document, page_number);
     push_page_mark_section_separator_svg(&mut svg, layout, document, page_number);
     push_shanai_lan_sparse_table_borders_svg(&mut svg, layout, document, page_number);
@@ -211,7 +220,12 @@ pub(crate) fn render_text_page_svg(
                     .source_span
                     .as_ref()
                     .and_then(|span| {
-                        native_rule_body_top_y(document, layout, native_rule_flow.as_ref(), span)
+                        native_rule_body_top_y(
+                            document,
+                            layout,
+                            native_rule_flow.is_some() || native_rule_borders.is_some(),
+                            span,
+                        )
                     })
                     .map(|top| top + font_size)
                     .unwrap_or(y + font_size - APP_FONT_SIZE_PX);
