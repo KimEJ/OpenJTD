@@ -162,6 +162,57 @@ pub(crate) fn native_section_setting_line(flow: &DocumentTextFlow, from: usize, 
             })
 }
 
+/// Only the corroborated middle-page style: same default font, 100% scales,
+/// known 60% spacing and line profile. General page-style inheritance is unproven.
+pub(crate) fn native_section_spacing_candidate(
+    document: &Document,
+    layout: PageLayout,
+    page: usize,
+) -> Option<u16> {
+    if page != 2
+        || modern_view_writing_mode(document.unknown_styles()) != Some(WritingMode::Horizontal)
+    {
+        return None;
+    }
+    let layouts = native_section_layouts(document, layout)?;
+    let selected = layouts.get(page - 1)?;
+    if (selected.width_px() - layout.width_px()).abs() > 0.1
+        || (selected.height_px() - layout.height_px()).abs() > 0.1
+        || (selected.margin_left_px() - layout.margin_left_px()).abs() > 0.1
+        || (selected.margin_right_px() - layout.margin_right_px()).abs() > 0.1
+        || (selected.margin_top_px() - layout.margin_top_px()).abs() > 0.1
+        || (selected.margin_bottom_px() - layout.margin_bottom_px()).abs() > 0.1
+    {
+        return None;
+    }
+    let style = document
+        .unknown_styles()
+        .iter()
+        .find(|s| s.name() == Some(PAGE_LAYOUT_STYLE_PATH))?;
+    let summary = summarize_style_stream(style.payload());
+    let record = summary.records().first()?;
+    let mut fonts = record.subrecords().iter().filter(|s| s.code() == 0x4006);
+    let font = fonts.next()?.payload();
+    if fonts.next().is_some()
+        || font.len() != 26
+        || font[..5] != [0, 0, 0xc1, 0, 0]
+        || font[7..14] != [0x80, 0, 0, 0x3f, 0, 2, 0x66]
+        || font[14..] != [0, 100, 0, 100, 0x80, 0, 0x80, 0, 2, 0x80, 0, 0]
+        || (hundredth_millimeters_to_css_px(u32::from(u16::from_be_bytes([font[5], font[6]])))
+            - document_default_font_size_px(document)?)
+        .abs()
+            > 0.01
+    {
+        return None;
+    }
+    let mut gaps = record.subrecords().iter().filter(|s| s.code() == 0x400a);
+    let gap = gaps.next()?.payload();
+    if gaps.next().is_some() || gap != [0xc3, 0, 0, 13, 0, 0, 0x50, 0x40, 1, 0] {
+        return None;
+    }
+    Some(60)
+}
+
 impl DocumentCore {
     pub(crate) fn page_layout_for(&self, page: usize) -> PageLayout {
         native_section_layouts(&self.document, self.page_layout)

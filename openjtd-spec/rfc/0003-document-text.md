@@ -579,3 +579,25 @@ the remaining width between cells, with half a gap at either edge. It retains
 `data-group-ruby-candidate` and decoded-false geometry. Other grouping records,
 font changes, scripts, long or non-kana annotations retain fallback; general
 ruby units, exact printer metrics and editing remain unresolved.
+
+## Bounded selected-page character spacing
+
+The previously validated single-style portrait/landscape/portrait association
+also owns the middle page's controlled spacing. Only page 2 with the known
+apply/reset, three fixed84 page entries, stock swap and equal source margins
+is admitted. The global view must independently identify horizontal writing;
+the existing global-only direction guard for explicit styles remains intact.
+
+The unique `0x4006` subrecord has length 26, prefix `0000c10000`, the same
+hundredth-millimeter font size as the global default at bytes 5..7,
+`8000003f000266` at 7..14, 100/100 scales at 14..18, and suffix
+`8000800002800000`. The unique `0x400a` profile is `c300000d000050400100`.
+This corroborates the same controlled 60% spacing association as the global
+view profile; it does not decode a general numeric formula or style inheritance.
+
+The shared tracking projection uses physical source rows and backend Latin
+advances, while Japanese cells retain the 60% spacing candidate. SVG/layer
+output distinguishes `page-layout-style-4006` from `document-view-style-1006`.
+Unknown size/scale/spacing/line profiles, writing direction or layout/margin
+associations retain fallback. Other pages retain their prior rendering.
+Geometry, glyph baselines, whitespace and printer quantization remain candidates.

@@ -536,3 +536,22 @@ base・annotation と model の一致、annotation font/scale override 無しを
 半 gap を置く。`data-group-ruby-candidate`とdecoded-false geometryを保持する。
 別 grouping record・font 変更・script・長いまたは非 kana annotation は fallback。
 一般 ruby 単位、正確な printer metrics と編集 semantics は未解明。
+
+## 限定した選択 page の字間
+
+既存の単一書式・縦長/横長/縦長対応を、中間pageの統制字間にも使用する。
+既知apply/reset・fixed84の三page entry・用紙寸法swap・同じsource余白を持つ
+page2だけを認める。global view の横書き判定も独立に要求し、明示styleに対する
+既存global-only方向guardは維持する。
+
+唯一の`0x4006` subrecordは26byte、prefix`0000c10000`、5..7にglobal既定値と
+同じ百分の一mm font size、7..14に`8000003f000266`、14..18に100/100 scale、
+suffix`8000800002800000`を持つ。唯一の`0x400a` profileは`c300000d000050400100`。
+global viewと同じ統制字間60%対応を照合したが、一般数値式やstyle継承を
+確定したものではない。
+
+共有tracking投影は物理source行とbackend英字advanceを再利用し、和文cellには
+60%字間候補を維持する。SVG/layerは`page-layout-style-4006`と
+`document-view-style-1006`を区別する。未知size/scale/spacing/line profile・
+書字方向・layout/余白対応はfallback。別pageは従来描画を維持する。
+geometry、glyph baseline、空白とprinter量子化は候補のまま。

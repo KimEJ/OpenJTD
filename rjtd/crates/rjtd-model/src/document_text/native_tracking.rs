@@ -9,9 +9,10 @@ pub(crate) struct NativeTrackingRun {
     family: String,
     advance: f32,
     line: usize,
+    spacing_basis: &'static str,
 }
 
-/// Source physical rows and the corroborated global landscape 60% spacing profile.
+/// Source physical rows and corroborated global or selected-page 60% spacing.
 /// Latin advances remain backend-owned; Japanese fullwidth cells stay candidates.
 pub(crate) fn native_tracking_projection(
     document: &Document,
@@ -21,14 +22,22 @@ pub(crate) fn native_tracking_projection(
     lines: &[PageTextLine],
     measured: &BTreeMap<usize, f32>,
 ) -> Option<Vec<NativeTrackingRun>> {
-    if mode.is_vertical()
-        || layout.width_px() <= layout.height_px()
-        || modern_source_writing_mode(document) != Some(WritingMode::Horizontal)
-        || document.character_spacing_percent_candidate() != Some(60)
-        || !layout.has_source_margins()
+    if mode.is_vertical() || layout.width_px() <= layout.height_px() || !layout.has_source_margins()
     {
         return None;
     }
+    let spacing_basis = if document
+        .unknown_styles()
+        .iter()
+        .any(|s| s.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+    {
+        native_section_spacing_candidate(document, layout, page)?;
+        "page-layout-style-4006"
+    } else {
+        (modern_source_writing_mode(document) == Some(WritingMode::Horizontal)).then_some(())?;
+        (document.character_spacing_percent_candidate() == Some(60)).then_some(())?;
+        "document-view-style-1006"
+    };
     if !document.table_candidates().is_empty()
         || !document.text_field_candidates().is_empty()
         || !document.footnote_text_candidates().is_empty()
@@ -110,6 +119,7 @@ pub(crate) fn native_tracking_projection(
                     family: family.clone(),
                     advance,
                     line: record,
+                    spacing_basis,
                 });
                 x += advance;
                 start = end;
@@ -141,7 +151,7 @@ pub(crate) fn push_native_tracking_svg(svg: &mut String, runs: &[NativeTrackingR
             .source_span
             .as_ref()
             .map_or(0, TextSourceSpan::unit_start);
-        svg.push_str(&format!("<text class=\"rjtd-native-tracking\" id=\"rjtd-text-advance-{unit}\" data-source-unit-start=\"{unit}\" data-character-spacing-percent-candidate=\"60\" data-line-mark-record-index=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" x=\"{:.3}\" y=\"{:.3}\" font-family=\"{}\" font-size=\"{:.3}\" letter-spacing=\"{:.3}\" fill=\"#111111\" xml:space=\"preserve\">{}</text>",r.line,r.x,r.baseline,escape_xml(&r.family),r.font,r.spacing,escape_xml(&r.fragment.text)));
+        svg.push_str(&format!("<text class=\"rjtd-native-tracking\" id=\"rjtd-text-advance-{unit}\" data-source-unit-start=\"{unit}\" data-character-spacing-percent-candidate=\"60\" data-spacing-basis=\"{}\" data-line-mark-record-index=\"{}\" data-decoded=\"false\" data-geometry-decoded=\"false\" x=\"{:.3}\" y=\"{:.3}\" font-family=\"{}\" font-size=\"{:.3}\" letter-spacing=\"{:.3}\" fill=\"#111111\" xml:space=\"preserve\">{}</text>",r.spacing_basis,r.line,r.x,r.baseline,escape_xml(&r.family),r.font,r.spacing,escape_xml(&r.fragment.text)));
     }
 }
 
@@ -152,7 +162,7 @@ pub(crate) fn push_native_tracking_layer_json(
 ) {
     for r in runs {
         let id = sources.len();
-        out.push_str(&format!(",{{\"type\":\"textRun\",\"bbox\":{{\"x\":{:.3},\"y\":{:.3},\"width\":{:.3},\"height\":{:.3}}},\"text\":{},\"baseline\":{:.3},\"fontSize\":{:.3},\"fontFamily\":{},\"letterSpacingCandidate\":{:.3},\"characterSpacingPercentCandidate\":60,\"lineMarkRecordIndex\":{},\"projectionKind\":\"nativeTrackingCandidate\",\"decoded\":false,\"geometryDecoded\":false,\"positionsDecoded\":false,\"source\":",r.x,r.baseline-r.font,r.advance,r.font,json_string(&r.fragment.text),r.baseline,r.font,json_string(&r.family),r.spacing,r.line));
+        out.push_str(&format!(",{{\"type\":\"textRun\",\"bbox\":{{\"x\":{:.3},\"y\":{:.3},\"width\":{:.3},\"height\":{:.3}}},\"text\":{},\"baseline\":{:.3},\"fontSize\":{:.3},\"fontFamily\":{},\"letterSpacingCandidate\":{:.3},\"characterSpacingPercentCandidate\":60,\"spacingBasis\":{},\"lineMarkRecordIndex\":{},\"projectionKind\":\"nativeTrackingCandidate\",\"decoded\":false,\"geometryDecoded\":false,\"positionsDecoded\":false,\"source\":",r.x,r.baseline-r.font,r.advance,r.font,json_string(&r.fragment.text),r.baseline,r.font,json_string(&r.family),r.spacing,json_string(r.spacing_basis),r.line));
         push_page_layer_source_span_json(out, id, &r.fragment);
         out.push('}');
         push_page_layer_text_source_json(sources, id, &r.fragment);

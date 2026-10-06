@@ -298,7 +298,7 @@ Bounded printing-date/page/link caches are now modeled with source bindings. Pri
 
 The JTTC model now reuses the decoded inner CFB for auxiliary layout marks, note/bookmark data, and object/frame streams while retaining the compressed source and shared resource limits. JTT/JTTC source-page placement follows the same model path.
 
-The controlled single-style portrait/landscape/portrait profile now selects layout per page across SVG, page/layer information, PDF and canvas dimensions. Unknown style associations and differing margin/paper profiles keep fallback; native tracking and general section editing remain unresolved.
+The controlled single-style portrait/landscape/portrait profile now selects layout per page across SVG, page/layer information, PDF and canvas dimensions. Unknown style associations and differing margin/paper profiles keep fallback; other page typography and general section editing remain unresolved.
 
 Plain `/Header` slots are preserved raw and exposed as source-linked text candidates. The bounded global horizontal profile now renders headers, footers, facing-page variants, cover suppression, and the enabled centered page-number pattern in SVG/PDF and layer information. Slot roles, nominal anchors, font metrics, and general numbering remain candidates; see [RFC 0007](../openjtd-spec/rfc/0007-layout-mark-streams.md#bounded-plain-running-regions).
 
@@ -315,3 +315,5 @@ The controlled global landscape 60% character-spacing profile now uses physical 
 The controlled saved TOC profile now distinguishes solid/dotted leaders from adjacent page labels. Complete title/leader records and empty caches retain one separator cell, body-right labels, physical source rows and backend text advances in SVG/PDF and layer data. Leader metrics and general tab/navigation/editing semantics remain decoded-false candidates; see [RFC 0003](../openjtd-spec/rfc/0003-document-text.md#bounded-saved-toc-leaders).
 
 Linked standard footnote markers now retain their separate body/note source spans and the corroborated parent-style references. The bounded horizontal body marker uses half-size upper placement; its literal two-paragraph profile keeps one source line gap. Parsed ruby bases retain source spans and font advances, with bounded grouped-kana spacing. SVG/PDF/layer geometry remains candidate data. Note-area placement and general style/ruby inheritance remain unresolved; see [RFC 0003](../openjtd-spec/rfc/0003-document-text.md#bounded-linked-footnote-marker-and-ruby-source).
+
+The controlled mixed-orientation middle page now inherits its corroborated 60% Japanese spacing from the selected page style. The known 4006/400a profile requires the same font size, 100% scales and validated style/page/margin association. Portrait neighbors retain their prior rendering, while SVG/PDF/layer data names the spacing basis. Other page typography and exact font/whitespace metrics remain unresolved.

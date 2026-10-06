@@ -289,7 +289,7 @@ named text の明示改ページ後も本文を保持し、model inline span は
 
 JTTC model は解凍した inner CFB を補助 layout mark・note/bookmark・object/frame stream に再利用し、圧縮 source と共有 resource limit を保全する。JTT/JTTC の source-page 配置は同じ model 経路に従う。
 
-統制した単一書式の縦長・横長・縦長 profile は、SVG・page/layer info・PDF・canvas 寸法で page ごとの layout を選ぶ。未知の書式対応や異なる余白・紙 profile は fallback を保ち、native tracking・一般 section 編集は未解決。
+統制した単一書式の縦長・横長・縦長 profile は、SVG・page/layer info・PDF・canvas 寸法で page ごとの layout を選ぶ。未知の書式対応や異なる余白・紙 profile は fallback を保ち、他 page typography・一般 section 編集は未解決。
 
 plain `/Header` slot を raw のまま保存し、source に対応する text 候補を公開する。限定した global 横書き profile の header・footer・見開きの切替・表紙非表示・有効な中央 page-number pattern を SVG/PDF と layer info に描画する。slot role、名目 anchor、font metrics、一般的な番号付けは候補のまま。[RFC 0007](../openjtd-spec/rfc/0007-layout-mark-streams.ja.md) を参照。
 
@@ -306,3 +306,5 @@ plain `/Header` slot を raw のまま保存し、source に対応する text �
 統制した保存済み目次 profile は、実線・点線 leader と題名に隣接する page label を区別する。完全な title/leader record と空 cache に限定し、一つの区切り cell、本文右端の label、物理 source 行、backend の文字送りを SVG/PDF と layer に反映する。leader metrics と一般 tab/navigation/edit semantics は decoded-false 候補のまま。[RFC 0003](../openjtd-spec/rfc/0003-document-text.ja.md) を参照。
 
 標準脚注 marker は本文・脚注の個別 source span と照合済み parent-style 参照を保持する。限定した横書き本文 marker を半サイズの上付きに置き、literal な二段落 profile は一つの source 行間を維持する。parsed ruby base の source span・font advance を保持し、限定した grouped kana 間隔を描画する。SVG/PDF/layer geometry は候補のまま。脚注領域配置と一般 style/ruby 継承は未解明。[RFC 0003](../openjtd-spec/rfc/0003-document-text.ja.md) を参照。
+
+統制した方向混在の中間 page は、選択した page style の照合済み字間60%を和文に反映する。既知4006/400a profile で同じ font size・100% scale・検証したstyle/page/margin対応を要求する。前後の縦長pageは従来描画を維持し、SVG/PDF/layer は字間basisを公開する。他page typographyと正確なfont/空白metricsは未解明。
