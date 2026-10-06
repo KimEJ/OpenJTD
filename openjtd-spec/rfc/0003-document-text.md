@@ -211,7 +211,7 @@ match, and there must be exactly one pair. A source line containing only that
 setting record and its line terminator consumes no text pitch. Ordinary blank
 or space-only content does not inherit this rule.
 
-Within this region, the observed 17-unit tab context and optional 18-unit leader
+Within this region, the observed 17-unit title context and optional 18-unit leader
 context (`1` or `100` raw variant) can pass the existing physical source-page
 path. Two visible text runs separated by exactly those contexts provide saved
 TOC title/page-label metadata through `tocEntries`, with source spans and
@@ -219,7 +219,7 @@ TOC title/page-label metadata through `tocEntries`, with source spans and
 fallback and raw evidence. Metadata is cached content, not a decoded generation,
 heading-level, bookmark, or editable TOC model.
 
-The horizontal tab stops and leader paint are still unproven. Page assignment
+General horizontal tab stops and exact leader metrics are unproven; the bounded saved leader projection is described below. Page assignment
 and text pitch now follow the shared model path, while page labels retain
 fallback horizontal placement. Raw context fields remain available for further
 analysis; no reference-PDF coordinates are used to place the region.
@@ -513,3 +513,29 @@ and PageMark pitch own pages/baselines. SVG/PDF and layer data share source
 ranges and candidate spacing. This remains a bounded uniform-font/plain-flow
 projection; other spacing values, rich/table/field/section profiles, exact
 Latin/whitespace metrics and general numeric-unit interpretation stay unresolved.
+
+## Bounded saved TOC leaders
+
+Within the previously framed saved TOC scope, the exact 17-unit title context
+`[1c,0,17,0,9,375,31,0090,0,2,f81e,0,0,17,0,0,1f]` and optional 18-unit
+leader record `[1c,0,18,0,21,0,23,0090,K,2,a77c,0,0,0,18,0,0,1f]` retain
+three corroborated variants: `K=1` solid, `K=100` dotted, or no leader record.
+Every record must be followed contiguously by the complete empty cache
+`[1c,1,7,0,0,1,1d,C,1e,5,0,1,1f]`, with `C=5` after the title context and
+`C=3` after a leader record; the literal title and numeric saved
+label must bind to the same source row and metadata entry.
+
+The controlled title context reserves one fullwidth separator cell. With a
+leader, the label ends at the source body's right margin; without a leader it
+stays after that separator beside the title. Backend glyph advances determine
+text widths, and source LineMark/PageMark data determines pages and baselines.
+SVG/PDF and layer output preserve text spans and leader-record spans. Unknown
+contexts/caches, rich or vertical rows, missing physical source rows, and
+conflicting widths retain fallback text. The model is never rewritten.
+
+This is a bounded source-associated rendering candidate. Solid/dotted selection
+is corroborated by native creation settings and output; the fullwidth gap,
+right anchor, leader vertical position, stroke width and dot pitch retain
+`decoded:false`/`geometryDecoded:false`. Leader metrics use a backend-neutral
+approximation, without native-PDF coordinate fitting. Arbitrary tab stops,
+heading navigation, TOC regeneration and editing remain unproven.

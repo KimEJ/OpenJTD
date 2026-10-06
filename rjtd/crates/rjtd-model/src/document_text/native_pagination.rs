@@ -258,13 +258,13 @@ pub(crate) fn native_toc_source_scope(document: &Document) -> Option<(usize, usi
     (start.unit_end() < end.unit_start()).then_some((start.unit_start(), end.unit_end()))
 }
 
-fn native_toc_context_record(event: &DocumentTextFlowEvent) -> bool {
+pub(crate) fn native_toc_context_record(event: &DocumentTextFlowEvent) -> bool {
     if native_toc_section_record(event).is_some() {
         return true;
     }
     let words = event.raw_words();
-    // Admit only the controlled tab/leader framing. Horizontal stops and
-    // leader paint remain undecoded; this path owns source pages and rows only.
+    // Admit only the controlled title context and optional leader framing.
+    // General tab stops and leader metrics remain undecoded.
     words
         == [
             0x1c, 0, 17, 0, 9, 375, 31, 0x90, 0, 2, 0xf81e, 0, 0, 17, 0, 0, 0x1f,

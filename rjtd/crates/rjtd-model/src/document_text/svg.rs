@@ -233,6 +233,18 @@ pub(crate) fn render_text_page_svg(
             if success_data_test_top_text_line_should_skip(document, page_number, line) {
                 continue;
             }
+            if let Some(row) = native_toc_row(
+                document,
+                layout,
+                page_number,
+                writing_mode,
+                line,
+                measured_widths,
+            ) {
+                push_native_toc_svg(&mut svg, &row);
+                fallback_visual_line_index += 1;
+                continue;
+            }
             let frame_text_placement = page_frame_text_placement(
                 document,
                 layout,

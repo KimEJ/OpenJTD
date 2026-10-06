@@ -281,9 +281,9 @@ cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 
 補助の脚注・リンク・bookmark tag stream を raw のまま保持する。限定した一 link の脚注 profile は、source に対応した note text 候補を JSON にも公開する。本文、脚注配置、field 評価は分離して扱う。
 
-named text の明示改ページ後も本文を保持し、model inline span は表示 UTF-16 unit を指す。raw wrapper は保全する。限定した見出し・一覧 cache は物理 source 行と fixed84 page 範囲を再利用する。動的 field、目次 leader、native 横長和文 tracking は未解決。
+named text の明示改ページ後も本文を保持し、model inline span は表示 UTF-16 unit を指す。raw wrapper は保全する。限定した見出し・一覧 cache は物理 source 行と fixed84 page 範囲を再利用する。別の動的 field profile と一般 native typography は未解決。
 
-限定した保存済み目次領域の title/page label を保全し、設定 record に本文行高を割り当てず物理 page 範囲を再利用する。横方向 tab stop、leader paint、生成と編集可能な目次 semantics は未解読。
+限定した保存済み目次領域の title/page label を保全し、設定 record に本文行高を割り当てず物理 page 範囲を再利用する。一般 tab stop、生成と編集可能な目次 semantics は未解読。統制した保存済み leader profile は後述する。
 
 限定した印刷日・page・link cache と source 対応を保持する。印刷日は明示 render context（browser/Unix PDF の local date を既定で使用）で描画し、raw cache を変更しない。外部 link の色・下線と HTTP(S) SVG target は対応 record に従う。一般的な再番号付け、bookmark 位置、別 field profile は未解決。
 
@@ -302,3 +302,5 @@ plain `/Header` slot を raw のまま保存し、source に対応する text �
 統制した JSEQ/GCI text snapshot は zero-based の最初の frame を関連付け、source 数式文字・italic/添字サイズ・確保した本文行を SVG/PDF と layer に描画する。editable formula と snapshot の文字 packet 一致を要求する。font baseline と一般数式・編集 semantics は候補のまま。[RFC 0008](../openjtd-spec/rfc/0008-object-stream-candidates.ja.md) を参照。
 
 統制した global 横長・字間60% profile は、物理 source 行と和文の字間を再利用し、英字 advance は backend に委ねる。SVG/PDF と layer は source span と decoded-false geometry を保つ。他 tracking profile と正確な空白 metrics は未解決。
+
+統制した保存済み目次 profile は、実線・点線 leader と題名に隣接する page label を区別する。完全な title/leader record と空 cache に限定し、一つの区切り cell、本文右端の label、物理 source 行、backend の文字送りを SVG/PDF と layer に反映する。leader metrics と一般 tab/navigation/edit semantics は decoded-false 候補のまま。[RFC 0003](../openjtd-spec/rfc/0003-document-text.ja.md) を参照。

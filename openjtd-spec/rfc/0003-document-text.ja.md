@@ -193,14 +193,14 @@ native 和文文字間隔は未解決のまま。
 一組だけであることを要求する。その設定 record と行末だけの source 行は text pitch
 を消費しない。通常の空行や空白だけの本文へこの規則を拡張しない。
 
-領域内の観測した 17-unit tab context と任意の 18-unit leader context
+領域内の観測した 17-unit title context と任意の 18-unit leader context
 （raw variant `1`/`100`）は既存の物理 source-page 経路を通せる。
 この context で区切られた二つの表示 text run を、保存済み title/page label の
 `tocEntries` metadata として source span・`decoded:false` 付きで保持する。
 不完全、重複 section、未知 context は fallback と raw evidence を保つ。
 生成・目次レベル・bookmark・編集可能な目次 model の解読ではなく、保存済み内容である。
 
-横方向の tab stop と leader paint は未証明。page 割当と text pitch は共通 model 経路に
+一般の横方向 tab stop と正確な leader metrics は未証明。限定した保存済み leader 投影は後述する。page 割当と text pitch は共通 model 経路に
 従うが、page label の横位置は fallback のまま。追加分析用の raw field を保全し、
 参照 PDF の座標で領域の配置を補正しない。
 
@@ -479,3 +479,27 @@ backend advance を保持する。source LineMark 行と PageMark pitch で page
 を選び、SVG/PDF と layer は source range と候補字間を共有する。限定 uniform-font・
 plain-flow 投影のまま。他字間値、rich/table/field/section profile、正確な英字・
 空白 metrics、一般数値単位の解釈は未解決。
+
+## 限定した保存済み目次 leader
+
+既存の保存済み目次 scope 内で、厳密な17-unit title context
+`[1c,0,17,0,9,375,31,0090,0,2,f81e,0,0,17,0,0,1f]` と任意の18-unit
+leader record `[1c,0,18,0,21,0,23,0090,K,2,a77c,0,0,0,18,0,0,1f]` を照合する。
+`K=1` は実線、`K=100` は点線、leader record が無ければ隣接番号という
+三つの統制 variant を保持する。各 record の直後に完全な空 cache
+`[1c,1,7,0,0,1,1d,C,1e,5,0,1,1f]` を要求する。title context の後は `C=5`、
+leader record の後は `C=3` とし、literal title と保存済み
+数字 label が同一 source 行・metadata entry に対応することを検証する。
+
+統制 title context は全角一 cell の区切りを確保する。leader があれば label の
+右端を source 本文右余白に置き、無ければ区切りの後で題名に隣接させる。
+文字幅は backend の glyph advance、page と baseline は source LineMark/PageMark
+で決める。SVG/PDF と layer は text span と leader-record span を保持する。
+未知 context/cache、rich・縦書き行、物理 source 行欠落、幅の矛盾は fallback
+本文を維持し、model を書き換えない。
+
+限定した source 対応の描画候補である。実線・点線の選択は native 作成設定と
+出力で照合したが、全角区切り、右 anchor、leader 縦位置、線幅、点間隔は
+`decoded:false`/`geometryDecoded:false` のまま。leader metrics は backend 中立の
+近似を使用し、native PDF 座標で補正しない。任意 tab stop、見出し navigation、
+目次再生成と編集 semantics は未解明。

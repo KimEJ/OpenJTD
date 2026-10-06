@@ -290,9 +290,9 @@ Bounded character runs now retain bold/italic/single-underline candidates, half-
 
 Auxiliary footnote/link/bookmark-tag streams are preserved raw. The bounded single-link footnote profile also exposes source-linked note text candidates in JSON; body text, note placement, and field evaluation remain separate.
 
-Named text now survives explicit page breaks, and model inline spans cover visible UTF-16 units while raw wrappers remain preserved. Bounded heading/list caches reuse physical source lines and fixed84 page ranges. Dynamic fields, TOC leaders, and native landscape Japanese tracking remain unresolved.
+Named text now survives explicit page breaks, and model inline spans cover visible UTF-16 units while raw wrappers remain preserved. Bounded heading/list caches reuse physical source lines and fixed84 page ranges. Other dynamic field profiles and general native typography remain unresolved.
 
-Bounded saved TOC regions now preserve title/page-label metadata and use physical page ranges without consuming text height for their setting records. Horizontal tab stops, leader paint, generation, and editable TOC semantics remain undecoded.
+Bounded saved TOC regions now preserve title/page-label metadata and use physical page ranges without consuming text height for their setting records. General tab stops, generation, and editable TOC semantics remain undecoded; the controlled saved leader profile is described below.
 
 Bounded printing-date/page/link caches are now modeled with source bindings. Printing dates use an explicit render context (local browser/Unix PDF date by default); raw caches remain unchanged. External-link color/underline and HTTP(S) SVG targets follow the bound record. General renumbering, bookmark positions, and other field profiles remain unresolved.
 
@@ -311,3 +311,5 @@ The controlled rectangle/ellipse/line profile now binds source blank-line anchor
 The controlled JSEQ/GCI text snapshot now retains the zero-based first frame association and renders source-bound equation characters, italic/script sizes and the reserved body row through SVG/PDF and layer output. The editable formula and snapshot character packets must agree. Font baselines and general equation/editing semantics remain candidates; see [RFC 0008](../openjtd-spec/rfc/0008-object-stream-candidates.md#bounded-gci-equation-text).
 
 The controlled global landscape 60% character-spacing profile now uses physical source rows and spaced Japanese runs while keeping Latin advances backend-owned. SVG/PDF and layer output retain source spans and decoded-false geometry. Other tracking profiles and exact whitespace metrics remain unresolved.
+
+The controlled saved TOC profile now distinguishes solid/dotted leaders from adjacent page labels. Complete title/leader records and empty caches retain one separator cell, body-right labels, physical source rows and backend text advances in SVG/PDF and layer data. Leader metrics and general tab/navigation/editing semantics remain decoded-false candidates; see [RFC 0003](../openjtd-spec/rfc/0003-document-text.md#bounded-saved-toc-leaders).

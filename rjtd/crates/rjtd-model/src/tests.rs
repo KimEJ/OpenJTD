@@ -11,6 +11,7 @@ mod native_figures;
 #[cfg(feature = "bitmap-images")]
 mod native_image;
 mod native_running;
+mod native_toc;
 mod native_tracking;
 mod native_vertical;
 mod page_grid_y_anchor_and_record_flags;

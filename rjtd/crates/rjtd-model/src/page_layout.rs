@@ -1184,6 +1184,19 @@ pub(super) fn page_layer_tree_json(
                 continue;
             }
 
+            if let Some(row) = native_toc_row(
+                &core.document,
+                layout,
+                page_num as usize + 1,
+                core.writing_mode,
+                line,
+                &BTreeMap::new(),
+            ) {
+                push_native_toc_layer_json(&mut output, &mut text_sources, &row);
+                fallback_visual_line_index += 1;
+                continue;
+            }
+
             let frame_text_placement = if core.writing_mode.is_vertical() {
                 None
             } else {
