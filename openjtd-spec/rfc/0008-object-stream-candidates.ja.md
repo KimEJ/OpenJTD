@@ -333,3 +333,30 @@ geometry/paint は decoded-false 候補。inline baseline は fallback em-bottom
 native 出力と約5ptの差が残り、代替 font で回避の切れ目も一文字変わる。一般 alignment、
 crop、複数画像、rich・縦書き・複数 page flow、別 profile は対象外。reference PDF の
 座標・色合わせは行わない。
+
+## 限定的な native 図形描画
+
+統制した本文空白・三図形 profile は `/Frame` object ID と class0 tag`0x30`
+floating record、完全な selector1 cache `1d,0002,1e` を関連付ける。LineMark
+interval は各 record の空白 source 行を示し、既存 PageMark font-plus-gap pitch
+を縦方向 anchor に使用する。Frame row offset8 は kind4、offset12 はこの形の
+一基点 FDM paint slot。`/Figure` row も同じ slot 順に object ID を列挙する。
+位置から順序を推定せず、四角形・楕円の入替を照合する。
+
+この FDMIndex の座標 field は axis pair x1,x2,y1,y2。Frame size で index の
+外側 bounds を page 座標へ写し、内部 command の point/ellipse と stroke value8
+にも同じ scale を使う。一般 FDM world-unit 式は仮定しない。軸に沿う閉じた五点
+四角形、楕円、二点直線だけを許容する。
+
+fill の `01000a60` parent は46-byte prefix と一つの nested outline child を持つ。
+parent/child 長、child offset46、index/parent bounds の一致を要求する。parent
+offset36 の BE-u32 は BGR fill color、raw child は黒 stroke。既知 empty/opaque
+AlphaBlend profile で非透明を照合する。未知 mode、矛盾する順序、非zero low
+coordinate word、複雑 child、bounds 外 geometry、別 alpha profile は昇格しない。
+
+SVG/PDF と layer は source 投影を共有し、raw Frame/Figure/FDMVector/FDMIndex/
+AlphaBlend を保全する。検証済み図形のみの page は本文未抽出 notice を置き換える。
+JSON は object/slot、source record、anchor 行、vector/child offset、frame size と
+paint 候補を公開する。配置・geometry・paint order は `decoded:false` のまま。
+printer 丸め・stroke rasterization に小差が残る。connector、任意図形集合、
+rich・複数 page anchor、編集可能な図形 semantics はこの規則の対象外。

@@ -166,6 +166,30 @@ pub fn to_json(document: &Document) -> String {
         push_document_toc_entry_json(&mut output, entry);
     }
     output.push(']');
+    let figures = document.figure_shape_candidates();
+    if !figures.is_empty() {
+        output.push_str(",\"figureShapeCandidates\":[");
+        for (index, shape) in figures.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str(&format!("{{\"objectId\":{},\"paintSlotCandidate\":{},\"lineMarkRecordIndex\":{},\"vectorOffset\":{},\"commandOffset\":{},\"strokeSourceUnits\":{},\"kind\":",shape.object_id(),shape.slot(),shape.line_mark_index(),shape.vector_offset(),shape.command_offset(),shape.stroke_units()));
+            push_json_string(&mut output, shape.kind());
+            output.push_str(",\"fillColor\":");
+            if let Some(fill) = shape.fill() {
+                push_json_string(&mut output, fill);
+            } else {
+                output.push_str("null");
+            }
+            let [x, y, width, height] = shape.frame_mm100();
+            output.push_str(&format!(",\"frameMm100\":{{\"x\":{x},\"y\":{y},\"width\":{width},\"height\":{height}}},\"recordSourceSpan\":"));
+            text_layout::push_text_source_span_json(&mut output, shape.record_span());
+            output.push_str(
+                ",\"decoded\":false,\"geometryDecoded\":false,\"paintOrderDecoded\":false}",
+            );
+        }
+        output.push(']');
+    }
     let image_frames = document.image_frame_candidates();
     if !image_frames.is_empty() {
         output.push_str(",\"imageFrameCandidates\":[");

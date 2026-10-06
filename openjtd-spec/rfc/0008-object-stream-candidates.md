@@ -346,3 +346,34 @@ fallback em-bottom alignment, differing by about5pt in native output; fallback
 fonts also change the wrap split by one character. General alignment, cropping,
 multiple images, rich/vertical/multipage flow and other profiles remain outside
 this projection. Reference-PDF coordinates/colors are not fitted.
+
+## Bounded Native Figure Paint
+
+The controlled blank-body three-figure profile associates `/Frame` object IDs
+with class0 tag`0x30` floating records and their complete selector1 cache
+`1d,0002,1e`. LineMark intervals identify the blank source line for each
+record; PageMark's existing font-plus-gap pitch supplies its vertical anchor.
+Frame row offset8 is kind4; offset12 is the one-based FDM paint slot here.
+The `/Figure` rows independently list object IDs in that same slot order.
+This resolves the rectangle/ellipse swap without inferring order from geometry.
+
+FDMIndex's coordinate fields are axis pairs x1,x2,y1,y2 in this profile.
+The frame size maps the outer index bounds to page coordinates; contained
+command points/ellipse geometry and the stroke value8 use the same scale.
+A general FDM world-unit formula is not assumed. Only the axis-aligned closed
+five-point rectangle, ellipse, and two-point line are admitted.
+
+The filled `01000a60` parent has a 46-byte prefix and one nested outline child.
+The parent/child lengths, child offset46 and index/parent bounds must agree.
+The BE-u32 at parent offset36 is BGR fill color; the raw child keeps black
+stroke. Known empty/opaque AlphaBlend profiles corroborate no transparency.
+Unknown modes, order contradictions, nonzero low coordinate words, complex
+children, geometry outside bounds and other alpha profiles stay unpromoted.
+
+SVG/PDF and layer output share the source projection, preserving raw Frame,
+Figure, FDMVector, FDMIndex and AlphaBlend streams. A validated drawing-only
+page replaces the no-extractable-text notice. JSON exposes object/slot, source
+record, anchor line, vector/child offsets, frame size and paint candidates.
+Placement, geometry and paint order remain `decoded:false`; printer rounding
+and stroke rasterization differ slightly. Connectors, arbitrary figure sets,
+rich/multipage anchors and editable figure semantics remain outside this rule.

@@ -484,6 +484,11 @@ impl IchitaroParser {
             "/FootnoteLink",
             "/MarkTag",
             rjtd_core::header_stream::HEADER_PATH,
+            "/Frame",
+            "/Figure",
+            "/FigureData/main_data/FDMVector",
+            "/FigureData/main_data/FDMIndex",
+            "/FigureData/main_data/AlphaBlend",
         ] {
             if let Ok(stream) = read_cfb_stream(source_container, stream_name) {
                 document.push_raw_stream(RawStream::new(stream_name, stream));

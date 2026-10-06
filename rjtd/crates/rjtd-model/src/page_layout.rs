@@ -604,6 +604,12 @@ pub(super) fn page_layer_tree_json(
     let layout = core.page_layout_for(page_num as usize);
     let font_family = document_font_family_css(&core.document);
     let fields = core.document.text_field_candidates();
+    let native_figures = native_figure_projection(
+        &core.document,
+        layout,
+        page_num as usize + 1,
+        core.writing_mode,
+    );
     let native_image = native_image_projection(
         &core.document,
         layout,
@@ -629,7 +635,7 @@ pub(super) fn page_layer_tree_json(
     push_page_layer_page_background_json(&mut output, layout);
     let page_frame_projection =
         page_frame_projection(&core.document, layout, page_num as usize + 1)
-            .filter(|_| native_image.is_none());
+            .filter(|_| native_image.is_none() && native_figures.is_none());
     if let Some(projection) = &page_frame_projection {
         for shape in &projection.shapes {
             output.push(',');
@@ -727,7 +733,7 @@ pub(super) fn page_layer_tree_json(
         }
         for diagnostic in fdm_frame_diagnostics(&core.document)
             .into_iter()
-            .filter(|_| native_image.is_none())
+            .filter(|_| native_image.is_none() && native_figures.is_none())
         {
             if fdm_frame_diagnostic_bbox(layout, diagnostic).is_some() {
                 output.push(',');
@@ -1113,6 +1119,9 @@ pub(super) fn page_layer_tree_json(
     if let Some(projection) = &native_image {
         push_native_image_layer_json(&mut output, &mut text_sources, projection);
     }
+    if let Some(shapes) = &native_figures {
+        push_native_figure_layer_json(&mut output, shapes);
+    }
     let native_vertical = native_vertical_projection(
         &core.document,
         layout,
@@ -1128,6 +1137,7 @@ pub(super) fn page_layer_tree_json(
         && form_projection.is_none()
         && native_vertical.is_none()
         && native_image.is_none()
+        && native_figures.is_none()
     {
         let style_resolver = document_text_style_resolver(&core.document);
         let default_font_size = document_default_font_size_px(&core.document);

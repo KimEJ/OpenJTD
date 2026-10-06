@@ -296,3 +296,5 @@ plain `/Header` slot を raw のまま保存し、source に対応する text �
 統制した modern view profile で横書き・縦書きと source の30mm余白を選ぶ。plain 縦書きは source の列と PageMark pitch を再利用し、既知の字間60% profile と二桁・幅に収めない縦中横 cache を SVG/PDF と layer の共通投影で描画する。数字を本文に復元し、raw control と unknown cache を保全する。他 profile、native font metrics、英字・空白の送り、縦用 glyph 置換は candidate/fallback の制限を残す。[RFC 0003](../openjtd-spec/rfc/0003-document-text.ja.md) を参照。
 
 統制した単一 PNG profile の frame/cache/image を関連付け、source 位置・寸法、inline 挿入、両側回避、前面描画を SVG/PDF と layer に反映する。raw data と隠れた本文を保全する。inline baseline と代替 font の回避に差が残り、複数画像・rich/縦書き・別 profile は diagnostic のまま。[RFC 0008](../openjtd-spec/rfc/0008-object-stream-candidates.ja.md) を参照。
+
+統制した四角形・楕円・直線 profile は source 空白行 anchor、frame geometry、FDM command、fill color、独立に照合した paint order を関連付ける。SVG/PDF と layer は投影を共有し、raw 図形 stream と decoded-false evidence を保全する。一般単位、透明・connector profile、編集可能な図形 semantics は未解決。[RFC 0008](../openjtd-spec/rfc/0008-object-stream-candidates.ja.md) を参照。
