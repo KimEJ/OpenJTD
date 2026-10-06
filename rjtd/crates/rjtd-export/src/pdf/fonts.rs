@@ -17,9 +17,56 @@ pub(crate) fn create_fontdb() -> usvg::fontdb::Database {
     }
     load_macos_mobile_asset_fonts(&mut fontdb);
 
-    fontdb.set_serif_family("Hiragino Mincho ProN");
-    fontdb.set_sans_serif_family("Hiragino Sans");
-    fontdb.set_monospace_family("Menlo");
+    // Generic families must name an installed face. Unconditionally assigning
+    // macOS names makes otherwise available Linux text disappear in usvg.
+    for (generic, names) in [
+        (
+            usvg::fontdb::Family::Serif,
+            &[
+                "Hiragino Mincho ProN",
+                "Noto Serif CJK JP",
+                "DejaVu Serif",
+                "Liberation Serif",
+                "Times New Roman",
+            ][..],
+        ),
+        (
+            usvg::fontdb::Family::SansSerif,
+            &[
+                "Hiragino Sans",
+                "Noto Sans CJK JP",
+                "DejaVu Sans",
+                "Liberation Sans",
+                "Arial",
+            ][..],
+        ),
+        (
+            usvg::fontdb::Family::Monospace,
+            &[
+                "Menlo",
+                "Noto Sans Mono CJK JP",
+                "DejaVu Sans Mono",
+                "Liberation Mono",
+                "Courier New",
+            ][..],
+        ),
+    ] {
+        if let Some(name) = names.iter().find(|name| {
+            fontdb
+                .query(&usvg::fontdb::Query {
+                    families: &[usvg::fontdb::Family::Name(name)],
+                    ..Default::default()
+                })
+                .is_some()
+        }) {
+            match generic {
+                usvg::fontdb::Family::Serif => fontdb.set_serif_family(*name),
+                usvg::fontdb::Family::SansSerif => fontdb.set_sans_serif_family(*name),
+                usvg::fontdb::Family::Monospace => fontdb.set_monospace_family(*name),
+                _ => unreachable!(),
+            }
+        }
+    }
     fontdb
 }
 

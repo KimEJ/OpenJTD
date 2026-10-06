@@ -540,6 +540,27 @@ fn bold_outline_preparation_leaves_unmarked_svg_text_unchanged() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn generic_pdf_font_families_resolve_to_installed_faces() {
+    let fontdb = crate::pdf::fonts::create_fontdb();
+    for family in [
+        usvg::fontdb::Family::Serif,
+        usvg::fontdb::Family::SansSerif,
+        usvg::fontdb::Family::Monospace,
+    ] {
+        assert!(
+            fontdb
+                .query(&usvg::fontdb::Query {
+                    families: &[family],
+                    ..Default::default()
+                })
+                .is_some(),
+            "generic PDF family has no installed face: {family:?}"
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn scrubs_embedded_cmap_eof_markers_but_keeps_file_eof() {
     let mut pdf = b"%PDF-1.4\n1 0 obj\n<< /Length 45 >>\nstream\n%%EndResource\n%%EOF\nendstream\nendobj\nstartxref\n0\n%%EOF"
             .to_vec();
