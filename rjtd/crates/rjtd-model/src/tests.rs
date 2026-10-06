@@ -6,6 +6,7 @@ mod fdm_and_embedded_press;
 mod fields;
 mod footnote;
 mod local_samples;
+mod native_equation;
 mod native_figures;
 #[cfg(feature = "bitmap-images")]
 mod native_image;

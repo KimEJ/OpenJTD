@@ -60,19 +60,23 @@ pub(crate) fn render_text_page_svg(
         native_rule_border_projection(document, layout, page_number, writing_mode)
             .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
     let native_figures = native_figure_projection(document, layout, page_number, writing_mode);
+    let native_equation =
+        native_equation_projection(document, layout, page_number, writing_mode, lines);
     if let Some(segments) = &native_rule_borders {
         for table in &mut native_control_tables {
             table.border = None;
         }
         push_native_rule_borders_svg(&mut svg, segments);
     }
-    if native_image.is_none() && native_figures.is_none() {
+    if native_image.is_none() && native_figures.is_none() && native_equation.is_none() {
         push_page_frame_projection_svg(&mut svg, layout, document, page_number);
     }
     push_page_mark_section_separator_svg(&mut svg, layout, document, page_number);
     push_shanai_lan_sparse_table_borders_svg(&mut svg, layout, document, page_number);
     push_visual_list_diagnostic_svg(&mut svg, layout, document, page_number);
-    push_embedding_frame_diagnostic_svg(&mut svg, layout, document, lines, page_number);
+    if native_equation.is_none() {
+        push_embedding_frame_diagnostic_svg(&mut svg, layout, document, lines, page_number);
+    }
     push_success_data_test_title_art_projection_svg(&mut svg, layout, document, lines, page_number);
     push_success_data_test_answer_sheet_projection_svg(
         &mut svg,
@@ -81,7 +85,16 @@ pub(crate) fn render_text_page_svg(
         page_number,
         &font_family,
     );
-    push_jseq_formula_projection_svg(&mut svg, layout, document, lines, page_number, &font_family);
+    if native_equation.is_none() {
+        push_jseq_formula_projection_svg(
+            &mut svg,
+            layout,
+            document,
+            lines,
+            page_number,
+            &font_family,
+        );
+    }
     // Line-rule candidates stay in the layer tree until the topology decoder is reliable enough
     // to render them without adding false connector trunks.
     let fdm_vector_primitives_rendered = if let Some(shapes) = &native_figures {
@@ -95,6 +108,8 @@ pub(crate) fn render_text_page_svg(
         push_shanai_lan_text_projection_svg(&mut svg, projection, &font_family);
     } else if let Some(projection) = &form_projection {
         push_observed_form_text_projection_svg(&mut svg, projection, &font_family);
+    } else if let Some(projection) = &native_equation {
+        push_native_equation_svg(&mut svg, projection, document);
     } else if native_figures.is_some() {
         // A fully source-bound drawing page does not need the no-text notice.
     } else if let Some(projection) = &native_image {
@@ -399,7 +414,7 @@ pub(crate) fn render_text_page_svg(
     if native_image.is_none() {
         push_image_payload_diagnostic_svg(&mut svg, layout, document, page_number);
     }
-    if !fdm_vector_primitives_rendered && native_image.is_none() {
+    if !fdm_vector_primitives_rendered && native_image.is_none() && native_equation.is_none() {
         push_fdm_command_diagnostic_svg(&mut svg, layout, document, page_number);
         push_fdm_frame_diagnostic_svg(&mut svg, layout, document, page_number);
     }

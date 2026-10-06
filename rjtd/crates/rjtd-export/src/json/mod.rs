@@ -166,6 +166,34 @@ pub fn to_json(document: &Document) -> String {
         push_document_toc_entry_json(&mut output, entry);
     }
     output.push(']');
+    let equations = document.equation_candidates();
+    if !equations.is_empty() {
+        output.push_str(",\"equationCandidates\":[");
+        for (index, equation) in equations.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str(&format!("{{\"source\":\"JSEQ3Contents+EmbeddedPress+Frame+DocumentText\",\"lineMarkRecordIndex\":{},\"recordSourceSpan\":",equation.line_mark_index()));
+            text_layout::push_text_source_span_json(&mut output, equation.record_span());
+            output.push_str(",\"glyphs\":[");
+            for (i, glyph) in equation.glyphs().iter().enumerate() {
+                if i > 0 {
+                    output.push(',');
+                }
+                output.push_str("{\"text\":");
+                push_json_string(&mut output, glyph.text());
+                let [x, y] = glyph.position_mm100();
+                let [start, end] = glyph.snapshot_range();
+                output.push_str(&format!(",\"xMm100\":{x},\"yMm100\":{y},\"fontSizeMm100\":{},\"italic\":{},\"snapshotByteStart\":{start},\"snapshotByteEnd\":{end},\"contentsOffset\":{},\"fontFamily\":",glyph.font_size_mm100(),glyph.italic(),glyph.contents_offset()));
+                push_json_string(&mut output, glyph.family());
+                output.push('}');
+            }
+            output.push_str(
+                "],\"decoded\":false,\"geometryDecoded\":false,\"baselineDecoded\":false}",
+            );
+        }
+        output.push(']');
+    }
     let figures = document.figure_shape_candidates();
     if !figures.is_empty() {
         output.push_str(",\"figureShapeCandidates\":[");

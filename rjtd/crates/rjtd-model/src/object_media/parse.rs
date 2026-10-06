@@ -72,7 +72,11 @@ pub(crate) fn embedding_frame_candidate_is_plausible(
     frame: &ObjectEmbeddingFrameCandidate,
 ) -> bool {
     frame.embedding_index() > 0
-        && frame.frame_ref() > 0
+        && (frame.frame_ref() > 0
+            || (frame.class_name() == "JSEQ.Document.3"
+                && frame.embedding_index() == 1
+                && frame.frame_width() == u32::from(frame.primary_width())
+                && frame.frame_height() == u32::from(frame.primary_height())))
         && frame.frame_width() > 0
         && frame.frame_height() > 0
         && frame.frame_width() <= 200_000

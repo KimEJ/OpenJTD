@@ -489,6 +489,9 @@ impl IchitaroParser {
             "/FigureData/main_data/FDMVector",
             "/FigureData/main_data/FDMIndex",
             "/FigureData/main_data/AlphaBlend",
+            "/EmbedItems/EmbeddingInfo",
+            "/EmbedItems/Embedding 1/JSEQ3Contents",
+            "/EmbedItems/Embedding 1/\x03EmbeddedPress",
         ] {
             if let Ok(stream) = read_cfb_stream(source_container, stream_name) {
                 document.push_raw_stream(RawStream::new(stream_name, stream));

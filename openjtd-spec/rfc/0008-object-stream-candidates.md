@@ -377,3 +377,31 @@ record, anchor line, vector/child offsets, frame size and paint candidates.
 Placement, geometry and paint order remain `decoded:false`; printer rounding
 and stroke rasterization differ slightly. Connectors, arbitrary figure sets,
 rich/multipage anchors and editable figure semantics remain outside this rule.
+
+## Bounded GCI Equation Text
+
+The controlled `JSEQ.Document.3` embedding permits frame reference0 when the
+first embedding's primary and trailing dimensions agree. Other zero-reference
+classes keep the old rejection. `/Frame` and the class0 tag`0x30` object/cache
+record corroborate the association, with source LineMark placing it between
+the surrounding paragraphs. Raw EmbeddingInfo, JSEQ3Contents and EmbeddedPress
+are retained. This is not a decoded general equation AST or ownership scheme.
+
+The GCI snapshot's controlled font/text packet contains record`0x94` (font),
+`0x60` (select/restore), `0x40` (transparent background), `0xc8` (one-character
+TextOut) and `0x65` (release). Complete ordered packets are required. Font
+records preserve the Times New Roman face, italic flag and size field370/240
+mm100; TextOut supplies its x/top reference. These are corroborated against
+ordered character/color packets in the editable JSEQ3 data. Contradictory
+characters, unknown packet/state/font/alignment profiles and frame dimensions
+do not receive this projection.
+
+SVG/PDF and layer output render the saved characters, style and size without
+constructing a hardcoded expression. The source frame height and paragraph gap
+reserve the equation row, and both body paragraphs keep their source spans.
+Top-to-baseline metrics use the backend font and remain candidates; the current
+controlled native comparison differs by roughly1.2pt vertically. JSON exposes
+character/font/coordinate candidates and both snapshot/editable-source offsets
+with `decoded:false`, `geometryDecoded:false` and `baselineDecoded:false`.
+Other fonts, paths, glyph groups, arbitrary rich/multipage anchors and editable
+math semantics remain outside this bounded implementation.

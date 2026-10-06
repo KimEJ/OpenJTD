@@ -1,10 +1,13 @@
 mod diagnostics;
+mod native_equation;
 mod native_image;
 mod parse;
 mod svg;
 mod types;
 
 pub(crate) use diagnostics::*;
+pub(crate) use native_equation::*;
+pub use native_equation::{NativeEquationCandidate, NativeEquationGlyphCandidate};
 pub(crate) use native_image::*;
 pub use native_image::{DocumentImageFrameCandidate, NativeImageMode};
 pub(crate) use parse::*;

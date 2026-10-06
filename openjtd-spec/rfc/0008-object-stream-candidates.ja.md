@@ -360,3 +360,25 @@ JSON は object/slot、source record、anchor 行、vector/child offset、frame 
 paint 候補を公開する。配置・geometry・paint order は `decoded:false` のまま。
 printer 丸め・stroke rasterization に小差が残る。connector、任意図形集合、
 rich・複数 page anchor、編集可能な図形 semantics はこの規則の対象外。
+
+## 限定的な GCI 数式文字
+
+統制した `JSEQ.Document.3` embedding は、最初の embedding の primary/trailing
+寸法が一致すると frame reference0 を許容する。他のzero-reference class は
+従来どおり拒否する。`/Frame` と class0 tag`0x30` object/cache record を照合し、
+source LineMark で前後の段落の間に配置する。raw EmbeddingInfo/JSEQ3Contents/
+EmbeddedPress を保全する。一般数式 AST や ownership scheme の解読ではない。
+
+GCI snapshot の限定 font/text packet は record`0x94`（font）、`0x60`（select/restore）、
+`0x40`（transparent background）、`0xc8`（一文字 TextOut）、`0x65`（release）を
+持ち、完全な順序を要求する。font は Times New Roman、italic flag、370/240-mm100
+size field を保持し、TextOut は x/top reference を与える。editable JSEQ3 内の
+順序付き character/color packet と照合する。文字矛盾、未知 packet/state/font/
+alignment profile、frame 寸法不一致は投影しない。
+
+SVG/PDF と layer は固定式を作らず保存文字・書式・サイズを描画する。source frame
+高さと paragraph gap で数式行を確保し、前後本文の source span を保持する。
+top-to-baseline は backend font の候補で、統制 native 比較では縦に約1.2ptの差が
+残る。JSON は文字/font/座標候補と snapshot/editable source offset、`decoded:false`、
+`geometryDecoded:false`、`baselineDecoded:false` を公開する。他 font・path・glyph group、
+任意 rich/複数 page anchor、編集可能な数式 semantics はこの限定実装の対象外。
