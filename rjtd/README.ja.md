@@ -304,3 +304,5 @@ plain `/Header` slot を raw のまま保存し、source に対応する text �
 統制した global 横長・字間60% profile は、物理 source 行と和文の字間を再利用し、英字 advance は backend に委ねる。SVG/PDF と layer は source span と decoded-false geometry を保つ。他 tracking profile と正確な空白 metrics は未解決。
 
 統制した保存済み目次 profile は、実線・点線 leader と題名に隣接する page label を区別する。完全な title/leader record と空 cache に限定し、一つの区切り cell、本文右端の label、物理 source 行、backend の文字送りを SVG/PDF と layer に反映する。leader metrics と一般 tab/navigation/edit semantics は decoded-false 候補のまま。[RFC 0003](../openjtd-spec/rfc/0003-document-text.ja.md) を参照。
+
+標準脚注 marker は本文・脚注の個別 source span と照合済み parent-style 参照を保持する。限定した横書き本文 marker を半サイズの上付きに置き、literal な二段落 profile は一つの source 行間を維持する。parsed ruby base の source span・font advance を保持し、限定した grouped kana 間隔を描画する。SVG/PDF/layer geometry は候補のまま。脚注領域配置と一般 style/ruby 継承は未解明。[RFC 0003](../openjtd-spec/rfc/0003-document-text.ja.md) を参照。

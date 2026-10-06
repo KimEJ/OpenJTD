@@ -600,6 +600,78 @@ fn promotes_ruby_base_and_annotation_to_structured_inline() {
 }
 
 #[test]
+fn parser_keeps_ruby_base_source_spans_when_promoting_text_runs() {
+    let raw = document_text_with_ruby();
+    let document = parse_document(&cfb_with_document_text(raw.clone())).unwrap();
+    let Block::Paragraph(paragraph) = &document.blocks()[0] else {
+        unreachable!()
+    };
+    let Inline::Ruby(ruby) = &paragraph.inlines()[1] else {
+        unreachable!()
+    };
+    let span = ruby.base_source_span().unwrap();
+    assert_eq!(
+        &raw[span.byte_start()..span.byte_end()],
+        "午后"
+            .encode_utf16()
+            .flat_map(u16::to_be_bytes)
+            .collect::<Vec<_>>()
+            .as_slice()
+    );
+    let unit = span.unit_start();
+    let core = DocumentCore::from_document(document);
+    assert!(core.page_text_advance_targets(0).unwrap().contains(&unit));
+}
+
+#[test]
+fn grouped_source_ruby_uses_backend_base_width_and_rejects_unknown_grouping() {
+    let make = |group: u16| {
+        let mut body = document_text_with_ruby();
+        let record = [0x1c_u16, 0, 12, 0, 5, 0, 517, group, 12, 0, 0, 0x1f];
+        body.splice(6..6, record.into_iter().flat_map(u16::to_be_bytes));
+        let mut bytes = vec![0; 32];
+        bytes[..8].copy_from_slice(b"SsmgV.01");
+        bytes[20..28].copy_from_slice(b"TextV.01");
+        bytes[28..32].copy_from_slice(&((body.len() / 2) as u32).to_be_bytes());
+        let count = (body.len() / 2) as u32;
+        bytes.extend(body);
+        bytes.push(0);
+        bytes.extend(count.to_be_bytes());
+        bytes.push(0xff);
+        parse_document(&cfb_with_streams(&[
+            ("/DocumentText", &bytes),
+            (
+                DOCUMENT_VIEW_STYLES_PATH,
+                &super::native_vertical::view(false, false),
+            ),
+        ]))
+        .unwrap()
+    };
+    let core = DocumentCore::from_document(make(512));
+    let Block::Paragraph(paragraph) = &core.document().blocks()[0] else {
+        unreachable!()
+    };
+    let Inline::Ruby(ruby) = &paragraph.inlines()[1] else {
+        unreachable!()
+    };
+    let unit = ruby.base_source_span().unwrap().unit_start();
+    assert!(source_group_ruby_candidate(
+        core.document(),
+        ruby.base_source_span().unwrap(),
+        ruby.annotation_text()
+    ));
+    let svg = core
+        .render_page_svg_with_text_widths(0, &BTreeMap::from([(unit, 40.0)]))
+        .unwrap();
+    assert!(svg.contains("data-group-ruby-candidate=\"true\""));
+    assert!(svg.contains("letter-spacing=\"13.008\""));
+    let unknown = DocumentCore::from_document(make(513));
+    let svg = unknown.render_page_svg(0).unwrap();
+    assert!(!svg.contains("data-group-ruby-candidate"));
+    assert!(svg.contains(">ごご</text>"));
+}
+
+#[test]
 fn parser_builds_model_and_preserves_raw_document_text_stream() {
     let bytes = cfb_with_document_text(document_text_fixture());
     let document = parse_document(&bytes).unwrap();

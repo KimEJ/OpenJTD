@@ -539,3 +539,43 @@ right anchor, leader vertical position, stroke width and dot pitch retain
 `decoded:false`/`geometryDecoded:false`. Leader metrics use a backend-neutral
 approximation, without native-PDF coordinate fitting. Arbitrary tab stops,
 heading navigation, TOC regeneration and editing remain unproven.
+
+## Bounded linked footnote marker and ruby source
+
+The single-link footnote candidate now retains both marker source spans. In the
+controlled horizontal profile, the visible body marker has property 1 value 1
+and property 20 value `0x80000000`, while its note-area marker references 2.
+Explicit size/scale overrides are absent. The unique SsmgSlots TextLayoutStyle
+has the corroborated two `0x5555` records at `0x114`/`0x214`, matching kind,
+character and paragraph subrecords. Slot 1's exact `0x5004` profile includes
+`-50`, `60`, `50`, `50` fields and the half-size upper marker; slot 2 retains
+the normal profile. Only that complete link/span/reference/style association
+reuses the existing upper half-size renderer. Other references, scales and
+incomplete profiles retain normal fallback text and all raw data. SVG/layer
+output names the inherited script basis; JSON retains the note-marker span.
+This does not establish a general property-1 inheritance decoder.
+
+The controlled no-layout-mark body profile has two literal paragraphs, one
+source newline, default size 370 and the known `0x100b` 600 line-gap profile.
+It contains only the known note and optional grouped-ruby records, has no
+other object/table/section data, and each paragraph fits one line. Source and
+model text must agree. SVG and layer placement use the 60% gap association
+without adding a fallback blank paragraph row. Edits, wrapping, unknown gap
+values or other layouts retain fallback; numeric units and geometry remain
+candidates. The note area's baseline and separator placement remain unproven.
+
+Ruby promotion retains the base TextRun's source span instead of discarding it.
+JSON and layer source data expose that span, and SVG/PDF reuse source font
+sizes and backend base advances. Source-font ruby uses a half-size annotation
+and an em-relative upper baseline as rendering candidates; manual annotations
+without source font data retain the prior fallback.
+
+The controlled grouped-kana record is
+`[1c,0,12,0,5,0,517,512,12,0,0,1f]` with complete contiguous selector-3 base
+and selector-`0x0082` annotation caches. The source base and annotation must
+agree with the model, and annotation font/scale overrides must be absent.
+For fullwidth kana fitting the measured base width, the renderer distributes
+the remaining width between cells, with half a gap at either edge. It retains
+`data-group-ruby-candidate` and decoded-false geometry. Other grouping records,
+font changes, scripts, long or non-kana annotations retain fallback; general
+ruby units, exact printer metrics and editing remain unresolved.

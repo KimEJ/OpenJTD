@@ -1230,6 +1230,15 @@ pub(super) fn page_layer_tree_json(
                 frame_text_placement
                     .map(|placement| placement.y)
                     .or_else(|| {
+                        linked_footnote_body_line_top(
+                            &core.document,
+                            layout,
+                            page_num as usize + 1,
+                            line,
+                        )
+                        .map(f64::from)
+                    })
+                    .or_else(|| {
                         fallback_text_origin(layout, &core.document).map(|origin| {
                             origin.1 as f64 + line_index as f64 * APP_LINE_HEIGHT_PX as f64
                         })
@@ -1303,6 +1312,7 @@ pub(super) fn page_layer_tree_json(
                     .unwrap_or_default();
                 if core.writing_mode.is_vertical() {
                     character_style.script = None;
+                    character_style.script_basis = None;
                 }
                 let run_font_family = character_style
                     .font
@@ -1361,6 +1371,17 @@ pub(super) fn page_layer_tree_json(
                     line.native_line_mark_index,
                     &character_style,
                     field,
+                    if core.writing_mode.is_vertical() {
+                        None
+                    } else {
+                        linked_footnote_body_line_top(
+                            &core.document,
+                            layout,
+                            page_num as usize + 1,
+                            line,
+                        )
+                        .map(|_| "linked-footnote-literal-rows")
+                    },
                 );
                 push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
                 if core.writing_mode.is_vertical() {

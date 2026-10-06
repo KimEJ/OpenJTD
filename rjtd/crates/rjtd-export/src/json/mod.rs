@@ -283,6 +283,8 @@ pub fn to_json(document: &Document) -> String {
             text_layout::push_text_source_span_json(&mut output, note.source_span());
             output.push_str(",\"bodyMarkerSourceSpan\":");
             text_layout::push_text_source_span_json(&mut output, note.body_marker_span());
+            output.push_str(",\"noteMarkerSourceSpan\":");
+            text_layout::push_text_source_span_json(&mut output, note.note_marker_span());
             output.push_str(&format!(",\"linkNoteAnchorOffset\":{},\"linkBodyRecordOffset\":{},\"decoded\":false,\"linkRolesDecoded\":false,\"placementDecoded\":false}}", note.note_anchor_offset(), note.body_record_offset()));
         }
         output.push(']');

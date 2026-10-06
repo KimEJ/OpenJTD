@@ -126,6 +126,7 @@ pub(crate) struct DocumentTextCharacterStyle {
     pub(crate) italic: bool,
     pub(crate) underline: bool,
     pub(crate) script: Option<&'static str>,
+    pub(crate) script_basis: Option<&'static str>,
     pub(crate) font: Option<(u16, String)>,
 }
 
@@ -177,6 +178,12 @@ pub(crate) fn document_text_character_style(
         (Some(0x8000_0400), true) => Some("sub"),
         _ => None,
     };
+    let script_basis = if script.is_none() && flags == Some(0x8000_0000) {
+        crate::linked_footnote_marker_script_basis(document, resolver, span)
+    } else {
+        None
+    };
+    let script = script.or(script_basis.map(|_| "super"));
     let default_font = || {
         let payload = document_view_style_payload(document, 0x1006)?;
         if !matches!(payload.len(), 20 | 21) || payload.get(..3) != Some(&[0x1f, 0, 0]) {
@@ -218,6 +225,7 @@ pub(crate) fn document_text_character_style(
         underline: flags == Some(0x8000_0010)
             && value(13) == Some(Some(DocumentTextStyleTypedValue::U16(1))),
         script,
+        script_basis,
         font,
     }
 }

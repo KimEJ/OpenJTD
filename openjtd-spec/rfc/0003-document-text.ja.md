@@ -503,3 +503,36 @@ leader record の後は `C=3` とし、literal title と保存済み
 `decoded:false`/`geometryDecoded:false` のまま。leader metrics は backend 中立の
 近似を使用し、native PDF 座標で補正しない。任意 tab stop、見出し navigation、
 目次再生成と編集 semantics は未解明。
+
+## 限定した脚注 marker と ruby source
+
+単一 link の脚注候補は両方の marker source span を保持する。統制した横書き
+profile の本文 marker は property1 が1、property20 が`0x80000000`、脚注領域
+marker は2を参照する。明示 size/scale override は無い。唯一の SsmgSlots
+TextLayoutStyle の`0x114`/`0x214`にある二つの`0x5555` record と kind・character・
+paragraph subrecord を照合する。slot1の厳密な`0x5004` profile は`-50`・`60`・
+`50`・`50` field と半サイズ上付き marker に対応し、slot2は通常 profile を保つ。
+完全な link/span/reference/style 対応だけで既存半サイズ上付き renderer を再利用する。
+別参照・倍率・不完全 profile は通常 fallback 本文と raw data を保つ。SVG/layerは
+継承 script の basis、JSONは脚注側 marker span を公開する。一般 property1 継承
+decoder を確定したものではない。
+
+統制した layout mark 無し本文 profile は literal な二段落、source 改行一つ、
+既定 size370、既知`0x100b`の600行間 profile を持つ。既知脚注と任意の grouped
+ruby record だけを含み、他 object/table/section data が無く、各段落が一行に収まる。
+source と model の文字列一致を要求する。SVG/layer は60%行間の対応を用い、
+fallback の空段落行を追加しない。編集・折返し・未知行間・別 layout は fallback。
+数値単位と geometry は候補のまま。脚注領域の baseline・区切り配置は未証明。
+
+ruby 昇格時に base TextRun の source span を破棄せず保持する。JSON/layer はspan、
+SVG/PDF はsource font size とbackend base advance を再利用する。source font が
+ある ruby は半サイズ annotation と em 相対上方 baseline を描画候補として使い、
+source font が無い手動 annotation は従来 fallback を保つ。
+
+統制 grouped kana record は`[1c,0,12,0,5,0,517,512,12,0,0,1f]`と、連続した
+完全な selector3 base・selector`0x0082` annotation cache で構成する。source の
+base・annotation と model の一致、annotation font/scale override 無しを要求する。
+測定した base 幅に収まる全角 kana に対し、残り幅を cell 間に分配し、両端には
+半 gap を置く。`data-group-ruby-candidate`とdecoded-false geometryを保持する。
+別 grouping record・font 変更・script・長いまたは非 kana annotation は fallback。
+一般 ruby 単位、正確な printer metrics と編集 semantics は未解明。

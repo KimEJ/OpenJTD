@@ -325,12 +325,13 @@ impl DocumentTextModelBuilder {
         };
 
         let base_text = std::mem::take(&mut base_run.text);
-        let annotation = RubyAnnotation::new(
+        let mut annotation = RubyAnnotation::new(
             base_text,
             segment.text(),
             DOCUMENT_TEXT_RUBY_TEXT_SELECTOR,
             unknown_object_from_skipped_inline(segment),
         );
+        annotation.base_source_span = base_run.source_span.take();
         *inline = Inline::Ruby(annotation);
         self.can_merge_current_text_run = false;
         true

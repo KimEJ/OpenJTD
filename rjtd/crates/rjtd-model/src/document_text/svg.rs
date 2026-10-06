@@ -178,6 +178,7 @@ pub(crate) fn render_text_page_svg(
                     .map(|(resolver, span)| document_text_character_style(document, resolver, span))
                     .unwrap_or_default();
                 character_style.script = None;
+                character_style.script_basis = None;
                 character_style.source_unit_start = fragment
                     .source_span
                     .as_ref()
@@ -208,6 +209,7 @@ pub(crate) fn render_text_page_svg(
                         &font_family,
                         annotation,
                         true,
+                        None,
                     );
                 }
                 y += vertical_text_advance_px(&fragment.text) as f32 * font_size / APP_FONT_SIZE_PX;
@@ -260,6 +262,10 @@ pub(crate) fn render_text_page_svg(
             let y = frame_text_placement
                 .map(|placement| placement.baseline as f32)
                 .or_else(|| {
+                    linked_footnote_body_line_top(document, layout, page_number, line)
+                        .map(|top| top + APP_FONT_SIZE_PX)
+                })
+                .or_else(|| {
                     line.native_line_mark_index
                         .and_then(|record| native_rule_line_placement(document, layout, record))
                         .filter(|(page, _, _)| *page == page_number)
@@ -309,14 +315,13 @@ pub(crate) fn render_text_page_svg(
                 }) {
                     continue;
                 }
-                let unscaled_font_size = style_resolver
+                let source_font_size = style_resolver
                     .as_ref()
                     .zip(fragment.source_span.as_ref())
                     .and_then(|(resolver, span)| {
                         document_text_font_size(resolver, span, default_font_size)
-                    })
-                    .map(|size| size.px)
-                    .unwrap_or(APP_FONT_SIZE_PX);
+                    });
+                let unscaled_font_size = source_font_size.map_or(APP_FONT_SIZE_PX, |size| size.px);
                 let mut character_style = style_resolver
                     .as_ref()
                     .zip(paint_span.as_ref())
@@ -383,10 +388,23 @@ pub(crate) fn render_text_page_svg(
                     push_svg_ruby_annotation(
                         &mut svg,
                         x + (width / 2.0),
-                        y - (APP_FONT_SIZE_PX * 0.75),
+                        source_font_size
+                            .map_or(y - APP_FONT_SIZE_PX * 0.75, |size| baseline - size.px),
                         &font_family,
                         annotation,
                         false,
+                        source_font_size.map(|size| {
+                            (
+                                size.px,
+                                fragment
+                                    .source_span
+                                    .as_ref()
+                                    .filter(|span| {
+                                        source_group_ruby_candidate(document, span, annotation)
+                                    })
+                                    .map(|_| width),
+                            )
+                        }),
                     );
                 }
                 x += width;
@@ -578,6 +596,9 @@ pub(crate) fn push_svg_text_run(
         if let Some(script) = style.script {
             style_attrs.push_str(&format!(" data-script-candidate=\"{script}\""));
         }
+        if let Some(basis) = style.script_basis {
+            style_attrs.push_str(&format!(" data-script-basis=\"{basis}\""));
+        }
         if let Some((id, _)) = &style.font {
             style_attrs.push_str(&format!(
                 " data-font-id-candidate=\"{id}\" data-font-decoded=\"false\""
@@ -599,16 +620,32 @@ pub(crate) fn push_svg_ruby_annotation(
     font_family: &str,
     annotation: &str,
     vertical: bool,
+    source_metrics: Option<(f32, Option<f32>)>,
 ) {
     let writing_mode_attr = if vertical {
         " writing-mode=\"vertical-rl\""
     } else {
         " text-anchor=\"middle\""
     };
+    let font = source_metrics.map_or(APP_FONT_SIZE_PX * 0.55, |(font, _)| font * 0.5);
+    let count = annotation.chars().count() as f32;
+    let group = source_metrics
+        .and_then(|(_, width)| width)
+        .filter(|width| *width >= count * font)
+        .map(|width| {
+            let spacing = (width - count * font) / count;
+            (x - width / 2.0 + spacing / 2.0, spacing)
+        });
+    let (x, spacing) = group.unwrap_or((x, 0.0));
+    let writing_mode_attr = if group.is_some() {
+        " data-group-ruby-candidate=\"true\" data-geometry-decoded=\"false\""
+    } else {
+        writing_mode_attr
+    };
     let font_family = escape_xml(font_family);
     svg.push_str(&format!(
-        "<text class=\"rjtd-ruby\" x=\"{x:.1}\" y=\"{y:.1}\" font-family=\"{font_family}\" font-size=\"{:.1}\" fill=\"#111111\" letter-spacing=\"0\" xml:space=\"preserve\"{writing_mode_attr}>{}</text>",
-        APP_FONT_SIZE_PX * 0.55,
+        "<text class=\"rjtd-ruby\" x=\"{x:.1}\" y=\"{y:.1}\" font-family=\"{font_family}\" font-size=\"{:.1}\" fill=\"#111111\" letter-spacing=\"{spacing:.3}\" xml:space=\"preserve\"{writing_mode_attr}>{}</text>",
+        font,
         escape_xml(&svg_visual_text(annotation))
     ));
 }

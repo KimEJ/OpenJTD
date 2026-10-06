@@ -48,6 +48,7 @@ pub(crate) fn push_page_layer_text_run_json(
     native_line_mark_index: Option<usize>,
     character_style: &DocumentTextCharacterStyle,
     field: Option<&DocumentTextFieldCandidate>,
+    source_line_basis: Option<&str>,
 ) {
     let font_size = source_font_size.map_or(APP_FONT_SIZE_PX, |size| size.px);
     let font_scale = f64::from(font_size / APP_FONT_SIZE_PX);
@@ -85,6 +86,9 @@ pub(crate) fn push_page_layer_text_run_json(
     if let Some(script) = character_style.script {
         output.push_str(&format!(",\"scriptCandidate\":\"{script}\",\"characterScaleCandidate\":0.5,\"scriptGeometryDecoded\":false"));
     }
+    if let Some(basis) = character_style.script_basis {
+        output.push_str(&format!(",\"scriptBasis\":\"{basis}\""));
+    }
     if let Some((id, _)) = &character_style.font {
         output.push_str(&format!(
             ",\"fontIdCandidate\":{id},\"fontMappingDecoded\":false"
@@ -93,6 +97,9 @@ pub(crate) fn push_page_layer_text_run_json(
     if let Some(annotation) = &fragment.ruby_annotation {
         output.push_str(",\"rubyText\":");
         output.push_str(&json_string(annotation));
+        if source_font_size.is_some() {
+            output.push_str(",\"rubySizeRatioCandidate\":0.5,\"rubyGeometryDecoded\":false");
+        }
     }
     if fragment.paragraph_index.is_some() {
         output.push_str(",\"paragraphCharRange\":");
@@ -115,6 +122,9 @@ pub(crate) fn push_page_layer_text_run_json(
     push_f64_array_json(output, &positions);
     if let Some(record) = native_line_mark_index {
         output.push_str(&format!(",\"lineMarkRecordIndex\":{record},\"pageAssignmentCandidate\":true,\"decoded\":false,\"geometryDecoded\":false,\"positionsDecoded\":false"));
+    }
+    if let Some(basis) = source_line_basis {
+        output.push_str(&format!(",\"sourceLineBasis\":{},\"decoded\":false,\"geometryDecoded\":false,\"positionsDecoded\":false",json_string(basis)));
     }
     output.push_str(",\"isParaEnd\":false,\"isLineBreakEnd\":false}");
 }

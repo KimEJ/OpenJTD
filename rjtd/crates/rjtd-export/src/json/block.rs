@@ -30,6 +30,10 @@ pub(crate) fn push_block_json(output: &mut String, block: &Block) {
                     Inline::Ruby(ruby) => {
                         output.push_str("{\"type\":\"ruby\",\"baseText\":");
                         push_json_string(output, ruby.base_text());
+                        if let Some(span) = ruby.base_source_span() {
+                            output.push_str(",\"baseSourceSpan\":");
+                            push_text_source_span_json(output, span);
+                        }
                         output.push_str(",\"annotationText\":");
                         push_json_string(output, ruby.annotation_text());
                         output.push_str(",\"annotationSelector\":");

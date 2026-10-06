@@ -166,6 +166,7 @@ impl Paragraph {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RubyAnnotation {
     pub(crate) base_text: String,
+    pub(crate) base_source_span: Option<TextSourceSpan>,
     pub(crate) annotation_text: String,
     pub(crate) annotation_selector: u16,
     pub(crate) annotation_source: UnknownObject,
@@ -180,6 +181,7 @@ impl RubyAnnotation {
     ) -> Self {
         Self {
             base_text: base_text.into(),
+            base_source_span: None,
             annotation_text: annotation_text.into(),
             annotation_selector,
             annotation_source,
@@ -188,6 +190,9 @@ impl RubyAnnotation {
 
     pub fn base_text(&self) -> &str {
         &self.base_text
+    }
+    pub fn base_source_span(&self) -> Option<&TextSourceSpan> {
+        self.base_source_span.as_ref()
     }
 
     pub fn annotation_text(&self) -> &str {

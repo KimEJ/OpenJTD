@@ -24,6 +24,7 @@ pub(crate) use fields::*;
 pub use fields::{DocumentTextFieldCandidate, DocumentTextFieldKind};
 pub use flow::*;
 pub use footnote::DocumentFootnoteTextCandidate;
+pub(crate) use footnote::{linked_footnote_body_line_top, linked_footnote_marker_script_basis};
 pub(crate) use fragments::*;
 pub(crate) use layout_box::*;
 pub(crate) use native_pagination::*;
