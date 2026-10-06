@@ -590,3 +590,19 @@ SVG と layer は raw cell source 範囲に加え、空白 prefix の範囲・�
 raw 本文・元の空白・source record・行 metrics を維持する。空白の font 範囲の混在や
 不足、壊れた font 値、明示的な幅・高さ scale 属性は fallback を保つ。
 他のセル書式は未解明であり、geometry は decoded-false のまま。
+
+## 限定した bookmark 名 directory
+
+統制した `/MarkTag` stream は `MarkV.01` と BE-u16 の entry 数に続き、
+中立な BE-u32 directory 値、UTF-16 単位の BE-u16 名称長、UTF-16BE 名称を持つ。
+完全な範囲消費・正しい UTF-16・数/名称/stream の上限・制御文字のない名称を要求し、
+他の形は raw に残す。model/JSON の名称候補は record byte 範囲と元の directory 値を
+保持する。その値を address や text coordinate に昇格しない。
+
+`/DocumentTextPositionTables` は既存の count 診断に加え raw も保持し、圧縮された
+JTT/JTTC の inner container でも同じ処理を使う。統制した named-marker table は
+`MarkV.01` の直後にも6 byte の ID/value item を持つ。既存 position parser は先頭を
+header と扱っており、最初の directory 名との対応は一般 position 診断を変える前に
+独立した context が必要である。固定 `+29` probe を解読済み navigation、page/paragraph
+座標や編集 semantics に昇格しない。名称は読めるが位置と一般 bookmark 動作は未解明。
+表示本文と rendering は変更しない。

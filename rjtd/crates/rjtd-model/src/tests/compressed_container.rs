@@ -93,6 +93,38 @@ fn compressed_model_reuses_inner_container_for_auxiliary_streams_and_keeps_wrapp
 }
 
 #[test]
+fn compressed_bookmark_names_retain_the_original_position_table() {
+    let (_, inner, _, _) = fixture();
+    let text = rjtd_core::container::read_cfb_stream(&inner, "/DocumentText").unwrap();
+    let mut tags = b"MarkV.01".to_vec();
+    tags.extend([0, 1, 0, 0, 0, 0, 0, 1, 0, b'A']);
+    let positions = b"SsmgV.01 retained unparsed position bytes";
+    let named = cfb_with_streams(&[
+        ("/DocumentText", &text),
+        ("/MarkTag", &tags),
+        ("/DocumentTextPositionTables", positions),
+    ]);
+    let compressed = compressed_stream(&named);
+    let outer = cfb_with_streams(&[("/JSCompDocument", &compressed)]);
+    let document = parse_document(&outer).unwrap();
+    assert_eq!(document.bookmark_name_candidates()[0].name(), "A");
+    for (name, expected) in [
+        ("/MarkTag", tags.as_slice()),
+        ("/DocumentTextPositionTables", positions.as_slice()),
+    ] {
+        assert_eq!(
+            document
+                .raw_streams()
+                .iter()
+                .find(|s| s.name() == name)
+                .unwrap()
+                .bytes(),
+            expected
+        );
+    }
+}
+
+#[test]
 fn compressed_inner_streams_share_limits_without_charging_a_new_decompression() {
     let (outer, inner, stream, inner_stream_bytes) = fixture();
     let limits = ParseLimits::DEFAULT

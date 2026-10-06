@@ -268,6 +268,21 @@ pub fn to_json(document: &Document) -> String {
         }
         output.push(']');
     }
+    let bookmarks = document.bookmark_name_candidates();
+    if !bookmarks.is_empty() {
+        output.push_str(",\"bookmarkNameCandidates\":[");
+        for (index, mark) in bookmarks.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str(&format!("{{\"sourceStream\":\"/MarkTag\",\"entryValueCandidate\":{},\"byteStart\":{},\"byteEnd\":{},\"name\":", mark.entry_value(), mark.byte_start(), mark.byte_end()));
+            push_json_string(&mut output, mark.name());
+            output.push_str(
+                ",\"decoded\":false,\"directoryValueDecoded\":false,\"positionDecoded\":false}",
+            );
+        }
+        output.push(']');
+    }
     let footnotes = document.footnote_text_candidates();
     if !footnotes.is_empty() {
         output.push_str(",\"footnoteTextCandidates\":[");

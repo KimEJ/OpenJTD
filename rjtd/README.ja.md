@@ -312,3 +312,5 @@ plain `/Header` slot を raw のまま保存し、source に対応する text �
 統制した plain 段落の固定10mm profile は、物理的な折返し行と source に対応する改行幅を SVG/PDF・layer に反映する。単独の保存済み pitch はその段落だけに適用し、未知 profile、source 対応の喪失、縦書き・grid 混在は fallback を維持する。raw 本文・PageMark を変更せず、glyph metrics は候補のまま。
 
 採用済み control grid の padding は、表示 label と独立に先頭空白自身の source font size を使う。SVG/PDF・layer の位置は限定した相対 size 調整を共有し、raw 空白・source 範囲と個別の padding provenance を保持する。混在・未対応の scale profile は fallback を保つ。
+
+限定した `/MarkTag` の bookmark 名を model/JSON の source 候補として公開し、directory 値と byte 範囲を保持する。元の position table は通常・圧縮 container のどちらでも raw を保存する。位置・navigation・編集は未解明のままで、heuristic offset を bookmark 座標として示さない。

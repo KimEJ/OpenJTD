@@ -495,9 +495,19 @@ fn parser_surfaces_preserved_jtd_data_as_validation_warnings() {
 
     let warnings = core.get_validation_warnings();
 
-    assert!(warnings.contains("\"count\":5"));
+    assert_eq!(
+        core.document
+            .raw_streams()
+            .iter()
+            .find(|stream| stream.name()
+                == rjtd_core::document_text_position::DOCUMENT_TEXT_POSITION_TABLES_PATH)
+            .unwrap()
+            .bytes(),
+        position_table
+    );
+    assert!(warnings.contains("\"count\":6"));
     assert!(warnings.contains("\"JTD text layout uses fallback pagination\":1"));
-    assert!(warnings.contains("\"JTD raw stream preserved but not decoded\":1"));
+    assert!(warnings.contains("\"JTD raw stream preserved but not decoded\":2"));
     assert!(warnings.contains("\"JTD style stream preserved but not decoded\":1"));
     assert!(warnings.contains("\"JTD text-count range preserved as diagnostic data\":2"));
     assert!(warnings.contains("\"kind\":\"JtdRawStreamPreserved\""));

@@ -642,3 +642,22 @@ padding prefix range, space count and candidate width. Raw text, original spaces
 source records and line metrics are preserved. Mixed/uncovered padding font
 ranges, malformed font values or explicit width/height scale properties retain
 fallback. Other cell typography remains unresolved; geometry stays decoded-false.
+
+## Bounded bookmark name directory
+
+The controlled `/MarkTag` stream starts with `MarkV.01`, a BE-u16 entry count,
+then entries containing a neutral BE-u32 directory value, BE-u16 name length
+in UTF-16 units, and UTF-16BE name text. Complete consumption, valid UTF-16,
+bounded count/name/stream sizes and non-control names are required. Other shapes
+stay raw. Model/JSON name candidates retain record byte ranges and the original
+directory value; that value is not promoted to an address or text coordinate.
+
+`/DocumentTextPositionTables` is now retained raw as well as being used for
+existing count diagnostics, including the decompressed JTT/JTTC container path.
+The controlled named-marker table also places a six-byte ID/value item directly
+after `MarkV.01`. The existing position parser treats those first bytes as a
+header; their association with the first directory name needs independent
+context before changing general position diagnostics. No fixed `+29` probe is
+promoted to decoded navigation, page/paragraph coordinates or editing semantics.
+Bookmark names are readable while positions and general bookmark behavior remain
+undecoded; visible text and rendering are unchanged.

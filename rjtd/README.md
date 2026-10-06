@@ -321,3 +321,5 @@ The controlled mixed-orientation middle page now inherits its corroborated 60% J
 The controlled plain-paragraph fixed 10mm profile now keeps its physical wrapped rows and source-bound advance through SVG/PDF and layer output. Its single saved pitch field applies only to that paragraph; unknown profiles, lost bindings and vertical/grid mixtures retain fallback. Raw text and PageMark data stay unchanged; glyph metrics remain candidates.
 
 The admitted control-grid padding now follows the leading spaces’ own source font size, independently of each visible label. SVG/PDF and layer positions share the bounded relative-size adjustment; raw spaces/source ranges stay preserved, with separate padding provenance. Mixed or unsupported scaling profiles retain fallback.
+
+Bounded bookmark names from `/MarkTag` are now exposed as model/JSON source candidates, preserving directory values and byte ranges. The original position table is retained through plain and compressed container paths. Positions, navigation and editing remain undecoded; no heuristic offset is presented as a bookmark coordinate.

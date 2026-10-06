@@ -28,6 +28,26 @@ fn count_pdf_eof_markers(pdf: &[u8]) -> usize {
         .count()
 }
 
+#[test]
+fn bookmark_names_export_as_source_candidates_without_inventing_positions() {
+    let mut bytes = b"MarkV.01".to_vec();
+    bytes.extend(1_u16.to_be_bytes());
+    bytes.extend(0x10000_u32.to_be_bytes());
+    let name = "P\"😀";
+    bytes.extend((name.encode_utf16().count() as u16).to_be_bytes());
+    bytes.extend(name.encode_utf16().flat_map(u16::to_be_bytes));
+    let mut document = Document::from_plain_text("BODY");
+    document.push_raw_stream(RawStream::new("/MarkTag", bytes.clone()));
+    let json = to_json(&document);
+    assert!(json.contains(
+        "\"bookmarkNameCandidates\":[{\"sourceStream\":\"/MarkTag\",\"entryValueCandidate\":65536"
+    ));
+    assert!(json.contains("\"name\":\"P\\\"😀\""));
+    assert!(json.contains("\"directoryValueDecoded\":false,\"positionDecoded\":false"));
+    assert_eq!(document.raw_streams()[0].bytes(), bytes);
+    assert_eq!(to_plain_text(&document), "BODY\n");
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, Copy)]
 struct PdfMediaBox {

@@ -477,6 +477,7 @@ impl IchitaroParser {
         for stream_name in [
             PAGE_MARK_PATH,
             PAPER_MARK_PATH,
+            rjtd_core::document_text_position::DOCUMENT_TEXT_POSITION_TABLES_PATH,
             LAYOUT_BOX_PATH,
             LAYOUT_BOX_TEXT_PATH,
             LAYOUT_BOX_TEXT_POSITION_TABLES_PATH,

@@ -1,3 +1,4 @@
+mod bookmarks;
 mod control_table;
 mod counts_json;
 mod fields;
