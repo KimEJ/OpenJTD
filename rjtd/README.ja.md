@@ -290,3 +290,5 @@ named text の明示改ページ後も本文を保持し、model inline span は
 JTTC model は解凍した inner CFB を補助 layout mark・note/bookmark・object/frame stream に再利用し、圧縮 source と共有 resource limit を保全する。JTT/JTTC の source-page 配置は同じ model 経路に従う。
 
 統制した単一書式の縦長・横長・縦長 profile は、SVG・page/layer info・PDF・canvas 寸法で page ごとの layout を選ぶ。未知の書式対応や異なる余白・紙 profile は fallback を保ち、native tracking・一般 section 編集は未解決。
+
+plain `/Header` slot を raw のまま保存し、source に対応する text 候補を公開する。限定した global 横書き profile の header・footer・見開きの切替・表紙非表示・有効な中央 page-number pattern を SVG/PDF と layer info に描画する。slot role、名目 anchor、font metrics、一般的な番号付けは候補のまま。[RFC 0007](../openjtd-spec/rfc/0007-layout-mark-streams.ja.md) を参照。

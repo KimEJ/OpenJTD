@@ -486,3 +486,33 @@ visible content does. This is a bounded source-backed orientation candidate,
 not a decoded general section DOM, arbitrary style inheritance, full navigation
 layout, or native character tracking. Raw records and decoded-false evidence
 remain preserved.
+
+## Bounded Plain Running Regions
+
+The observed `/Header` profile starts with `SsmgV.01`, a BE-u32 slot count at
+offset 8 and `0x100` at offset 12. Each 512-byte slot starts at `16 + 512*i`:
+`TextV.01` at +4, a BE-u32 UTF-16 unit count at +12, and text at +16, followed
+by a zero byte and repeated BE-u32 unit count. An empty `TCntV.01` part starts
+at +260. The final table has a zero prefix/suffix and one 24-byte row per slot:
+`[slotID, 0, 17+2*units, 1, 1, 2*i]` as BE-u32 words. The model exposes byte
+ranges and IDs; invalid Unicode, styled/control text, duplicate IDs, truncation,
+and other layouts retain raw data without plain-slot projection.
+
+Controlled global horizontal profiles associate IDs 0/1/2/5/6 with page-number,
+primary/secondary header and primary/secondary footer candidates. Known view
+groups `0x31`, `0x32/33`, and `0x36/37` corroborate them. Mode 3 and paired
+alignment values 2/3 corroborate odd-left/even-right placement; the known cover
+profile in `0x1011` suppresses the first page without renumbering later pages.
+The declared sequential view extent locates a trailer with a four-byte header
+and code/u32-length sections `0x1001` and `0x1002`. In the bounded 2026-byte
+settings section, the BE-u32 at payload offset 8 differs from 0 to 2 when
+page-number printing is enabled. Slot 0's presence alone does not enable it.
+This trailer is not a sequential u16-length style record.
+
+SVG/PDF and layer output share source bindings and nominal mm100 anchors:
+header from the paper top, footer below the body bottom, and page number from
+the paper bottom. Geometry remains `decoded:false`; the controlled native PDFs
+still differ by about 1.3 points in vertical font metrics and in page-number
+spacing. No reference coordinates are fitted. Explicit page styles, arbitrary
+number starts/formats, multiline or styled slots, and other mode/cover/settings
+profiles remain outside this projection. Original streams are preserved.

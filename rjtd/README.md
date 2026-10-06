@@ -299,3 +299,5 @@ Bounded printing-date/page/link caches are now modeled with source bindings. Pri
 The JTTC model now reuses the decoded inner CFB for auxiliary layout marks, note/bookmark data, and object/frame streams while retaining the compressed source and shared resource limits. JTT/JTTC source-page placement follows the same model path.
 
 The controlled single-style portrait/landscape/portrait profile now selects layout per page across SVG, page/layer information, PDF and canvas dimensions. Unknown style associations and differing margin/paper profiles keep fallback; native tracking and general section editing remain unresolved.
+
+Plain `/Header` slots are preserved raw and exposed as source-linked text candidates. The bounded global horizontal profile now renders headers, footers, facing-page variants, cover suppression, and the enabled centered page-number pattern in SVG/PDF and layer information. Slot roles, nominal anchors, font metrics, and general numbering remain candidates; see [RFC 0007](../openjtd-spec/rfc/0007-layout-mark-streams.md#bounded-plain-running-regions).

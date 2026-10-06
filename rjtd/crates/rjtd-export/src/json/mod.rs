@@ -166,6 +166,21 @@ pub fn to_json(document: &Document) -> String {
         push_document_toc_entry_json(&mut output, entry);
     }
     output.push(']');
+    let headers = document.header_text_candidates();
+    if !headers.is_empty() {
+        output.push_str(",\"headerTextCandidates\":[");
+        for (index, header) in headers.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str(&format!("{{\"sourceStream\":\"/Header\",\"slotId\":{},\"byteStart\":{},\"byteEnd\":{},\"text\":", header.slot_id(), header.byte_start(), header.byte_end()));
+            push_json_string(&mut output, header.text());
+            output.push_str(
+                ",\"decoded\":false,\"slotRoleDecoded\":false,\"geometryDecoded\":false}",
+            );
+        }
+        output.push(']');
+    }
     let footnotes = document.footnote_text_candidates();
     if !footnotes.is_empty() {
         output.push_str(",\"footnoteTextCandidates\":[");

@@ -1291,6 +1291,14 @@ pub(super) fn page_layer_tree_json(
         output.push(',');
         push_page_layer_decoration_json(&mut output, layout, &decoration);
     }
+    if let Some(items) = native_running_text(
+        &core.document,
+        layout,
+        core.writing_mode,
+        page_num as usize + 1,
+    ) {
+        push_native_running_layer_json(&mut output, &items, &font_family);
+    }
 
     if page_num == 0 {
         let mut overlay_index = 0usize;

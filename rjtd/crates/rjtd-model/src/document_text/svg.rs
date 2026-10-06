@@ -353,6 +353,9 @@ pub(crate) fn render_text_page_svg(
     if let Some(decoration) = decoration {
         push_page_decoration_svg(&mut svg, layout, writing_mode, decoration, &font_family);
     }
+    if let Some(items) = native_running_text(document, layout, writing_mode, page_number) {
+        push_native_running_svg(&mut svg, &items, &font_family);
+    }
     push_success_data_test_cone_diagram_projection_svg(
         &mut svg,
         layout,

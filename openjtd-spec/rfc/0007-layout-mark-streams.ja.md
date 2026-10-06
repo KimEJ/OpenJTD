@@ -428,3 +428,29 @@ SVG・layer/page info・PDF・canvas 寸法は同じ model page layout を選ぶ
 書式設定 record と行末だけなら text pitch を消費しないが、本文空行や表示文字には
 拡張しない。限定的な source-backed 方向候補であり、一般 section DOM、任意の書式継承、
 完全な navigation layout、native 文字間隔の解読ではない。raw/decoded-false evidence を保つ。
+
+## 限定的な plain running 領域
+
+観測した `/Header` は `SsmgV.01`、offset8 の BE-u32 slot count、offset12 の
+`0x100` で始まる。512-byte slot は `16 + 512*i` にあり、+4 の `TextV.01`、
++12 の BE-u32 UTF-16 unit count、+16 の本文に続き、zero byte と同じ BE-u32
+unit count を持つ。空の `TCntV.01` part は +260。末尾 table は zero の prefix/suffix と
+slot ごとの 24-byte row `[slotID, 0, 17+2*units, 1, 1, 2*i]`（BE-u32）を持つ。
+model は byte range と ID を公開する。不正 Unicode、書式・control text、重複 ID、
+切れた stream、別 layout は plain-slot 投影せず raw のまま保存する。
+
+統制した global 横書き profile の ID0/1/2/5/6 は page-number、primary/secondary
+header、primary/secondary footer 候補に対応し、既知 view group `0x31`、`0x32/33`、
+`0x36/37` で照合する。mode3 と alignment2/3 の組は奇数左・偶数右を裏付ける。
+`0x1011` の既知表紙 profile は最初の page を非表示にし、後続番号を変更しない。
+宣言された sequential view 範囲の後には four-byte header と code/u32-length section
+`0x1001`、`0x1002` がある。限定した 2026-byte settings section の payload offset8
+の BE-u32 は page-number 印刷有効時に 0 から 2 に変わる。slot0 の存在だけでは
+表示を有効にしない。この trailer は sequential u16-length style record ではない。
+
+SVG/PDF と layer output は source 対応と名目 mm100 anchor を共有する。
+header は紙上端、footer は本文下端から下方、page-number は紙下端を基準とする。
+geometry は `decoded:false` のまま。native PDF との差は縦方向 font metrics に約1.3pt、
+page-number の空白幅にも残る。reference 座標合わせは行わない。明示 page style、任意の
+番号開始・形式、複数行・書式付き slot、別 mode/cover/settings profile は対象外。
+元 stream を保全する。

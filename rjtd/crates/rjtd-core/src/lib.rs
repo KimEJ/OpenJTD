@@ -8,6 +8,7 @@ pub mod document_text_position;
 pub mod error;
 pub mod font_stream;
 pub mod format;
+pub mod header_stream;
 pub mod layout_mark;
 pub mod lha;
 pub mod limits;
