@@ -86,7 +86,7 @@ cargo run -p rjtd-cli -- cat ../rjtd-testdata/local-samples/setsuden_05.jttc
 cargo run -p rjtd-cli -- export ../rjtd-testdata/local-samples/setsuden_05.jttc --format json
 ```
 
-JSON export は inner raw stream summary を保存する。
+JSON inner raw stream summary の抜粋。現在の export は圧縮 wrapper と補助 stream も保持する。
 
 ```json
 {
@@ -110,3 +110,20 @@ JSON export は inner raw stream summary を保存する。
 - synthetic data を使い、minimal LH5 decoder の regression fixtures を追加する。
 - metadata boundary が明確になったら、より多くの `JSCompDocument` metadata を document model に保存する。
 - template/control-heavy content を blank text として扱わず、inner `DocumentText` stream の解釈を続ける。
+
+## Model 読み込み用の共有 inner container
+
+`DocumentTextPayload` は `/DocumentText` byte と分離して、すでに解凍した inner CFB
+を公開する。model は line/page/paper mark、layout box、脚注、bookmark tag、auto text、
+position table、object/frame にこの container を使う。従来は outer wrapper だけを探し、
+inner mark が存在しても source-page 配置が fallback になった。outer named text の
+既存優先順位は維持する。
+
+元の `/JSCompDocument` byte を model raw stream に保持する。inner stream も outer と
+同じ累積 stream count/byte budget に含め、元 input と LH5 output の制限は分離する。
+補助読み取りのための追加解凍は行わない。既存の standalone style/font reader は自身の
+shared-budget visit を引き続き計上し、現在の model の三 visit を reset しない。
+生成した literal-LH5 fixture で exact limit と最初の超過 byte/count の拒否を検証する。
+
+exporter は引き続き model を読む。inner container は解析 source であり、すべての
+layout/object field の解読の証明ではない。

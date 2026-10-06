@@ -295,3 +295,5 @@ Named text now survives explicit page breaks, and model inline spans cover visib
 Bounded saved TOC regions now preserve title/page-label metadata and use physical page ranges without consuming text height for their setting records. Horizontal tab stops, leader paint, generation, and editable TOC semantics remain undecoded.
 
 Bounded printing-date/page/link caches are now modeled with source bindings. Printing dates use an explicit render context (local browser/Unix PDF date by default); raw caches remain unchanged. External-link color/underline and HTTP(S) SVG targets follow the bound record. General renumbering, bookmark positions, and other field profiles remain unresolved.
+
+The JTTC model now reuses the decoded inner CFB for auxiliary layout marks, note/bookmark data, and object/frame streams while retaining the compressed source and shared resource limits. JTT/JTTC source-page placement follows the same model path.

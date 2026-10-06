@@ -314,6 +314,7 @@ pub struct DocumentTextPayload {
     bytes: Vec<u8>,
     parsed_text: ParsedDocumentText,
     text: String,
+    decompressed_container: Option<Vec<u8>>,
 }
 
 impl DocumentTextPayload {
@@ -328,6 +329,7 @@ impl DocumentTextPayload {
             bytes,
             parsed_text,
             text,
+            decompressed_container: None,
         }
     }
 
@@ -337,6 +339,12 @@ impl DocumentTextPayload {
 
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
+    }
+
+    /// Validated inner CFB already reached by the shared decompression budget.
+    /// Model loaders can reuse it for auxiliary streams without another decode.
+    pub fn decompressed_container(&self) -> Option<&[u8]> {
+        self.decompressed_container.as_deref()
     }
 
     pub fn parsed_text(&self) -> &ParsedDocumentText {
@@ -405,11 +413,9 @@ fn read_compressed_or_embedded_document_text(
     let inner_document = decompress_just_compressed_document_with_budget(&stream, budget)?;
     let bytes = read_cfb_stream(&inner_document, DOCUMENT_TEXT_PATH)?;
     let parsed_text = parse_document_text(&bytes);
-    Ok(DocumentTextPayload::new(
-        DOCUMENT_TEXT_PATH,
-        bytes,
-        parsed_text,
-    ))
+    let mut payload = DocumentTextPayload::new(DOCUMENT_TEXT_PATH, bytes, parsed_text);
+    payload.decompressed_container = Some(inner_document);
+    Ok(payload)
 }
 
 pub fn has_embedded_document_text(data: &[u8]) -> bool {

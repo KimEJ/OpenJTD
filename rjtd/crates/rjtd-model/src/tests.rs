@@ -1,4 +1,5 @@
 mod character_style;
+mod compressed_container;
 mod document_core;
 mod document_text;
 mod fdm_and_embedded_press;

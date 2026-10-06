@@ -88,7 +88,7 @@ cargo run -p rjtd-cli -- cat ../rjtd-testdata/local-samples/setsuden_05.jttc
 cargo run -p rjtd-cli -- export ../rjtd-testdata/local-samples/setsuden_05.jttc --format json
 ```
 
-The JSON export preserves the inner raw stream summary:
+An excerpt of the JSON inner raw stream summary (the current export also retains the compressed wrapper and auxiliary streams):
 
 ```json
 {
@@ -109,6 +109,26 @@ The JSON export preserves the inner raw stream summary:
 
 ## Next Steps
 
-- Add regression fixtures for the minimal LH5 decoder using synthetic data.
+- Generated literal-LH5 decoder/container regression fixtures are now implemented; broader archive methods remain unsupported.
 - Preserve more `JSCompDocument` metadata in the document model once the metadata boundary is clearer.
 - Continue interpreting the inner `DocumentText` stream instead of treating template/control-heavy content as blank text.
+
+## Shared Inner Container for Model Loading
+
+`DocumentTextPayload` now exposes the already-decoded inner CFB separately from
+its `/DocumentText` bytes. The model reuses this container for line/page/paper
+marks, layout boxes, footnotes, bookmark tags, auto text, position tables, and
+object/frame data. These streams previously looked only in the outer wrapper,
+causing source-page placement to fall back even when the inner marks existed.
+Named outer text retains its existing priority.
+
+The original `/JSCompDocument` bytes are retained in model raw streams. Inner
+streams join the same cumulative stream-count and stream-byte budgets as outer
+streams; original-input and LH5 output limits remain separate. This adds no
+new decompression pass for auxiliary loading. Existing standalone style/font
+readers still charge their own shared-budget visits, so the model's current
+three visits are preserved rather than silently reset. Generated literal-LH5
+fixtures verify exact limits and rejection of their first exceeded byte/count.
+
+Exporters continue to consume model data. The inner container is a parsing
+source, not decoded proof of every layout or object field.

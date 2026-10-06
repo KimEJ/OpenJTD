@@ -435,6 +435,10 @@ impl IchitaroParser {
         reserve_and_verify_cfb_streams(data, budget)?;
         let payload =
             read_document_text_payload_with_budget(data, budget.decompression_budget_mut())?;
+        let source_container = payload.decompressed_container().unwrap_or(data);
+        if payload.decompressed_container().is_some() {
+            reserve_and_verify_cfb_streams(source_container, budget)?;
+        }
         let map = map_document_text(payload.bytes());
         let mut document = Document::from_document_text_payload_with_map(&payload, &map);
         for entry in document_text_toc_entries(map.entries()) {
@@ -444,12 +448,21 @@ impl IchitaroParser {
             payload.source_name(),
             payload.bytes().to_vec(),
         ));
+        if payload.decompressed_container().is_some()
+            && let Ok(stream) =
+                read_cfb_stream(data, rjtd_core::document_text::COMPRESSED_DOCUMENT_PATH)
+        {
+            document.push_raw_stream(RawStream::new(
+                rjtd_core::document_text::COMPRESSED_DOCUMENT_PATH,
+                stream,
+            ));
+        }
         if document.toc_entries().is_empty() {
             for entry in native_toc_cached_entries(&document) {
                 document.push_toc_entry(entry);
             }
         }
-        if let Ok(line_mark) = read_cfb_stream(data, LINE_MARK_PATH) {
+        if let Ok(line_mark) = read_cfb_stream(source_container, LINE_MARK_PATH) {
             document.push_raw_stream(RawStream::new(LINE_MARK_PATH, line_mark));
         }
         for stream_name in [
@@ -462,7 +475,7 @@ impl IchitaroParser {
             "/FootnoteLink",
             "/MarkTag",
         ] {
-            if let Ok(stream) = read_cfb_stream(data, stream_name) {
+            if let Ok(stream) = read_cfb_stream(source_container, stream_name) {
                 document.push_raw_stream(RawStream::new(stream_name, stream));
             }
         }
@@ -488,7 +501,7 @@ impl IchitaroParser {
                 ));
             }
         }
-        if let Ok(auto_text_info) = read_auto_text_info(data) {
+        if let Ok(auto_text_info) = read_auto_text_info(source_container) {
             for entry in auto_text_info.entries() {
                 document.push_auto_text(DocumentAutoText::from_auto_text_entry(
                     auto_text_info.name(),
@@ -496,27 +509,27 @@ impl IchitaroParser {
                 ));
             }
         }
-        if let Ok(page_mark) = read_page_mark(data) {
+        if let Ok(page_mark) = read_page_mark(source_container) {
             document.push_page_mark(DocumentPageMark::from_page_mark(PAGE_MARK_PATH, &page_mark));
         }
-        if let Ok(paper_mark) = read_paper_mark(data) {
+        if let Ok(paper_mark) = read_paper_mark(source_container) {
             document.push_paper_mark(DocumentPaperMark::from_paper_mark(
                 PAPER_MARK_PATH,
                 &paper_mark,
             ));
         }
-        for candidate in object_stream_candidates_from_cfb(data, budget)? {
+        for candidate in object_stream_candidates_from_cfb(source_container, budget)? {
             document.push_object_stream_candidate(candidate);
         }
-        let object_frame_records = object_frame_records_from_cfb(data, budget)?;
+        let object_frame_records = object_frame_records_from_cfb(source_container, budget)?;
         for record in object_frame_records {
             document.push_object_frame_record(record);
         }
-        let object_embedding_frames = object_embedding_frames_from_cfb(data, budget)?;
+        let object_embedding_frames = object_embedding_frames_from_cfb(source_container, budget)?;
         for frame in object_embedding_frames {
             document.push_object_embedding_frame(frame);
         }
-        if let Ok(position_tables) = read_document_text_position_tables(data) {
+        if let Ok(position_tables) = read_document_text_position_tables(source_container) {
             for entry in position_tables.text_count_entries() {
                 let mut range = TextCountRange::from_entry(entry);
                 range.set_document_text_overlaps(text_count_range_overlaps(&range, &document));
@@ -533,9 +546,11 @@ impl IchitaroParser {
             for candidate in table_candidates_from_text_boundaries(&document) {
                 document.push_table_candidate(candidate);
             }
-            for candidate in
-                text_paragraph_boundary_candidates_from_layout(&document, map.entries(), data)
-            {
+            for candidate in text_paragraph_boundary_candidates_from_layout(
+                &document,
+                map.entries(),
+                source_container,
+            ) {
                 document.push_text_paragraph_boundary_candidate(candidate);
             }
         }
