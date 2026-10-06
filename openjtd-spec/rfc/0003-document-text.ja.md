@@ -472,3 +472,10 @@ SVG/PDF と layer は二桁を一つの縦方向 cell に横向きに配置し�
 一般の縦組み方向を維持する。他の長さ・非数字・fit mode・ruby・不完全 record を
 この規則では昇格しない。JSON は record/value span と `decoded:false` を公開し、
 geometry、font/spacing 解釈は候補のまま保持する。
+
+統制した global 横長 profile も、縦書きと同じ `0x0266`・既知 `0x100b` の
+字間60%対応を再利用する。和文 fullwidth run に字間を適用し、英字 run は
+backend advance を保持する。source LineMark 行と PageMark pitch で page・baseline
+を選び、SVG/PDF と layer は source range と候補字間を共有する。限定 uniform-font・
+plain-flow 投影のまま。他字間値、rich/table/field/section profile、正確な英字・
+空白 metrics、一般数値単位の解釈は未解決。

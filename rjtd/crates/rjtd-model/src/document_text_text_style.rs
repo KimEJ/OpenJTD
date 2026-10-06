@@ -28,6 +28,15 @@ pub(crate) struct DocumentTextFontSize {
 }
 
 impl Document {
+    /// Controlled 60% spacing association; a general binary-unit formula is unproven.
+    pub fn character_spacing_percent_candidate(&self) -> Option<u16> {
+        let font = document_view_style_payload(self, 0x1006)?;
+        (matches!(font.len(), 20 | 21)
+            && font.get(..3) == Some(&[0x1f, 0, 0])
+            && font.get(16..18) == Some(&[2, 0x66])
+            && document_view_style_payload(self, 0x100b)? == [2, 0, 13, 0, 4, 0, 0, 0, 8])
+        .then_some(60)
+    }
     /// Bounded western-style candidate; unknown records remain in unknown_styles.
     /// Absence of the optional off value is enabled only in this observed profile.
     pub fn english_justification_candidate(&self) -> Option<bool> {

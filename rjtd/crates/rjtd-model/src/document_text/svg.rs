@@ -114,6 +114,15 @@ pub(crate) fn render_text_page_svg(
         // A fully source-bound drawing page does not need the no-text notice.
     } else if let Some(projection) = &native_image {
         push_native_image_svg(&mut svg, projection);
+    } else if let Some(projection) = native_tracking_projection(
+        document,
+        layout,
+        page_number,
+        writing_mode,
+        lines,
+        measured_widths,
+    ) {
+        push_native_tracking_svg(&mut svg, &projection);
     } else if let Some(projection) =
         native_vertical_projection(document, layout, page_number, lines, writing_mode)
     {

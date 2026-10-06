@@ -448,6 +448,16 @@ impl DocumentCore {
         if self.writing_mode.is_vertical() {
             return Ok(Vec::new());
         }
+        if let Some(runs) = native_tracking_projection(
+            &self.document,
+            self.page_layout_for(page_num as usize),
+            page_num as usize + 1,
+            self.writing_mode,
+            lines,
+            &BTreeMap::new(),
+        ) {
+            return Ok(native_tracking_units(&runs));
+        }
         if let Some(projection) = native_image_projection(
             &self.document,
             self.page_layout_for(page_num as usize),

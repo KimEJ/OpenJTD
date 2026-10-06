@@ -1138,6 +1138,18 @@ pub(super) fn page_layer_tree_json(
     if let Some(projection) = &native_equation {
         push_native_equation_layer_json(&mut output, &mut text_sources, projection, &core.document);
     }
+    let native_tracking = native_tracking_projection(
+        &core.document,
+        layout,
+        page_num as usize + 1,
+        core.writing_mode,
+        lines,
+        &BTreeMap::new(),
+    )
+    .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
+    if let Some(runs) = &native_tracking {
+        push_native_tracking_layer_json(&mut output, &mut text_sources, runs);
+    }
     let native_vertical = native_vertical_projection(
         &core.document,
         layout,
@@ -1155,6 +1167,7 @@ pub(super) fn page_layer_tree_json(
         && native_image.is_none()
         && native_figures.is_none()
         && native_equation.is_none()
+        && native_tracking.is_none()
     {
         let style_resolver = document_text_style_resolver(&core.document);
         let default_font_size = document_default_font_size_px(&core.document);

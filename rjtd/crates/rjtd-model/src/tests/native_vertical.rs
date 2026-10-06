@@ -1,7 +1,7 @@
 use super::*;
 use crate::*;
 
-fn view(vertical: bool, unknown_flag: bool) -> Vec<u8> {
+pub(super) fn view(vertical: bool, unknown_flag: bool) -> Vec<u8> {
     let mut bytes = vec![0; 10];
     let mut record = |code: u16, payload: &[u8]| {
         bytes.extend(code.to_be_bytes());

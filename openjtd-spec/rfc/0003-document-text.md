@@ -505,3 +505,11 @@ one vertical cell; ordinary `123` retains the normal vertical orientation.
 Other lengths, nonnumeric caches, fit modes, ruby, and incomplete records are
 not promoted by this rule. JSON exposes both record/value spans with
 `decoded:false`; geometry and font/spacing interpretation remain candidates.
+
+The controlled global landscape profile now reuses the same `0x0266`/known
+`0x100b` 60% spacing association as vertical text. Japanese fullwidth runs
+receive the spacing; Latin runs retain backend advances. Source LineMark rows
+and PageMark pitch own pages/baselines. SVG/PDF and layer data share source
+ranges and candidate spacing. This remains a bounded uniform-font/plain-flow
+projection; other spacing values, rich/table/field/section profiles, exact
+Latin/whitespace metrics and general numeric-unit interpretation stay unresolved.

@@ -198,7 +198,7 @@ pub(crate) fn native_vertical_projection(
         view.payload().get(at..at.checked_add(r.payload_len())?)
     };
     let font = payload(0x1006)?;
-    if font.get(16..18) != Some(&[2, 0x66]) || payload(0x100b)? != [2, 0, 13, 0, 4, 0, 0, 0, 8] {
+    if document.character_spacing_percent_candidate() != Some(60) {
         return None;
     }
     let font_size = document_default_font_size_px(document)?;
