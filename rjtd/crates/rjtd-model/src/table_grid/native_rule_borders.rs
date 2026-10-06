@@ -68,7 +68,9 @@ fn native_rule_border_projection_inner(
     }
     let terminal_has_run = strips.len().is_multiple_of(4);
     let mut lengths = strips
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|strip| strip[3])
         .collect::<Vec<_>>();
     if !terminal_has_run {
