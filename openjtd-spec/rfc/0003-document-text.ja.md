@@ -555,3 +555,22 @@ global viewと同じ統制字間60%対応を照合したが、一般数値式や
 `document-view-style-1006`を区別する。未知size/scale/spacing/line profile・
 書字方向・layout/余白対応はfallback。別pageは従来描画を維持する。
 geometry、glyph baseline、空白とprinter量子化は候補のまま。
+
+## 限定した単独段落の改行幅
+
+統制した plain 段落は、class `0x0010` の16語 record を使う:
+`001c 0010 0010 0000 0020 0004 0008 P 0000 0000 ffff 0000 0010 0000 0010 001f`。
+既存の表・本文 profile と異なり、二つ目の pitch pair は繰返しではなく
+未設定の `0,0` である。統制した `P=1000` は保存済み10mmの改行幅と対応する。
+限定した百分の一mm pitch 候補であり、一般段落 decoder ではない。
+
+完全な単独 profile が model 段落の保存済み source span の直前にあり、
+global 横書きで rule grid がない場合だけ使う。すべての該当 record に段落の
+対応を要求する。LineMark の物理範囲から折返し行を選び、pitch 候補はその段落の
+source 範囲内で続き、末尾で終了する。後続段落には伝播しない。既存の表の
+繰返し属性の検査は維持する。本文・空白・raw record・PageMark 値を変更せず、
+SVG/PDF と layer は同じ source page plan を使い、予算検査も物理行数を数える。
+
+未知の field、source/line 範囲の不足、縦書きや grid の混在、失われた source 対応は
+fallback を保つ。他の段落 profile、正確な glyph metrics・印刷時の量子化は未解明。
+Geometry は decoded-false のまま。

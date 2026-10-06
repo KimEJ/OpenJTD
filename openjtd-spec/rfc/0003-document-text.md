@@ -601,3 +601,25 @@ output distinguishes `page-layout-style-4006` from `document-view-style-1006`.
 Unknown size/scale/spacing/line profiles, writing direction or layout/margin
 associations retain fallback. Other pages retain their prior rendering.
 Geometry, glyph baselines, whitespace and printer quantization remain candidates.
+
+## Bounded standalone paragraph pitch
+
+The controlled plain paragraph uses a 16-word class `0x0010` record:
+`001c 0010 0010 0000 0020 0004 0008 P 0000 0000 ffff 0000 0010 0000 0010 001f`.
+Unlike the previously admitted table/body profile, its second pitch pair is
+absent (`0,0`), rather than a repeated attribute. The controlled `P=1000`
+corroborates the saved 10mm paragraph line advance. This remains a bounded
+hundredth-millimeter pitch candidate, not a general paragraph decoder.
+
+Only a complete standalone profile immediately preceding a model paragraph's
+preserved source span is admitted, with global horizontal writing and no rule
+grid. All such records must have paragraph bindings. Physical LineMark ranges
+supply wrapped rows; the candidate advance follows that paragraph's source
+bounds and stops at its end, rather than leaking to later paragraphs. Existing
+repeated table attributes retain their checks. Source text, spaces, raw records
+and PageMark values remain unchanged. SVG/PDF and layer data share the source
+page plan; resource preflight counts those physical rows.
+
+Unknown fields, incomplete source/line coverage, vertical or grid mixtures and
+lost source bindings retain fallback. Other paragraph profiles, exact glyph
+metrics and printer quantization remain unresolved. Geometry stays decoded-false.

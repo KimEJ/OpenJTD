@@ -10,6 +10,19 @@ pub(crate) fn native_rule_fixed_pitch(event: &DocumentTextFlowEvent) -> Option<u
         && words[7] == words[9]
         && (1..=5_000).contains(&words[7]))
     .then(|| words[7])
+    .or_else(|| native_plain_paragraph_fixed_pitch(event))
+}
+
+/// Bounded standalone paragraph profile with one saved fixed-pitch field.
+/// The zero pair is absent here, not a conflicting repeated table attribute.
+pub(crate) fn native_plain_paragraph_fixed_pitch(event: &DocumentTextFlowEvent) -> Option<u16> {
+    let words = event.raw_words();
+    (event.record_class() == Some(0x0010)
+        && words.len() == 16
+        && words[..7] == [0x1c, 0x10, 16, 0, 0x20, 4, 8]
+        && words[8..] == [0, 0, 0xffff, 0, 16, 0, 0x10, 0x1f]
+        && (1..=5_000).contains(&words[7]))
+    .then(|| words[7])
 }
 
 pub(crate) fn native_rule_parent_offset(event: &DocumentTextFlowEvent) -> Option<usize> {
@@ -88,6 +101,38 @@ pub(crate) fn native_rule_line_placement(
         return None;
     }
     let flow = document.document_text_flow()?;
+    let plain_records = flow
+        .events()
+        .iter()
+        .filter(|event| native_plain_paragraph_fixed_pitch(event).is_some())
+        .count();
+    let plain_pitches = if plain_records == 0 {
+        Vec::new()
+    } else {
+        document
+            .blocks()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, _)| {
+                let (from, to) = native_paragraph_source_bounds(document, index)?;
+                let event = flow
+                    .events()
+                    .iter()
+                    .find(|event| event.unit_end() == from)?;
+                Some((from, to, native_plain_paragraph_fixed_pitch(event)?))
+            })
+            .collect::<Vec<_>>()
+    };
+    if plain_records != plain_pitches.len()
+        || (!plain_pitches.is_empty()
+            && (modern_source_writing_mode(document) != Some(WritingMode::Horizontal)
+                || flow
+                    .events()
+                    .iter()
+                    .any(|event| native_rule_parent_offset(event).is_some())))
+    {
+        return None;
+    }
     let intervals = shanai_lan_line_mark_intervals(document);
     let resolver = document_text_style_resolver(document)?;
     let toc_scope = native_toc_source_scope(document);
@@ -133,7 +178,12 @@ pub(crate) fn native_rule_line_placement(
             .events()
             .iter()
             .find(|event| event.unit_start() == interval.unit_start);
-        let fixed = header.and_then(native_rule_fixed_pitch);
+        let fixed = header.and_then(native_rule_fixed_pitch).or_else(|| {
+            plain_pitches
+                .iter()
+                .find(|(from, to, _)| interval.unit_start < *to && *from < interval.unit_end)
+                .map(|(_, _, pitch)| *pitch)
+        });
         if header.is_some_and(|event| {
             event.record_class() == Some(0x0010) && event.raw_words().get(4) == Some(&0x20)
         }) && fixed.is_none()

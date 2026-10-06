@@ -10,6 +10,7 @@ mod native_equation;
 mod native_figures;
 #[cfg(feature = "bitmap-images")]
 mod native_image;
+mod native_plain_pitch;
 mod native_running;
 mod native_toc;
 mod native_tracking;
