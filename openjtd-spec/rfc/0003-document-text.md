@@ -203,6 +203,27 @@ TOC leaders, dynamic fields, or native whitespace/tracking. Portrait/landscape
 page ranges use the shared model layout path; native landscape Japanese
 character spacing is still unresolved.
 
+## Bounded Saved TOC Rows
+
+A controlled `/DocumentText` TOC region uses paired 12-unit class `0x0020`
+records with word 4 `0x0030`/`0x0031`. Their other observed fields and order must
+match, and there must be exactly one pair. A source line containing only that
+setting record and its line terminator consumes no text pitch. Ordinary blank
+or space-only content does not inherit this rule.
+
+Within this region, the observed 17-unit tab context and optional 18-unit leader
+context (`1` or `100` raw variant) can pass the existing physical source-page
+path. Two visible text runs separated by exactly those contexts provide saved
+TOC title/page-label metadata through `tocEntries`, with source spans and
+`decoded:false`. Incomplete, duplicate-section, or unknown contexts keep the
+fallback and raw evidence. Metadata is cached content, not a decoded generation,
+heading-level, bookmark, or editable TOC model.
+
+The horizontal tab stops and leader paint are still unproven. Page assignment
+and text pitch now follow the shared model path, while page labels retain
+fallback horizontal placement. Raw context fields remain available for further
+analysis; no reference-PDF coordinates are used to place the region.
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` also contains length-delimited `TextV.01` blocks. Their bounded

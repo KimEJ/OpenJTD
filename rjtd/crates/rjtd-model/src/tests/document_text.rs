@@ -1,6 +1,52 @@
 use super::*;
 
 #[test]
+fn toc_settings_do_not_consume_ink_rows_or_create_entries_from_unknown_contexts() {
+    let make = |kind: u16, tag: u16, setup: &str| {
+        let mut words = vec![0x1c, 0x20, 12, 0, kind, 0, 0, 0, 12, 0, 0x20, 0x1f];
+        words.extend(setup.encode_utf16());
+        words.extend("TITLE".encode_utf16());
+        words.extend([
+            0x1c, 0, 17, 0, 9, 375, 31, 0x90, 0, 2, tag, 0, 0, 17, 0, 0, 0x1f,
+        ]);
+        words.extend([0x1c, 1, 7, 0, 0, 1, 0x1d, 5, 0x1e, 5, 0, 1, 0x1f]);
+        words.extend("7\n".encode_utf16());
+        words.extend([0x1c, 0x20, 12, 0, 0x31, 0, 0, 0, 12, 0, 0x20, 0x1f, 10]);
+        words.extend("BODY".encode_utf16());
+        let mut bytes = vec![0; 32];
+        bytes[..8].copy_from_slice(b"SsmgV.01");
+        bytes[20..28].copy_from_slice(b"TextV.01");
+        bytes[28..32].copy_from_slice(&(words.len() as u32).to_be_bytes());
+        for word in words {
+            bytes.extend(word.to_be_bytes());
+        }
+        parse_document(&cfb_with_streams(&[("/DocumentText", &bytes)])).unwrap()
+    };
+    let doc = make(0x30, 0xf81e, "\n");
+    assert_eq!(doc.toc_entries().len(), 1);
+    assert_eq!(
+        (
+            doc.toc_entries()[0].title(),
+            doc.toc_entries()[0].page_label()
+        ),
+        ("TITLE", "7")
+    );
+    let flow = doc.document_text_flow().unwrap();
+    let scope = native_toc_source_scope(&doc);
+    assert!(native_toc_setting_line(flow, scope, 16, 29));
+    assert!(!native_toc_setting_line(flow, scope, 16, 34));
+    let spaced = make(0x30, 0xf81e, " \n");
+    assert!(!native_toc_setting_line(
+        spaced.document_text_flow().unwrap(),
+        native_toc_source_scope(&spaced),
+        16,
+        30
+    ));
+    assert!(make(0x32, 0xf81e, "\n").toc_entries().is_empty());
+    assert!(make(0x30, 0xf81f, "\n").toc_entries().is_empty());
+}
+
+#[test]
 fn inline_source_spans_cover_visible_utf16_units_while_flow_preserves_wrappers() {
     let mut units = vec![0x1c, 1, 7, 0, 0, 1, 0x1d];
     units.extend("A😀Z".encode_utf16());

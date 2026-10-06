@@ -186,6 +186,24 @@ heading context（`0x0010`、13 unit、subfield `0x002e`、値1–3）、観測�
 解読ではない。縦長・横長の page 範囲は共通 model layout を使うが、横長文書の
 native 和文文字間隔は未解決のまま。
 
+## 限定的な保存済み目次行
+
+統制した `/DocumentText` 目次領域は、word 4 `0x0030`/`0x0031` を持つ
+12-unit class `0x0020` record の組を使う。観測した他の field と順序が一致し、
+一組だけであることを要求する。その設定 record と行末だけの source 行は text pitch
+を消費しない。通常の空行や空白だけの本文へこの規則を拡張しない。
+
+領域内の観測した 17-unit tab context と任意の 18-unit leader context
+（raw variant `1`/`100`）は既存の物理 source-page 経路を通せる。
+この context で区切られた二つの表示 text run を、保存済み title/page label の
+`tocEntries` metadata として source span・`decoded:false` 付きで保持する。
+不完全、重複 section、未知 context は fallback と raw evidence を保つ。
+生成・目次レベル・bookmark・編集可能な目次 model の解読ではなく、保存済み内容である。
+
+横方向の tab stop と leader paint は未証明。page 割当と text pitch は共通 model 経路に
+従うが、page label の横位置は fallback のまま。追加分析用の raw field を保全し、
+参照 PDF の座標で領域の配置を補正しない。
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` にも長さで区切られた `TextV.01` block がある。区切られた content は

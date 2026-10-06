@@ -291,3 +291,5 @@ Bounded character runs now retain bold/italic/single-underline candidates, half-
 Auxiliary footnote/link/bookmark-tag streams are preserved raw. The bounded single-link footnote profile also exposes source-linked note text candidates in JSON; body text, note placement, and field evaluation remain separate.
 
 Named text now survives explicit page breaks, and model inline spans cover visible UTF-16 units while raw wrappers remain preserved. Bounded heading/list caches reuse physical source lines and fixed84 page ranges. Dynamic fields, TOC leaders, and native landscape Japanese tracking remain unresolved.
+
+Bounded saved TOC regions now preserve title/page-label metadata and use physical page ranges without consuming text height for their setting records. Horizontal tab stops, leader paint, generation, and editable TOC semantics remain undecoded.

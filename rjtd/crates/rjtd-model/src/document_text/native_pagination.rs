@@ -29,6 +29,7 @@ pub(crate) fn native_page_line_plan(
         .events()
         .iter()
         .any(|event| native_rule_parent_offset(event).is_some());
+    let toc_scope = native_toc_source_scope(document);
     if has_rules && !native_rule_grid_admitted(document, layout, writing_mode) {
         return None;
     }
@@ -54,6 +55,11 @@ pub(crate) fn native_page_line_plan(
                     || native_rule_fixed_pitch(event).is_some()
                     || native_paragraph_attributes(event).is_some()
                     || (!has_rules && heading_or_number_record(event))
+                    || (!has_rules
+                        && toc_scope.is_some_and(|(from, to)| {
+                            from <= event.unit_start() && event.unit_end() <= to
+                        })
+                        && native_toc_context_record(event))
                     || (has_rules && event.record_class() == Some(0x0030)))
             }
             DocumentTextFlowKind::Control => {
@@ -191,6 +197,155 @@ fn heading_or_number_record(event: &DocumentTextFlowEvent) -> bool {
         || (words[..8] == [0x1c, 0, 13, 0, 10, 0, 391, 0x2010]
             && words[8] != 0xffff
             && words[9..] == [13, 0, 0, 0x1f])
+}
+
+pub(crate) fn native_toc_section_record(event: &DocumentTextFlowEvent) -> Option<u16> {
+    let words = event.raw_words();
+    if event.kind() != DocumentTextFlowKind::Record
+        || words.len() != 12
+        || words[..4] != [0x1c, 0x20, 12, 0]
+        || words[5..] != [0, 0, 0, 12, 0, 0x20, 0x1f]
+        || !matches!(words[4], 0x30 | 0x31)
+    {
+        return None;
+    }
+    Some(words[4])
+}
+
+pub(crate) fn native_toc_source_scope(document: &Document) -> Option<(usize, usize)> {
+    let sections = document
+        .document_text_flow()?
+        .events()
+        .iter()
+        .filter_map(|event| native_toc_section_record(event).map(|kind| (kind, event)))
+        .collect::<Vec<_>>();
+    let [(0x30, start), (0x31, end)] = sections.as_slice() else {
+        return None;
+    };
+    (start.unit_end() < end.unit_start()).then_some((start.unit_start(), end.unit_end()))
+}
+
+fn native_toc_context_record(event: &DocumentTextFlowEvent) -> bool {
+    if native_toc_section_record(event).is_some() {
+        return true;
+    }
+    let words = event.raw_words();
+    // Admit only the controlled tab/leader framing. Horizontal stops and
+    // leader paint remain undecoded; this path owns source pages and rows only.
+    words
+        == [
+            0x1c, 0, 17, 0, 9, 375, 31, 0x90, 0, 2, 0xf81e, 0, 0, 17, 0, 0, 0x1f,
+        ]
+        || (words.len() == 18
+            && words[..8] == [0x1c, 0, 18, 0, 21, 0, 23, 0x90]
+            && matches!(words[8], 1 | 100)
+            && words[9..] == [2, 0xa77c, 0, 0, 0, 18, 0, 0, 0x1f])
+}
+
+pub(crate) fn native_toc_setting_line(
+    flow: &DocumentTextFlow,
+    scope: Option<(usize, usize)>,
+    from: usize,
+    to: usize,
+) -> bool {
+    scope.is_some_and(|(start, end)| start <= from && to <= end.saturating_add(1))
+        && flow
+            .events()
+            .iter()
+            .any(|event| event.unit_start() == from && native_toc_section_record(event).is_some())
+        && flow
+            .events()
+            .iter()
+            .filter(|event| event.unit_start() < to && from < event.unit_end())
+            .all(|event| {
+                if matches!(
+                    event.kind(),
+                    DocumentTextFlowKind::Text | DocumentTextFlowKind::Inline
+                ) {
+                    return matches!(
+                        text_by_utf16_units(
+                            event.text(),
+                            from.max(event.unit_start()) - event.unit_start(),
+                            to.min(event.unit_end()) - event.unit_start(),
+                        )
+                        .as_str(),
+                        "" | "\n" | "\r" | "\r\n"
+                    );
+                }
+                native_toc_section_record(event).is_some()
+            })
+}
+
+pub(crate) fn native_toc_cached_entries(document: &Document) -> Vec<DocumentTocEntry> {
+    let Some((from, to)) = native_toc_source_scope(document) else {
+        return Vec::new();
+    };
+    let Some(flow) = document.document_text_flow() else {
+        return Vec::new();
+    };
+    let mut entries = Vec::new();
+    for (index, _) in document
+        .blocks()
+        .iter()
+        .filter(|block| matches!(block, Block::Paragraph(_)))
+        .enumerate()
+    {
+        let Some((start, end)) = native_paragraph_source_bounds(document, index) else {
+            continue;
+        };
+        if start < from || end > to {
+            continue;
+        }
+        let Some(paragraph) = paragraph_by_index(document, index) else {
+            return Vec::new();
+        };
+        let [Inline::Text(title), Inline::Text(label)] = paragraph.inlines() else {
+            return Vec::new();
+        };
+        let Some(title_span) = title
+            .source_span()
+            .and_then(|span| native_visible_text_span(document, title.text(), span))
+        else {
+            return Vec::new();
+        };
+        let Some(label_span) = label
+            .source_span()
+            .and_then(|span| native_visible_text_span(document, label.text(), span))
+        else {
+            return Vec::new();
+        };
+        let records = flow
+            .events()
+            .iter()
+            .filter(|event| {
+                event.kind() == DocumentTextFlowKind::Record
+                    && title_span.unit_end() <= event.unit_start()
+                    && event.unit_end() <= label_span.unit_start()
+            })
+            .collect::<Vec<_>>();
+        if title.text().is_empty()
+            || label.text().is_empty()
+            || !matches!(records.len(), 1 | 2)
+            || records[0].raw_words().get(2) != Some(&17)
+            || (records.len() == 2 && records[1].raw_words().get(2) != Some(&18))
+            || records
+                .iter()
+                .any(|event| !native_toc_context_record(event))
+        {
+            return Vec::new();
+        }
+        entries.push(DocumentTocEntry::new(
+            title.text(),
+            label.text(),
+            TextSourceSpan::new(
+                title_span.byte_start(),
+                label_span.byte_end(),
+                title_span.unit_start(),
+                label_span.unit_end(),
+            ),
+        ));
+    }
+    entries
 }
 
 pub(crate) fn native_page_output_shape(plan: &[NativePageLinePlan]) -> PageOutputShape {

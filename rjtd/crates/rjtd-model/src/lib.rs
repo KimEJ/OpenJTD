@@ -444,6 +444,11 @@ impl IchitaroParser {
             payload.source_name(),
             payload.bytes().to_vec(),
         ));
+        if document.toc_entries().is_empty() {
+            for entry in native_toc_cached_entries(&document) {
+                document.push_toc_entry(entry);
+            }
+        }
         if let Ok(line_mark) = read_cfb_stream(data, LINE_MARK_PATH) {
             document.push_raw_stream(RawStream::new(LINE_MARK_PATH, line_mark));
         }

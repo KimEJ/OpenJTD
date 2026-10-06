@@ -282,3 +282,5 @@ cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 補助の脚注・リンク・bookmark tag stream を raw のまま保持する。限定した一 link の脚注 profile は、source に対応した note text 候補を JSON にも公開する。本文、脚注配置、field 評価は分離して扱う。
 
 named text の明示改ページ後も本文を保持し、model inline span は表示 UTF-16 unit を指す。raw wrapper は保全する。限定した見出し・一覧 cache は物理 source 行と fixed84 page 範囲を再利用する。動的 field、目次 leader、native 横長和文 tracking は未解決。
+
+限定した保存済み目次領域の title/page label を保全し、設定 record に本文行高を割り当てず物理 page 範囲を再利用する。横方向 tab stop、leader paint、生成と編集可能な目次 semantics は未解読。

@@ -84,11 +84,15 @@ pub(crate) fn native_rule_line_placement(
     let flow = document.document_text_flow()?;
     let intervals = shanai_lan_line_mark_intervals(document);
     let resolver = document_text_style_resolver(document)?;
+    let toc_scope = native_toc_source_scope(document);
     let mut top = layout.margin_top_px();
     // ponytail: scan only this page's source-line prefix; cache page metrics if large ruled documents need it.
     for interval in intervals.iter().filter(|interval| {
         start_record <= interval.record_index && interval.record_index < record_index
     }) {
+        if native_toc_setting_line(flow, toc_scope, interval.unit_start, interval.unit_end) {
+            continue;
+        }
         let mut largest = font;
         for event in flow
             .events()
