@@ -118,6 +118,32 @@ model renderer は対応する明示・既定サイズとその根拠を SVG/PDF
 へ渡す。文字送りと折返しはまだ fallback metrics を使うため、完全な font shaping や
 レイアウト再現を意味しない。
 
+## 限定的な文字書式・フォント候補
+
+統制した文字範囲では UTF-16 source unit の書式境界を保持し、surrogate pair は
+分割しない。描画時に run を分けても model の plain text、source flow、raw byte は変えない。
+
+観測した property `20` profile は `0x84000000`（太字）、`0x90000000`（斜体）、
+property `13 = 1` と組み合わせた `0x80000010`（一本下線）、`0x80000c00`（上付き1/4）、
+`0x80000400`（下付き1/4）。`0` と `0x80000000` は通常 profile として許容する。
+1/4 書式は one-byte property `4` と `5` が両方 `50` のときだけ幅・高さを半分にする。
+その他の組み合わせ、幅、flag は未対応のまま残す。
+
+property `3` は `u16` ID で一意な `/Font` entry を選ぶ。`0xffff` と未設定状態は、
+対応する sequential `0x1006` payload の byte 5–6 にある既定 ID へ戻る。
+欠落・重複 ID や予約値から任意のフォントを選ばない。同一段落内の明示範囲の間でも
+既定フォントへ戻る場合がある。
+
+SVG/PDF と layer-tree は候補 flag と `decoded:false` を保持する。横書きでは行内の
+最大の未縮小サイズで共通 baseline を作り、上付きは fallback em 上端、下付きは
+通常 baseline に置く。通常 face しかない場合も synthetic stroke（0.025 em）で太字、
+shear（0.25）で斜体を表示する。これらの paint と添字位置は renderer 近似であり、
+解読済み font metrics や native device geometry ではない。PDF backend と browser は
+既存 model API に実フォント・代替フォントの glyph advance を渡し、書式 run を隣接配置する。
+layer 位置と折返しは fallback metrics のまま。native 空白、正確な印刷量子化、
+複合書式 profile、縦書き添字位置は未証明。synthetic 太字の PDF では検索テキストが
+重複する場合がある。
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` にも長さで区切られた `TextV.01` block がある。区切られた content は

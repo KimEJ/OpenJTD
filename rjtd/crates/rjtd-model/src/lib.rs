@@ -115,10 +115,10 @@ pub use table_text_candidate_model::{
 };
 
 use document_text_text_style::{
-    DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS, DocumentTextFontSize,
-    DocumentTextProperty15ColorCandidate, document_default_font_size_px, document_text_font_size,
-    document_text_foreground_color, document_text_property_15_color_candidate,
-    document_text_style_resolver,
+    DOCUMENT_TEXT_PROPERTY_15_COLOR_BASIS, DocumentTextCharacterStyle, DocumentTextFontSize,
+    DocumentTextProperty15ColorCandidate, document_default_font_size_px,
+    document_text_character_style, document_text_font_size, document_text_foreground_color,
+    document_text_property_15_color_candidate, document_text_style_resolver,
 };
 #[cfg(test)]
 use rjtd_core::document_text::read_document_text_payload;

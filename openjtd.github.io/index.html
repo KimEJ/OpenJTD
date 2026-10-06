@@ -406,7 +406,7 @@ function renderPage() {
     if (typeof doc.renderPageSvgWithTextWidths === 'function') {
       document.fonts.ready.then(() => {
         if (doc !== renderedDoc || currentPage !== page || currentTab !== 'svg') return;
-        const runs = [...svgContainer.querySelectorAll('text[data-word-justification-width]')];
+        const runs = [...svgContainer.querySelectorAll('text[data-word-justification-width], text[data-text-advance-candidate]')];
         if (!runs.length) return;
         const units = Uint32Array.from(runs, run => Number(run.dataset.sourceUnitStart));
         const widths = Float32Array.from(runs, run => run.getComputedTextLength());

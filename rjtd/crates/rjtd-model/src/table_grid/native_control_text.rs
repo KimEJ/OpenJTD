@@ -556,6 +556,7 @@ pub(crate) fn push_native_control_table_text_svg(
                 fallback_text_fill_color(),
                 &slot.text,
                 None,
+                None,
             );
             svg.push_str("</g>");
         }

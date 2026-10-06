@@ -47,6 +47,82 @@ pub(crate) fn page_text_line_fragments(
     fragments
 }
 
+pub(crate) fn page_text_line_style_fragments(
+    document: &Document,
+    line: &PageTextLine,
+    resolver: Option<&rjtd_core::document_text::DocumentTextStyleResolver>,
+) -> Vec<PageLayerTextFragment> {
+    let fragments = page_text_line_fragments(document, line);
+    let Some(resolver) = resolver else {
+        return fragments;
+    };
+    fragments
+        .into_iter()
+        .flat_map(|fragment| split_text_style_fragments(fragment, resolver))
+        .collect()
+}
+
+fn split_text_style_fragments(
+    fragment: PageLayerTextFragment,
+    resolver: &rjtd_core::document_text::DocumentTextStyleResolver,
+) -> Vec<PageLayerTextFragment> {
+    let Some(span) = fragment.source_span.as_ref() else {
+        return vec![fragment];
+    };
+    if fragment.ruby_annotation.is_some()
+        || span.unit_end().checked_sub(span.unit_start())
+            != Some(fragment.text.encode_utf16().count())
+    {
+        return vec![fragment];
+    }
+    let mut cuts = vec![0];
+    let mut unit = span.unit_start();
+    let mut previous = resolver.style_at_unit(unit);
+    for (index, character) in fragment.text.chars().enumerate() {
+        let style = resolver.style_at_unit(unit);
+        if style != previous {
+            cuts.push(index);
+        }
+        previous = style;
+        unit += character.len_utf16();
+    }
+    cuts.push(fragment.text.chars().count());
+    cuts.windows(2)
+        .map(|range| PageLayerTextFragment {
+            text: text_by_char_range(&fragment.text, range[0], range[1]),
+            paragraph_index: fragment.paragraph_index,
+            char_start: fragment.char_start + range[0],
+            char_end: fragment.char_start + range[1],
+            source_span: Some(source_span_for_char_range(
+                &fragment.text,
+                span,
+                range[0],
+                range[1],
+            )),
+            ruby_annotation: None,
+        })
+        .collect()
+}
+
+pub(crate) fn text_line_font_size(
+    resolver: Option<&rjtd_core::document_text::DocumentTextStyleResolver>,
+    fragments: &[PageLayerTextFragment],
+    default_font_size: Option<f32>,
+) -> f32 {
+    fragments
+        .iter()
+        .map(|fragment| {
+            resolver
+                .zip(fragment.source_span.as_ref())
+                .and_then(|(resolver, span)| {
+                    document_text_font_size(resolver, span, default_font_size)
+                })
+                .map_or(APP_FONT_SIZE_PX, |size| size.px)
+        })
+        .reduce(f32::max)
+        .unwrap_or(APP_FONT_SIZE_PX)
+}
+
 pub(crate) fn paragraph_by_index(
     document: &Document,
     paragraph_index: usize,

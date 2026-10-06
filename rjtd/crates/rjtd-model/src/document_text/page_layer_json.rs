@@ -46,6 +46,7 @@ pub(crate) fn push_page_layer_text_run_json(
     fill_color: &str,
     fragment: &PageLayerTextFragment,
     native_line_mark_index: Option<usize>,
+    character_style: &DocumentTextCharacterStyle,
 ) {
     let font_size = source_font_size.map_or(APP_FONT_SIZE_PX, |size| size.px);
     let font_scale = f64::from(font_size / APP_FONT_SIZE_PX);
@@ -72,6 +73,17 @@ pub(crate) fn push_page_layer_text_run_json(
         let basis = size.basis;
         output.push_str(&format!(
             ",\"fontSize\":{font_size:.3},\"fontSizeBasis\":\"{basis}\""
+        ));
+    }
+    if let Some(flags) = character_style.flags {
+        output.push_str(&format!(",\"characterStyleFlagsCandidate\":{flags},\"characterStyleDecoded\":false,\"bold\":{},\"italic\":{},\"underline\":{}", character_style.bold, character_style.italic, character_style.underline));
+    }
+    if let Some(script) = character_style.script {
+        output.push_str(&format!(",\"scriptCandidate\":\"{script}\",\"characterScaleCandidate\":0.5,\"scriptGeometryDecoded\":false"));
+    }
+    if let Some((id, _)) = &character_style.font {
+        output.push_str(&format!(
+            ",\"fontIdCandidate\":{id},\"fontMappingDecoded\":false"
         ));
     }
     if let Some(annotation) = &fragment.ruby_annotation {

@@ -95,7 +95,8 @@ pub(crate) fn render_text_page_svg(
                 y = ((layout.height_px() - line_extent) / 2.0).max(layout.margin_px());
             }
 
-            for fragment in page_text_line_fragments(document, line) {
+            for fragment in page_text_line_style_fragments(document, line, style_resolver.as_ref())
+            {
                 if fragment.text.is_empty() {
                     continue;
                 }
@@ -114,17 +115,28 @@ pub(crate) fn render_text_page_svg(
                     })
                     .map(|size| size.px)
                     .unwrap_or(APP_FONT_SIZE_PX);
+                let mut character_style = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .map(|(resolver, span)| document_text_character_style(document, resolver, span))
+                    .unwrap_or_default();
+                character_style.script = None;
+                let run_font_family = character_style
+                    .font
+                    .as_ref()
+                    .map_or(font_family.as_str(), |(_, family)| family.as_str());
 
                 push_svg_text_run(
                     &mut svg,
                     "rjtd-text",
                     x,
                     y,
-                    &font_family,
+                    run_font_family,
                     font_size,
                     fill_color,
                     &fragment.text,
                     Some("vertical-rl"),
+                    Some(&character_style),
                 );
                 if let Some(annotation) = &fragment.ruby_annotation {
                     push_svg_ruby_annotation(
@@ -186,7 +198,10 @@ pub(crate) fn render_text_page_svg(
                         + APP_FONT_SIZE_PX
                         + (index as f32 * APP_LINE_HEIGHT_PX)
                 });
-            for fragment in page_text_line_fragments(document, line) {
+            let fragments = page_text_line_style_fragments(document, line, style_resolver.as_ref());
+            let line_font_size =
+                text_line_font_size(style_resolver.as_ref(), &fragments, default_font_size);
+            for fragment in fragments {
                 if fragment.text.is_empty() {
                     continue;
                 }
@@ -214,7 +229,7 @@ pub(crate) fn render_text_page_svg(
                 }) {
                     continue;
                 }
-                let font_size = style_resolver
+                let unscaled_font_size = style_resolver
                     .as_ref()
                     .zip(fragment.source_span.as_ref())
                     .and_then(|(resolver, span)| {
@@ -222,8 +237,25 @@ pub(crate) fn render_text_page_svg(
                     })
                     .map(|size| size.px)
                     .unwrap_or(APP_FONT_SIZE_PX);
-                let width =
-                    text_width_px(layout, &fragment.text) as f32 * font_size / APP_FONT_SIZE_PX;
+                let character_style = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .map(|(resolver, span)| document_text_character_style(document, resolver, span))
+                    .unwrap_or_default();
+                let run_font_family = character_style
+                    .font
+                    .as_ref()
+                    .map_or(font_family.as_str(), |(_, family)| family.as_str());
+                let font_size = unscaled_font_size * character_style.font_scale();
+                let width = fragment
+                    .source_span
+                    .as_ref()
+                    .and_then(|span| measured_widths.get(&span.unit_start()))
+                    .copied()
+                    .filter(|width| width.is_finite() && *width > 0.0)
+                    .unwrap_or_else(|| {
+                        text_width_px(layout, &fragment.text) as f32 * font_size / APP_FONT_SIZE_PX
+                    });
                 let baseline = fragment
                     .source_span
                     .as_ref()
@@ -240,8 +272,9 @@ pub(crate) fn render_text_page_svg(
                             span,
                         )
                     })
-                    .map(|top| top + font_size)
-                    .unwrap_or(y + font_size - APP_FONT_SIZE_PX);
+                    .map(|top| top + line_font_size)
+                    .unwrap_or(y + line_font_size - APP_FONT_SIZE_PX)
+                    + character_style.baseline_shift(unscaled_font_size);
                 let source_color = style_resolver
                     .as_ref()
                     .zip(fragment.source_span.as_ref())
@@ -254,11 +287,12 @@ pub(crate) fn render_text_page_svg(
                     "rjtd-text",
                     x,
                     baseline,
-                    &font_family,
+                    run_font_family,
                     font_size,
                     fill_color,
                     &fragment.text,
                     None,
+                    Some(&character_style),
                 );
                 if let Some(annotation) = &fragment.ruby_annotation {
                     push_svg_ruby_annotation(
@@ -412,14 +446,46 @@ pub(crate) fn push_svg_text_run(
     fill: &str,
     text: &str,
     writing_mode: Option<&str>,
+    character_style: Option<&DocumentTextCharacterStyle>,
 ) {
     let visual_text = escape_xml(&svg_visual_text(text));
     let font_family = escape_xml(font_family);
     let writing_mode_attr = writing_mode
         .map(|mode| format!(" writing-mode=\"{mode}\""))
         .unwrap_or_default();
+    let mut style_attrs = String::new();
+    if let Some(style) = character_style {
+        if let Some(unit) = style.source_unit_start {
+            style_attrs.push_str(&format!(" id=\"rjtd-text-advance-{unit}\" data-source-unit-start=\"{unit}\" data-text-advance-candidate=\"true\""));
+        }
+        if style.bold {
+            // Regular-only CJK faces have no bold/italic variant in the SVG
+            // PDF backend. Use bounded synthetic paint in every backend;
+            // its strength/angle are renderer approximations, not decoded units.
+            style_attrs.push_str(&format!(" font-weight=\"normal\" stroke=\"{fill}\" stroke-width=\"{:.3}\" stroke-linejoin=\"round\" data-bold-paint-candidate=\"true\"", font_size * 0.025));
+        }
+        if style.italic {
+            style_attrs.push_str(&format!(" font-style=\"normal\" transform=\"matrix(1 0 -0.25 1 {:.3} 0)\" data-italic-paint-candidate=\"true\"", y * 0.25));
+        }
+        if style.underline {
+            style_attrs.push_str(" text-decoration=\"underline\"");
+        }
+        if let Some(flags) = style.flags {
+            style_attrs.push_str(&format!(
+                " data-style-flags=\"0x{flags:08x}\" data-style-decoded=\"false\""
+            ));
+        }
+        if let Some(script) = style.script {
+            style_attrs.push_str(&format!(" data-script-candidate=\"{script}\""));
+        }
+        if let Some((id, _)) = &style.font {
+            style_attrs.push_str(&format!(
+                " data-font-id-candidate=\"{id}\" data-font-decoded=\"false\""
+            ));
+        }
+    }
     svg.push_str(&format!(
-        "<text class=\"{class_name}\" x=\"{x:.1}\" y=\"{y:.1}\" font-family=\"{font_family}\" font-size=\"{font_size:.1}\" fill=\"{fill}\" letter-spacing=\"0\" xml:space=\"preserve\"{writing_mode_attr}>{visual_text}</text>"
+        "<text class=\"{class_name}\" x=\"{x:.1}\" y=\"{y:.1}\" font-family=\"{font_family}\" font-size=\"{font_size:.1}\" fill=\"{fill}\" letter-spacing=\"0\" xml:space=\"preserve\"{writing_mode_attr}{style_attrs}>{visual_text}</text>"
     ));
 }
 

@@ -98,11 +98,12 @@ impl DocumentTextStyleResolver {
     }
 
     pub fn style_at_unit(&self, source_unit: usize) -> Option<DocumentTextResolvedStyle> {
+        let end = self
+            .spans
+            .partition_point(|span| span.source_unit_start <= source_unit);
         self.spans
-            .iter()
-            .find(|span| {
-                span.source_unit_start <= source_unit && source_unit < span.source_unit_end
-            })
+            .get(end.checked_sub(1)?)
+            .filter(|span| source_unit < span.source_unit_end)
             .map(|span| span.style)
     }
 

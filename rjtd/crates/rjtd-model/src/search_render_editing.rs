@@ -441,6 +441,22 @@ impl DocumentCore {
         ))
     }
 
+    /// Source text runs requesting backend glyph advances for horizontal placement.
+    pub fn page_text_advance_targets(&self, page_num: u32) -> Result<Vec<usize>> {
+        let lines = self.page_lines(page_num)?;
+        if self.writing_mode.is_vertical() {
+            return Ok(Vec::new());
+        }
+        let resolver = document_text_style_resolver(&self.document);
+        Ok(lines
+            .iter()
+            .flat_map(|line| {
+                page_text_line_style_fragments(&self.document, line, resolver.as_ref())
+            })
+            .filter_map(|fragment| fragment.source_span.map(|span| span.unit_start()))
+            .collect())
+    }
+
     /// Source widths requesting English word justification. Glyph metrics remain backend-owned.
     pub fn page_word_justification_targets(&self, page_num: u32) -> Result<Vec<(usize, f32)>> {
         self.page_lines(page_num)?;

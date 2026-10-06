@@ -124,6 +124,37 @@ The model renderer now carries supported explicit/default sizes into SVG/PDF
 and layer-tree text runs with their basis. Text advance and line wrapping still
 use fallback metrics; this is not full font shaping or layout fidelity.
 
+## Bounded Character Style and Font Candidates
+
+Controlled character runs preserve property boundaries in UTF-16 source units;
+a surrogate pair is never split. Rendering separates these runs without
+changing the model's plain text, source flow, or raw style bytes.
+
+The observed property `20` profiles are `0x84000000` (bold), `0x90000000`
+(italic), `0x80000010` with property `13 = 1` (single underline),
+`0x80000c00` (upper quarter), and `0x80000400` (lower quarter).
+`0` and `0x80000000` are admitted ordinary profiles. Quarter scripts additionally
+require both one-byte properties `4` and `5` to equal `50`; they use half width
+and height. Other combinations, widths, and flags remain unsupported.
+
+Property `3` selects a unique `/Font` entry by its `u16` ID. `0xffff` restores
+the default ID at bytes 5–6 of the supported sequential `0x1006` payload;
+an unset property uses that same default. Missing or duplicate IDs and
+reserved values do not select an arbitrary font. A range can return to the
+default between explicit selections even inside a single paragraph.
+
+SVG/PDF and layer-tree runs retain candidate flags and `decoded:false` evidence.
+The horizontal renderer shares the largest unscaled size as a line baseline,
+places upper-half scripts at the fallback em top, and keeps lower-half scripts
+on that baseline. Regular-only faces receive synthetic bold stroke (0.025 em)
+and italic shear (0.25). These paint choices and script placement are renderer
+approximations, not decoded font metrics or native device geometry. The PDF
+backend and browser supply glyph advances through the existing model rendering
+API so adjacent style runs use their selected or substitute fonts' widths.
+Layer positions and wrapping still use fallback metrics; native whitespace,
+exact print quantization, combined style profiles, and vertical script placement
+remain unproven. Synthetic bold may produce repeated searchable text in PDF.
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` also contains length-delimited `TextV.01` blocks. Their bounded

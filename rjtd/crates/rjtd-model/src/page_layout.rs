@@ -1096,7 +1096,11 @@ pub(super) fn page_layer_tree_json(
                     .unwrap_or(y + APP_FONT_SIZE_PX as f64)
             };
 
-            for fragment in page_text_line_fragments(&core.document, line) {
+            let fragments =
+                page_text_line_style_fragments(&core.document, line, style_resolver.as_ref());
+            let line_font_size =
+                text_line_font_size(style_resolver.as_ref(), &fragments, default_font_size);
+            for fragment in fragments {
                 if fragment.text.is_empty() {
                     continue;
                 }
@@ -1132,13 +1136,29 @@ pub(super) fn page_layer_tree_json(
                     .and_then(|(resolver, span)| {
                         document_text_font_size(resolver, span, default_font_size)
                     });
+                let unscaled_font_size = font_size.map_or(APP_FONT_SIZE_PX, |size| size.px);
+                let mut character_style = style_resolver
+                    .as_ref()
+                    .zip(fragment.source_span.as_ref())
+                    .map(|(resolver, span)| {
+                        document_text_character_style(&core.document, resolver, span)
+                    })
+                    .unwrap_or_default();
+                if core.writing_mode.is_vertical() {
+                    character_style.script = None;
+                }
+                let run_font_family = character_style
+                    .font
+                    .as_ref()
+                    .map_or(font_family.as_str(), |(_, family)| family.as_str());
+                let font_size = font_size.map(|size| DocumentTextFontSize {
+                    px: size.px * character_style.font_scale(),
+                    basis: size.basis,
+                });
                 let font_scale = f64::from(
                     font_size.map_or(APP_FONT_SIZE_PX, |size| size.px) / APP_FONT_SIZE_PX,
                 );
-                let styled_baseline = baseline
-                    + f64::from(
-                        font_size.map_or(APP_FONT_SIZE_PX, |size| size.px) - APP_FONT_SIZE_PX,
-                    );
+                let styled_baseline = baseline + f64::from(line_font_size - APP_FONT_SIZE_PX);
                 let native_body_top = line
                     .native_line_mark_index
                     .and_then(|record| native_rule_line_placement(&core.document, layout, record))
@@ -1161,20 +1181,28 @@ pub(super) fn page_layer_tree_json(
                     source_id,
                     PageLayerTextPlacement {
                         x,
-                        y: native_body_top.map(f64::from).unwrap_or(y),
+                        y: if core.writing_mode.is_vertical() {
+                            y
+                        } else {
+                            native_body_top
+                                .map(|top| f64::from(top + line_font_size))
+                                .unwrap_or(styled_baseline)
+                                + f64::from(character_style.baseline_shift(unscaled_font_size))
+                                - f64::from(font_size.map_or(APP_FONT_SIZE_PX, |size| size.px))
+                        },
                         baseline: native_body_top
-                            .map(|top| {
-                                f64::from(top + font_size.map_or(APP_FONT_SIZE_PX, |size| size.px))
-                            })
-                            .unwrap_or(styled_baseline),
+                            .map(|top| f64::from(top + line_font_size))
+                            .unwrap_or(styled_baseline)
+                            + f64::from(character_style.baseline_shift(unscaled_font_size)),
                     },
                     layout,
                     core.writing_mode,
                     font_size,
-                    &font_family,
+                    run_font_family,
                     fill_color,
                     &fragment,
                     line.native_line_mark_index,
+                    &character_style,
                 );
                 push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
                 if core.writing_mode.is_vertical() {

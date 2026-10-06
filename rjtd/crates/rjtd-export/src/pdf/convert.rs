@@ -38,6 +38,16 @@ pub(crate) fn svgs_to_pdf(
             .map_err(|error| format!("SVG parse failed: {error}"))?;
         if let Some(core) = core {
             let mut widths = std::collections::BTreeMap::new();
+            for unit in core
+                .page_text_advance_targets(page as u32)
+                .map_err(|e| e.to_string())?
+            {
+                if let Some(usvg::Node::Text(text)) =
+                    tree.node_by_id(&format!("rjtd-text-advance-{unit}"))
+                {
+                    widths.insert(unit, text.bounding_box().width());
+                }
+            }
             for (unit, _) in core
                 .page_word_justification_targets(page as u32)
                 .map_err(|e| e.to_string())?

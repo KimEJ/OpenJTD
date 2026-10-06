@@ -109,6 +109,110 @@ fn font_size_mm100_to_px(size_mm100: u16) -> Option<f32> {
     Some(hundredth_millimeters_to_css_px(u32::from(size_mm100)))
 }
 
+#[derive(Debug, Default, Clone, PartialEq)]
+pub(crate) struct DocumentTextCharacterStyle {
+    pub(crate) source_unit_start: Option<usize>,
+    pub(crate) flags: Option<u32>,
+    pub(crate) bold: bool,
+    pub(crate) italic: bool,
+    pub(crate) underline: bool,
+    pub(crate) script: Option<&'static str>,
+    pub(crate) font: Option<(u16, String)>,
+}
+
+impl DocumentTextCharacterStyle {
+    pub(crate) fn font_scale(&self) -> f32 {
+        if self.script.is_some() { 0.5 } else { 1.0 }
+    }
+
+    pub(crate) fn baseline_shift(&self, unscaled_font_size: f32) -> f32 {
+        // Quarter-area scripts use half width/height. Align the upper half to
+        // the fallback em top and the lower half to the ordinary baseline.
+        // Exact glyph ascent and device quantization remain font dependent.
+        if self.script == Some("super") {
+            -unscaled_font_size * 0.5
+        } else {
+            0.0
+        }
+    }
+}
+
+pub(crate) fn document_text_character_style(
+    document: &Document,
+    resolver: &DocumentTextStyleResolver,
+    span: &TextSourceSpan,
+) -> DocumentTextCharacterStyle {
+    let value = |property| {
+        resolver.uniform_optional_value_in_range(span.unit_start(), span.unit_end(), property)
+    };
+    let flags = match value(20) {
+        Some(Some(DocumentTextStyleTypedValue::U32(flags)))
+            if matches!(
+                flags,
+                0 | 0x8000_0000
+                    | 0x8400_0000
+                    | 0x9000_0000
+                    | 0x8000_0010
+                    | 0x8000_0c00
+                    | 0x8000_0400
+            ) =>
+        {
+            Some(flags)
+        }
+        _ => None,
+    };
+    let half_size = value(4) == Some(Some(DocumentTextStyleTypedValue::U8(50)))
+        && value(5) == Some(Some(DocumentTextStyleTypedValue::U8(50)));
+    let script = match (flags, half_size) {
+        (Some(0x8000_0c00), true) => Some("super"),
+        (Some(0x8000_0400), true) => Some("sub"),
+        _ => None,
+    };
+    let default_font = || {
+        let payload = document_view_style_payload(document, 0x1006)?;
+        if !matches!(payload.len(), 20 | 21) || payload.get(..3) != Some(&[0x1f, 0, 0]) {
+            return None;
+        }
+        Some(u16::from_be_bytes([payload[5], payload[6]]))
+    };
+    let font_id = match value(3) {
+        Some(Some(DocumentTextStyleTypedValue::U16(0xffff))) | Some(None) => default_font(),
+        Some(Some(DocumentTextStyleTypedValue::U16(id))) if id < 0xfffd => Some(id),
+        _ => None,
+    };
+    let font = font_id.and_then(|id| {
+        let mut fonts = document
+            .fonts()
+            .iter()
+            .filter(|font| font.source_stream() == "/Font" && font.id() == id);
+        let font = fonts.next()?;
+        if fonts.next().is_some() || font.name().trim().is_empty() {
+            return None;
+        }
+        let mut names = Vec::new();
+        crate::push_font_family_with_aliases(&mut names, font.name());
+        let family = names
+            .iter()
+            .map(|name| crate::css_font_family_name(name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        Some((
+            id,
+            format!("{family}, {}", crate::document_font_family_css(document)),
+        ))
+    });
+    DocumentTextCharacterStyle {
+        source_unit_start: Some(span.unit_start()),
+        flags,
+        bold: flags == Some(0x8400_0000),
+        italic: flags == Some(0x9000_0000),
+        underline: flags == Some(0x8000_0010)
+            && value(13) == Some(Some(DocumentTextStyleTypedValue::U16(1))),
+        script,
+        font,
+    }
+}
+
 pub(crate) fn document_text_foreground_color(
     resolver: &DocumentTextStyleResolver,
     source_span: &TextSourceSpan,
