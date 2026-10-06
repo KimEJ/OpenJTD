@@ -479,6 +479,67 @@ fn embeds_svg_chunk_with_preview_safe_page_wrapper_contract() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn synthetic_bold_pdf_keeps_one_selectable_copy_and_vector_stroke() {
+    use crate::pdf::convert::outline_synthetic_bold_strokes;
+    use crate::pdf::fonts::create_fontdb;
+    let options = usvg::Options {
+        fontdb: std::sync::Arc::new(create_fontdb()),
+        ..Default::default()
+    };
+    // Exercise escaping, a surrounding transform, skew, color and distinct IDs.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><g transform="translate(7 3)"><text x="10" y="30" font-family="sans-serif" font-size="20" fill="#cc0000" stroke="#cc0000" stroke-width="0.5" stroke-linejoin="round" transform="matrix(1 0 -0.25 1 7.5 0)" id="run" data-bold-paint-candidate="true">B&amp;D</text><text x="10" y="60" font-family="sans-serif" font-size="20" fill="#111111" stroke="#111111" stroke-width="0.5" id="second" data-bold-paint-candidate="true">X</text></g></svg>"##;
+    let resolved = outline_synthetic_bold_strokes(svg, &options).unwrap();
+    let tree = usvg::Tree::from_str(&resolved, &options).unwrap();
+    let original = usvg::Tree::from_str(svg, &options).unwrap();
+    for id in ["run", "second"] {
+        let Some(usvg::Node::Text(text)) = tree.node_by_id(id) else {
+            panic!("selectable text lost: {id}");
+        };
+        assert!(
+            text.chunks()
+                .iter()
+                .flat_map(|chunk| chunk.spans())
+                .all(|span| span.fill().is_some() && span.stroke().is_none())
+        );
+        let Some(usvg::Node::Text(before)) = original.node_by_id(id) else {
+            panic!("fixture text missing: {id}");
+        };
+        assert_eq!(text.bounding_box(), before.bounding_box());
+        assert_eq!(text.abs_transform(), before.abs_transform());
+    }
+    assert!(resolved.contains("<path"));
+    assert!(resolved.contains("stroke=\"#cc0000\""));
+    assert!(resolved.contains("rjtd-bold-outline-0-"));
+    assert!(resolved.contains("rjtd-bold-outline-1-"));
+    let (chunk, _) = svg2pdf::to_chunk(
+        &tree,
+        svg2pdf::ConversionOptions {
+            compress: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let bytes = chunk.as_bytes();
+    // Each ordinary glyph has one Tj; an outlined stroke has none.
+    assert_eq!(pdf_byte_pattern_count(bytes, b" Tj"), 4);
+    assert!(pdf_byte_pattern_count(bytes, b"\nS\n") >= 2);
+    let pdf = svgs_to_pdf(&[svg.to_owned()], None).unwrap();
+    assert!(pdf_preview_safety_issues(&pdf).is_empty());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn bold_outline_preparation_leaves_unmarked_svg_text_unchanged() {
+    use crate::pdf::convert::outline_synthetic_bold_strokes;
+    let svg = r#"<svg width="100" height="80"><text x="1" y="20" fill="red" stroke="blue">ordinary &amp; outlined</text></svg>"#;
+    assert_eq!(
+        outline_synthetic_bold_strokes(svg, &usvg::Options::default()).unwrap(),
+        svg
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn scrubs_embedded_cmap_eof_markers_but_keeps_file_eof() {
     let mut pdf = b"%PDF-1.4\n1 0 obj\n<< /Length 45 >>\nstream\n%%EndResource\n%%EOF\nendstream\nendobj\nstartxref\n0\n%%EOF"
             .to_vec();

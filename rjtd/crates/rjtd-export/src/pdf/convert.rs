@@ -33,7 +33,7 @@ pub(crate) fn svgs_to_pdf(
     let mut page_datas = Vec::new();
 
     for (page, svg) in svg_pages.iter().enumerate() {
-        let svg_with_fallback = add_font_fallbacks(svg);
+        let mut svg_with_fallback = add_font_fallbacks(svg);
         let mut tree = usvg::Tree::from_str(&svg_with_fallback, &options)
             .map_err(|error| format!("SVG parse failed: {error}"))?;
         if let Some(core) = core {
@@ -62,9 +62,15 @@ pub(crate) fn svgs_to_pdf(
                 let resolved = core
                     .render_page_svg_with_text_widths(page as u32, &widths)
                     .map_err(|e| e.to_string())?;
-                tree = usvg::Tree::from_str(&add_font_fallbacks(&resolved), &options)
+                svg_with_fallback = add_font_fallbacks(&resolved);
+                tree = usvg::Tree::from_str(&svg_with_fallback, &options)
                     .map_err(|error| format!("Font-measured SVG parse failed: {error}"))?;
             }
+        }
+        if svg_with_fallback.contains("data-bold-paint-candidate=\"true\"") {
+            let resolved = outline_synthetic_bold_strokes(&svg_with_fallback, &options)?;
+            tree = usvg::Tree::from_str(&resolved, &options)
+                .map_err(|error| format!("Bold-outline SVG parse failed: {error}"))?;
         }
         let (chunk, svg_ref) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default())
             .map_err(|error| format!("SVG chunk conversion failed: {error:?}"))?;
@@ -151,4 +157,56 @@ pub(crate) fn svgs_to_pdf(
     ensure_pdf_form_xobject_form_types(&mut bytes)?;
     validate_pdf_preview_safety(&bytes)?;
     Ok(bytes)
+}
+
+/// svg2pdf emits filled/stroked text twice. Keep the model's filled text
+/// selectable and outline only its synthetic stroke, using the same fontdb.
+/// This consumes our flat, explicitly styled SVG text runs, not source records.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn outline_synthetic_bold_strokes(
+    svg: &str,
+    options: &usvg::Options,
+) -> Result<String, String> {
+    let root_end = svg.find('>').ok_or("missing SVG opening tag")? + 1;
+    let mut output = String::with_capacity(svg.len());
+    let mut rest = svg;
+    let mut index = 0;
+    while let Some(start) = rest.find("<text ") {
+        output.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let end = rest.find("</text>").ok_or("missing SVG text closing tag")? + 7;
+        let text = &rest[..end];
+        let tag_end = text.find('>').ok_or("missing SVG text opening tag")?;
+        if text[..tag_end].contains("data-bold-paint-candidate=\"true\"") {
+            let replace_paint = |name: &str, value: &str| -> Result<String, String> {
+                let attribute = format!(" {name}=\"");
+                let start = text[..tag_end]
+                    .find(&attribute)
+                    .ok_or_else(|| format!("missing synthetic bold {name}"))?
+                    + attribute.len();
+                let end = start
+                    + text[start..tag_end]
+                        .find('"')
+                        .ok_or("unterminated synthetic bold paint")?;
+                Ok(format!("{}{value}{}", &text[..start], &text[end..]))
+            };
+            let stroke = replace_paint("fill", "none")?;
+            let fragment = format!("{}{stroke}</svg>", &svg[..root_end]);
+            let tree = usvg::Tree::from_str(&fragment, options)
+                .map_err(|error| format!("Synthetic bold stroke parse failed: {error}"))?;
+            let outlines = tree.to_string(&usvg::WriteOptions {
+                id_prefix: Some(format!("rjtd-bold-outline-{index}-")),
+                ..Default::default()
+            });
+            // Preserve paint order and parent transforms at the original run.
+            output.push_str(&replace_paint("stroke", "none")?);
+            output.push_str(&outlines);
+            index += 1;
+        } else {
+            output.push_str(text);
+        }
+        rest = &rest[end..];
+    }
+    output.push_str(rest);
+    Ok(output)
 }
