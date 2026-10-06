@@ -307,3 +307,29 @@ import 経由の margin-sweep 文書は view の既定値を変更しても明�
 - object ownership と page geometry が証明された後にのみ、preserved image payload bytes を model-level image resources に接続する。
 - non-text PDF rendering の前に decoded object/layout records から real page/layer paint operations を構築する。
 - table semantics は stream-name matching ではなく、`/DocumentText` control ranges と layout/style streams から調査する。
+
+## 限定的な単一 PNG 配置
+
+統制した一 frame・一 PNG の横書き profile は `/Frame` row0（ID0/type1）、
+`/EmbedItems/Embedding 1/Contents`、`/DocumentText` の完全な object cache を
+関連付ける。既知76-byte Frame/60-byte record、宣言長に一致する完全 PNG、
+同じ縦横比、連続する record/cache/text を要求する。偶然の ownership 整数一致は使わない。
+
+record offset16 の BE-u16 は inline0/floating1、offset46 は wrap1/front4。
+class0・14-unit tag`0x30` record は inline context `0107,0010` または floating
+`0507,0012` を持つ。index0 selector1 cache は `1d,0002,1e` と既知の完全 wrapper。
+geometry offset28/32/36/40 の整数 field はこの profile のみ mm100 と解釈し、
+隣接 low word は zero を要求する。offset44 の200-mm100は text-clearance 候補で、
+corner radius ではない。他の field と元 data を保全する。
+
+SVG/PDF と layer は本文基準の source 位置・寸法と PNG pixel を使用し、対応する
+画像/frame の diagnostic paint を置き換える。inline 前の本文は保存 object 境界を
+cached width 候補に使い、glyph advance は既存 PDF/browser 測定を再利用する。
+wrap は画像と clearance の後へ本文を移し、front は本文の後に描画する。隠れた本文と
+source span を保持する。LineMark の single-object-row flag と PageMark の最大
+inline extent で限定配置を照合する。
+
+geometry/paint は decoded-false 候補。inline baseline は fallback em-bottom 配置で
+native 出力と約5ptの差が残り、代替 font で回避の切れ目も一文字変わる。一般 alignment、
+crop、複数画像、rich・縦書き・複数 page flow、別 profile は対象外。reference PDF の
+座標・色合わせは行わない。

@@ -29,6 +29,15 @@ pub(crate) fn render_text_page_svg(
     let shanai_lan_text_projection =
         shanai_lan_document_text_projection(document, layout, page_number);
     let form_projection = observed_form_text_projection(document, layout, page_number);
+    let native_image = native_image_projection(
+        document,
+        layout,
+        page_number,
+        writing_mode,
+        lines,
+        measured_widths,
+    )
+    .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
     let mut native_control_tables =
         native_control_table_text_projections(document, layout, page_number, writing_mode);
     let native_control_flow = native_control_flow_text_projection(
@@ -56,7 +65,9 @@ pub(crate) fn render_text_page_svg(
         }
         push_native_rule_borders_svg(&mut svg, segments);
     }
-    push_page_frame_projection_svg(&mut svg, layout, document, page_number);
+    if native_image.is_none() {
+        push_page_frame_projection_svg(&mut svg, layout, document, page_number);
+    }
     push_page_mark_section_separator_svg(&mut svg, layout, document, page_number);
     push_shanai_lan_sparse_table_borders_svg(&mut svg, layout, document, page_number);
     push_visual_list_diagnostic_svg(&mut svg, layout, document, page_number);
@@ -79,6 +90,8 @@ pub(crate) fn render_text_page_svg(
         push_shanai_lan_text_projection_svg(&mut svg, projection, &font_family);
     } else if let Some(projection) = &form_projection {
         push_observed_form_text_projection_svg(&mut svg, projection, &font_family);
+    } else if let Some(projection) = &native_image {
+        push_native_image_svg(&mut svg, projection);
     } else if let Some(projection) =
         native_vertical_projection(document, layout, page_number, lines, writing_mode)
     {
@@ -376,8 +389,10 @@ pub(crate) fn render_text_page_svg(
         &native_control_tables,
         [native_rule_flow.as_ref(), native_control_flow.as_ref()],
     );
-    push_image_payload_diagnostic_svg(&mut svg, layout, document, page_number);
-    if !fdm_vector_primitives_rendered {
+    if native_image.is_none() {
+        push_image_payload_diagnostic_svg(&mut svg, layout, document, page_number);
+    }
+    if !fdm_vector_primitives_rendered && native_image.is_none() {
         push_fdm_command_diagnostic_svg(&mut svg, layout, document, page_number);
         push_fdm_frame_diagnostic_svg(&mut svg, layout, document, page_number);
     }

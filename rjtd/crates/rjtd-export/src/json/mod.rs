@@ -166,6 +166,24 @@ pub fn to_json(document: &Document) -> String {
         push_document_toc_entry_json(&mut output, entry);
     }
     output.push(']');
+    let image_frames = document.image_frame_candidates();
+    if !image_frames.is_empty() {
+        output.push_str(",\"imageFrameCandidates\":[");
+        for (index, image) in image_frames.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            let [x, y, width, height] = image.geometry_mm100();
+            output.push_str("{\"mode\":");
+            push_json_string(&mut output, image.mode().as_str());
+            output.push_str(&format!(",\"sourceFrame\":\"/Frame\",\"objectCandidateIndex\":{},\"payloadIndex\":{},\"geometryMm100\":{{\"x\":{x},\"y\":{y},\"width\":{width},\"height\":{height}}},\"wrapMarginMm100\":{},\"recordSourceSpan\":",image.image_index(),image.payload_index(),image.wrap_margin_mm100()));
+            text_layout::push_text_source_span_json(&mut output, image.record_span());
+            output.push_str(
+                ",\"decoded\":false,\"geometryDecoded\":false,\"paintOrderDecoded\":false}",
+            );
+        }
+        output.push(']');
+    }
     let tatechuyoko = document.tatechuyoko_candidates();
     if !tatechuyoko.is_empty() {
         output.push_str(",\"tatechuyokoCandidates\":[");

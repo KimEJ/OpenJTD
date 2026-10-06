@@ -604,6 +604,14 @@ pub(super) fn page_layer_tree_json(
     let layout = core.page_layout_for(page_num as usize);
     let font_family = document_font_family_css(&core.document);
     let fields = core.document.text_field_candidates();
+    let native_image = native_image_projection(
+        &core.document,
+        layout,
+        page_num as usize + 1,
+        core.writing_mode,
+        lines,
+        &BTreeMap::new(),
+    );
     let mut output = format!(
         "{{\"schemaVersion\":1,\"schemaMinorVersion\":0,\"schema\":{{\"major\":1,\"minor\":0}},\"resourceTableVersion\":1,\"resourceTableMinorVersion\":0,\"resourceTable\":{{\"major\":1,\"minor\":0}},\"unit\":\"px\",\"coordinateSystem\":\"page\",\"profile\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"outputOptions\":{{\"showParagraphMarks\":{},\"showControlCodes\":{},\"showTransparentBorders\":{},\"clipEnabled\":{},\"debugOverlay\":false}},\"pageWidth\":{:.1},\"pageHeight\":{:.1},\"root\":{{\"kind\":\"leaf\",\"bounds\":{{\"x\":0.0,\"y\":0.0,\"width\":{:.1},\"height\":{:.1}}},\"ops\":[",
         json_string(profile),
@@ -620,7 +628,8 @@ pub(super) fn page_layer_tree_json(
     let mut text_sources = Vec::new();
     push_page_layer_page_background_json(&mut output, layout);
     let page_frame_projection =
-        page_frame_projection(&core.document, layout, page_num as usize + 1);
+        page_frame_projection(&core.document, layout, page_num as usize + 1)
+            .filter(|_| native_image.is_none());
     if let Some(projection) = &page_frame_projection {
         for shape in &projection.shapes {
             output.push(',');
@@ -716,7 +725,10 @@ pub(super) fn page_layer_tree_json(
                 }
             }
         }
-        for diagnostic in fdm_frame_diagnostics(&core.document) {
+        for diagnostic in fdm_frame_diagnostics(&core.document)
+            .into_iter()
+            .filter(|_| native_image.is_none())
+        {
             if fdm_frame_diagnostic_bbox(layout, diagnostic).is_some() {
                 output.push(',');
                 push_page_layer_fdm_frame_diagnostic_json(&mut output, layout, diagnostic);
@@ -1098,6 +1110,9 @@ pub(super) fn page_layer_tree_json(
             push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
         }
     }
+    if let Some(projection) = &native_image {
+        push_native_image_layer_json(&mut output, &mut text_sources, projection);
+    }
     let native_vertical = native_vertical_projection(
         &core.document,
         layout,
@@ -1112,6 +1127,7 @@ pub(super) fn page_layer_tree_json(
     if shanai_lan_text_projection.is_none()
         && form_projection.is_none()
         && native_vertical.is_none()
+        && native_image.is_none()
     {
         let style_resolver = document_text_style_resolver(&core.document);
         let default_font_size = document_default_font_size_px(&core.document);
@@ -1344,6 +1360,7 @@ pub(super) fn page_layer_tree_json(
 
         for (overlay_index, diagnostic) in image_payload_diagnostics(&core.document)
             .into_iter()
+            .filter(|_| native_image.is_none())
             .take(APP_IMAGE_DIAGNOSTIC_MAX_OVERLAYS)
             .enumerate()
         {

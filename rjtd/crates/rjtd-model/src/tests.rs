@@ -6,6 +6,8 @@ mod fdm_and_embedded_press;
 mod fields;
 mod footnote;
 mod local_samples;
+#[cfg(feature = "bitmap-images")]
+mod native_image;
 mod native_running;
 mod native_vertical;
 mod page_grid_y_anchor_and_record_flags;

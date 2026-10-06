@@ -316,3 +316,33 @@ separate work.
 - Connect preserved image payload bytes to model-level image resources only after object ownership and page geometry are proven.
 - Build real page/layer paint operations from decoded object and layout records before adding non-text PDF rendering.
 - Investigate table semantics through `/DocumentText` control ranges and layout/style streams rather than stream-name matching.
+
+## Bounded Single PNG Placement
+
+The controlled one-frame/one-PNG horizontal profile binds `/Frame` row0
+(ID0/type1) to `/EmbedItems/Embedding 1/Contents` and the complete object cache
+in `/DocumentText`. It requires the known 76-byte Frame/60-byte record profile,
+a complete declared PNG payload, equal frame/payload aspect, and contiguous
+record/cache/text ranges. Incidental ownership integer matches are not used.
+
+BE-u16 record offset16 distinguishes inline0/floating1; offset46 is wrap1/front4.
+The class0 14-unit tag`0x30` record contains inline context `0107,0010` or
+floating `0507,0012`. Its index0 selector1 cache contains `1d,0002,1e` with
+complete known wrappers. Geometry integer fields at offsets28/32/36/40 are
+interpreted as mm100 only here; adjacent low words must be zero. Offset44's
+200-mm100 value is the controlled text-clearance candidate, not corner radius.
+Other fields and all original data remain preserved.
+
+SVG/PDF and layer output use body-relative source position/size and source PNG
+pixels, replacing corresponding diagnostic picture/frame paint. Inline
+preceding text uses the saved object boundary as a cached-width candidate;
+glyph advances reuse the existing PDF/browser measurements. Wrap moves text
+past the image plus clearance; front paints after text. Occluded text and
+source spans remain intact. LineMark's single-object-row flag and PageMark's
+maximum inline extent corroborate this bounded placement.
+
+Geometry/paint remain decoded-false candidates. Inline baseline currently uses
+fallback em-bottom alignment, differing by about5pt in native output; fallback
+fonts also change the wrap split by one character. General alignment, cropping,
+multiple images, rich/vertical/multipage flow and other profiles remain outside
+this projection. Reference-PDF coordinates/colors are not fitted.

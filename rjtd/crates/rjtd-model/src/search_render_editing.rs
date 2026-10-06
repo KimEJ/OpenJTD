@@ -448,6 +448,16 @@ impl DocumentCore {
         if self.writing_mode.is_vertical() {
             return Ok(Vec::new());
         }
+        if let Some(projection) = native_image_projection(
+            &self.document,
+            self.page_layout_for(page_num as usize),
+            page_num as usize + 1,
+            self.writing_mode,
+            lines,
+            &BTreeMap::new(),
+        ) {
+            return Ok(native_image_text_units(&projection));
+        }
         let resolver = document_text_style_resolver(&self.document);
         Ok(lines
             .iter()
