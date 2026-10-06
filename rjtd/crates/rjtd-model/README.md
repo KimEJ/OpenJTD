@@ -3,7 +3,7 @@
 Experimental document model and parser integration for Ichitaro JTD files.
 
 `rjtd-model` is the model layer of
-[OpenJTD](https://github.com/KimEJ/OpenJTD). It consumes the low-level evidence
+[OpenJTD](https://github.com/OpenJTD/rjtd). It consumes the low-level evidence
 produced by `rjtd-core` and provides the `Document`, `DocumentParser`, and
 `DocumentCore` APIs used by exporters, the CLI, WebAssembly bindings, and the
 OpenJTD viewer.

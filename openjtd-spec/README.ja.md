@@ -2,8 +2,13 @@
 
 JTD public specification と RFC 形式の reverse engineering records を管理する場所である。
 
-`openjtd-spec` は OpenJTD の project-level specification space である。公開形式の知見を
-単一実装に閉じ込めないため、`rjtd` Rust ツール群と同格に扱う。
+共同仕様の作業は [OpenJTD/spec](https://github.com/OpenJTD/spec) で管理する。
+初期試行として RFC 0001 と RFC 0003、および日本語訳を、内容を変更せず過去の草案として
+移入した。[移入記録](https://github.com/OpenJTD/spec/blob/main/IMPORTS.md) を参照する。
+
+このディレクトリには実装に付随する研究記録と未移入の RFC を残す。移入済み RFC の新しい
+共同レビューは共有リポジトリで行う。過去のコピーを残すことは、その主張の共同承認や
+独立再現を意味しない。
 
 ## ライセンス境界
 

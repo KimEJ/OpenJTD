@@ -12,8 +12,10 @@
 
 [deployment workflow](../.github/workflows/deploy-viewer.yml) をビルド・資材コピー手順の
 基準とする。`wasm-pack build --target web rjtd/crates/rjtd-wasm` でビルドし、生成した
-package で `pkg/` を置き換え、distribution notices を含めて `main` から GitHub Pages
-へ公開する。workflow dispatch でも build は `main` に限定される。
+package で `pkg/` を置き換え、distribution notices を含めて `main` から
+<https://openjtd.github.io/rjtd/> へ公開する。workflow dispatch でも build は `main` に
+限定される。GitHub Pages URL はリポジトリ移転後に redirect されないため、以前の
+個人アカウントの viewer URL は使用しない。
 
 `pkg/` は生成物である。ソースを checkout しただけでは、WASM package のビルド・コピー
 が済むまでビューアを起動できない場合がある。過去の Cloudflare デプロイ実験は履歴であり、

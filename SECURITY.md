@@ -19,7 +19,7 @@ maintained after a fixed release is available.
 ## Reporting a Vulnerability
 
 Use GitHub Private Vulnerability Reporting from the repository's
-[Security advisories page](https://github.com/KimEJ/OpenJTD/security/advisories).
+[Security advisories page](https://github.com/OpenJTD/rjtd/security/advisories).
 Do not disclose vulnerability details in a public issue, discussion, or pull
 request.
 

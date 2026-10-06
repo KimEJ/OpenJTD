@@ -9,8 +9,9 @@ document format used by the Japanese word processor Ichitaro, and it provides
 the current parser, model, export, CLI, WASM, and app-core integration
 components.
 
-This folder is the Rust implementation workspace inside the broader OpenJTD
-project.
+This folder is the implementation workspace in `OpenJTD/rjtd`. OpenJTD is the
+shared research umbrella; rjtd and Tika JTD+ remain independent implementations.
+Shared RFC review takes place in [OpenJTD/spec](https://github.com/OpenJTD/spec).
 
 The overall project charter and ecosystem plan follow the top-level [docs/CHARTER.md](../docs/CHARTER.md).
 

@@ -257,17 +257,25 @@ The goal is not to make "a library that can read JTD", but to build "an open eco
 
 ## GitHub Organization Model
 
-The initial GitHub organization should use the following structure. The current top-level workspace already reflects this layout.
+OpenJTD is the shared research umbrella. Its repositories separate jointly
+verifiable knowledge from independent implementations:
 
 ```text
-openjtd/
-├── docs
-├── rjtd
-├── openjtd-spec
-├── openjtd-samples
-├── rjtd-testdata
-└── openjtd.github.io
+OpenJTD/
+├── community       # shared policies and discussions; private initially
+├── spec            # public RFCs, observations, and validation criteria
+├── corpus          # redistributable inputs and public manifests
+├── corpus-private  # inputs permitted for collaborator sharing
+└── rjtd            # independent Rust implementation
 ```
 
-The principle that `openjtd-spec` is a peer project to the `rjtd` code is also
-reflected in the organization structure.
+rjtd and Tika JTD+ retain independent implementation goals. Shared format
+knowledge should be useful without depending on either engine. Apache-2.0 is
+the default for jointly authored material; external documents retain their
+original terms and require individual provenance and sharing records.
+
+The initial trial imports RFC 0001 and RFC 0003 with their Japanese translations
+into [spec](https://github.com/OpenJTD/spec). The shared research policy,
+evidence labels, and corpus formats are drafts for joint review. Local research
+records, fixtures, and viewer sources remain in this implementation repository;
+no local input is promoted to a shared corpus without permission.
