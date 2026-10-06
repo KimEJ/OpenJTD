@@ -1,6 +1,7 @@
 mod control_table;
 mod counts_json;
 mod flow;
+mod footnote;
 mod fragments;
 mod layout_box;
 mod native_pagination;
@@ -14,6 +15,7 @@ mod types;
 pub(crate) use control_table::*;
 pub(crate) use counts_json::*;
 pub use flow::*;
+pub use footnote::DocumentFootnoteTextCandidate;
 pub(crate) use fragments::*;
 pub(crate) use layout_box::*;
 pub(crate) use native_pagination::*;

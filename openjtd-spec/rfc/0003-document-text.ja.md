@@ -144,6 +144,27 @@ layer 位置と折返しは fallback metrics のまま。native 空白、正確�
 複合書式 profile、縦書き添字位置は未証明。synthetic 太字の PDF では検索テキストが
 重複する場合がある。
 
+## 補助脚注テキストの保持
+
+model は `/Footnote`、`/FootnoteLink`、`/MarkTag` の不正・未対応形式も含めて
+raw stream を変更せず保持する。本文とは分離し、脚注の editor 用末尾 cache を
+本文 projection へ混ぜない。
+
+限定した 44-byte・一 entry の `/FootnoteLink` profile は byte 10–13 と 18–21 に
+big-endian `u32` address を持つ。text header の 16-unit bias を加えると、前者は
+脚注の `0x001f` text marker、後者は本文 context record を指す。両 address、
+cache marker 文字列の一致、完全な 13-unit record を同時に確認する。脚注 context の
+word 7 は `0x0030`、ID の word 8 は `0`。同じ形の終了 context は ID `0xffff`。
+対応する本文 context は word 7 `0x0010`、ID `0`。この間の文字だけを
+`footnoteTextCandidates` として公開し、marker、脚注・本文 source span、raw link
+address と `decoded:false`、placement/link-role の制限を残す。
+
+候補読み取りは補助 text 64 KiB までで、各 stream は一意でなければならない。
+切れた・不一致の address、別 link profile、重複 stream、別 note context は
+raw evidence を保ち、対応関係を推測しない。source text の保持であり、一般的な
+脚注番号、複数脚注、脚注領域の geometry、marker 縮小、bookmark semantics の解読ではない。
+native 脚注配置と field 評価は別の未解決項目として残る。
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` にも長さで区切られた `TextV.01` block がある。区切られた content は

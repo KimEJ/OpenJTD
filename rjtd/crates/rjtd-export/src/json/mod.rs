@@ -165,7 +165,27 @@ pub fn to_json(document: &Document) -> String {
         }
         push_document_toc_entry_json(&mut output, entry);
     }
-    output.push_str("],\"pageMarks\":[");
+    output.push(']');
+    let footnotes = document.footnote_text_candidates();
+    if !footnotes.is_empty() {
+        output.push_str(",\"footnoteTextCandidates\":[");
+        for (index, note) in footnotes.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str("{\"sourceStream\":\"/Footnote\",\"marker\":");
+            push_json_string(&mut output, note.marker());
+            output.push_str(",\"text\":");
+            push_json_string(&mut output, note.text());
+            output.push_str(",\"sourceSpan\":");
+            text_layout::push_text_source_span_json(&mut output, note.source_span());
+            output.push_str(",\"bodyMarkerSourceSpan\":");
+            text_layout::push_text_source_span_json(&mut output, note.body_marker_span());
+            output.push_str(&format!(",\"linkNoteAnchorOffset\":{},\"linkBodyRecordOffset\":{},\"decoded\":false,\"linkRolesDecoded\":false,\"placementDecoded\":false}}", note.note_anchor_offset(), note.body_record_offset()));
+        }
+        output.push(']');
+    }
+    output.push_str(",\"pageMarks\":[");
     for (index, page_mark) in document.page_marks().iter().enumerate() {
         if index > 0 {
             output.push(',');

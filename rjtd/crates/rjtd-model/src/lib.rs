@@ -453,6 +453,9 @@ impl IchitaroParser {
             LAYOUT_BOX_PATH,
             LAYOUT_BOX_TEXT_PATH,
             LAYOUT_BOX_TEXT_POSITION_TABLES_PATH,
+            "/Footnote",
+            "/FootnoteLink",
+            "/MarkTag",
         ] {
             if let Ok(stream) = read_cfb_stream(data, stream_name) {
                 document.push_raw_stream(RawStream::new(stream_name, stream));

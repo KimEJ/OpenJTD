@@ -155,6 +155,29 @@ Layer positions and wrapping still use fallback metrics; native whitespace,
 exact print quantization, combined style profiles, and vertical script placement
 remain unproven. Synthetic bold may produce repeated searchable text in PDF.
 
+## Auxiliary Footnote Text Preservation
+
+The model now retains `/Footnote`, `/FootnoteLink`, and `/MarkTag` streams
+unchanged, including malformed and unsupported forms. They are separate from
+body text; a footnote's cached editor tail must not enter the body projection.
+
+A bounded 44-byte, one-entry `/FootnoteLink` profile contains big-endian `u32`
+addresses at bytes 10–13 and 18–21. Adding the 16-unit text header bias places
+the first at the note's `0x001f` text marker and the second at its body context
+record. Both addresses, matching cached marker strings, and complete 13-unit
+records are checked together. The note context has word 7 `0x0030`, ID word 8
+`0`, followed by an otherwise matching closing context with ID `0xffff`;
+the linked body context has word 7 `0x0010`, ID `0`. Only the intervening note
+text is exposed as `footnoteTextCandidates`, with its marker, note/body source
+spans, raw link addresses, and `decoded:false`/placement/link-role limits.
+
+The candidate reader is capped at 64 KiB of auxiliary text and requires unique
+streams. Truncated or mismatched addresses, other link profiles, duplicate
+streams, or other note contexts retain raw evidence without a guessed match.
+This preserves source text; it does not establish general note numbering,
+multiple-note linking, note-area geometry, marker scaling, or bookmark semantics.
+Native note placement and field evaluation remain separate unresolved work.
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` also contains length-delimited `TextV.01` blocks. Their bounded
