@@ -606,7 +606,7 @@ fn parse_document_text_range(
                 elements.push(DocumentTextElement::ControlBoundary(
                     DocumentTextControl::new(code),
                 ));
-                reading_text = code == TEXT_ROW_DELIMITER;
+                reading_text = code == TEXT_ROW_DELIMITER || (code == 0x000c && range.is_some());
             }
         }
 
@@ -685,7 +685,7 @@ fn map_document_text_range(data: &[u8], range: Option<std::ops::Range<usize>>) -
             } else {
                 push_map_run(&mut entries, &mut run, run_start, index);
                 push_map_control(&mut entries, index, code);
-                reading_text = code == TEXT_ROW_DELIMITER;
+                reading_text = code == TEXT_ROW_DELIMITER || (code == 0x000c && range.is_some());
             }
         }
 
@@ -1246,6 +1246,36 @@ mod tests {
             "should contain 'sto' but got: {text:?}"
         );
         assert!(text.contains('て'), "should contain 'て' but got: {text:?}");
+    }
+
+    #[test]
+    fn preserves_named_text_after_explicit_page_boundaries_without_unbounded_salvage() {
+        let units = "PAGE-A\u{c}PAGE-B\u{c}PAGE-C"
+            .encode_utf16()
+            .collect::<Vec<_>>();
+        let bytes = text_segment_fixture(&units, 1);
+        assert_eq!(extract_document_text(&bytes), "PAGE-APAGE-BPAGE-C");
+        let map = map_document_text(&bytes);
+        assert_eq!(
+            map.entries()
+                .iter()
+                .filter(|entry| entry.kind() == DocumentTextMapKind::TextRun)
+                .map(|entry| entry.text())
+                .collect::<Vec<_>>(),
+            ["PAGE-A", "PAGE-B", "PAGE-C"]
+        );
+        assert_eq!(
+            map.entries()
+                .iter()
+                .filter(|entry| entry.code() == Some(12))
+                .count(),
+            2
+        );
+        let mut unnamed = vec![0, 0x1f];
+        for unit in units {
+            unnamed.extend(unit.to_be_bytes());
+        }
+        assert_eq!(extract_document_text(&unnamed), "PAGE-A");
     }
 
     fn text_segment_fixture(content: &[u16], segment_count: u16) -> Vec<u8> {

@@ -178,6 +178,31 @@ This preserves source text; it does not establish general note numbering,
 multiple-note linking, note-area geometry, marker scaling, or bookmark semantics.
 Native note placement and field evaluation remain separate unresolved work.
 
+## Visible Inline Ranges and Explicit Page Boundaries
+
+An explicit `0x000c` remains a control boundary but no longer terminates text
+reading inside a validated named `TextV.01` segment. Both the token parser and
+source map retain the following pages. Unbounded marker-only input keeps its
+previous conservative stop behavior.
+
+Core inline map ranges include `0x001d`/`0x001e`. Model text ranges now exclude
+those wrappers when their length equals the complete visible UTF-16 string
+plus two units; malformed or non-contiguous inline strings have no guessed
+text span. Raw map/flow ranges remain unchanged. Physical-line admission also
+checks the visible bytes and translates UTF-16 offsets to character offsets,
+rejecting boundaries inside a surrogate pair.
+
+The existing fixed-84-byte source-page path now admits complete selector-1
+cache groups, the controlled heading context (`0x0010`, 13 units, subfield
+`0x002e`, values 1–3), and the observed 13-unit numbered-marker context
+(`0x0000`, subfield 10, `391/0x2010`). It applies them only to non-ruled
+horizontal flow. Unknown contexts, incomplete wrappers, section styles, and
+vertical text retain their fallbacks. This preserves stored marker text and
+source line/page assignment; it does not decode editable heading/list semantics,
+TOC leaders, dynamic fields, or native whitespace/tracking. Portrait/landscape
+page ranges use the shared model layout path; native landscape Japanese
+character spacing is still unresolved.
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` also contains length-delimited `TextV.01` blocks. Their bounded

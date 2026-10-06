@@ -20,7 +20,15 @@ impl<'a> DocumentTextSourceSpans<'a> {
         while let Some(entry) = self.entries.get(self.index) {
             self.index += 1;
             if entry.kind() == kind && (text.is_empty() || entry.text() == text) {
-                return Some(TextSourceSpan::from_document_text_entry(entry));
+                let span = TextSourceSpan::from_document_text_entry(entry);
+                if kind == DocumentTextMapKind::InlineText {
+                    let length = span.unit_end().checked_sub(span.unit_start())?;
+                    if length != entry.text().encode_utf16().count().checked_add(2)? {
+                        return None;
+                    }
+                    return Some(span.subspan_by_units(1, length - 1));
+                }
+                return Some(span);
             }
         }
         None

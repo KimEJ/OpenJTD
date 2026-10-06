@@ -280,3 +280,5 @@ cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 限定的な文字範囲の太字・斜体・一本下線候補、半サイズの上付き・下付き、色・サイズ変更、font ID と既定値復帰を保持する。SVG/PDF と viewer は backend の文字送りを run 間で再利用する。flag、font mapping、synthetic paint、添字位置、折返し、native 空白の candidate/fallback 制限は [RFC 0003](../openjtd-spec/rfc/0003-document-text.ja.md) を参照。
 
 補助の脚注・リンク・bookmark tag stream を raw のまま保持する。限定した一 link の脚注 profile は、source に対応した note text 候補を JSON にも公開する。本文、脚注配置、field 評価は分離して扱う。
+
+named text の明示改ページ後も本文を保持し、model inline span は表示 UTF-16 unit を指す。raw wrapper は保全する。限定した見出し・一覧 cache は物理 source 行と fixed84 page 範囲を再利用する。動的 field、目次 leader、native 横長和文 tracking は未解決。

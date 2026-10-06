@@ -32,21 +32,38 @@ pub(crate) fn native_page_line_plan(
     if has_rules && !native_rule_grid_admitted(document, layout, writing_mode) {
         return None;
     }
-    if flow.events().iter().any(|event| match event.kind() {
-        DocumentTextFlowKind::Text => event
-            .text()
-            .chars()
-            .any(|c| c != '\n' && !native_rule_character_supported(c)),
-        DocumentTextFlowKind::Record => {
-            !(native_rule_parent_offset(event).is_some()
-                || native_rule_fixed_pitch(event).is_some()
-                || native_paragraph_attributes(event).is_some()
-                || (has_rules && event.record_class() == Some(0x0030)))
+    let mut event_index = 0;
+    while let Some(event) = flow.events().get(event_index) {
+        if !has_rules
+            && inline_cache_group(
+                flow.events()
+                    .get(event_index..event_index + 4)
+                    .unwrap_or(&[]),
+            )
+        {
+            event_index += 4;
+            continue;
         }
-        DocumentTextFlowKind::Control => event.code() != Some(0x000e),
-        _ => true,
-    }) {
-        return None;
+        if match event.kind() {
+            DocumentTextFlowKind::Text => event
+                .text()
+                .chars()
+                .any(|c| c != '\n' && !native_rule_character_supported(c)),
+            DocumentTextFlowKind::Record => {
+                !(native_rule_parent_offset(event).is_some()
+                    || native_rule_fixed_pitch(event).is_some()
+                    || native_paragraph_attributes(event).is_some()
+                    || (!has_rules && heading_or_number_record(event))
+                    || (has_rules && event.record_class() == Some(0x0030)))
+            }
+            DocumentTextFlowKind::Control => {
+                event.code() != Some(0x000e) && (event.code() != Some(0x000c) || has_rules)
+            }
+            _ => true,
+        } {
+            return None;
+        }
+        event_index += 1;
     }
     let mut runs = Vec::new();
     let resolver = document_text_style_resolver(document)?;
@@ -60,19 +77,10 @@ pub(crate) fn native_page_line_plan(
             let Inline::Text(run) = inline else {
                 return None;
             };
-            let span = run.source_span()?;
-            let visible_span = native_rule_visible_span(run.text(), span);
+            let span = native_visible_text_span(document, run.text(), run.source_span()?)?;
+            let visible_span = native_rule_visible_span(run.text(), &span);
             document_text_font_size(&resolver, &visible_span, Some(default_font))?;
-            if span.unit_end() - span.unit_start() != run.text().chars().count()
-                || flow.text_for_range(
-                    span.unit_start(),
-                    span.unit_end(),
-                    TextCountRangeOverlapBasis::Unit,
-                ) != run.text()
-            {
-                return None;
-            }
-            runs.push((paragraph_index, offset, span));
+            runs.push((paragraph_index, offset, span, run.text()));
             offset += run.text().chars().count();
         }
     }
@@ -104,18 +112,19 @@ pub(crate) fn native_page_line_plan(
         }
         previous_page = page;
         let mut range: Option<(usize, usize, usize)> = None;
-        let first_run = runs.partition_point(|(_, _, span)| span.unit_end() <= interval.unit_start);
-        for (paragraph, offset, span) in runs[first_run..]
+        let first_run =
+            runs.partition_point(|(_, _, span, _)| span.unit_end() <= interval.unit_start);
+        for (paragraph, offset, span, text) in runs[first_run..]
             .iter()
-            .take_while(|(_, _, span)| span.unit_start() < interval.unit_end)
+            .take_while(|(_, _, span, _)| span.unit_start() < interval.unit_end)
         {
             let from = span.unit_start().max(interval.unit_start);
             let to = span.unit_end().min(interval.unit_end);
             if from >= to {
                 continue;
             }
-            let start = offset + from - span.unit_start();
-            let end = offset + to - span.unit_start();
+            let start = offset + char_offset_at_utf16_unit(text, from - span.unit_start())?;
+            let end = offset + char_offset_at_utf16_unit(text, to - span.unit_start())?;
             if let Some((previous, _, previous_end)) = range {
                 if previous != *paragraph || previous_end != start {
                     return None;
@@ -137,6 +146,51 @@ pub(crate) fn native_page_line_plan(
         });
     }
     Some(plan)
+}
+
+fn char_offset_at_utf16_unit(text: &str, offset: usize) -> Option<usize> {
+    let mut units = 0;
+    for (index, character) in text.chars().enumerate() {
+        if units == offset {
+            return Some(index);
+        }
+        units += character.len_utf16();
+    }
+    (units == offset).then_some(text.chars().count())
+}
+
+fn inline_cache_group(events: &[DocumentTextFlowEvent]) -> bool {
+    let [start, prefix, text, suffix] = events else {
+        return false;
+    };
+    start.kind() == DocumentTextFlowKind::Control
+        && start.code() == Some(0x1c)
+        && prefix.kind() == DocumentTextFlowKind::Opaque
+        && prefix.raw_words() == [1, 7, 0, 0, 1]
+        && text.kind() == DocumentTextFlowKind::Inline
+        && text.selector() == Some(1)
+        && text
+            .text()
+            .chars()
+            .all(|c| native_rule_character_supported(c) || c == '●')
+        && suffix.kind() == DocumentTextFlowKind::Opaque
+        && suffix.raw_words() == [5, 0, 1, 0x1f]
+        && events
+            .windows(2)
+            .all(|pair| pair[0].unit_end() == pair[1].unit_start())
+}
+
+fn heading_or_number_record(event: &DocumentTextFlowEvent) -> bool {
+    let words = event.raw_words();
+    if words.len() != 13 {
+        return false;
+    }
+    (words[..6] == [0x1c, 0x10, 13, 0, 0x2e, 1]
+        && (1..=3).contains(&words[6])
+        && words[7..] == [0xffff, 0, 13, 0, 0x10, 0x1f])
+        || (words[..8] == [0x1c, 0, 13, 0, 10, 0, 391, 0x2010]
+            && words[8] != 0xffff
+            && words[9..] == [13, 0, 0, 0x1f])
 }
 
 pub(crate) fn native_page_output_shape(plan: &[NativePageLinePlan]) -> PageOutputShape {
@@ -168,6 +222,30 @@ pub(crate) fn native_pages_from_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_page_admission_requires_complete_cache_and_known_heading_profiles() {
+        let flow = |units: &[u16]| {
+            let mut bytes = vec![0; 32];
+            bytes[..8].copy_from_slice(b"SsmgV.01");
+            bytes[20..28].copy_from_slice(b"TextV.01");
+            bytes[28..32].copy_from_slice(&(units.len() as u32).to_be_bytes());
+            for word in units {
+                bytes.extend(word.to_be_bytes());
+            }
+            DocumentTextFlow::from_map("/DocumentText", &bytes, &map_document_text(&bytes))
+        };
+        let mut cache = [0x1c, 1, 7, 0, 0, 1, 0x1d, 65, 0x1e, 5, 0, 1, 0x1f];
+        assert!(inline_cache_group(flow(&cache).events()));
+        cache[5] = 2;
+        assert!(!inline_cache_group(flow(&cache).events()));
+        let mut heading = [0x1c, 0x10, 13, 0, 0x2e, 1, 1, 0xffff, 0, 13, 0, 0x10, 0x1f];
+        assert!(heading_or_number_record(&flow(&heading).events()[0]));
+        heading[6] = 4;
+        assert!(!heading_or_number_record(&flow(&heading).events()[0]));
+        assert_eq!(char_offset_at_utf16_unit("A😀B", 3), Some(2));
+        assert_eq!(char_offset_at_utf16_unit("A😀B", 2), None);
+    }
 
     #[test]
     fn source_pagination_leaves_unframed_paragraphs_on_the_fallback_path() {

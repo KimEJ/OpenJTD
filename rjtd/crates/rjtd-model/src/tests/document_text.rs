@@ -1,4 +1,43 @@
 use super::*;
+
+#[test]
+fn inline_source_spans_cover_visible_utf16_units_while_flow_preserves_wrappers() {
+    let mut units = vec![0x1c, 1, 7, 0, 0, 1, 0x1d];
+    units.extend("A😀Z".encode_utf16());
+    units.extend([0x1e, 5, 0, 1, 0x1f]);
+    let mut bytes = vec![0; 32];
+    bytes[..8].copy_from_slice(b"SsmgV.01");
+    bytes[20..28].copy_from_slice(b"TextV.01");
+    bytes[28..32].copy_from_slice(&(units.len() as u32).to_be_bytes());
+    for unit in units {
+        bytes.extend(unit.to_be_bytes());
+    }
+    let document = parse_document(&cfb_with_streams(&[("/DocumentText", &bytes)])).unwrap();
+    let Block::Paragraph(paragraph) = &document.blocks()[0] else {
+        panic!("paragraph");
+    };
+    let Inline::Text(run) = &paragraph.inlines()[0] else {
+        panic!("text");
+    };
+    let span = run.source_span().unwrap();
+    assert_eq!((span.unit_start(), span.unit_end()), (23, 27));
+    assert_eq!(
+        bytes[span.byte_start()..span.byte_end()],
+        "A😀Z"
+            .encode_utf16()
+            .flat_map(u16::to_be_bytes)
+            .collect::<Vec<_>>()
+    );
+    let event = document
+        .document_text_flow()
+        .unwrap()
+        .events()
+        .iter()
+        .find(|event| event.kind() == DocumentTextFlowKind::Inline)
+        .unwrap();
+    assert_eq!((event.unit_start(), event.unit_end()), (22, 28));
+    assert_eq!(document.raw_streams()[0].bytes(), bytes);
+}
 use crate::*;
 use rjtd_core::font_stream::FONT_STREAM_PATH;
 

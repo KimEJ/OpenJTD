@@ -58,8 +58,52 @@ pub(crate) fn page_text_line_style_fragments(
     };
     fragments
         .into_iter()
-        .flat_map(|fragment| split_text_style_fragments(fragment, resolver))
+        .flat_map(|mut fragment| {
+            if let Some(span) = fragment
+                .source_span
+                .as_ref()
+                .and_then(|span| native_visible_text_span(document, &fragment.text, span))
+            {
+                fragment.source_span = Some(span);
+            }
+            split_text_style_fragments(fragment, resolver)
+        })
         .collect()
+}
+
+pub(crate) fn native_visible_text_span(
+    document: &Document,
+    text: &str,
+    span: &TextSourceSpan,
+) -> Option<TextSourceSpan> {
+    if span.unit_start().checked_mul(2) != Some(span.byte_start())
+        || span.unit_end().checked_mul(2) != Some(span.byte_end())
+    {
+        return None;
+    }
+    let bytes = document_text_raw_stream(document)?;
+    let source = bytes.get(span.byte_start()..span.byte_end())?;
+    let units = text.encode_utf16().collect::<Vec<_>>();
+    let raw = source.as_chunks::<2>();
+    if !raw.1.is_empty() {
+        return None;
+    }
+    let raw = raw
+        .0
+        .iter()
+        .map(|pair| u16::from_be_bytes(*pair))
+        .collect::<Vec<_>>();
+    if raw == units {
+        return Some(span.clone());
+    }
+    if raw.len() == units.len() + 2
+        && raw.first() == Some(&0x1d)
+        && raw.last() == Some(&0x1e)
+        && raw[1..raw.len() - 1] == units
+    {
+        return Some(span.subspan_by_units(1, raw.len() - 1));
+    }
+    None
 }
 
 fn split_text_style_fragments(

@@ -289,3 +289,5 @@ cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 Bounded character runs now retain bold/italic/single-underline candidates, half-size upper/lower scripts, color/size changes, and source font-ID selections with default resets. SVG/PDF and the viewer reuse backend font advances between runs. Flags, font mapping, synthetic paint, script placement, wrapping, and native whitespace retain their documented candidate/fallback limits; see [RFC 0003](../openjtd-spec/rfc/0003-document-text.md#bounded-character-style-and-font-candidates).
 
 Auxiliary footnote/link/bookmark-tag streams are preserved raw. The bounded single-link footnote profile also exposes source-linked note text candidates in JSON; body text, note placement, and field evaluation remain separate.
+
+Named text now survives explicit page breaks, and model inline spans cover visible UTF-16 units while raw wrappers remain preserved. Bounded heading/list caches reuse physical source lines and fixed84 page ranges. Dynamic fields, TOC leaders, and native landscape Japanese tracking remain unresolved.

@@ -165,6 +165,27 @@ raw evidence を保ち、対応関係を推測しない。source text の保持�
 脚注番号、複数脚注、脚注領域の geometry、marker 縮小、bookmark semantics の解読ではない。
 native 脚注配置と field 評価は別の未解決項目として残る。
 
+## 表示インライン範囲と明示改ページ
+
+明示 `0x000c` は control boundary のままだが、検証済み named `TextV.01` segment
+では text 読み取りを終了しない。token parser と source map の両方が後続ページを
+保持する。境界のない marker-only input は従来の保守的な停止動作を維持する。
+
+core inline map 範囲は `0x001d`/`0x001e` を含む。完全な表示 UTF-16 文字列に
+2 unit を加えた長さと一致するとき、model text 範囲は両 wrapper を除く。
+不正・非連続 inline には推測の text span を付けない。raw map/flow 範囲は変更しない。
+物理行の許容時も表示 byte を確認し、UTF-16 offset を character offset に変換して
+surrogate pair 内部の境界を拒否する。
+
+既存の fixed84 source-page 経路は、完全な selector-1 cache group、統制した
+heading context（`0x0010`、13 unit、subfield `0x002e`、値1–3）、観測した
+13-unit 番号 marker context（`0x0000`、subfield 10、`391/0x2010`）を許容する。
+横書き・罫線なし flow のみに適用し、未知 context、不完全 wrapper、section style、
+縦書きは fallback を保つ。保存済み marker と source 行・ページ割当の保持であり、
+編集可能な見出し・一覧 semantics、目次 leader、動的 field、native 空白・tracking の
+解読ではない。縦長・横長の page 範囲は共通 model layout を使うが、横長文書の
+native 和文文字間隔は未解決のまま。
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` にも長さで区切られた `TextV.01` block がある。区切られた content は
