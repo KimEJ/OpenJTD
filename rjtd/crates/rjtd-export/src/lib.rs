@@ -12,5 +12,5 @@ mod tests;
 pub use html::to_html;
 pub use json::to_json;
 #[cfg(not(target_arch = "wasm32"))]
-pub use pdf::{to_pdf, to_pdf_with_file_name};
+pub use pdf::{to_pdf, to_pdf_with_file_name, to_pdf_with_file_name_and_print_date};
 pub use text::{to_markdown, to_plain_text};

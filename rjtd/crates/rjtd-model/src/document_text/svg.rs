@@ -11,6 +11,7 @@ pub(crate) fn render_text_page_svg(
     document: &Document,
     decoration: Option<&PageDecoration>,
     measured_widths: &BTreeMap<usize, f32>,
+    print_date: Option<&str>,
 ) -> String {
     let mut svg = String::new();
     svg.push_str(&format!(
@@ -24,6 +25,7 @@ pub(crate) fn render_text_page_svg(
     let font_family = document_font_family_css(document);
     let style_resolver = document_text_style_resolver(document);
     let default_font_size = document_default_font_size_px(document);
+    let fields = document.text_field_candidates();
     let shanai_lan_text_projection =
         shanai_lan_document_text_projection(document, layout, page_number);
     let form_projection = observed_form_text_projection(document, layout, page_number);
@@ -95,14 +97,21 @@ pub(crate) fn render_text_page_svg(
                 y = ((layout.height_px() - line_extent) / 2.0).max(layout.margin_px());
             }
 
-            for fragment in page_text_line_style_fragments(document, line, style_resolver.as_ref())
+            for mut fragment in
+                page_text_line_style_fragments(document, line, style_resolver.as_ref())
             {
+                apply_print_date(&mut fragment, &fields, print_date);
+                let field = fragment
+                    .source_span
+                    .as_ref()
+                    .and_then(|span| field_for_span(&fields, span));
+                let paint_span = field_paint_span(field, fragment.source_span.as_ref());
                 if fragment.text.is_empty() {
                     continue;
                 }
                 let source_color = style_resolver
                     .as_ref()
-                    .zip(fragment.source_span.as_ref())
+                    .zip(paint_span.as_ref())
                     .and_then(|(resolver, span)| document_text_foreground_color(resolver, span));
                 let fill_color = source_color
                     .as_deref()
@@ -117,10 +126,14 @@ pub(crate) fn render_text_page_svg(
                     .unwrap_or(APP_FONT_SIZE_PX);
                 let mut character_style = style_resolver
                     .as_ref()
-                    .zip(fragment.source_span.as_ref())
+                    .zip(paint_span.as_ref())
                     .map(|(resolver, span)| document_text_character_style(document, resolver, span))
                     .unwrap_or_default();
                 character_style.script = None;
+                character_style.source_unit_start = fragment
+                    .source_span
+                    .as_ref()
+                    .map(TextSourceSpan::unit_start);
                 let run_font_family = character_style
                     .font
                     .as_ref()
@@ -137,6 +150,7 @@ pub(crate) fn render_text_page_svg(
                     &fragment.text,
                     Some("vertical-rl"),
                     Some(&character_style),
+                    field,
                 );
                 if let Some(annotation) = &fragment.ruby_annotation {
                     push_svg_ruby_annotation(
@@ -201,7 +215,13 @@ pub(crate) fn render_text_page_svg(
             let fragments = page_text_line_style_fragments(document, line, style_resolver.as_ref());
             let line_font_size =
                 text_line_font_size(style_resolver.as_ref(), &fragments, default_font_size);
-            for fragment in fragments {
+            for mut fragment in fragments {
+                apply_print_date(&mut fragment, &fields, print_date);
+                let field = fragment
+                    .source_span
+                    .as_ref()
+                    .and_then(|span| field_for_span(&fields, span));
+                let paint_span = field_paint_span(field, fragment.source_span.as_ref());
                 if fragment.text.is_empty() {
                     continue;
                 }
@@ -237,11 +257,15 @@ pub(crate) fn render_text_page_svg(
                     })
                     .map(|size| size.px)
                     .unwrap_or(APP_FONT_SIZE_PX);
-                let character_style = style_resolver
+                let mut character_style = style_resolver
                     .as_ref()
-                    .zip(fragment.source_span.as_ref())
+                    .zip(paint_span.as_ref())
                     .map(|(resolver, span)| document_text_character_style(document, resolver, span))
                     .unwrap_or_default();
+                character_style.source_unit_start = fragment
+                    .source_span
+                    .as_ref()
+                    .map(TextSourceSpan::unit_start);
                 let run_font_family = character_style
                     .font
                     .as_ref()
@@ -277,7 +301,7 @@ pub(crate) fn render_text_page_svg(
                     + character_style.baseline_shift(unscaled_font_size);
                 let source_color = style_resolver
                     .as_ref()
-                    .zip(fragment.source_span.as_ref())
+                    .zip(paint_span.as_ref())
                     .and_then(|(resolver, span)| document_text_foreground_color(resolver, span));
                 let fill_color = source_color
                     .as_deref()
@@ -293,6 +317,7 @@ pub(crate) fn render_text_page_svg(
                     &fragment.text,
                     None,
                     Some(&character_style),
+                    field,
                 );
                 if let Some(annotation) = &fragment.ruby_annotation {
                     push_svg_ruby_annotation(
@@ -447,6 +472,7 @@ pub(crate) fn push_svg_text_run(
     text: &str,
     writing_mode: Option<&str>,
     character_style: Option<&DocumentTextCharacterStyle>,
+    field: Option<&DocumentTextFieldCandidate>,
 ) {
     let visual_text = escape_xml(&svg_visual_text(text));
     let font_family = escape_xml(font_family);
@@ -454,6 +480,15 @@ pub(crate) fn push_svg_text_run(
         .map(|mode| format!(" writing-mode=\"{mode}\""))
         .unwrap_or_default();
     let mut style_attrs = String::new();
+    if let Some(field) = field {
+        style_attrs.push_str(&format!(" data-field-kind-candidate=\"{}\" data-field-decoded=\"false\" data-cached-field-text=\"{}\"",field.kind().as_str(),escape_xml(field.cached_value())));
+        if field.kind() == DocumentTextFieldKind::Hyperlink {
+            svg.push_str(&format!(
+                "<a href=\"{}\" target=\"_blank\" rel=\"noopener\">",
+                escape_xml(field.argument())
+            ));
+        }
+    }
     if let Some(style) = character_style {
         if let Some(unit) = style.source_unit_start {
             style_attrs.push_str(&format!(" id=\"rjtd-text-advance-{unit}\" data-source-unit-start=\"{unit}\" data-text-advance-candidate=\"true\""));
@@ -487,6 +522,9 @@ pub(crate) fn push_svg_text_run(
     svg.push_str(&format!(
         "<text class=\"{class_name}\" x=\"{x:.1}\" y=\"{y:.1}\" font-family=\"{font_family}\" font-size=\"{font_size:.1}\" fill=\"{fill}\" letter-spacing=\"0\" xml:space=\"preserve\"{writing_mode_attr}{style_attrs}>{visual_text}</text>"
     ));
+    if field.is_some_and(|field| field.kind() == DocumentTextFieldKind::Hyperlink) {
+        svg.push_str("</a>");
+    }
 }
 
 pub(crate) fn push_svg_ruby_annotation(

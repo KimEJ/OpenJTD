@@ -30,11 +30,24 @@ pub(crate) fn native_page_line_plan(
         .iter()
         .any(|event| native_rule_parent_offset(event).is_some());
     let toc_scope = native_toc_source_scope(document);
+    let fields = document.text_field_candidates();
     if has_rules && !native_rule_grid_admitted(document, layout, writing_mode) {
         return None;
     }
     let mut event_index = 0;
     while let Some(event) = flow.events().get(event_index) {
+        if !has_rules
+            && let Some(end) = native_field_end(&fields, flow.events(), event.unit_start())
+        {
+            while flow
+                .events()
+                .get(event_index)
+                .is_some_and(|event| event.unit_start() < end)
+            {
+                event_index += 1;
+            }
+            continue;
+        }
         if !has_rules
             && inline_cache_group(
                 flow.events()

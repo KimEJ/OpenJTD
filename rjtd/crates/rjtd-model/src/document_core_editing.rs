@@ -63,6 +63,7 @@ impl DocumentCore {
             document,
             pages: Vec::new(),
             file_name: String::new(),
+            print_date: None,
             dpi: APP_DEFAULT_DPI,
             page_layout,
             show_paragraph_marks: false,

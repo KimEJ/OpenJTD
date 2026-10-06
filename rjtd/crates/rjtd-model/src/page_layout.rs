@@ -536,6 +536,7 @@ pub(super) fn page_layer_tree_json(
 ) -> String {
     let layout = core.page_layout;
     let font_family = document_font_family_css(&core.document);
+    let fields = core.document.text_field_candidates();
     let mut output = format!(
         "{{\"schemaVersion\":1,\"schemaMinorVersion\":0,\"schema\":{{\"major\":1,\"minor\":0}},\"resourceTableVersion\":1,\"resourceTableMinorVersion\":0,\"resourceTable\":{{\"major\":1,\"minor\":0}},\"unit\":\"px\",\"coordinateSystem\":\"page\",\"profile\":{},\"writingMode\":\"{}\",\"writingModeDecoded\":false,\"outputOptions\":{{\"showParagraphMarks\":{},\"showControlCodes\":{},\"showTransparentBorders\":{},\"clipEnabled\":{},\"debugOverlay\":false}},\"pageWidth\":{:.1},\"pageHeight\":{:.1},\"root\":{{\"kind\":\"leaf\",\"bounds\":{{\"x\":0.0,\"y\":0.0,\"width\":{:.1},\"height\":{:.1}}},\"ops\":[",
         json_string(profile),
@@ -1100,7 +1101,13 @@ pub(super) fn page_layer_tree_json(
                 page_text_line_style_fragments(&core.document, line, style_resolver.as_ref());
             let line_font_size =
                 text_line_font_size(style_resolver.as_ref(), &fragments, default_font_size);
-            for fragment in fragments {
+            for mut fragment in fragments {
+                apply_print_date(&mut fragment, &fields, core.print_date.as_deref());
+                let field = fragment
+                    .source_span
+                    .as_ref()
+                    .and_then(|span| field_for_span(&fields, span));
+                let paint_span = field_paint_span(field, fragment.source_span.as_ref());
                 if fragment.text.is_empty() {
                     continue;
                 }
@@ -1125,7 +1132,7 @@ pub(super) fn page_layer_tree_json(
                 first_op = false;
                 let source_color = style_resolver
                     .as_ref()
-                    .zip(fragment.source_span.as_ref())
+                    .zip(paint_span.as_ref())
                     .and_then(|(resolver, span)| document_text_foreground_color(resolver, span));
                 let fill_color = source_color
                     .as_deref()
@@ -1139,7 +1146,7 @@ pub(super) fn page_layer_tree_json(
                 let unscaled_font_size = font_size.map_or(APP_FONT_SIZE_PX, |size| size.px);
                 let mut character_style = style_resolver
                     .as_ref()
-                    .zip(fragment.source_span.as_ref())
+                    .zip(paint_span.as_ref())
                     .map(|(resolver, span)| {
                         document_text_character_style(&core.document, resolver, span)
                     })
@@ -1203,6 +1210,7 @@ pub(super) fn page_layer_tree_json(
                     &fragment,
                     line.native_line_mark_index,
                     &character_style,
+                    field,
                 );
                 push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
                 if core.writing_mode.is_vertical() {

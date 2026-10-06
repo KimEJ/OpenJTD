@@ -1,5 +1,6 @@
 mod control_table;
 mod counts_json;
+mod fields;
 mod flow;
 mod footnote;
 mod fragments;
@@ -14,6 +15,8 @@ mod types;
 
 pub(crate) use control_table::*;
 pub(crate) use counts_json::*;
+pub(crate) use fields::*;
+pub use fields::{DocumentTextFieldCandidate, DocumentTextFieldKind};
 pub use flow::*;
 pub use footnote::DocumentFootnoteTextCandidate;
 pub(crate) use fragments::*;

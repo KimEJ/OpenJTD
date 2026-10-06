@@ -47,6 +47,7 @@ pub(crate) fn push_page_layer_text_run_json(
     fragment: &PageLayerTextFragment,
     native_line_mark_index: Option<usize>,
     character_style: &DocumentTextCharacterStyle,
+    field: Option<&DocumentTextFieldCandidate>,
 ) {
     let font_size = source_font_size.map_or(APP_FONT_SIZE_PX, |size| size.px);
     let font_scale = f64::from(font_size / APP_FONT_SIZE_PX);
@@ -77,6 +78,9 @@ pub(crate) fn push_page_layer_text_run_json(
     }
     if let Some(flags) = character_style.flags {
         output.push_str(&format!(",\"characterStyleFlagsCandidate\":{flags},\"characterStyleDecoded\":false,\"bold\":{},\"italic\":{},\"underline\":{}", character_style.bold, character_style.italic, character_style.underline));
+    }
+    if let Some(field) = field {
+        output.push_str(&format!(",\"fieldKindCandidate\":{},\"cachedFieldText\":{},\"fieldArgument\":{},\"fieldDecoded\":false,\"fieldValueFromContext\":{}",json_string(field.kind().as_str()),json_string(field.cached_value()),json_string(field.argument()),field.kind() == DocumentTextFieldKind::PrintingDate && fragment.text != field.cached_value()));
     }
     if let Some(script) = character_style.script {
         output.push_str(&format!(",\"scriptCandidate\":\"{script}\",\"characterScaleCandidate\":0.5,\"scriptGeometryDecoded\":false"));

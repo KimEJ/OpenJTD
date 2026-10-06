@@ -438,6 +438,7 @@ impl DocumentCore {
             &self.document,
             decoration.as_ref(),
             widths,
+            self.print_date.as_deref(),
         ))
     }
 

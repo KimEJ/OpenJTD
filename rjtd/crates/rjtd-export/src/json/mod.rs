@@ -185,6 +185,27 @@ pub fn to_json(document: &Document) -> String {
         }
         output.push(']');
     }
+    let fields = document.text_field_candidates();
+    if !fields.is_empty() {
+        output.push_str(",\"textFieldCandidates\":[");
+        for (index, field) in fields.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str("{\"kind\":");
+            push_json_string(&mut output, field.kind().as_str());
+            output.push_str(",\"cachedValue\":");
+            push_json_string(&mut output, field.cached_value());
+            output.push_str(",\"argument\":");
+            push_json_string(&mut output, field.argument());
+            output.push_str(",\"recordSourceSpan\":");
+            text_layout::push_text_source_span_json(&mut output, field.record_span());
+            output.push_str(",\"valueSourceSpan\":");
+            text_layout::push_text_source_span_json(&mut output, field.value_span());
+            output.push_str(",\"decoded\":false}");
+        }
+        output.push(']');
+    }
     output.push_str(",\"pageMarks\":[");
     for (index, page_mark) in document.page_marks().iter().enumerate() {
         if index > 0 {

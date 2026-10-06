@@ -245,6 +245,7 @@ pub(crate) fn push_jseq_formula_projection_svg(
                     &slot.text,
                     None,
                     None,
+                    None,
                 );
             }
             svg.push_str("</g>");

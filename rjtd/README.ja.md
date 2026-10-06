@@ -284,3 +284,5 @@ cargo run -p rjtd-cli -- export <file.jtd> --format pdf -o output.pdf
 named text の明示改ページ後も本文を保持し、model inline span は表示 UTF-16 unit を指す。raw wrapper は保全する。限定した見出し・一覧 cache は物理 source 行と fixed84 page 範囲を再利用する。動的 field、目次 leader、native 横長和文 tracking は未解決。
 
 限定した保存済み目次領域の title/page label を保全し、設定 record に本文行高を割り当てず物理 page 範囲を再利用する。横方向 tab stop、leader paint、生成と編集可能な目次 semantics は未解読。
+
+限定した印刷日・page・link cache と source 対応を保持する。印刷日は明示 render context（browser/Unix PDF の local date を既定で使用）で描画し、raw cache を変更しない。外部 link の色・下線と HTTP(S) SVG target は対応 record に従う。一般的な再番号付け、bookmark 位置、別 field profile は未解決。

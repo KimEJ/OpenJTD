@@ -204,6 +204,29 @@ native 和文文字間隔は未解決のまま。
 従うが、page label の横位置は fallback のまま。追加分析用の raw field を保全し、
 参照 PDF の座標で領域の配置を補正しない。
 
+## 限定的な field cache の対応
+
+統制した JTD・JTT・JTTC は class0 の三つの field profile を共有する。
+28-unit 印刷日（`0x0033`）、15-unit page number（`0x0035`）、12-unit 外部 link
+（`0x0048`）。完全な selector1 value wrapper と selector0 argument wrapper が record
+と連続することを確認する。日付は `DATE`、page number は `PAGENUMBER`、HTTP(S) link は
+URL target と空の第二 argument を要求する。他の field/profile は raw のまま保つ。
+`textFieldCandidates` は cache・argument・record/value span を `decoded:false` で公開し、
+一般的な field expression engine の解読とはしない。
+
+有効な `YYYY/MM/DD` 印刷日は model の render context であり、cache/raw を書き換えない。
+`DocumentCore::set_print_date` が SVG と layer へ値を渡し、WASM wrapper/viewer は
+browser の local date を供給する。native Unix PDF export は対応する印刷日 field がある
+場合だけ platform の `date` command を使う。明示 API
+`to_pdf_with_file_name_and_print_date` は全 native target で再現可能な出力を支える。
+provider/context がなければ cache を維持する。page number cache は一般的な再番号付けをしない。
+
+統制した外部 link profile は record 最初の unit の color/underline property を表示 cache
+へ対応させる。SVG は escape した HTTP(S) target を持ち、layer は field/cache evidence を保つ。
+完全な field group は物理 source-page 経路も通せる。bookmark 位置、別の日付形式・種類、
+任意の target、編集可能な field semantics、PDF link annotation は未対応。
+geometry/font metrics は既存 candidate/fallback の制限を維持する。
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` にも長さで区切られた `TextV.01` block がある。区切られた content は

@@ -224,6 +224,34 @@ and text pitch now follow the shared model path, while page labels retain
 fallback horizontal placement. Raw context fields remain available for further
 analysis; no reference-PDF coordinates are used to place the region.
 
+## Bounded Field Cache Bindings
+
+The controlled JTD, JTT, and JTTC inputs share three class-0 field profiles:
+28-unit printing date (`0x0033`), 15-unit page number (`0x0035`), and 12-unit
+external link (`0x0048`). Complete selector-1 value wrappers and selector-0
+argument wrappers must be contiguous with the record; dates require `DATE`,
+page numbers require `PAGENUMBER`, and HTTP(S) links require their target plus
+an empty secondary argument. Other record fields and profiles stay raw.
+`textFieldCandidates` exposes the cache, argument, and record/value spans with
+`decoded:false`. This does not establish a general field expression engine.
+
+A validated `YYYY/MM/DD` printing date is a model render context, not a mutation
+of cached text or raw data. `DocumentCore::set_print_date` supplies it to SVG
+and layer output; the WASM wrapper and viewer supply the local browser date.
+Native Unix PDF export obtains the local date from the platform `date` command
+only when a supported printing-date field exists. The explicit
+`to_pdf_with_file_name_and_print_date` API supports reproducible output on all
+native targets; without a date provider or supplied context, caches remain.
+Page-number caches are preserved without general renumbering.
+
+The controlled external-link profile binds the record's first-unit color and
+underline properties to its visible cache. SVG carries the escaped HTTP(S)
+target, and layer output retains field/cache evidence. Complete field groups
+also pass physical source-page admission. Bookmark positions, other date
+formats/types, arbitrary targets, editable field semantics, and PDF link
+annotations remain unsupported. Geometry and font metrics retain their
+existing candidate/fallback limits.
+
 ## LayoutBoxText Content
 
 `/LayoutBoxText` also contains length-delimited `TextV.01` blocks. Their bounded

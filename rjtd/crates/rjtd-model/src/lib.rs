@@ -861,6 +861,7 @@ pub struct DocumentCore {
     document: Document,
     pages: Vec<Vec<PageTextLine>>,
     file_name: String,
+    print_date: Option<String>,
     dpi: f64,
     page_layout: PageLayout,
     show_paragraph_marks: bool,

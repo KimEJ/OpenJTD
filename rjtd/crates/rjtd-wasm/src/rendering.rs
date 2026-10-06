@@ -3,6 +3,10 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 impl HwpDocument {
+    #[wasm_bindgen(js_name = setPrintDate)]
+    pub fn set_print_date(&mut self, value: &str) -> Result<(), JsValue> {
+        self.core.set_print_date(value).map_err(js_error)
+    }
     #[wasm_bindgen(js_name = renderPageSvg)]
     pub fn render_page_svg(&self, page_num: u32) -> Result<String, JsValue> {
         self.core.render_page_svg(page_num).map_err(js_error)

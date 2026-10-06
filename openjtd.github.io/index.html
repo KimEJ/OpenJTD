@@ -443,6 +443,11 @@ async function openFile(file) {
   try {
     if (doc) { doc.free(); doc = null; }
     doc = new HwpDocument(bytes);
+    if (typeof doc.setPrintDate === 'function') {
+      const now = new Date();
+      const date = `${String(now.getFullYear()).padStart(4, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+      doc.setPrintDate(date);
+    }
     doc.setFileName(file.name);
     totalPages = doc.pageCount();
     currentPage = 0;
