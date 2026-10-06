@@ -138,6 +138,11 @@ pub(super) fn page_layout_with_source_margins(
             let payload = bytes.get(start..start.checked_add(record.payload_len())?)?;
             let offset = match (payload.len(), payload.get(..2)) {
                 (32, Some([0, 0xd8])) => 2,
+                (33, Some([0, 0xd8]))
+                    if modern_source_writing_mode(document) == Some(WritingMode::VerticalRl) =>
+                {
+                    2
+                }
                 (33, Some([0, 0xd9])) if payload.get(2) == Some(&1) => 3,
                 _ => return None,
             };
@@ -188,7 +193,7 @@ pub(super) fn page_layout_from_document_view_styles(bytes: &[u8]) -> Option<Page
     })
 }
 
-fn modern_document_view_layout(bytes: &[u8]) -> Option<PageLayout> {
+pub(super) fn modern_document_view_layout(bytes: &[u8]) -> Option<PageLayout> {
     let summary = summarize_style_stream(bytes);
     if summary.record_layout() != rjtd_core::style_stream::StyleStreamRecordLayout::Sequential {
         return None;
@@ -1093,7 +1098,21 @@ pub(super) fn page_layer_tree_json(
             push_page_layer_text_source_json(&mut text_sources, source_id, &fragment);
         }
     }
-    if shanai_lan_text_projection.is_none() && form_projection.is_none() {
+    let native_vertical = native_vertical_projection(
+        &core.document,
+        layout,
+        page_num as usize + 1,
+        lines,
+        core.writing_mode,
+    )
+    .filter(|_| shanai_lan_text_projection.is_none() && form_projection.is_none());
+    if let Some(projection) = &native_vertical {
+        push_native_vertical_layer_json(&mut output, &mut text_sources, projection, &font_family);
+    }
+    if shanai_lan_text_projection.is_none()
+        && form_projection.is_none()
+        && native_vertical.is_none()
+    {
         let style_resolver = document_text_style_resolver(&core.document);
         let default_font_size = document_default_font_size_px(&core.document);
         let mut fallback_visual_line_index = 0usize;

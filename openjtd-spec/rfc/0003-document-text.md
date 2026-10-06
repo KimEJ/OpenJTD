@@ -474,3 +474,34 @@ These corroborations are strong but not exhaustive:
 - Identify the container/object boundary that owns embedded `SsmgV.01` fragments.
 - Expand `JustCompressedDocument` documentation as more `.jttc` samples are observed.
 - Recover paragraph boundaries and style references from surrounding streams instead of deriving model blocks from plain-text line breaks.
+
+## Bounded Modern Vertical Text
+
+The controlled modern sequential view family uses the same `0x1001` stock-size
+profile for horizontal and vertical text. Its `0x1002` payload keeps the margin
+quad at offset 2: the 32-byte horizontal form has `0x40` at offset 10; the
+33-byte vertical form has `0x50,0x01` at offsets 10/11. Both have the same
+ten repeated `0x02bc` words and zero suffix after the direction portion.
+Duplicate size/margin records, unknown flags, or explicit page styles do not
+select this global profile. The edit section `0x2000` changes with caret state
+and is not a writing-direction discriminator. Legacy first-record heuristics
+remain diagnostic only.
+
+Plain text uses validated LineMark source columns and the existing PageMark
+font-plus-gap pitch across the horizontal axis. The controlled `0x1006` tail
+value `0x0266` with the known `0x100b` profile corresponds to the native UI's
+60% character spacing. The bounded renderer applies that spacing to Japanese
+runs; this association does not establish a general numeric-unit formula.
+Latin and whitespace advances, fallback font metrics, and vertical glyph
+substitutions remain approximate. Source column boundaries are preserved.
+
+A class-zero 12-unit record `[1c,0,12,0,47,0,5,0210,12,0,0,1f]`, followed by
+an empty index-0 selector-1 cache and an index-1 selector-`0x0101` two-digit
+cache, identifies the controlled no-fit tatechuyoko candidate. Complete
+contiguous wrappers and terminators are required. The numeric value becomes
+a source-linked TextRun while its original skipped cache and raw controls
+remain preserved. SVG/PDF and layer output place this pair horizontally in
+one vertical cell; ordinary `123` retains the normal vertical orientation.
+Other lengths, nonnumeric caches, fit modes, ruby, and incomplete records are
+not promoted by this rule. JSON exposes both record/value spans with
+`decoded:false`; geometry and font/spacing interpretation remain candidates.

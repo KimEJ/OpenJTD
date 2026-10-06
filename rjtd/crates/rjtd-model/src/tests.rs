@@ -7,6 +7,7 @@ mod fields;
 mod footnote;
 mod local_samples;
 mod native_running;
+mod native_vertical;
 mod page_grid_y_anchor_and_record_flags;
 mod shanai_lan;
 mod support;

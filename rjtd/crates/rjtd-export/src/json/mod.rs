@@ -166,6 +166,23 @@ pub fn to_json(document: &Document) -> String {
         push_document_toc_entry_json(&mut output, entry);
     }
     output.push(']');
+    let tatechuyoko = document.tatechuyoko_candidates();
+    if !tatechuyoko.is_empty() {
+        output.push_str(",\"tatechuyokoCandidates\":[");
+        for (index, candidate) in tatechuyoko.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str("{\"text\":");
+            push_json_string(&mut output, candidate.text());
+            output.push_str(",\"recordSourceSpan\":");
+            text_layout::push_text_source_span_json(&mut output, candidate.record_span());
+            output.push_str(",\"valueSourceSpan\":");
+            text_layout::push_text_source_span_json(&mut output, candidate.value_span());
+            output.push_str(",\"decoded\":false,\"geometryDecoded\":false}");
+        }
+        output.push(']');
+    }
     let headers = document.header_text_candidates();
     if !headers.is_empty() {
         output.push_str(",\"headerTextCandidates\":[");

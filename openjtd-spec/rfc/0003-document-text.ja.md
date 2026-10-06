@@ -447,3 +447,28 @@ pub const DOCUMENT_TEXT_PAGE_BREAK_CONTROL: u16 = 0x000c;
 - embedded `SsmgV.01` fragments を所有する container/object boundary を特定する。
 - より多くの `.jttc` samples が観察されたら `JustCompressedDocument` documentation を拡張する。
 - plain-text line breaks から model blocks を derive する代わりに、surrounding streams から paragraph boundaries と style references を復元する。
+
+## 限定的な modern 縦書き本文
+
+統制した modern sequential view family は、横書き・縦書きで同じ `0x1001` stock-size
+profile を使用する。`0x1002` payload の margin quad は offset2 にあり、32-byte
+横書き形は offset10 の `0x40`、33-byte 縦書き形は offset10/11 の `0x50,0x01` を
+持つ。方向部分の後には同じ十個の `0x02bc` word と zero suffix がある。size/margin
+record の重複、未知 flag、明示 page style はこの global profile を選択しない。
+edit section `0x2000` は caret 状態で変わり、書字方向の判別に使用しない。
+legacy の first-record heuristic は diagnostic のみ。
+
+plain 本文は検証した LineMark source 列と既存 PageMark font-plus-gap pitch を
+横方向に再利用する。既知 `0x100b` profile と `0x1006` tail の `0x0266` は
+native UI の字間60%に対応する。限定 renderer は和文 run にその字間を適用するが、
+一般的な数値単位の式を確定したものではない。英字・空白の送り、代替 font metrics、
+縦用 glyph 置換は近似のまま。source の列境界を保持する。
+
+class0 の 12-unit record `[1c,0,12,0,47,0,5,0210,12,0,0,1f]` に空の index0
+selector1 cache と index1 selector`0x0101` の二桁 cache が続くと、統制した
+幅に収めない縦中横候補になる。連続した完全な wrapper と terminator を要求する。
+数字を source 付き TextRun に復元し、元 skipped cache と raw control を保全する。
+SVG/PDF と layer は二桁を一つの縦方向 cell に横向きに配置し、通常の `123` は
+一般の縦組み方向を維持する。他の長さ・非数字・fit mode・ruby・不完全 record を
+この規則では昇格しない。JSON は record/value span と `decoded:false` を公開し、
+geometry、font/spacing 解釈は候補のまま保持する。

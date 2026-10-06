@@ -23,7 +23,10 @@ pub(crate) fn native_page_line_plan(
     {
         return None;
     }
-    if writing_mode.is_vertical() || !layout.has_source_margins() {
+    if (writing_mode.is_vertical()
+        && modern_source_writing_mode(document) != Some(WritingMode::VerticalRl))
+        || !layout.has_source_margins()
+    {
         return None;
     }
     let flow = document.document_text_flow()?;
@@ -33,11 +36,25 @@ pub(crate) fn native_page_line_plan(
         .any(|event| native_rule_parent_offset(event).is_some());
     let toc_scope = native_toc_source_scope(document);
     let fields = document.text_field_candidates();
+    let tatechuyoko = document.tatechuyoko_candidates();
+    if writing_mode.is_vertical() && (has_rules || !fields.is_empty()) {
+        return None;
+    }
     if has_rules && !native_rule_grid_admitted(document, layout, writing_mode) {
         return None;
     }
     let mut event_index = 0;
     while let Some(event) = flow.events().get(event_index) {
+        if let Some(end) = native_tatechuyoko_end(&tatechuyoko, event.unit_start()) {
+            while flow
+                .events()
+                .get(event_index)
+                .is_some_and(|event| event.unit_start() < end)
+            {
+                event_index += 1;
+            }
+            continue;
+        }
         if !has_rules
             && let Some(end) = native_field_end(&fields, flow.events(), event.unit_start())
         {

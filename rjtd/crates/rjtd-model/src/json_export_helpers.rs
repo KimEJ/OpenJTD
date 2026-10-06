@@ -642,8 +642,8 @@ pub(crate) struct DocumentViewWritingModeCandidate {
 // DocumentViewStyles record 0x1001 appears as the first sequential record in
 // current vertical-writing Ginga samples, but also appears in horizontal
 // reference-PDF samples such as tsaiten, tmogi3_2, success_data-test, and
-// shanai_lan. Keep it diagnostic-only until the surrounding style semantics are
-// decoded.
+// shanai_lan. The bounded modern margin/direction profile takes precedence;
+// the first-code heuristic remains diagnostic-only for other stream families.
 pub(crate) fn writing_mode_candidate_from_document_view_styles(
     styles: &[UnknownStyle],
 ) -> Option<DocumentViewWritingModeCandidate> {
@@ -655,7 +655,9 @@ pub(crate) fn writing_mode_candidate_from_document_view_styles(
                 .records()
                 .first()?
                 .code();
-            let writing_mode = if first_record_code == 0x1001 {
+            let writing_mode = if let Some(mode) = modern_view_writing_mode(styles) {
+                mode
+            } else if first_record_code == 0x1001 {
                 WritingMode::VerticalRl
             } else {
                 WritingMode::Horizontal

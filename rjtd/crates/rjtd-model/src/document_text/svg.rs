@@ -79,6 +79,10 @@ pub(crate) fn render_text_page_svg(
         push_shanai_lan_text_projection_svg(&mut svg, projection, &font_family);
     } else if let Some(projection) = &form_projection {
         push_observed_form_text_projection_svg(&mut svg, projection, &font_family);
+    } else if let Some(projection) =
+        native_vertical_projection(document, layout, page_number, lines, writing_mode)
+    {
+        push_native_vertical_svg(&mut svg, &projection, &font_family);
     } else if writing_mode.is_vertical() {
         let placement = vertical_page_text_placement(layout, lines);
         svg.push_str("<g writing-mode=\"vertical-rl\" glyph-orientation-vertical=\"auto\">");

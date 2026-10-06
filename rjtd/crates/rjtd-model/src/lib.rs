@@ -244,6 +244,8 @@ impl Document {
     ) -> Self {
         let mut spans = DocumentTextSourceSpans::new(map.entries());
         let mut builder = DocumentTextModelBuilder::default();
+        let flow = DocumentTextFlow::from_map(payload.source_name(), payload.bytes(), map);
+        let tatechuyoko = native_tatechuyoko_candidates(&flow);
 
         for element in payload.parsed_text().elements() {
             match element {
@@ -253,11 +255,22 @@ impl Document {
                     segment,
                     spans.next(DocumentTextMapKind::InlineText, segment.text()),
                 ),
-                DocumentTextElement::SkippedInlineText(segment) => builder
-                    .push_skipped_inline_with_span(
-                        segment,
-                        spans.next(DocumentTextMapKind::SkippedInlineText, segment.text()),
-                    ),
+                DocumentTextElement::SkippedInlineText(segment) => {
+                    let span = spans.next(DocumentTextMapKind::SkippedInlineText, segment.text());
+                    builder.push_skipped_inline_with_span(segment, span.clone());
+                    if let Some(candidate) = tatechuyoko.iter().find(|c| {
+                        span.as_ref().is_some_and(|span| {
+                            c.value_span().unit_start() == span.unit_start() + 1
+                                && c.value_span().unit_end() + 1 == span.unit_end()
+                        }) && c.text() == segment.text()
+                    }) {
+                        builder.push_text(
+                            candidate.text(),
+                            ModelTextSource::Inline,
+                            Some(candidate.value_span().clone()),
+                        );
+                    }
+                }
                 DocumentTextElement::ControlBoundary(control) => {
                     builder.push_control_boundary(control, spans.next_control(control.code()));
                 }
@@ -272,11 +285,7 @@ impl Document {
         for boundary in text_control_boundaries {
             document.push_text_control_boundary(boundary);
         }
-        document.document_text_flow = Some(DocumentTextFlow::from_map(
-            payload.source_name(),
-            payload.bytes(),
-            map,
-        ));
+        document.document_text_flow = Some(flow);
         document
     }
 
@@ -772,6 +781,16 @@ fn source_document_layout_hint(
     document: &Document,
     decoded_layout: PageLayout,
 ) -> Option<SourceDocumentLayoutHint> {
+    if let Some(writing_mode) = modern_source_writing_mode(document) {
+        return Some(SourceDocumentLayoutHint {
+            basis: "modern-view-margin-direction",
+            fallback_layout: decoded_layout,
+            writing_mode,
+            override_decoded_layout: false,
+            margin_override_px: None,
+            vertical_wrap_columns_override: None,
+        });
+    }
     if document_has_shanai_lan_fdm_command_evidence(document)
         || document_has_shanai_lan_fdm_frame_evidence(document)
     {
