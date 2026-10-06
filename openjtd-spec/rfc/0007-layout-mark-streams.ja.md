@@ -409,3 +409,22 @@ RFC 0009 により、`/DocumentText` の各 `0x001c` が自己記述型の段落
 - tag offsets と contexts を text/layout boundaries と比較し、`/LineMark` 内の `0x1000`、`0x1001`、`0x1002` tag families を decode する。
 - final Mark header `u16` が `/LineMark` tag clusters 近くに入る一方で Mark entries が入らない理由を decode する。
 - direct `/LineMark`、`/PageMark`、`/PaperMark` coordinates が rejected された後の `TCntV.01` ranges の actual target を decode する。`text-position-count-fields`、`text-position-count-field-deltas`、`text-position-count-tail-context`、`text-position-count-tail-delta-scan`、`text-position-count-tail-delta-groups`、`text-position-count-tail-row-deltas`、`text-position-count-tail-row-context`、`text-position-count-range-preview`、`text-position-count-range-boundaries`、`text-control-context` を使って tail field patterns と chosen `/DocumentText` byte-range/control overlap を比較する。
+
+## 限定的なページ書式の方向切替
+
+統制した単一 page style は、subfield `0x0010` の 12-unit class `0x0020`
+record で ID1 適用と ID0 復帰を行う。中央 page の fixed84 flag `0x00050100` と
+隣接 page の `0x00010000` を照合する。一つの既知 style、中央 page source 境界の
+apply/reset、連続する三つの active page、入れ替わった紙寸法、同じ view/style margin
+quad のみ許容する。他の ID・関係・寸法・余白・record shape は fallback のまま。
+
+258-byte sequential view `0x1001` profile の payload offset 126/130 と 154/158 は
+重複する LE-u32 stock size。統制した 267-byte 方向 profile は 9-byte prefix を加え、
+offset1/5 の BE-u32 に明示寸法を持つ。重複値と既知 prefix を確認してから使用する。
+観測した 39/40-byte `0x4002` margin profile は既存 mm quad 解釈を共有し、
+残りの field は raw として保持する。
+
+SVG・layer/page info・PDF・canvas 寸法は同じ model page layout を選ぶ。
+書式設定 record と行末だけなら text pitch を消費しないが、本文空行や表示文字には
+拡張しない。限定的な source-backed 方向候補であり、一般 section DOM、任意の書式継承、
+完全な navigation layout、native 文字間隔の解読ではない。raw/decoded-false evidence を保つ。

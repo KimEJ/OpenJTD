@@ -14,10 +14,12 @@ pub(crate) fn native_page_line_plan(
     layout: PageLayout,
     writing_mode: WritingMode,
 ) -> Option<Vec<NativePageLinePlan>> {
+    let sections = native_section_layouts(document, layout);
     if document
         .unknown_styles()
         .iter()
         .any(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+        && sections.is_none()
     {
         return None;
     }
@@ -68,6 +70,7 @@ pub(crate) fn native_page_line_plan(
                     || native_rule_fixed_pitch(event).is_some()
                     || native_paragraph_attributes(event).is_some()
                     || (!has_rules && heading_or_number_record(event))
+                    || (!has_rules && sections.is_some() && native_section_marker(event).is_some())
                     || (!has_rules
                         && toc_scope.is_some_and(|(from, to)| {
                             from <= event.unit_start() && event.unit_end() <= to

@@ -288,3 +288,5 @@ named text の明示改ページ後も本文を保持し、model inline span は
 限定した印刷日・page・link cache と source 対応を保持する。印刷日は明示 render context（browser/Unix PDF の local date を既定で使用）で描画し、raw cache を変更しない。外部 link の色・下線と HTTP(S) SVG target は対応 record に従う。一般的な再番号付け、bookmark 位置、別 field profile は未解決。
 
 JTTC model は解凍した inner CFB を補助 layout mark・note/bookmark・object/frame stream に再利用し、圧縮 source と共有 resource limit を保全する。JTT/JTTC の source-page 配置は同じ model 経路に従う。
+
+統制した単一書式の縦長・横長・縦長 profile は、SVG・page/layer info・PDF・canvas 寸法で page ごとの layout を選ぶ。未知の書式対応や異なる余白・紙 profile は fallback を保ち、native tracking・一般 section 編集は未解決。

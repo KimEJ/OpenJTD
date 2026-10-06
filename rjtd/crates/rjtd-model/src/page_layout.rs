@@ -71,6 +71,18 @@ pub(super) fn page_layout_is_close_to_mm(
 }
 
 pub(super) fn page_layout_from_document(document: &Document) -> PageLayout {
+    if !document
+        .unknown_styles()
+        .iter()
+        .any(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+        && let Some(layout) = document
+            .unknown_styles()
+            .iter()
+            .find(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))
+            .and_then(|style| modern_document_view_layout(style.payload()))
+    {
+        return layout;
+    }
     decoded_page_layout_from_styles(document.unknown_styles())
         .unwrap_or_default()
         .with_portrait_orientation()
@@ -100,7 +112,7 @@ pub(super) fn page_layout_with_source_margins(
                 .iter()
                 .find(|s| s.code() == 0x4002)?
                 .payload();
-            if payload.len() != 39 || payload.get(..3) != Some(&[0xfe, 0x80, 0]) {
+            if !matches!(payload.len(), 39 | 40) || payload.get(..3) != Some(&[0xfe, 0x80, 0]) {
                 return None;
             }
             page_margins_at(payload, 3)
@@ -140,7 +152,7 @@ pub(super) fn page_layout_with_source_margins(
     layout
 }
 
-fn page_margins_at(bytes: &[u8], offset: usize) -> Option<[f32; 4]> {
+pub(crate) fn page_margins_at(bytes: &[u8], offset: usize) -> Option<[f32; 4]> {
     let top = read_be16_at(bytes, offset)?;
     let bottom = read_be16_at(bytes, offset + 2)?;
     let left = read_be16_at(bytes, offset + 4)?;
@@ -168,10 +180,60 @@ pub(super) fn decoded_page_layout_from_styles(styles: &[UnknownStyle]) -> Option
 }
 
 pub(super) fn page_layout_from_document_view_styles(bytes: &[u8]) -> Option<PageLayout> {
-    page_layout_from_encoded_mm100_shift8(
-        read_be32_at(bytes, DOCUMENT_VIEW_STYLES_PAGE_WIDTH_OFFSET)?,
-        read_be32_at(bytes, DOCUMENT_VIEW_STYLES_PAGE_HEIGHT_OFFSET)?,
-    )
+    modern_document_view_layout(bytes).or_else(|| {
+        page_layout_from_encoded_mm100_shift8(
+            read_be32_at(bytes, DOCUMENT_VIEW_STYLES_PAGE_WIDTH_OFFSET)?,
+            read_be32_at(bytes, DOCUMENT_VIEW_STYLES_PAGE_HEIGHT_OFFSET)?,
+        )
+    })
+}
+
+fn modern_document_view_layout(bytes: &[u8]) -> Option<PageLayout> {
+    let summary = summarize_style_stream(bytes);
+    if summary.record_layout() != rjtd_core::style_stream::StyleStreamRecordLayout::Sequential {
+        return None;
+    }
+    let records = summary
+        .records()
+        .iter()
+        .filter(|record| record.code() == 0x1001)
+        .collect::<Vec<_>>();
+    if let [record] = records.as_slice() {
+        let start = record.offset().checked_add(4)?;
+        let payload = bytes.get(start..start.checked_add(record.payload_len())?)?;
+        let extra = match payload.len() {
+            258 => 0,
+            267 if payload.first() == Some(&14) => 9,
+            _ => usize::MAX,
+        };
+        let prefix = if extra == 9 {
+            [1, 4, 1, 0, 0, 0]
+        } else {
+            [0, 4, 1, 0, 0, 0]
+        };
+        if extra != usize::MAX && payload.get(extra..extra + 6) == Some(prefix.as_slice()) {
+            let le = |offset: usize| {
+                payload
+                    .get(offset..offset + 4)
+                    .map(|value| u32::from_le_bytes(value.try_into().unwrap()))
+            };
+            let stock = (le(126 + extra)?, le(130 + extra)?);
+            if stock == (le(154 + extra)?, le(158 + extra)?) {
+                let (width, height) = if extra == 9 {
+                    (read_be32_at(payload, 1)?, read_be32_at(payload, 5)?)
+                } else {
+                    stock
+                };
+                if let Some(layout) = page_layout_from_encoded_mm100_shift8(
+                    width.checked_mul(256)?,
+                    height.checked_mul(256)?,
+                ) {
+                    return Some(layout);
+                }
+            }
+        }
+    }
+    None
 }
 
 pub(super) fn page_layout_from_page_layout_style(bytes: &[u8]) -> Option<PageLayout> {
@@ -534,7 +596,7 @@ pub(super) fn page_layer_tree_json(
     profile: &str,
     page_num: u32,
 ) -> String {
-    let layout = core.page_layout;
+    let layout = core.page_layout_for(page_num as usize);
     let font_family = document_font_family_css(&core.document);
     let fields = core.document.text_field_candidates();
     let mut output = format!(

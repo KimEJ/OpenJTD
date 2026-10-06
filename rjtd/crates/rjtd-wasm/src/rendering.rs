@@ -130,8 +130,8 @@ fn render_core_page_to_canvas(
     use web_sys::CanvasRenderingContext2d;
 
     let lines = core.page_text_lines(page_num).map_err(js_error)?;
-    let layout = crate::canvas::canvas_layout(core.page_width_px(), core.page_height_px(), scale)
-        .map_err(js_error)?;
+    let (page_width, page_height) = core.page_size_px(page_num).map_err(js_error)?;
+    let layout = crate::canvas::canvas_layout(page_width, page_height, scale).map_err(js_error)?;
     canvas.set_width(layout.width());
     canvas.set_height(layout.height());
 
@@ -142,7 +142,7 @@ fn render_core_page_to_canvas(
 
     context.set_transform(layout.scale(), 0.0, 0.0, layout.scale(), 0.0, 0.0)?;
     context.set_fill_style_str("#ffffff");
-    context.fill_rect(0.0, 0.0, core.page_width_px(), core.page_height_px());
+    context.fill_rect(0.0, 0.0, page_width, page_height);
 
     context.set_fill_style_str("#111111");
     context.set_font(&format!(

@@ -1,6 +1,66 @@
 use super::*;
 
 #[test]
+fn modern_page_size_records_keep_stock_dimensions_and_explicit_orientation_distinct() {
+    let make = |landscape: bool, mismatch: bool| {
+        let extra = if landscape { 9 } else { 0 };
+        let mut payload = vec![0; 258 + extra];
+        if landscape {
+            payload[0] = 14;
+            payload[1..5].copy_from_slice(&29700_u32.to_be_bytes());
+            payload[5..9].copy_from_slice(&21000_u32.to_be_bytes());
+        }
+        payload[extra..extra + 6].copy_from_slice(&[u8::from(landscape), 4, 1, 0, 0, 0]);
+        for (offset, value) in [
+            (126, 21000_u32),
+            (130, 29700),
+            (154, if mismatch { 14800 } else { 21000 }),
+            (158, 29700),
+        ] {
+            payload[offset + extra..offset + extra + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        let mut bytes = vec![0; 32];
+        for (code, value) in [
+            (0x1001_u16, payload.as_slice()),
+            (0x1007, &[1]),
+            (0x1008, &[2]),
+            (0x1009, &[3]),
+        ] {
+            bytes.extend(code.to_be_bytes());
+            bytes.extend((value.len() as u16).to_be_bytes());
+            bytes.extend(value);
+        }
+        bytes
+    };
+    let portrait = page_layout_from_document_view_styles(&make(false, false)).unwrap();
+    let landscape = page_layout_from_document_view_styles(&make(true, false)).unwrap();
+    assert!((portrait.width_px() - landscape.height_px()).abs() < 0.01);
+    assert!((portrait.height_px() - landscape.width_px()).abs() < 0.01);
+    assert!(landscape.width_px() > landscape.height_px());
+    assert!(page_layout_from_document_view_styles(&make(false, true)).is_none());
+}
+
+#[test]
+fn section_setting_records_reject_unknown_ids_and_do_not_hide_visible_text() {
+    let make = |id: u16| {
+        let words = [0x1c, 0x20, 12, 0, 0x10, id, 0, 1, 12, 0, 0x20, 0x1f, 10, 65];
+        let mut bytes = vec![0; 32];
+        bytes[..8].copy_from_slice(b"SsmgV.01");
+        bytes[20..28].copy_from_slice(b"TextV.01");
+        bytes[28..32].copy_from_slice(&(words.len() as u32).to_be_bytes());
+        for word in words {
+            bytes.extend(word.to_be_bytes());
+        }
+        DocumentTextFlow::from_map("/DocumentText", &bytes, &map_document_text(&bytes))
+    };
+    let flow = make(1);
+    assert_eq!(native_section_marker(&flow.events()[0]), Some(1));
+    assert!(native_section_setting_line(&flow, 16, 29));
+    assert!(!native_section_setting_line(&flow, 16, 30));
+    assert_eq!(native_section_marker(&make(2).events()[0]), None);
+}
+
+#[test]
 fn toc_settings_do_not_consume_ink_rows_or_create_entries_from_unknown_contexts() {
     let make = |kind: u16, tag: u16, setup: &str| {
         let mut words = vec![0x1c, 0x20, 12, 0, kind, 0, 0, 0, 12, 0, 0x20, 0x1f];

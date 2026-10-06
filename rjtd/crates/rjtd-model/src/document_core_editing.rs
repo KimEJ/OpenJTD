@@ -423,7 +423,7 @@ impl DocumentCore {
 
     pub fn get_page_info(&self, page_num: u32) -> Result<String> {
         self.page_lines(page_num)?;
-        let layout = self.page_layout;
+        let layout = self.page_layout_for(page_num as usize);
         let body_x = layout.margin_left_px();
         let body_width = layout.body_width_px();
         let mark_evidence = page_decoration_mark_evidence(&self.document, page_num as usize);

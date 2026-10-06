@@ -462,3 +462,27 @@ same coordinate system as `/DocumentText` `0x0030` cell coordinates.
 - Decode the `0x1000`, `0x1001`, and `0x1002` tag families inside `/LineMark` by comparing tag offsets and contexts with text and layout boundaries.
 - Decode why the final Mark header `u16` lands inside `/LineMark` near tag clusters while the Mark entries do not.
 - Decode the actual target for `TCntV.01` ranges after direct `/LineMark`, `/PageMark`, and `/PaperMark` coordinates were rejected; use `text-position-count-fields`, `text-position-count-field-deltas`, `text-position-count-tail-context`, `text-position-count-tail-delta-scan`, `text-position-count-tail-delta-groups`, `text-position-count-tail-row-deltas`, `text-position-count-tail-row-context`, `text-position-count-range-preview`, `text-position-count-range-boundaries`, and `text-control-context` to compare tail field patterns and chosen `/DocumentText` byte-range/control overlap.
+
+## Bounded Page-Style Orientation Switching
+
+A controlled single explicit page style uses paired 12-unit class `0x0020`
+records with subfield `0x0010`, applying ID 1 and restoring ID 0. Fixed84
+page flags `0x00050100` corroborate the middle page's style, while adjacent
+pages use `0x00010000`. The model admits only one known style, ordered
+apply/reset records at the middle page's source boundaries, three consecutive
+active pages, swapped paper dimensions, and equal view/style margin quads.
+Other IDs, associations, dimensions, margins, or record shapes stay fallback.
+
+The 258-byte sequential view `0x1001` profile has duplicate LE-u32 stock sizes
+at payload offsets 126/130 and 154/158. Its controlled 267-byte orientation
+profile adds a 9-byte prefix with explicit BE-u32 dimensions at offsets 1/5.
+Both duplicated stock values and the known prefix must agree before use.
+The observed 39/40-byte `0x4002` margin profiles share the existing millimeter
+quad interpretation; remaining fields stay raw.
+
+SVG, layer/page information, PDF, and canvas dimensions select the same model
+page layout. Pure style-setting records consume no text pitch; actual blank or
+visible content does. This is a bounded source-backed orientation candidate,
+not a decoded general section DOM, arbitrary style inheritance, full navigation
+layout, or native character tracking. Raw records and decoded-false evidence
+remain preserved.

@@ -61,10 +61,16 @@ pub(crate) fn native_rule_line_placement(
     let [entry] = entries.as_slice() else {
         return None;
     };
-    if entry.flags() != Some(0x10000) {
+    let sections = native_section_layouts(document, layout);
+    if entry.flags() != Some(0x10000) && !(entry.flags() == Some(0x50100) && sections.is_some()) {
         return None;
     }
     let page = (entry.index()? as usize).checked_add(1)?;
+    let layout = sections
+        .as_ref()
+        .and_then(|layouts| layouts.get(page - 1))
+        .copied()
+        .unwrap_or(layout);
     let start_record = entry.line_start()? as usize;
     let font = document_default_font_size_px(document)?;
     let default_mm100 = (font * 2540.0 / 96.0).round() as u16;
@@ -90,6 +96,11 @@ pub(crate) fn native_rule_line_placement(
     for interval in intervals.iter().filter(|interval| {
         start_record <= interval.record_index && interval.record_index < record_index
     }) {
+        if sections.is_some()
+            && native_section_setting_line(flow, interval.unit_start, interval.unit_end)
+        {
+            continue;
+        }
         if native_toc_setting_line(flow, toc_scope, interval.unit_start, interval.unit_end) {
             continue;
         }

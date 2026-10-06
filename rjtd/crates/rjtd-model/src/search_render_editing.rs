@@ -433,7 +433,7 @@ impl DocumentCore {
             lines,
             index + 1,
             self.page_count() as usize,
-            self.page_layout,
+            self.page_layout_for(index),
             self.writing_mode,
             &self.document,
             decoration.as_ref(),
