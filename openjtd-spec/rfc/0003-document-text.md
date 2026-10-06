@@ -623,3 +623,22 @@ page plan; resource preflight counts those physical rows.
 Unknown fields, incomplete source/line coverage, vertical or grid mixtures and
 lost source bindings retain fallback. Other paragraph profiles, exact glyph
 metrics and printer quantization remain unresolved. Geometry stays decoded-false.
+
+## Bounded control-cell padding typography
+
+In the admitted horizontal control grid, leading ASCII spaces have their own
+source character properties. A controlled 14pt cell selection starts after the
+first cell's three padding spaces, but includes the padding of subsequent cells.
+Their property-2 ranges therefore differ even when every visible label is 14pt.
+
+The existing two-grid-unit space advance now scales by the padding's source
+font size relative to the document default. The visible label's font size is
+resolved independently. Default padding retains its prior position exactly.
+This is a bounded placement candidate; it does not decode general space units,
+proportional-font metrics or cell ownership. No reference-PDF position is used.
+
+SVG and layer data retain the raw cell source range and additionally name the
+padding prefix range, space count and candidate width. Raw text, original spaces,
+source records and line metrics are preserved. Mixed/uncovered padding font
+ranges, malformed font values or explicit width/height scale properties retain
+fallback. Other cell typography remains unresolved; geometry stays decoded-false.

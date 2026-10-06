@@ -574,3 +574,19 @@ SVG/PDF と layer は同じ source page plan を使い、予算検査も物理�
 未知の field、source/line 範囲の不足、縦書きや grid の混在、失われた source 対応は
 fallback を保つ。他の段落 profile、正確な glyph metrics・印刷時の量子化は未解明。
 Geometry は decoded-false のまま。
+
+## 限定した control cell の空白書式
+
+採用済み横書き control grid の先頭 ASCII 空白は、独自の source 文字属性を持つ。
+統制した14ptのセル選択は、最初のセルの空白三つの後から始まり、後続セルの
+空白も含む。このため、表示 label がすべて14ptでも property-2 の範囲は異なる。
+
+既存の空白一つ当たり二 grid unit の advance を、空白自身の source font size と
+文書既定 size の比で拡縮する。表示 label の font size は別に解決する。
+既定 size の空白は元の位置をそのまま維持する。限定した配置候補であり、一般の
+空白単位・比例 font metrics・cell ownership を解読しない。参照 PDF 座標は使わない。
+
+SVG と layer は raw cell source 範囲に加え、空白 prefix の範囲・数・候補幅を示す。
+raw 本文・元の空白・source record・行 metrics を維持する。空白の font 範囲の混在や
+不足、壊れた font 値、明示的な幅・高さ scale 属性は fallback を保つ。
+他のセル書式は未解明であり、geometry は decoded-false のまま。

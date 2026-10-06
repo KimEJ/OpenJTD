@@ -204,13 +204,17 @@ pub(crate) fn push_page_layer_native_control_table_text_slot_json(
         &text_positions_px_for_font_size(slot.font_size.px, &slot.text),
     );
     output.push_str(&format!(
-        ",\"tableCandidateIndex\":{},\"rowIndex\":{},\"columnIndex\":{},\"headerOffsetUnits\":{},\"lineMarkRecordIndex\":{},\"pageMarkPitchMm100\":{},\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":true,\"referenceBacked\":false,\"isParaEnd\":false,\"isLineBreakEnd\":false}}",
+        ",\"tableCandidateIndex\":{},\"rowIndex\":{},\"columnIndex\":{},\"headerOffsetUnits\":{},\"lineMarkRecordIndex\":{},\"pageMarkPitchMm100\":{},\"leadingAsciiSpaceCount\":{},\"paddingWidthCandidatePx\":{:.3},\"paddingSourceUnitRange\":{{\"start\":{},\"end\":{}}},\"paddingBasis\":\"source-space-font-size-relative-to-default\",\"decoded\":false,\"geometryDecoded\":false,\"placementDerived\":true,\"referenceBacked\":false,\"isParaEnd\":false,\"isLineBreakEnd\":false}}",
         slot.candidate_index,
         slot.row_index,
         slot.column_index,
         slot.header_offset_units,
         slot.line_mark_record_index,
         slot.page_mark_pitch_mm100,
+        slot.leading_space_count,
+        slot.padding_width_px,
+        slot.source_span.unit_start(),
+        slot.source_span.unit_start() + slot.leading_space_count,
     ));
 }
 

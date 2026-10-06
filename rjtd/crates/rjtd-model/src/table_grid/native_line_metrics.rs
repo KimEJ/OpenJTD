@@ -205,6 +205,7 @@ pub(crate) fn native_rule_line_placement(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rjtd_core::document_text::DocumentTextStyleTypedValue;
 
     #[test]
     fn fixed_pitch_requires_matching_repeated_attributes() {
@@ -274,6 +275,41 @@ mod tests {
             let doc =
                 parse_document(&std::fs::read(root.join(format!("{name}.jtd"))).unwrap()).unwrap();
             let layout = page_layout_with_source_margins(&doc, page_layout_from_document(&doc));
+            if name == "table-font14" {
+                let tables =
+                    native_control_table_text_projections(&doc, layout, 1, WritingMode::Horizontal);
+                let slots = tables[0]
+                    .slots
+                    .iter()
+                    .filter(|slot| slot.column_index == 0)
+                    .collect::<Vec<_>>();
+                assert_eq!(slots.len(), 3);
+                let resolver = document_text_style_resolver(&doc).unwrap();
+                for (row, slot) in slots.iter().enumerate() {
+                    assert_eq!(slot.leading_space_count, 3);
+                    let padding = slot.source_span.subspan_by_units(0, 3);
+                    assert_eq!(
+                        resolver.uniform_optional_value_in_range(
+                            padding.unit_start(),
+                            padding.unit_end(),
+                            2
+                        ),
+                        Some(if row == 0 {
+                            None
+                        } else {
+                            Some(DocumentTextStyleTypedValue::U16(494))
+                        })
+                    );
+                    if row > 0 {
+                        assert!(slot.x > slots[0].x);
+                        assert!(
+                            (slot.padding_width_px / slots[0].padding_width_px - 494.0 / 370.0)
+                                .abs()
+                                < 0.0001
+                        );
+                    }
+                }
+            }
             for (index, record) in rows.iter().enumerate() {
                 let (page, top, _) = native_rule_line_placement(&doc, layout, *record).unwrap();
                 assert_eq!(page, 1);

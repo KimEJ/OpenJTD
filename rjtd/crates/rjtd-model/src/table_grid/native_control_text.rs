@@ -28,6 +28,8 @@ pub(crate) struct NativeControlTableTextSlot {
     pub(crate) row_index: usize,
     pub(crate) column_index: usize,
     pub(crate) header_offset_units: u16,
+    pub(crate) leading_space_count: usize,
+    pub(crate) padding_width_px: f32,
     pub(crate) line_mark_record_index: usize,
     pub(crate) page_mark_pitch_mm100: u16,
 }
@@ -538,13 +540,17 @@ pub(crate) fn push_native_control_table_text_svg(
         ));
         for slot in &projection.slots {
             svg.push_str(&format!(
-                "<g data-row=\"{}\" data-column=\"{}\" data-header-offset-units=\"{}\" data-line-mark-record-index=\"{}\" data-page-mark-pitch-mm100=\"{}\" data-font-size-basis=\"{}\">",
+                "<g data-row=\"{}\" data-column=\"{}\" data-header-offset-units=\"{}\" data-line-mark-record-index=\"{}\" data-page-mark-pitch-mm100=\"{}\" data-font-size-basis=\"{}\" data-leading-space-count=\"{}\" data-padding-width-candidate-px=\"{:.3}\" data-padding-source-unit-start=\"{}\" data-padding-source-unit-end=\"{}\" data-padding-basis=\"source-space-font-size-relative-to-default\">",
                 slot.row_index,
                 slot.column_index,
                 slot.header_offset_units,
                 slot.line_mark_record_index,
                 slot.page_mark_pitch_mm100,
                 slot.font_size.basis,
+                slot.leading_space_count,
+                slot.padding_width_px,
+                slot.source_span.unit_start(),
+                slot.source_span.unit_start() + slot.leading_space_count,
             ));
             push_svg_text_run(
                 svg,
@@ -879,8 +885,17 @@ fn native_control_table_text_projection(
             }
             let visible_span = native_rule_visible_span(&raw_text, &span);
             let font_size = document_text_font_size(&resolver, &visible_span, Some(default_font))?;
+            let padding_width_px = native_control_padding_width(
+                &resolver,
+                &span,
+                leading_spaces,
+                default_font,
+                unit_px,
+            )?;
+            let base_padding = leading_spaces as f32 * 2.0 * unit_px;
             let x = layout.margin_left_px()
-                + (f32::from(header.offset_units) + leading_spaces as f32 * 2.0) * unit_px;
+                + (f32::from(header.offset_units) + leading_spaces as f32 * 2.0) * unit_px
+                + (padding_width_px - base_padding);
             let (_, top, _) =
                 native_rule_line_placement(document, layout, resolved.interval.record_index)?;
             let baseline_y = top + font_size.px;
@@ -901,6 +916,8 @@ fn native_control_table_text_projection(
                 row_index,
                 column_index,
                 header_offset_units: header.offset_units,
+                leading_space_count: leading_spaces,
+                padding_width_px,
                 line_mark_record_index: resolved.interval.record_index,
                 page_mark_pitch_mm100: pitch_mm100,
             });
@@ -926,6 +943,37 @@ fn native_control_table_text_projection(
         slots,
         border,
     })
+}
+
+/// Keep the admitted grid-space advance, scaled by the padding's own source
+/// font size rather than the visible label's size. Mixed/unknown scales stay raw.
+fn native_control_padding_width(
+    resolver: &DocumentTextStyleResolver,
+    span: &TextSourceSpan,
+    leading_spaces: usize,
+    default_font: f32,
+    grid_unit: f32,
+) -> Option<f32> {
+    if leading_spaces == 0 {
+        return Some(0.0);
+    }
+    if leading_spaces > span.unit_end().checked_sub(span.unit_start())? {
+        return None;
+    }
+    let padding = span.subspan_by_units(0, leading_spaces);
+    for property in [4, 5] {
+        if resolver.uniform_optional_value_in_range(
+            padding.unit_start(),
+            padding.unit_end(),
+            property,
+        ) != Some(None)
+        {
+            return None;
+        }
+    }
+    let font = document_text_font_size(resolver, &padding, Some(default_font))?;
+    let width = leading_spaces as f32 * 2.0 * grid_unit * (font.px / default_font);
+    (width.is_finite() && width >= 0.0).then_some(width)
 }
 
 fn native_control_table_border_projection(
@@ -1080,6 +1128,109 @@ fn native_parent_row_header(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn padding_resolver(style: &[u8]) -> DocumentTextStyleResolver {
+        let mut bytes = vec![0; 32];
+        bytes[..8].copy_from_slice(b"SsmgV.01");
+        bytes[20..28].copy_from_slice(b"TextV.01");
+        bytes[28..32].copy_from_slice(&6_u32.to_be_bytes());
+        bytes.extend("   ABC".encode_utf16().flat_map(u16::to_be_bytes));
+        bytes.extend(style);
+        DocumentTextStyleResolver::from_document_text_bytes(&bytes)
+    }
+
+    #[test]
+    fn control_cell_padding_uses_its_own_font_before_the_visible_label() {
+        let default = hundredth_millimeters_to_css_px(370);
+        let larger = hundredth_millimeters_to_css_px(494);
+        let span = TextSourceSpan::new(32, 44, 16, 22);
+        let default_padding =
+            padding_resolver(&[0, 0, 0, 0, 3, 0xfe, 2, 2, 1, 0xee, 0xff, 0, 0, 0, 0, 0, 2]);
+        let larger_padding = padding_resolver(&[0xfe, 2, 2, 1, 0xee, 0xff, 0, 0, 0, 0, 0, 5]);
+        assert_eq!(
+            document_text_font_size(
+                &default_padding,
+                &span.subspan_by_units(3, 6),
+                Some(default)
+            )
+            .unwrap()
+            .px,
+            larger
+        );
+        let width = |resolver| {
+            native_control_padding_width(resolver, &span, 3, default, default / 4.0).unwrap()
+        };
+        assert!((width(&default_padding) - default * 1.5).abs() < 0.0001);
+        assert!((width(&larger_padding) - larger * 1.5).abs() < 0.0001);
+        assert_eq!(
+            native_control_padding_width(&larger_padding, &span, 0, default, default / 4.0),
+            Some(0.0)
+        );
+        assert!(
+            native_control_padding_width(&larger_padding, &span, 7, default, default / 4.0)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn control_cell_padding_rejects_mixed_fonts_malformed_values_and_unknown_scales() {
+        let span = TextSourceSpan::new(32, 44, 16, 22);
+        for style in [
+            &[0, 0, 0, 0, 1, 0xfe, 2, 2, 1, 0xee, 0xff, 0, 0, 0, 0, 0, 4][..],
+            &[0xfe, 2, 1, 14, 0xff, 0, 0, 0, 0, 0, 5][..],
+            &[0xfe, 4, 2, 0, 50, 0xff, 0, 0, 0, 0, 0, 5][..],
+            &[],
+        ] {
+            assert!(
+                native_control_padding_width(&padding_resolver(style), &span, 3, 14.0, 3.5)
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn control_cell_padding_keeps_raw_source_range_and_separate_prefix_provenance() {
+        let slot = NativeControlTableTextSlot {
+            candidate_index: 0,
+            text: "ABCDEF".into(),
+            x: 50.0,
+            baseline_y: 35.0,
+            font_size: DocumentTextFontSize {
+                px: 18.0,
+                basis: "document-text-style-property-2",
+            },
+            source_span: TextSourceSpan::new(40, 58, 20, 29),
+            row_index: 0,
+            column_index: 0,
+            header_offset_units: 2,
+            leading_space_count: 3,
+            padding_width_px: 24.0,
+            line_mark_record_index: 2,
+            page_mark_pitch_mm100: 592,
+        };
+        let mut layer = String::new();
+        push_page_layer_native_control_table_text_slot_json(&mut layer, 0, &slot, "sans-serif");
+        assert!(layer.contains("\"jtdUnitRange\":{\"start\":20,\"end\":29}"));
+        assert!(layer.contains("\"paddingSourceUnitRange\":{\"start\":20,\"end\":23}"));
+        assert!(layer.contains("\"paddingWidthCandidatePx\":24.000"));
+        assert!(layer.contains("\"geometryDecoded\":false"));
+        let mut svg = String::new();
+        push_native_control_table_text_svg(
+            &mut svg,
+            &[NativeControlTableTextProjection {
+                candidate_index: 0,
+                slots: vec![slot],
+                border: None,
+            }],
+            "sans-serif",
+        );
+        assert!(
+            svg.contains(
+                "data-padding-source-unit-start=\"20\" data-padding-source-unit-end=\"23\""
+            )
+        );
+        assert_eq!(svg.matches(">ABCDEF</text>").count(), 1);
+    }
 
     #[test]
     fn ruled_horizontal_text_keeps_utf16_spans_and_explicit_breaks() {
