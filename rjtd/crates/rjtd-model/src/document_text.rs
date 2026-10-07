@@ -1,6 +1,7 @@
 mod bookmarks;
 mod control_table;
 mod counts_json;
+mod field_render;
 mod fields;
 mod flow;
 mod footnote;
@@ -15,12 +16,14 @@ mod native_tracking;
 mod native_vertical;
 mod page_layer_json;
 mod pagination;
+mod print_context;
 mod source_spans;
 mod svg;
 mod types;
 
 pub(crate) use control_table::*;
 pub(crate) use counts_json::*;
+pub(crate) use field_render::*;
 pub(crate) use fields::*;
 pub use fields::{DocumentTextFieldCandidate, DocumentTextFieldKind};
 pub use flow::*;

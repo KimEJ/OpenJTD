@@ -1,4 +1,6 @@
-use crate::*;
+use crate::{
+    Document, DocumentTextFlowEvent, DocumentTextFlowKind, TextSourceSpan, native_visible_text_span,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DocumentTextFieldKind {
@@ -197,57 +199,8 @@ pub(crate) fn valid_print_date(value: &str) -> bool {
     year > 0 && day > 0 && day <= limit
 }
 
-impl DocumentCore {
-    /// Render context only; cached field values and raw document data stay intact.
-    pub fn set_print_date(&mut self, value: &str) -> Result<()> {
-        if !valid_print_date(value) {
-            return Err(Error::InvalidData(
-                "print date must be a valid YYYY/MM/DD date".into(),
-            ));
-        }
-        self.print_date = Some(value.to_string());
-        Ok(())
-    }
-}
-
-pub(crate) fn apply_print_date(
-    fragment: &mut PageLayerTextFragment,
-    fields: &[DocumentTextFieldCandidate],
-    date: Option<&str>,
-) {
-    if let Some(date) = date
-        && fields.iter().any(|field| {
-            field.kind == DocumentTextFieldKind::PrintingDate
-                && fragment.source_span.as_ref() == Some(&field.value_span)
-                && fragment.text == field.value
-        })
-    {
-        fragment.text = date.to_string();
-    }
-}
-
-pub(crate) fn field_for_span<'a>(
-    fields: &'a [DocumentTextFieldCandidate],
-    span: &TextSourceSpan,
-) -> Option<&'a DocumentTextFieldCandidate> {
-    fields.iter().find(|field| {
-        field.value_span.unit_start() <= span.unit_start()
-            && span.unit_end() <= field.value_span.unit_end()
-    })
-}
-
 pub(crate) fn field_style_span(field: &DocumentTextFieldCandidate) -> TextSourceSpan {
     field.record_span.subspan_by_units(0, 1)
-}
-
-pub(crate) fn field_paint_span(
-    field: Option<&DocumentTextFieldCandidate>,
-    span: Option<&TextSourceSpan>,
-) -> Option<TextSourceSpan> {
-    field
-        .filter(|field| field.kind == DocumentTextFieldKind::Hyperlink)
-        .map(field_style_span)
-        .or_else(|| span.cloned())
 }
 
 pub(crate) fn native_field_end(
