@@ -69,3 +69,23 @@ Rust/viewer の基本名は `JtdDocument`。Rust `HwpDocument` alias と生成 J
 485 passed/0 failed/17 ignored/52 filtered。Clippy/MSRV/WASM/doc/package/noticesも通過し、
 CIに生成SDK実行検証を追加した。全browser sessionやediting/round-trip証明ではない。
 後続release preflightは別作業として残る。
+
+## 整理完了の監査 (2026-10-08)
+
+承認済み local 整理は source/render/app 所有、独立 source model build、JTD wrapper 名称/互換review、
+version-aware release preflight を対象とする。形式研究とediting忠実度は [TODO](../TODO.ja.md) に残す。
+共同policy/schema repositoryとWindows入力作成は変更していない。
+
+最終境界監査で JSON style framing がexporterで解読されている点を発見した。
+`UnknownStyle.record_summary()` が原本queryを担当し、exporterはmodel結果と保持根拠だけを直列化する。
+exporterからcontainer/stream/record parserを呼ばない。既存native31ケースのJSONはbyte同一。
+parser/model/資源予算/移動調整本体を照合し、package versionとCargo.lock依存versionは不変である。
+
+preflightはtarget/internaldependencyの実versionを読み、既公開versionを拒否し、credentialなし/locked/
+dry-run-only/testkit境界を保持する。offline16ケースと [CI37651063553](https://github.com/OpenJTD/rjtd/actions/runs/37651063553)
+が `89a5b9b` で通過した。生成SDK検証の [CI37648063000](https://github.com/OpenJTD/rjtd/actions/runs/37648063000)
+は `265239c` で通過した。package公開/tag移動/owner変更/hosted deployは行っていない。
+
+境界は既存model crate内module/featureであり、公開互換stubはediting対応を意味しない。
+P09 note領域/separator、Japanese tracking、bookmark正規化、inline baseline、一般round-tripは未確定。
+上記native回帰は整理前rjtd出力保持であり原本office完全一致の証明ではない。

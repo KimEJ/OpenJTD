@@ -9,9 +9,14 @@ historical item remains unresolved unless its own evidence establishes completio
 
 ## Interpretation Core
 
-- [ ] Classify mixed source recognition, rendering, and app-state functions.
-- [ ] Expose source recognition results through the owned model, preserving flow, spans, raw/unknown data, and resource limits.
+- [x] Classify mixed source recognition, rendering, and app-state functions.
+- [x] Expose source recognition results through the owned model, preserving flow, spans, raw/unknown data, and resource limits.
 - [x] Verify parsing/model inspection without font or rendering initialization.
+
+The implementation cleanup uses internal model/source, optional rendering and app
+modules; it does not create a separate renderer crate. Source-only consumers and
+generated SDK contracts are checked. Public compatibility methods remain after
+consumer review. Unknown format/editing research below remains open.
 
 ## Reproducible Interpretation Checks
 
@@ -21,10 +26,10 @@ historical item remains unresolved unless its own evidence establishes completio
 
 ## Rendering and Application Boundary
 
-- [ ] Separate saved source line/page instructions from computed fallback layout.
-- [ ] Move font measurement, output units, SVG/page-layer construction, and paint behind the model boundary.
+- [x] Separate saved source line/page instructions from computed fallback layout.
+- [x] Move font measurement, output units, SVG/page-layer construction, and paint behind the model boundary.
 - [x] Review HwpDocument naming, generated bindings, viewer callers, and unused compatibility methods together.
-- [ ] Preserve source/model behavior, output regressions, and WASM/browser contracts during moves.
+- [x] Preserve source/model behavior, output regressions, and WASM/browser contracts during moves.
 
 ## Evidence and Coverage
 

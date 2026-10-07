@@ -9,7 +9,6 @@ pub(crate) mod table;
 mod text_flow;
 pub(crate) mod text_layout;
 
-use rjtd_core::style_stream::summarize_style_stream;
 use rjtd_model::Document;
 
 use block::push_block_json;
@@ -54,7 +53,7 @@ pub fn to_json(document: &Document) -> String {
             Some(name) => push_json_string(&mut output, name),
             None => output.push_str("null"),
         }
-        let summary = summarize_style_stream(style.payload());
+        let summary = style.record_summary();
         output.push_str(",\"family\":");
         push_json_string(&mut output, summary.family().as_str());
         output.push_str(",\"headerU32Be\":");

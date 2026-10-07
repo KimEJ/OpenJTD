@@ -142,6 +142,10 @@ impl UnknownStyle {
     pub fn payload(&self) -> &[u8] {
         &self.payload
     }
+    /// Diagnostic source record framing; unknown payload and decoded status remain unchanged.
+    pub fn record_summary(&self) -> rjtd_core::style_stream::StyleStreamSummary {
+        rjtd_core::style_stream::summarize_style_stream(&self.payload)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

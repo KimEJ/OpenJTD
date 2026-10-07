@@ -6,9 +6,13 @@
 
 ## 解釈コア
 
-- [ ] 混在した source 認識、描画、app state を分類する。
-- [ ] 認識結果を model に置き、flow/span/raw/unknown/資源上限を保持する。
+- [x] 混在した source 認識、描画、app state を分類する。
+- [x] 認識結果を model に置き、flow/span/raw/unknown/資源上限を保持する。
 - [x] font/renderer 初期化なしの解析・model 調査を検証する。
+
+実装整理は model/source、optional rendering、app 内部 module の境界であり独立 renderer crate は作成していない。
+source-only consumerと生成SDK契約を検証し、公開互換methodはconsumer review後も保持する。
+未確定の形式/編集研究は未完了として残す。
 
 ## 再現可能な解釈検証
 
@@ -18,10 +22,10 @@
 
 ## 描画と app 境界
 
-- [ ] 保存原本行/page 指示と fallback 計算を分ける。
-- [ ] font 計測、出力単位、SVG/page layer、paint を model の外側へ移す。
+- [x] 保存原本行/page 指示と fallback 計算を分ける。
+- [x] font 計測、出力単位、SVG/page layer、paint を model の外側へ移す。
 - [x] HwpDocument 名、generated binding、viewer caller、未使用互換 method を一緒に確認する。
-- [ ] 移動中の source/model、出力回帰、WASM/browser contract を保持する。
+- [x] 移動中の source/model、出力回帰、WASM/browser contract を保持する。
 
 ## 根拠と coverage
 

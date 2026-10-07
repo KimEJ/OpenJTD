@@ -105,3 +105,32 @@ MSRV, WASM, documentation, package and distribution-notice checks passed. CI now
 builds and exercises the generated SDK. This does not replace a full browser
 session or establish editing/round-trip support. Subsequent-release preflight
 remains separate work.
+
+## Cleanup Completion Audit (2026-10-08)
+
+The approved local cleanup covers source/render/app ownership, an independently
+buildable source model, JTD wrapper naming/compatibility review, and version-aware
+release preflight. Format research and editing fidelity remain the open work in
+[TODO](../TODO.md). Shared policy/schema repositories and Windows input creation
+were left unchanged.
+
+The final boundary audit found JSON style framing still decoded in the exporter.
+`UnknownStyle.record_summary()` now owns that source query; the exporter consumes
+the model result and serializes preserved evidence. No container/stream/record
+parser is invoked by exporters. Existing 31 native-case JSON outputs remain
+byte-identical. Parser/model/resource-accounting and moved coordination bodies
+were compared; package versions and Cargo.lock dependency versions are unchanged.
+
+Release preflight now derives target/internal dependency versions, rejects an
+already-published exact version, and retains credential-free, locked, dry-run-only
+and testkit boundaries. Sixteen offline command-boundary cases passed, and
+[CI 37651063553](https://github.com/OpenJTD/rjtd/actions/runs/37651063553) passed on
+`89a5b9b`. [CI 37648063000](https://github.com/OpenJTD/rjtd/actions/runs/37648063000)
+passed generated SDK verification on `265239c`. Package publication, tag movement,
+registry ownership and hosted deployment were not performed.
+
+The source/render boundary uses internal modules/features in the existing model
+crate. Retained public compatibility stubs still do not establish editing support.
+P09 note-area/separator placement, Japanese tracking, bookmark normalization,
+inline baseline and general round trips remain unproven. Native regression counts
+above describe rjtd output preservation, not complete original-office equivalence.
