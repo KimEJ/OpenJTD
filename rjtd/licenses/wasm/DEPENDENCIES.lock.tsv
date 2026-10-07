@@ -1,6 +1,4 @@
 package	version	cargo_lock_checksum	declared_license	source_url	archive_root_text	archive_root_text_sha256
-base64	0.22.1	72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6	MIT OR Apache-2.0	https://crates.io/crates/base64/0.22.1	LICENSE-APACHE	a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2
-base64	0.22.1	72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6	MIT OR Apache-2.0	https://crates.io/crates/base64/0.22.1	LICENSE-MIT	0dd882e53de11566d50f8e8e2d5a651bcf3fabee4987d70f306233cf39094ba7
 cfb	0.14.0	a347dcabdae9c31b0825fd6a8bed285ec9c2acb89c47827126d52fa4f59cece3	MIT	https://crates.io/crates/cfb/0.14.0	LICENSE	ebaac853b53fec0ed475796f533ce676912a4df9ad9d8a621fa76d5060591e10
 cfg-if	1.0.4	9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801	MIT OR Apache-2.0	https://crates.io/crates/cfg-if/1.0.4	LICENSE-APACHE	a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2
 cfg-if	1.0.4	9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801	MIT OR Apache-2.0	https://crates.io/crates/cfg-if/1.0.4	LICENSE-MIT	378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397

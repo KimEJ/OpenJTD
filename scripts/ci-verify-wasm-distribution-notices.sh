@@ -62,10 +62,10 @@ validate_inventory_format() {
     }
   ' "$inventory_path")" || die "malformed, duplicate, or inconsistent inventory record"
 
-  [[ "$record_count" == "33" ]] || die "expected 33 archive-root records, found $record_count"
+  [[ "$record_count" == "31" ]] || die "expected 31 archive-root records, found $record_count"
 
   awk -F '\t' 'NR > 1 { key = $1 FS $2; if (!seen[key]++) { print $1 FS $2 FS $3 FS $4 FS $5 } }' "$inventory_path" | LC_ALL=C sort > "$temporary_directory/inventory-packages.tsv"
-  [[ "$(wc -l < "$temporary_directory/inventory-packages.tsv" | tr -d ' ')" == "17" ]] || die "expected 17 locked packages"
+  [[ "$(wc -l < "$temporary_directory/inventory-packages.tsv" | tr -d ' ')" == "16" ]] || die "expected 16 locked packages"
 }
 
 validate_closure() {
