@@ -12,6 +12,8 @@ on:
       - '.github/workflows/**'
       - 'scripts/ci-*.sh'
       - 'scripts/ci-*.mjs'
+      - 'scripts/ci-*.py'
+      - 'scripts/release-preflight.sh'
   push:
     branches: [dev, main]
     paths:
@@ -23,6 +25,8 @@ on:
       - '.github/workflows/**'
       - 'scripts/ci-*.sh'
       - 'scripts/ci-*.mjs'
+      - 'scripts/ci-*.py'
+      - 'scripts/release-preflight.sh'
   workflow_dispatch:
 
 permissions:
@@ -110,6 +114,11 @@ jobs:
         run: |
           wasm-pack build --target web --dev --out-dir "$RUNNER_TEMP/rjtd-wasm-sdk" --out-name rjtd_wasm crates/rjtd-wasm --locked
           node ../scripts/ci-verify-wasm-sdk.mjs "$RUNNER_TEMP/rjtd-wasm-sdk"
+
+      - name: Test release preflight boundaries offline
+        run: |
+          bash -n ../scripts/release-preflight.sh
+          python3 ../scripts/ci-test-release-preflight.py
 
       - name: Inspect publishable package contents
         run: bash ../scripts/ci-verify-packages.sh

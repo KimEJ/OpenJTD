@@ -37,7 +37,7 @@ historical item remains unresolved unless its own evidence establishes completio
 
 - [ ] Verify each structure-preserving edit through save/reopen with unknown data intact.
 - [ ] Review rich clipboard, selection, and hit-test support against established JTD semantics.
-- [ ] Update release tooling currently fixed to the initial 0.0.1/unallocated-name procedure before preparing a later version.
+- [x] Update release tooling currently fixed to the initial 0.0.1/unallocated-name procedure before preparing a later version.
 
 Document reorganization is complete independently of these code tasks. Shared
 policy/schema review and repository migration are outside this local pass.

@@ -19,7 +19,7 @@ rjtd と Tika JTD+ は独立した実装を維持する。共同 RFC review は
 日付付き 0.0.1 release は experimental developer preview である。公開 package は `rjtd-core`、`rjtd-model`、`rjtd-export`、`rjtd-cli`、
 `rjtd-wasm` で、`rjtd-testkit` は内部専用である。現在の checkout は後続の未 release 開発を含み得る。
 release scope は [CHANGELOG.md](CHANGELOG.md)、必須の公開順序は
-[RELEASING.md](RELEASING.md) を参照する。
+[RELEASING.md](RELEASING.ja.md) を参照する。
 
 観察済み `.jtd`、`.jtt`、`.jttc` files は異なる範囲で対応しているが、
 実装は完全な Ichitaro format specification ではない。`Candidate`、

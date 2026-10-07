@@ -2,9 +2,7 @@
 
 set -euo pipefail
 
-readonly release_version="0.0.1"
 readonly registry_api="https://crates.io/api/v1/crates"
-readonly registry_user_agent="OpenJTD-release-preflight/${release_version}"
 
 allow_dirty=false
 package=""
@@ -20,7 +18,7 @@ usage() {
 Usage: scripts/release-preflight.sh --package <package> [--allow-dirty]
 
 Runs a publish-safe, credential-free crates.io preflight for exactly one
-OpenJTD 0.0.1 public crate. It never performs a real upload.
+OpenJTD public crate at its current Cargo version. It never performs a real upload.
 
 Options:
   -p, --package <package>  One of rjtd-core, rjtd-model, rjtd-export,
@@ -125,15 +123,15 @@ registry_status() {
         --user-agent "$registry_user_agent" --output /dev/null --write-out '%{http_code}' "$url"
 }
 
-assert_unallocated_name() {
+assert_unpublished_version() {
     local status
-    status="$(registry_status "$registry_api/$package")" || die "could not query crates.io for $package"
+    status="$(registry_status "$registry_api/$package/$release_version")" || die "could not query crates.io for $package"
     case "$status" in
         404)
-            printf 'name check: %s is unallocated at crates.io (point-in-time only)\n' "$package"
+            printf 'version check: %s %s is unpublished at crates.io (point-in-time only)\n' "$package" "$release_version"
             ;;
         200)
-            die "$package is already allocated on crates.io; stop before publishing"
+            die "$package $release_version is already published on crates.io; stop before publishing"
             ;;
         *)
             die "unexpected crates.io response for $package: HTTP $status"
@@ -143,32 +141,45 @@ assert_unallocated_name() {
 
 assert_indexed_dependency() {
     local dependency="$1"
+    local dependency_version
+    dependency_version="$(package_version "$dependency")"
     local status
-    status="$(registry_status "$registry_api/$dependency/$release_version")" || die "could not query crates.io for $dependency $release_version"
+    status="$(registry_status "$registry_api/$dependency/$dependency_version")" || die "could not query crates.io for $dependency $dependency_version"
     case "$status" in
         200)
-            printf 'dependency check: %s %s is indexed\n' "$dependency" "$release_version"
+            printf 'dependency check: %s %s is indexed\n' "$dependency" "$dependency_version"
             ;;
         404)
-            die "$package requires $dependency $release_version in crates.io before its dry-run; wait for index visibility"
+            die "$package requires $dependency $dependency_version in crates.io before its dry-run; wait for index visibility"
             ;;
         *)
-            die "unexpected crates.io response for $dependency $release_version: HTTP $status"
+            die "unexpected crates.io response for $dependency $dependency_version: HTTP $status"
             ;;
     esac
 }
 
-package_id="$(cargo pkgid --locked -p "$package" --manifest-path "$workspace_manifest")"
-[[ "$package_id" == *"#$release_version" ]] || die "expected $package@$release_version, got $package_id"
+package_version() {
+    local name="$1"
+    local package_id version
+    package_id="$(cargo pkgid --locked -p "$name" --manifest-path "$workspace_manifest")" || die "could not resolve Cargo version for $name"
+    version="${package_id##*#}"
+    version="${version##*@}"
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] || die "invalid Cargo package version for $name"
+    printf '%s\n' "$version"
+}
 
-assert_unallocated_name
+release_version="$(package_version "$package")"
+readonly release_version
+readonly registry_user_agent="OpenJTD-release-preflight/${release_version}"
+
+assert_unpublished_version
 if [[ "$package" != "rjtd-core" ]]; then
     for dependency in "${release_dependencies[@]}"; do
         assert_indexed_dependency "$dependency"
     done
 fi
 
-package_args=(--locked -p "$package" --manifest-path "$workspace_manifest")
+package_args=(--locked --registry crates-io -p "$package" --manifest-path "$workspace_manifest")
 if [[ "$allow_dirty" == true ]]; then
     package_args+=(--allow-dirty)
 fi

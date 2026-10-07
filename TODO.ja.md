@@ -34,6 +34,6 @@
 
 - [ ] 構造保持 edit/save/reopen と unknown 保持を操作ごとに検証する。
 - [ ] rich clipboard/selection/hit test を確立した JTD 意味と対応付ける。
-- [ ] 次 version の前に 0.0.1/未割当名前提の release tool を更新する。
+- [x] 次 version の前に 0.0.1/未割当名前提の release tool を更新する。
 
 文書整理とコード完了は別である。共同規定/schema review と他 repository への移入は今回の local 作業外とする。

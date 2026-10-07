@@ -6,19 +6,31 @@ and documentation cleanup do not create another 0.0.1 release.
 The [historical first-release procedure](docs/research/legacy-release-0.0.1.md)
 is retained for provenance, not as the next-release runbook.
 
-## Current Tooling Limitation
+## Version-aware Preflight
 
-The repository [preflight](../scripts/release-preflight.sh) is still fixed to
-`release_version="0.0.1"` and requires the selected crate name to be unallocated.
-Those are first-release assumptions. The script is not a gate for a new version
-of an existing crate. Its update is an open [code task](../TODO.md#editing-and-release-preparation),
-not a documentation change or a reason to bypass package verification.
+The repository [preflight](../scripts/release-preflight.sh) reads the selected
+package version and each internal dependency version from locked Cargo package
+IDs. It checks the exact target version is absent at crates.io and each exact
+internal dependency is indexed. Existing package names are permitted; an already
+published target version is rejected. These are point-in-time checks, not a name
+reservation, ownership check or publication approval.
 
-Before a later release, choose its scope/version and update the tooling and
-version manifests together. Verify current ownership, target version absence,
-internal dependency versions, package contents, dry-run behavior, and failure
-handling for that release. Do not use an old name-availability check as proof
-that a new version is publishable.
+The script inspects archive contents and runs only `cargo publish --dry-run`
+against `crates-io`, using a fresh temporary Cargo home and no registry tokens.
+It never uploads. `rjtd-testkit` is rejected. A dirty checkout is rejected unless
+`--allow-dirty` is used for local candidate inspection; that does not approve a
+release. The temporary Cargo home and target are removed on exit.
+
+```sh
+bash scripts/release-preflight.sh --package rjtd-core
+python3 scripts/ci-test-release-preflight.py
+```
+
+Run these from the repository root. The offline test substitutes Cargo, curl and
+git to verify new/existing version handling, exact dependency versions, credential
+isolation and failure-before-upload boundaries. For a later release, choose its
+scope/version, align manifests and lockfile, and run preflight for the actual
+candidate. Registry ownership and final publication remain separate operations.
 
 ## Branch and Source Invariants
 
@@ -51,8 +63,8 @@ cargo check -p rjtd-wasm --target wasm32-unknown-unknown --locked
 
 Review LICENSE copies, package lists, distribution notices, and locked
 dependencies using the quality workflow and repository verification scripts.
-Then run Cargo package/build and publish dry-runs per package with tooling
-updated for the selected version. Record private/skipped test inputs separately;
+Then run the version-aware package/publish preflight per package for the
+selected version. Record private/skipped test inputs separately;
 quality success does not certify native layout fidelity. A dirty candidate
 inspection is not the final clean release gate.
 
