@@ -602,10 +602,18 @@ fn parser_decodes_bmdv_visual_list_metadata_and_projects_raster_layer() {
     assert!(svg.contains("data-source-path=\"/VisualList\""));
     assert!(svg.contains("data-projection=\"rle8-raster\""));
     assert!(svg.contains("data-fallback-projection=\"horizontal-runs\""));
-    assert!(svg.contains("class=\"rjtd-visual-list-rle8-raster\""));
-    assert!(svg.contains("data-projection=\"visualListRle8RasterImage\""));
-    assert!(svg.contains("data-suppressed-dark-foreground=\"false\""));
-    assert!(svg.contains("data:image/png;base64,"));
+    #[cfg(feature = "bitmap-images")]
+    {
+        assert!(svg.contains("class=\"rjtd-visual-list-rle8-raster\""));
+        assert!(svg.contains("data-projection=\"visualListRle8RasterImage\""));
+        assert!(svg.contains("data-suppressed-dark-foreground=\"false\""));
+        assert!(svg.contains("data:image/png;base64,"));
+    }
+    #[cfg(not(feature = "bitmap-images"))]
+    {
+        assert!(svg.contains("class=\"rjtd-visual-list-horizontal-run\""));
+        assert!(!svg.contains("data:image/png;base64,"));
+    }
     assert!(svg.contains("data-format=\"BMDV\""));
 }
 

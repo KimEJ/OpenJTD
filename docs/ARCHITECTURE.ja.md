@@ -49,13 +49,18 @@ Exporter は raw container、stream、record data を直接読んではならな
 
 ## Current Implementation Boundary
 
-この分離は設計目標である。今回の文書変更は Rust module を移動せず、描画 component の
-独立 build が成立したことも意味しない。
+`rjtd-core` は低水準 container・stream・record parser を持つ。`rjtd-model` は
+`Document`、parser 統合、観測 profile 内の source candidate query を持つ。
+`--no-default-features` では描画/app surface と bitmap 依存を除外して build できる。
+`rendering` は `DocumentCore`、page 構成、SVG/page-layer と app state を有効化し、
+`bitmap-images` は bitmap decode と `rendering` を有効化する。既存 consumer 向けの
+default は両方有効である。`rjtd-export` は直列化と native PDF backend を担当する。
 
-`rjtd-core` は低水準の container・stream・record parser を持つ。`rjtd-model` は
-`Document` と parser 統合に加え、`DocumentCore`、pagination、SVG、page-layer の
-直列化、編集状態も持つ。`rjtd-export` は出力の直列化と native PDF backend を持つ。
-したがって現在の crate 名だけでは、目標とする境界を強制できていない。
+文字 style、note/field、page/section/running 指示、原本行、image、figure、equation の
+source 認識を配置/paint から分離した。source query は mm100/原本単位、原本 font 名、
+flow/span/raw/unknown を保持する。app は変更、navigation、snapshot、print context、
+描画は fallback 配置、CSS/font 計測、出力 geometry を担当する。
+既存 workspace 内の境界であり、独立 renderer crate は作成していない。
 
 現在の core block model は `Paragraph` と `Unknown`、inline は text、ruby、unknown
 object を公開する。表、スタイル、レイアウト、オブジェクトの候補は、意味が証明されるまで

@@ -692,18 +692,6 @@ pub(crate) fn fdm_connector_candidate_metric(
     })
 }
 
-pub(crate) fn fdm_connector_orientation(dx: f32, dy: f32) -> &'static str {
-    let abs_x = dx.abs();
-    let abs_y = dy.abs();
-    if abs_x >= abs_y * 2.0 {
-        "horizontal"
-    } else if abs_y >= abs_x * 2.0 {
-        "vertical"
-    } else {
-        "diagonal"
-    }
-}
-
 pub(crate) fn fdm_vector_path_span_filter_applies(
     command: &ObjectFdmVectorCommandCandidate,
 ) -> bool {

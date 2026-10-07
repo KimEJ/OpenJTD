@@ -1,18 +1,20 @@
 use crate::{
-    Document, DocumentTextFlow, DocumentTextFlowEvent, DocumentTextFlowKind,
-    PAGE_LAYOUT_STYLE_RECORD_CODE, page_margins_mm100_at,
-    page_size_mm100_from_document_view_styles, page_size_mm100_from_page_layout_style,
-    shanai_lan_line_mark_intervals, text_by_utf16_units,
+    Document, DocumentTextFlowEvent, DocumentTextFlowKind, PAGE_LAYOUT_STYLE_RECORD_CODE,
+    page_margins_mm100_at, page_size_mm100_from_document_view_styles,
+    page_size_mm100_from_page_layout_style, shanai_lan_line_mark_intervals,
 };
+#[cfg(any(test, feature = "rendering"))]
+use crate::{DocumentTextFlow, text_by_utf16_units};
 use rjtd_core::style_stream::{
     DOCUMENT_VIEW_STYLES_PATH, PAGE_LAYOUT_STYLE_PATH, summarize_style_stream,
 };
 
-pub(super) struct NativeSectionSource {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeSectionSource {
     pub(super) custom: (u32, u32),
     pub(super) default: (u32, u32),
     pub(super) margins: [u16; 4],
-    pub(super) landscape_pages: Vec<bool>,
+    pub(super) custom_style_pages: Vec<bool>,
 }
 
 pub(crate) fn native_section_marker(event: &DocumentTextFlowEvent) -> Option<u16> {
@@ -136,10 +138,11 @@ pub(super) fn native_section_source(document: &Document) -> Option<NativeSection
         custom,
         default,
         margins,
-        landscape_pages: result,
+        custom_style_pages: result,
     })
 }
 
+#[cfg(any(test, feature = "rendering"))]
 pub(crate) fn native_section_setting_line(flow: &DocumentTextFlow, from: usize, to: usize) -> bool {
     flow.events()
         .iter()
@@ -164,6 +167,7 @@ pub(crate) fn native_section_setting_line(flow: &DocumentTextFlow, from: usize, 
             })
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn native_section_spacing_source(document: &Document) -> Option<(u16, u16)> {
     let style = document
         .unknown_styles()
@@ -187,4 +191,26 @@ pub(super) fn native_section_spacing_source(document: &Document) -> Option<(u16,
         return None;
     }
     Some((u16::from_be_bytes([font[5], font[6]]), 60))
+}
+
+impl Document {
+    /// Bounded apply/reset and physical-source-page association candidate.
+    /// General section inheritance and display placement remain unproven.
+    pub fn section_source_candidate(&self) -> Option<NativeSectionSource> {
+        native_section_source(self)
+    }
+}
+impl NativeSectionSource {
+    pub fn custom_size_mm100(&self) -> (u32, u32) {
+        self.custom
+    }
+    pub fn default_size_mm100(&self) -> (u32, u32) {
+        self.default
+    }
+    pub fn margins_mm100(&self) -> [u16; 4] {
+        self.margins
+    }
+    pub fn custom_style_pages(&self) -> &[bool] {
+        &self.custom_style_pages
+    }
 }

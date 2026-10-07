@@ -24,10 +24,13 @@ pub(super) const OBJECT_FRAME_REFERENCE_ROW_CANDIDATES: &[ObjectFrameReferenceRo
     },
 ];
 
+#[cfg(feature = "rendering")]
 pub(super) const PAGE_FRAME_TITLE_OBJECT_TYPE: u16 = 1;
 
+#[cfg(feature = "rendering")]
 pub(super) const PAGE_FRAME_PATTERN_BAR_OBJECT_TYPE: u16 = 2;
 
+#[cfg(feature = "rendering")]
 pub(super) const PAGE_FRAME_PATTERN_BAR_BOTTOM_OBJECT_TYPE: u16 = 3;
 
 pub(super) fn unknown_object_from_skipped_inline(
@@ -559,10 +562,12 @@ pub(super) fn push_unique_object_reason(
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn default_object_bbox_json() -> String {
     "{\"pageIndex\":0,\"x\":0.0,\"y\":0.0,\"width\":0.0,\"height\":0.0}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn object_stream_candidates_json(candidates: &[ObjectStreamCandidate]) -> String {
     let mut output = String::from("[");
     for (index, candidate) in candidates.iter().enumerate() {
@@ -575,6 +580,7 @@ pub(super) fn object_stream_candidates_json(candidates: &[ObjectStreamCandidate]
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn object_frame_records_json(records: &[ObjectFrameRecordCandidate]) -> String {
     let mut output = String::from("[");
     for (index, record) in records.iter().enumerate() {
@@ -587,6 +593,7 @@ pub(super) fn object_frame_records_json(records: &[ObjectFrameRecordCandidate]) 
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_object_frame_record_candidate_json(
     output: &mut String,
     record: &ObjectFrameRecordCandidate,
@@ -630,6 +637,7 @@ pub(super) fn push_object_frame_record_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_object_stream_candidate_json(
     output: &mut String,
     candidate: &ObjectStreamCandidate,
@@ -787,6 +795,7 @@ pub(super) fn push_object_stream_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_object_stream_ownership_candidate_json(
     output: &mut String,
     ownership: &ObjectStreamOwnershipCandidate,
@@ -812,6 +821,7 @@ pub(super) fn push_object_stream_ownership_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_object_stream_ownership_reference_candidate_json(
     output: &mut String,
     reference: &ObjectStreamOwnershipReferenceCandidate,
@@ -827,6 +837,7 @@ pub(super) fn push_object_stream_ownership_reference_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_object_frame_reference_row_candidate_json(
     output: &mut String,
     row: &ObjectFrameReferenceRowCandidate,

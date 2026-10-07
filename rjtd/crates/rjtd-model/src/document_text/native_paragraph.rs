@@ -1,10 +1,12 @@
+#[cfg(feature = "rendering")]
 mod render;
 mod source;
 
+#[cfg(feature = "rendering")]
 pub(crate) use render::*;
 pub(crate) use source::*;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rendering"))]
 mod tests {
     use super::*;
     use crate::*;
@@ -97,3 +99,5 @@ mod tests {
         }
     }
 }
+
+pub use source::NativeParagraphAttributes as DocumentParagraphAttributeCandidate;

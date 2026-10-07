@@ -10,9 +10,9 @@ See [feature status](FEATURE-STATUS.md), [roadmap](ROADMAP.md), and the
 The controlled local native batch contains 67 original/native-PDF pairs and
 85 pages. Its checklist has 69 entries; T04/O07 are deferred. These original
 inputs and detailed outputs remain private and were not moved to a public corpus.
-The latest implementation audit used checkout `3869c48` with equivalent engine
-sources on dev `cce9cb2`. Current local documentation changes are not a new
-implementation or a new release.
+The 2026-10-07 source-format audit used checkout `3869c48` with equivalent engine
+sources on dev `cce9cb2`. That historical documentation checkpoint did not create a new implementation
+or release. Later cleanup checks are recorded separately below.
 
 The current 67-case SVG/layer output was checked against the previously
 inspected rendering artifacts. PDF text, page dimensions/counts, bounded source
@@ -62,3 +62,29 @@ research workspace. A public checkout must not imply it contains those inputs.
 The current quality workflow covers format/check/test/Clippy/docs/WASM/package/
 notices/dependency audit/MSRV; fidelity and actual browser runtime require their
 own checks. No new native input was created during this document cleanup.
+
+## Interpretation/Rendering Cleanup Checks (2026-10-08)
+
+The optional model `rendering` boundary is now checked separately from the
+historical 67-pair format audit above. Current local checks passed: workspace
+regressions with `local_` exclusion (483 passed, 0 failed, 17 ignored, 52 filtered),
+source-only model tests (43 passed), rendering without bitmap decoding (228 passed,
+11 ignored, 24 filtered), both Clippy configurations, workspace/source-only MSRV,
+WASM, formatting and warning-free documentation. Source stream/record/image
+budgets remain tested without rendering; app page-budget checks retain their
+rendering configuration.
+
+An independent consumer verified source-only parsing/candidate queries, the
+absence of `DocumentCore` and bitmap dependencies, rendering without bitmaps,
+and default rendering. Source model inspection was identical with and without
+the renderer for 31 existing native cases. These inputs remain private.
+The default output comparison uses 31 cases / 49 pages and the pre-cleanup rjtd
+output; it measures behavior preservation, not equality with the original office.
+Dynamic printing dates are controlled through the existing exporter API when
+comparing PDFs across the midnight boundary.
+
+The model/parser, resource-accounting, app state, snapshot and moved coordination
+bodies were compared. No new external dependencies, shared-repository changes or
+Windows inputs were introduced. Source candidates retain their bounded profiles
+and raw/unknown evidence. WASM naming/API cleanup and subsequent-release
+preflight remain separate tasks.

@@ -1,7 +1,10 @@
+#[cfg(feature = "rendering")]
 use super::*;
+#[cfg(feature = "rendering")]
 use crate::*;
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmFrameDiagnostic<'a> {
     pub(crate) candidate_index: usize,
     pub(crate) candidate: &'a ObjectStreamCandidate,
@@ -10,6 +13,7 @@ pub(crate) struct FdmFrameDiagnostic<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmCommandDiagnostic<'a> {
     pub(crate) candidate_index: usize,
     pub(crate) candidate: &'a ObjectStreamCandidate,
@@ -18,6 +22,7 @@ pub(crate) struct FdmCommandDiagnostic<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorParentCompoundProvenance<'a> {
     pub(crate) parent: &'a ObjectFdmVectorCommandCandidate,
     pub(crate) child_offset_in_parent: usize,
@@ -25,6 +30,7 @@ pub(crate) struct FdmConnectorParentCompoundProvenance<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmCommandProjectionExtent {
     pub(crate) left: i32,
     pub(crate) top: i32,
@@ -33,6 +39,7 @@ pub(crate) struct FdmCommandProjectionExtent {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorCandidateMetric {
     pub(crate) source_start: ObjectFdmVectorPoint,
     pub(crate) source_end: ObjectFdmVectorPoint,
@@ -47,6 +54,7 @@ pub(crate) struct FdmConnectorCandidateMetric {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorOrderTraceNodeJson {
     pub(crate) parent_relative_offset: Option<usize>,
     pub(crate) relative_offset: Option<usize>,
@@ -55,6 +63,7 @@ pub(crate) struct FdmConnectorOrderTraceNodeJson {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorOrderTraceSummary {
     pub(crate) trace_count: usize,
     pub(crate) source_segment_matches_index_entry_count: usize,
@@ -92,12 +101,14 @@ pub(crate) struct FdmConnectorOrderTraceSummary {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorTextGridPoint {
     pub(crate) x_units: f32,
     pub(crate) group_index_float: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorLineRuleDistance {
     pub(crate) axis_delta: f32,
     pub(crate) inline_delta: f32,
@@ -107,6 +118,7 @@ pub(crate) struct FdmConnectorLineRuleDistance {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorLineRuleEndpointMatchSummary {
     pub(crate) start_match_count: usize,
     pub(crate) end_match_count: usize,
@@ -115,6 +127,7 @@ pub(crate) struct FdmConnectorLineRuleEndpointMatchSummary {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorOpenStrokeAxisRuleEndpointMatchDetail {
     pub(crate) summary: FdmConnectorLineRuleEndpointMatchSummary,
     pub(crate) start_tight_match_count: usize,
@@ -124,12 +137,14 @@ pub(crate) struct FdmConnectorOpenStrokeAxisRuleEndpointMatchDetail {
     pub(crate) axis_rule_match_parent_relative_offset_max: Option<usize>,
 }
 
+#[cfg(feature = "rendering")]
 impl FdmConnectorOpenStrokeAxisRuleEndpointMatchDetail {
     pub(crate) fn tight_dual_endpoint_match(self) -> bool {
         self.start_tight_match_count > 0 && self.end_tight_match_count > 0
     }
 }
 
+#[cfg(feature = "rendering")]
 impl FdmConnectorOrderTraceSummary {
     pub(crate) fn readiness_blocked_reason(self) -> &'static str {
         if self.trace_count == 0 {
@@ -163,6 +178,7 @@ impl FdmConnectorOrderTraceSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorEndpointOwnerMatchSummary {
     pub(crate) start_candidate_count: usize,
     pub(crate) end_candidate_count: usize,
@@ -207,6 +223,7 @@ pub(crate) struct FdmConnectorEndpointOwnerMatchSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorGraphDiagnosticSummary {
     pub(crate) page_paint_coverage_summary: FdmPagePaintCoverageSummary,
     pub(crate) connector_candidate_count: usize,
@@ -305,6 +322,7 @@ pub(crate) struct FdmConnectorGraphDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmPagePaintCoverageSummary {
     pub(crate) inspected_primitive_count: usize,
     pub(crate) rendered_primitive_count: usize,
@@ -316,6 +334,7 @@ pub(crate) struct FdmPagePaintCoverageSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmTextMaskCohortDiagnosticSummary {
     pub(crate) row_index: usize,
     pub(crate) primitive_count: usize,
@@ -333,6 +352,7 @@ pub(crate) struct FdmTextMaskCohortDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmTextMaskComponentDiagnosticSummary {
     pub(crate) component_index: usize,
     pub(crate) primitive_count: usize,
@@ -348,6 +368,7 @@ pub(crate) struct FdmTextMaskComponentDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmTextMaskPrimitiveDiagnosticSummary {
     pub(crate) command_index: usize,
     pub(crate) relative_offset: usize,
@@ -359,6 +380,7 @@ pub(crate) struct FdmTextMaskPrimitiveDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorRuleSetMatchDiagnosticSummary {
     pub(crate) line_rule_projection_count: usize,
     pub(crate) connector_candidate_count: usize,
@@ -374,6 +396,7 @@ pub(crate) struct FdmConnectorRuleSetMatchDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmOpenStrokeAxisRuleRowCohortDiagnosticSummary {
     pub(crate) row_index: usize,
     pub(crate) connector_candidate_count: usize,
@@ -447,6 +470,8 @@ pub(crate) struct FdmOpenStrokeAxisRuleRowCohortDiagnosticSummary {
     pub(crate) dual_endpoint_connector_axis_rule_parent_span_unclassified_count: usize,
 }
 
+#[cfg(feature = "rendering")]
+#[cfg(feature = "rendering")]
 impl FdmOpenStrokeAxisRuleRowCohortDiagnosticSummary {
     pub(crate) fn non_diagonal_dual_endpoint_match_connector_count(self) -> usize {
         self.horizontal_dual_endpoint_match_connector_count
@@ -548,6 +573,7 @@ impl FdmOpenStrokeAxisRuleRowCohortDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary {
     pub(crate) dual_endpoint_match_connector_count: usize,
     pub(crate) dual_endpoint_owner_candidate_count: usize,
@@ -569,6 +595,7 @@ pub(crate) struct FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmOpenStrokeMarkerStyleProfile {
     pub(crate) command_count: usize,
     pub(crate) line_marker_count: usize,
@@ -583,6 +610,7 @@ pub(crate) struct FdmOpenStrokeMarkerStyleProfile {
     pub(crate) other_style_count: usize,
 }
 
+#[cfg(feature = "rendering")]
 impl FdmOpenStrokeMarkerStyleProfile {
     pub(crate) fn marker_family_diversity_count(self) -> usize {
         [
@@ -663,6 +691,8 @@ impl FdmOpenStrokeMarkerStyleProfile {
     }
 }
 
+#[cfg(feature = "rendering")]
+#[cfg(feature = "rendering")]
 impl FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary {
     pub(crate) fn parent_normalized_order_gate_blocked_reason(self) -> &'static str {
         if self.dual_endpoint_match_connector_count == 0 {
@@ -701,6 +731,7 @@ impl FdmOpenStrokeAxisRuleOwnerPromotionGateDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorOwnerRowCohortDiagnosticSummary {
     pub(crate) connector_candidate_count: usize,
     pub(crate) total_thresholded_endpoint_match_count: usize,
@@ -711,6 +742,7 @@ pub(crate) struct FdmConnectorOwnerRowCohortDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmConnectorMatchedRowDiagnosticSummary {
     pub(crate) connector_candidate_count: usize,
     pub(crate) total_thresholded_endpoint_match_count: usize,
@@ -723,6 +755,7 @@ pub(crate) struct FdmConnectorMatchedRowDiagnosticSummary {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmOpenStrokeCohortSummary {
     pub(crate) primitive_count: usize,
     pub(crate) open_stroke_count: usize,
@@ -742,6 +775,7 @@ pub(crate) struct FdmOpenStrokeCohortSummary {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmOpenStrokeRowCohortSummary {
     pub(crate) row_index: usize,
     pub(crate) open_stroke_count: usize,
@@ -761,6 +795,7 @@ pub(crate) struct FdmOpenStrokeRowCohortSummary {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmOpenStrokeAxisRule<'a> {
     pub(crate) diagnostic: FdmCommandDiagnostic<'a>,
     pub(crate) orientation: &'static str,
@@ -771,6 +806,7 @@ pub(crate) struct FdmOpenStrokeAxisRule<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) enum FdmConnectorEndpointOwnerCandidate<'a> {
     Primitive {
         diagnostic: FdmCommandDiagnostic<'a>,
@@ -784,6 +820,7 @@ pub(crate) enum FdmConnectorEndpointOwnerCandidate<'a> {
     },
 }
 
+#[cfg(feature = "rendering")]
 impl FdmConnectorEndpointOwnerCandidate<'_> {
     pub(crate) fn distance_px(self) -> f32 {
         match self {
@@ -801,6 +838,7 @@ impl FdmConnectorEndpointOwnerCandidate<'_> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct SuccessDataTestFdmProjection {
     pub(crate) role: &'static str,
     pub(crate) source_left: i32,
@@ -816,11 +854,13 @@ pub(crate) struct SuccessDataTestFdmProjection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) enum SuccessDataTestFdmScaleMode {
     IndependentReferenceBox,
     UniformUnitsFromHorizontalSpan,
 }
 
+#[cfg(feature = "rendering")]
 impl SuccessDataTestFdmScaleMode {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
@@ -832,10 +872,12 @@ impl SuccessDataTestFdmScaleMode {
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) type FdmTextMaskRightNeighborMatch<'a> =
     (&'a ShanaiLanTextSlot, (f32, f32, f32, f32), f32, f32, f32);
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmTextMaskRightNeighborCandidate<'a> {
     pub(crate) slot_index: usize,
     pub(crate) slot: &'a ShanaiLanTextSlot,
@@ -846,6 +888,7 @@ pub(crate) struct FdmTextMaskRightNeighborCandidate<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmTextMaskPreFragmentBridgeMetrics {
     pub(crate) pre_fragment_unit_count: usize,
     pub(crate) pre_fragment_grid_units: usize,
@@ -860,6 +903,7 @@ pub(crate) struct FdmTextMaskPreFragmentBridgeMetrics {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmTextMaskSourceTransformCandidate<'a> {
     pub(crate) row_index: usize,
     pub(crate) candidate_class: &'static str,

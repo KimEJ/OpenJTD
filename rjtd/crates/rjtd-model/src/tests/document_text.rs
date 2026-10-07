@@ -32,12 +32,12 @@ fn modern_page_size_records_keep_stock_dimensions_and_explicit_orientation_disti
         }
         bytes
     };
-    let portrait = page_layout_from_document_view_styles(&make(false, false)).unwrap();
-    let landscape = page_layout_from_document_view_styles(&make(true, false)).unwrap();
-    assert!((portrait.width_px() - landscape.height_px()).abs() < 0.01);
-    assert!((portrait.height_px() - landscape.width_px()).abs() < 0.01);
-    assert!(landscape.width_px() > landscape.height_px());
-    assert!(page_layout_from_document_view_styles(&make(false, true)).is_none());
+    let portrait = page_size_mm100_from_document_view_styles(&make(false, false)).unwrap();
+    let landscape = page_size_mm100_from_document_view_styles(&make(true, false)).unwrap();
+    assert_eq!(portrait.0, landscape.1);
+    assert_eq!(portrait.1, landscape.0);
+    assert!(landscape.0 > landscape.1);
+    assert!(page_size_mm100_from_document_view_styles(&make(false, true)).is_none());
 }
 
 #[test]
@@ -145,9 +145,11 @@ fn inline_source_spans_cover_visible_utf16_units_while_flow_preserves_wrappers()
     assert_eq!(document.raw_streams()[0].bytes(), bytes);
 }
 use crate::*;
+#[cfg(feature = "rendering")]
 use rjtd_core::font_stream::FONT_STREAM_PATH;
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_decodes_page_size_from_document_view_styles() {
     let view_styles = document_view_styles_page_size_fixture(14_800, 21_000);
     let bytes = cfb_with_streams(&[
@@ -176,6 +178,7 @@ fn document_core_decodes_page_size_from_document_view_styles() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_prefers_page_layout_style_over_document_view_styles_page_size() {
     let view_styles = document_view_styles_page_size_fixture(16_395, 29_700);
     let page_layout_style = page_layout_style_page_size_fixture(21_000, 29_700);
@@ -197,6 +200,7 @@ fn document_core_prefers_page_layout_style_over_document_view_styles_page_size()
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_uses_page_layout_margins_before_view_defaults() {
     let page = page_layout_style_margins_fixture([2469, 2469, 3175, 3175]);
     let view = view_style_margins_fixture([2000, 3000, 3000, 3000]);
@@ -220,6 +224,7 @@ fn document_core_uses_page_layout_margins_before_view_defaults() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_keeps_asymmetric_view_margins_and_rejects_invalid_bounds() {
     let view = view_style_margins_fixture([5000, 3000, 3000, 3000]);
     let core = DocumentCore::from_bytes(&cfb_with_streams(&[
@@ -244,6 +249,7 @@ fn document_core_keeps_asymmetric_view_margins_and_rejects_invalid_bounds() {
     assert_eq!(invalid.page_layout().margin_left_px(), APP_PAGE_MARGIN_PX);
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn view_style_margins_fixture(margins: [u16; 4]) -> Vec<u8> {
     let mut bytes = vec![0; 10];
     bytes.extend_from_slice(&[0x10, 2, 0, 32, 0, 0xd8]);
@@ -256,6 +262,7 @@ pub(super) fn view_style_margins_fixture(margins: [u16; 4]) -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn page_layout_style_margins_fixture(margins: [u16; 4]) -> Vec<u8> {
     let mut bytes = page_layout_style_page_size_fixture(21590, 27940);
     let offset = bytes
@@ -272,6 +279,7 @@ pub(super) fn page_layout_style_margins_fixture(margins: [u16; 4]) -> Vec<u8> {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn preserves_all_frame_record_bytes_beyond_the_diagnostic_prefix() {
     let mut row = frame_record_fixture(0, 1, (0, 568, 6350, 1704));
     row[58..60].copy_from_slice(&[0x12, 0x34]);
@@ -287,6 +295,7 @@ fn preserves_all_frame_record_bytes_beyond_the_diagnostic_prefix() {
     assert_eq!(document.object_frame_records()[0].row_prefix(), &row[..16]);
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn document_view_styles_sequential_fixture(first_code: u16) -> Vec<u8> {
     // Build a minimal sequential style stream with 4 records.
     // The sequential record parser requires >= 4 records to accept a sequence.
@@ -302,6 +311,7 @@ pub(super) fn document_view_styles_sequential_fixture(first_code: u16) -> Vec<u8
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_keeps_document_view_styles_writing_mode_candidate_diagnostic_only() {
     // 0x1001 is observed in both vertical and horizontal reference-PDF
     // samples, so it must remain a candidate rather than render authority.
@@ -360,6 +370,7 @@ fn document_core_keeps_document_view_styles_writing_mode_candidate_diagnostic_on
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_preserves_auto_text_info_candidates() {
     let auto_text = auto_text_info_fixture("銀河鉄道の夜");
     let bytes = cfb_with_streams(&[
@@ -381,6 +392,7 @@ fn parser_preserves_auto_text_info_candidates() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_renders_ruby_annotations_in_svg_and_layer_tree() {
     let bytes = cfb_with_document_text(document_text_with_ruby());
     let mut core = DocumentCore::from_bytes(&bytes).unwrap();
@@ -396,6 +408,7 @@ fn document_core_renders_ruby_annotations_in_svg_and_layer_tree() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_text_control_table_accepts_configured_empty_gap_boundary() {
     let payload = document_text_with_table_row_gap(DOCUMENT_TEXT_CONTROL_TABLE_MAX_EMPTY_GAP_ROWS);
     let map = map_document_text(&payload);
@@ -416,6 +429,7 @@ fn document_text_control_table_accepts_configured_empty_gap_boundary() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_text_control_table_splits_gap_larger_than_boundary() {
     let payload =
         document_text_with_table_row_gap(DOCUMENT_TEXT_CONTROL_TABLE_MAX_EMPTY_GAP_ROWS + 1);
@@ -438,6 +452,7 @@ fn document_text_control_table_splits_gap_larger_than_boundary() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn sparse_document_text_controls_preserve_empty_cells_as_table_evidence() {
     let payload = document_text_with_sparse_table_rows();
     let map = map_document_text(&payload);
@@ -499,6 +514,7 @@ fn sparse_document_text_controls_preserve_empty_cells_as_table_evidence() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_edits_body_paragraphs_and_rebuilds_pages() {
     let document = Document::from_plain_text("銀河鉄道\n午后");
     let mut core = DocumentCore::from_document(document);
@@ -600,6 +616,7 @@ fn promotes_ruby_base_and_annotation_to_structured_inline() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_keeps_ruby_base_source_spans_when_promoting_text_runs() {
     let raw = document_text_with_ruby();
     let document = parse_document(&cfb_with_document_text(raw.clone())).unwrap();
@@ -624,6 +641,7 @@ fn parser_keeps_ruby_base_source_spans_when_promoting_text_runs() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn grouped_source_ruby_uses_backend_base_width_and_rejects_unknown_grouping() {
     let make = |group: u16| {
         let mut body = document_text_with_ruby();
@@ -672,6 +690,7 @@ fn grouped_source_ruby_uses_backend_base_width_and_rejects_unknown_grouping() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_builds_model_and_preserves_raw_document_text_stream() {
     let bytes = cfb_with_document_text(document_text_fixture());
     let document = parse_document(&bytes).unwrap();
@@ -704,6 +723,7 @@ fn parser_builds_model_and_preserves_raw_document_text_stream() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_preserves_initial_named_segment_text_in_model_and_render_sources() {
     let mut text = b"SsmgV.01".to_vec();
     for word in [0_u16, 1, 0, 0x0100, 0, 3] {
@@ -744,6 +764,7 @@ fn text_range_overlap_uses_utf16_units_for_supplementary_characters() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn renders_explicit_text_style_sizes_in_svg_and_layer_tree() {
     let mut bytes = b"SsmgV.01".to_vec();
     for word in [0_u16, 1, 0, 0x0100, 0, 2] {
@@ -770,6 +791,7 @@ fn renders_explicit_text_style_sizes_in_svg_and_layer_tree() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn renders_document_default_font_size_and_restores_it_after_explicit_reset() {
     let mut text = b"SsmgV.01".to_vec();
     for word in [0_u16, 1, 0, 0x0100, 0, 2] {
@@ -862,6 +884,7 @@ fn parser_preserves_layout_box_streams_for_box_text_projection() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn layout_box_control_only_records_do_not_become_visible_title_text() {
     let words = [
         0x001c_u16, 0, 14, 0, 0x0030, 0xffff, 0x0507, 0x0012, 6, 0, 14, 0, 0, 0x001f, 0x001c, 1, 7,
@@ -876,6 +899,7 @@ fn layout_box_control_only_records_do_not_become_visible_title_text() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn layout_box_text_preserves_initial_text_and_utf16_source_ranges() {
     let mut content = "𠮷野\n".encode_utf16().collect::<Vec<_>>();
     content.extend_from_slice(&[0x001c, 0x0010, 10, 0, 0xffff, 0, 10, 0, 0x0010, 0x001f]);
@@ -892,6 +916,7 @@ fn layout_box_text_preserves_initial_text_and_utf16_source_ranges() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn layout_box_text_projection_decodes_plain_textv_blocks() {
     let mut document = Document::from_plain_text("既存本文");
     document.push_raw_stream(RawStream::new(
@@ -922,6 +947,7 @@ fn layout_box_text_projection_decodes_plain_textv_blocks() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_preserves_font_stream_entries_as_document_fonts() {
     let font_stream = font_stream_fixture(&[(1, "Times New Roman", 18), (2, "ＭＳ 明朝", 18)]);
     let bytes = cfb_with_streams(&[
@@ -954,6 +980,7 @@ fn parser_preserves_font_stream_entries_as_document_fonts() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_preserves_document_text_control_boundaries_with_source_spans() {
     let bytes = cfb_with_document_text(document_text_with_inline());
     let document = parse_document(&bytes).unwrap();
@@ -980,6 +1007,7 @@ fn parser_preserves_document_text_control_boundaries_with_source_spans() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_preserves_text_count_ranges_as_observed_model_data() {
     let position_table = text_count_table_fixture();
     let bytes = cfb_with_streams(&[
@@ -1015,6 +1043,7 @@ fn parser_preserves_text_count_ranges_as_observed_model_data() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_maps_text_count_ranges_to_source_text_overlaps() {
     let position_table = text_count_table_fixture_with_ranges(&[(10, 14), (5, 7)]);
     let bytes = cfb_with_streams(&[
@@ -1048,6 +1077,7 @@ fn parser_maps_text_count_ranges_to_source_text_overlaps() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_maps_text_count_ranges_to_control_range_overlaps() {
     let position_table = text_count_table_fixture_with_ranges(&[(10, 14), (5, 7)]);
     let bytes = cfb_with_streams(&[
@@ -1105,6 +1135,7 @@ fn parser_maps_text_count_ranges_to_control_range_overlaps() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn parser_preserves_layout_validated_paragraph_boundary_candidates() {
     let position_table = text_count_table_fixture_with_ranges(&[(9, 12)]);
     let line_mark = line_mark_words_0_to_20();
@@ -1173,6 +1204,7 @@ fn parser_preserves_observed_style_streams_as_unknown_styles() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_reports_preserved_style_stream_sources() {
     let ssmg_style = ssmg_style_fixture();
     let bytes = cfb_with_streams(&[
@@ -1205,6 +1237,7 @@ fn document_core_reports_preserved_style_stream_sources() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_reports_preserved_style_subrecords() {
     let page_style = ssmg_page_layout_style_with_subrecords_fixture();
     let bytes = cfb_with_streams(&[
@@ -1225,6 +1258,7 @@ fn document_core_reports_preserved_style_subrecords() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn document_core_reports_text_style_label_candidates() {
     let ssmg_style = ssmg_style_with_label_fixture("本文");
     let bytes = cfb_with_streams(&[
@@ -1289,6 +1323,7 @@ pub(super) fn document_text_fixture() -> Vec<u8> {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn page_output_preflight_matches_standard_pagination_shape() {
     let documents = [
         Document::from_plain_text(""),
@@ -1308,6 +1343,7 @@ fn page_output_preflight_matches_standard_pagination_shape() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn front_matter_projection_preflight_reserves_additional_page_headroom() {
     let document = Document::from_plain_text(
         "宮沢賢治 銀河鉄道の夜\n目次\n第一章\n銀河鉄道の夜\n一、午后の授業\n本文",
@@ -1326,6 +1362,7 @@ fn front_matter_projection_preflight_reserves_additional_page_headroom() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn front_matter_projection_does_not_charge_characters_as_pages() {
     let text = format!(
         "宮沢賢治 銀河鉄道の夜\n目次\n第一章\n銀河鉄道の夜\n一、午后の授業\n{}",
@@ -1350,6 +1387,7 @@ pub(super) fn document_text_fixture_for(text: &str) -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn font_stream_fixture(entries: &[(u16, &str, usize)]) -> Vec<u8> {
     let mut bytes = b"FontV.01".to_vec();
     bytes.extend_from_slice(&(entries.len() as u16).to_be_bytes());
@@ -1359,6 +1397,7 @@ pub(super) fn font_stream_fixture(entries: &[(u16, &str, usize)]) -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn font_entry_fixture(id: u16, name: &str, suffix_len: usize) -> Vec<u8> {
     let mut entry = vec![0; 30];
     entry[0..2].copy_from_slice(&id.to_be_bytes());
@@ -1371,6 +1410,7 @@ pub(super) fn font_entry_fixture(id: u16, name: &str, suffix_len: usize) -> Vec<
     entry
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn document_text_with_control_boundary() -> Vec<u8> {
     let mut bytes = b"SsmgV.01".to_vec();
     extend_units(
@@ -1382,6 +1422,7 @@ pub(super) fn document_text_with_control_boundary() -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn document_text_with_page_break() -> Vec<u8> {
     let mut bytes = b"SsmgV.01".to_vec();
     extend_units(&mut bytes, &[0x001f]);
@@ -1395,6 +1436,7 @@ pub(super) fn document_text_with_page_break() -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn document_text_with_two_row_control_table() -> Vec<u8> {
     let mut bytes = b"SsmgV.01".to_vec();
     extend_units(&mut bytes, &[0x001f]);
@@ -1437,6 +1479,7 @@ pub(super) fn layout_box_record_fixture(x_pt: u16, y_pt: u16, width_pt: u16) -> 
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn document_view_styles_page_size_fixture(
     width_mm100: u32,
     height_mm100: u32,
@@ -1451,6 +1494,7 @@ pub(super) fn document_view_styles_page_size_fixture(
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn page_layout_style_page_size_fixture(width_mm100: u32, height_mm100: u32) -> Vec<u8> {
     let mut bytes = ssmg_style_fixture();
     bytes.resize(0x114, 0);
@@ -1479,10 +1523,12 @@ pub(super) fn page_layout_style_page_size_fixture(width_mm100: u32, height_mm100
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn text_count_table_fixture() -> Vec<u8> {
     text_count_table_fixture_with_ranges(&[(0x1234, 0x1250), (0x2000, 0x2400)])
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn text_count_table_fixture_with_ranges(entries: &[(u32, u32)]) -> Vec<u8> {
     let mut bytes = b"SsmgV.01".to_vec();
     bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
@@ -1502,6 +1548,7 @@ pub(super) fn text_count_table_fixture_with_ranges(entries: &[(u32, u32)]) -> Ve
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn ssmg_style_fixture() -> Vec<u8> {
     vec![
         b'S', b's', b'm', b'g', b'V', b'.', b'0', b'1', 0, 0, 0, 0x1c, 0, 0, 1, 0, 0, 0, 0, 0x20,
@@ -1509,6 +1556,7 @@ pub(super) fn ssmg_style_fixture() -> Vec<u8> {
     ]
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn ssmg_style_with_label_fixture(label: &str) -> Vec<u8> {
     let mut bytes = ssmg_style_fixture();
     bytes.resize(0x114, 0);
@@ -1523,6 +1571,7 @@ pub(super) fn ssmg_style_with_label_fixture(label: &str) -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn ssmg_page_layout_style_with_subrecords_fixture() -> Vec<u8> {
     let mut bytes = ssmg_style_fixture();
     bytes.resize(0x114, 0);
@@ -1546,6 +1595,7 @@ pub(super) fn ssmg_page_layout_style_with_subrecords_fixture() -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn auto_text_info_fixture(text: &str) -> Vec<u8> {
     let mut bytes = b"SsmgV.01".to_vec();
     bytes.resize(84, 0);
@@ -1642,6 +1692,7 @@ pub(super) fn assert_ruby_inline(inline: &Inline, expected_base: &str, expected_
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn cfb_with_document_text(payload: Vec<u8>) -> Vec<u8> {
     cfb_with_streams(&[("/DocumentText", &payload)])
 }

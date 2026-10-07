@@ -1,10 +1,13 @@
+#[cfg(feature = "rendering")]
 mod render;
 mod source;
 
+#[cfg(feature = "rendering")]
 pub(crate) use render::*;
+#[cfg(feature = "rendering")]
 pub(crate) use source::document_text_style_resolver;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rendering"))]
 mod tests {
     use super::source::{
         SourceFontSize, document_text_source_character_style, document_text_source_font_size,
@@ -172,3 +175,8 @@ mod tests {
         bytes
     }
 }
+
+pub use source::{
+    SourceCharacterStyle as DocumentSourceCharacterStyleCandidate,
+    SourceFontSize as DocumentSourceFontSize,
+};

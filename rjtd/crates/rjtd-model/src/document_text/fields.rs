@@ -199,10 +199,12 @@ pub(crate) fn valid_print_date(value: &str) -> bool {
     year > 0 && day > 0 && day <= limit
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn field_style_span(field: &DocumentTextFieldCandidate) -> TextSourceSpan {
     field.record_span.subspan_by_units(0, 1)
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn native_field_end(
     fields: &[DocumentTextFieldCandidate],
     events: &[DocumentTextFlowEvent],

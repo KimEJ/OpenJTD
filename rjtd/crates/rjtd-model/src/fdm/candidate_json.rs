@@ -560,16 +560,6 @@ pub(crate) fn push_object_fdm_index_bbox_json(output: &mut String, bbox: ObjectF
     output.push('}');
 }
 
-pub(crate) fn fdm_vector_css_color(color: u32) -> Option<String> {
-    if color > 0x00ff_ffff {
-        return None;
-    }
-    let blue = (color >> 16) & 0xff;
-    let green = (color >> 8) & 0xff;
-    let red = color & 0xff;
-    Some(format!("#{red:02x}{green:02x}{blue:02x}"))
-}
-
 pub(crate) fn fdm_vector_primitive_css_color(color: u32) -> Option<String> {
     if color <= 0x00ff_ffff {
         return fdm_vector_css_color(color);

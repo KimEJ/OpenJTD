@@ -1,10 +1,13 @@
+#[cfg(feature = "rendering")]
 mod render;
 mod source;
 
+#[cfg(feature = "rendering")]
 pub(crate) use render::*;
+#[cfg(feature = "rendering")]
 pub(crate) use source::*;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rendering"))]
 mod tests {
     use super::*;
     use crate::*;

@@ -1,36 +1,29 @@
+#[cfg(feature = "rendering")]
 use super::*;
+use crate::PageMarkU16GeometryProfile;
+#[cfg(feature = "rendering")]
 use crate::*;
 
 pub(crate) const LINE_MARK_PATH: &str = "/LineMark";
 
-pub(crate) const LINE_MARK_BE_DELTA_HEADER_BYTES: usize = 18;
-
-pub(crate) const LINE_MARK_BE_DELTA_COUNT_OFFSET: usize = 8;
-
 /// `be16` at byte offset `12` of the `/LineMark` be-delta header, named by
 /// position only. What it counts is not decoded here.
+#[cfg(feature = "rendering")]
 pub(crate) const LINE_MARK_BE_DELTA_HEADER_U16_12_OFFSET: usize = 12;
 
-pub(crate) const LINE_MARK_BE_DELTA_BASE_UNIT: usize = 16;
-
-pub(crate) const LINE_MARK_BE_DELTA_RECORD_BYTES: usize = 4;
-
-pub(crate) const SHANAI_LAN_LINE_MARK_PROFILE_ABSENT: &str = "absent";
-
-pub(crate) const SHANAI_LAN_LINE_MARK_PROFILE_BE_DELTA_V1: &str = "be16-delta-v1";
-
-pub(crate) const SHANAI_LAN_LINE_MARK_PROFILE_MACRO_STYLE: &str = "macro-stream-style-reference";
-
-pub(crate) const SHANAI_LAN_LINE_MARK_PROFILE_UNPARSED: &str = "unparsed";
-
+#[cfg(feature = "rendering")]
 pub(crate) const PAGE_MARK_CENTIPOINT_TO_CSS_PX: f32 = PDF_POINT_TO_CSS_PX / 100.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const PAGE_MARK_SEPARATOR_MIN_Y_CENTIPOINTS: u16 = 10_000;
 
+#[cfg(feature = "rendering")]
 pub(crate) const PAGE_MARK_SEPARATOR_MAX_Y_CENTIPOINTS: u16 = 60_000;
 
+#[cfg(feature = "rendering")]
 pub(crate) const PAGE_MARK_SEPARATOR_STROKE_WIDTH_PX: f32 = 1.15;
 
+#[cfg(feature = "rendering")]
 pub(crate) fn page_mark_u16_subrecord_candidates(
     fields: &[u16],
 ) -> Vec<PageMarkU16SubrecordCandidate> {
@@ -53,10 +46,12 @@ pub(crate) fn page_mark_u16_subrecord_candidates(
         .collect()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn page_mark_u16_subrecord_words_look_plausible(words: &[u16; 8]) -> bool {
     words[3] == 0 && words[5] == 0 && words[7] == 0 && words[4] <= words[6]
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn page_mark_u16_subrecord_u32_fields(words: &[u16; 8]) -> [u32; 4] {
     [
         (u32::from(words[0]) << 16) | u32::from(words[1]),
@@ -66,6 +61,7 @@ pub(crate) fn page_mark_u16_subrecord_u32_fields(words: &[u16; 8]) -> [u32; 4] {
     ]
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_page_mark_u16_subrecord_scan_json(
     output: &mut String,
     fields: &[u16],
@@ -128,6 +124,7 @@ pub fn page_mark_u16_geometry_profile(fields: &[u16]) -> PageMarkU16GeometryProf
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_line_mark_record_stride_fields_json(
     output: &mut String,
     record_indexes: &[usize],
@@ -143,6 +140,7 @@ pub(crate) fn push_line_mark_record_stride_fields_json(
     push_optional_usize_json(output, stride.map(|value| value.saturating_sub(1)));
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn page_marks_json(page_marks: &[DocumentPageMark]) -> String {
     let mut output = String::from("[");
     for (index, page_mark) in page_marks.iter().enumerate() {
@@ -214,6 +212,7 @@ pub(crate) fn page_marks_json(page_marks: &[DocumentPageMark]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn page_mark_entry_stream_byte_offset(
     page_mark: &DocumentPageMark,
     entry_index: usize,
@@ -226,6 +225,7 @@ pub(crate) fn page_mark_entry_stream_byte_offset(
         .sum::<usize>()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn paper_marks_json(paper_marks: &[DocumentPaperMark]) -> String {
     let mut output = String::from("[");
     for (index, paper_mark) in paper_marks.iter().enumerate() {
@@ -265,6 +265,7 @@ pub(crate) fn paper_marks_json(paper_marks: &[DocumentPaperMark]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn paper_mark_writing_mode_diagnostics(
     paper_marks: &[DocumentPaperMark],
 ) -> PaperMarkWritingModeDiagnostics {
@@ -303,6 +304,7 @@ pub(crate) fn paper_mark_writing_mode_diagnostics(
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_page_layer_page_mark_separator_json(
     output: &mut String,
     separator: &PageMarkSeparatorProjection,
@@ -343,6 +345,7 @@ pub(crate) fn push_page_layer_page_mark_separator_json(
     output.push('}');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_page_mark_line_pitch_agreement_gate_json(
     output: &mut String,
     layout: PageLayout,
@@ -423,5 +426,6 @@ pub(crate) fn push_page_mark_line_pitch_agreement_gate_json(
     output.push('}');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) const PAGE_MARK_HORIZONTAL_REFERENCE_WORD_INDEXES: [usize; 10] =
     [10, 13, 14, 15, 16, 17, 18, 19, 20, 21];

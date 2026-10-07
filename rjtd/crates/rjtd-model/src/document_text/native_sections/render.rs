@@ -21,7 +21,7 @@ pub(crate) fn native_section_layouts(
         .map(|value| hundredth_millimeters_to_css_px(u32::from(value)));
     Some(
         source
-            .landscape_pages
+            .custom_style_pages
             .into_iter()
             .map(|landscape| {
                 let size = if landscape { custom } else { default };

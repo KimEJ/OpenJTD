@@ -12,16 +12,17 @@ readme = "README.md"
 keywords = ["ichitaro", "jtd", "document", "document-model", "parser"]
 categories = ["data-structures", "text-processing", "parser-implementations"]
 publish = ["crates-io"]
-include = ["src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
+include = ["src/**/*.rs", "tests/**/*.rs", "examples/**/*.rs", "README.md", "LICENSE"]
 
 [dependencies]
-base64 = "0.22"
+base64 = { version = "0.22", optional = true }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png"], optional = true }
 rjtd-core = { version = "0.0.1", path = "../rjtd-core" }
 
 [features]
-default = ["bitmap-images"]
-bitmap-images = ["dep:image"]
+default = ["rendering", "bitmap-images"]
+rendering = []
+bitmap-images = ["rendering", "dep:base64", "dep:image"]
 
 [dev-dependencies]
 cfb = "0.14"

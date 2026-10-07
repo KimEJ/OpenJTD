@@ -25,6 +25,7 @@ pub(crate) const VISUAL_LIST_Y_PPM_OFFSET: usize = 0x34;
 
 pub(crate) const VISUAL_LIST_RLE_LENGTH_OFFSET: usize = 0x4c;
 
+#[cfg(feature = "rendering")]
 pub(crate) const VISUAL_LIST_MIN_HORIZONTAL_RUN_PERCENT: usize = 31;
 
 pub(crate) const JSFART2_CONTENTS_MAGIC_UTF16LE: &[u8; 22] = b"M\0S\0T\0U\0D\0I\0O\0.\0O\0C\0X\0";
@@ -96,52 +97,14 @@ pub(crate) const EMBEDDING_INFO_FRAME_WIDTH_TRAILING_OFFSET: usize = 4;
 
 pub(crate) const EMBEDDING_INFO_FRAME_HEIGHT_TRAILING_OFFSET: usize = 8;
 
+#[cfg(feature = "rendering")]
 pub(crate) const APP_IMAGE_DIAGNOSTIC_THUMB_PX: f32 = 72.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const APP_IMAGE_DIAGNOSTIC_GAP_PX: f32 = 8.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const APP_IMAGE_DIAGNOSTIC_MAX_OVERLAYS: usize = 8;
-
-#[derive(Debug, Clone)]
-pub(crate) struct DocumentSnapshot {
-    pub(crate) id: u32,
-    pub(crate) document: Document,
-    pub(crate) pages: Vec<Vec<PageTextLine>>,
-    pub(crate) file_name: String,
-    pub(crate) dpi: f64,
-    pub(crate) page_layout: PageLayout,
-    pub(crate) show_paragraph_marks: bool,
-    pub(crate) show_control_codes: bool,
-    pub(crate) show_transparent_borders: bool,
-    pub(crate) clip_enabled: bool,
-    pub(crate) writing_mode: WritingMode,
-    pub(crate) caret_section: u32,
-    pub(crate) caret_paragraph: u32,
-    pub(crate) caret_char_offset: u32,
-    pub(crate) clipboard_text: Option<String>,
-}
-
-impl DocumentSnapshot {
-    pub(crate) fn capture(id: u32, core: &DocumentCore) -> Self {
-        Self {
-            id,
-            document: core.document.clone(),
-            pages: core.pages.clone(),
-            file_name: core.file_name.clone(),
-            dpi: core.dpi,
-            page_layout: core.page_layout,
-            show_paragraph_marks: core.show_paragraph_marks,
-            show_control_codes: core.show_control_codes,
-            show_transparent_borders: core.show_transparent_borders,
-            clip_enabled: core.clip_enabled,
-            writing_mode: core.writing_mode,
-            caret_section: core.caret_section,
-            caret_paragraph: core.caret_paragraph,
-            caret_char_offset: core.caret_char_offset,
-            clipboard_text: core.clipboard_text.clone(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectJseq3TextMarkerCandidate {

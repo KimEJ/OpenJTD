@@ -22,6 +22,7 @@ impl WritingMode {
         }
     }
 
+    #[cfg(feature = "rendering")]
     pub(crate) fn is_vertical(self) -> bool {
         matches!(self, Self::VerticalRl)
     }
@@ -177,6 +178,7 @@ pub(crate) fn native_tatechuyoko_candidates(
         .collect()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn native_tatechuyoko_end(
     candidates: &[DocumentTatechuyokoCandidate],
     unit: usize,

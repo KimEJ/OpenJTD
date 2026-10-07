@@ -18,8 +18,9 @@ The source checkout may include unreleased development after the dated 0.0.1
 release. See [feature status](../../../docs/FEATURE-STATUS.md) and
 [validation](../../../docs/VALIDATION.md) for current scope, and the
 [changelog](../../CHANGELOG.md) for the release record. The
-[architecture](../../../docs/ARCHITECTURE.md) describes planned interpretation/
-rendering separation; this documentation does not implement that migration.
+[architecture](../../../docs/ARCHITECTURE.md) describes the interpretation/
+rendering boundary. Parsing and model inspection can now be built independently
+of the optional rendering and application facade.
 
 ## What it provides
 
@@ -36,6 +37,41 @@ observed `.jttc` compressed documents are supported where their inner document
 can be recovered. This is not complete coverage of all Ichitaro versions or
 document features.
 
+## Build configurations
+
+| Features | Available surface |
+| --- | --- |
+| Default | Parsing, source model queries, `DocumentCore`, rendering and bitmap decoding |
+| `--no-default-features --features rendering` | Parsing, source queries and the application/rendering surface, without bitmap decoding |
+| `--no-default-features` | Parsing and source model inspection; no `DocumentCore`, page layout, drawing, `image` or `base64` dependency |
+
+`bitmap-images` enables `rendering`. Existing default CLI, exporter and WASM
+consumers retain the same behavior. Applications that previously disabled only
+bitmap support should select `rendering` explicitly.
+
+The source-only inspection example reads the model without constructing pages
+or initializing paint/font state:
+
+```bash
+cargo run -p rjtd-model --no-default-features --example inspect -- document.jtd
+```
+
+Source queries expose configured mm100 sizes/margins, bounded writing direction,
+section/style association, running slots and raw distances, physical source-row
+ranges, paragraph attributes, and source font/style/color values. Physical rows
+retain paragraph/character addressing and raw source-unit ranges. They do not
+represent table layout or rendered page placement. Uniform style queries require
+consistent in-bounds `/DocumentText` spans and reject ambiguous duplicate streams.
+Font queries retain source names; CSS alias stacks and baseline adjustments are
+rendering operations. `DocumentSourceFontSize::Default` is a source default/reset
+state, not a fallback pixel size.
+
+These APIs return candidates for the existing observed profiles. Unsupported
+records remain raw/unknown; source query results do not establish general section
+inheritance, glyph metrics or fully decoded layout. Candidate extraction preserves
+raw data and does not mutate the document. `Document`, its source fields, resource
+budgets, and `VERSION` remain available in every configuration.
+
 ## Primary Rust API
 
 - `parse_document(&[u8]) -> rjtd_core::Result<Document>` is the one-shot JTD
@@ -43,7 +79,7 @@ document features.
   construction.
 - `Document` owns the parsed metadata, blocks, raw streams, and retained
   evidence. It is the value consumed by `rjtd-export`.
-- `DocumentCore` is the application-facing facade used by the viewer and
+- With `rendering`, `DocumentCore` is the application-facing facade used by the viewer and
   `rjtd-wasm`. Construct it with `DocumentCore::from_document` or
   `DocumentCore::from_bytes` when page information, rendering, navigation, or
   editing fallbacks are needed.

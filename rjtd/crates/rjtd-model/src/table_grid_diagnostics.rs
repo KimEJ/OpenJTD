@@ -1368,13 +1368,6 @@ pub(crate) fn table_source_offset_to_units(
     }
 }
 
-pub(crate) fn push_optional_usize_json(output: &mut String, value: Option<usize>) {
-    match value {
-        Some(value) => output.push_str(&value.to_string()),
-        None => output.push_str("null"),
-    }
-}
-
 pub(crate) fn push_optional_u16_json(output: &mut String, value: Option<u16>) {
     match value {
         Some(value) => output.push_str(&value.to_string()),

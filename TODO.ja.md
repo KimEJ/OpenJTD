@@ -8,7 +8,7 @@
 
 - [ ] 混在した source 認識、描画、app state を分類する。
 - [ ] 認識結果を model に置き、flow/span/raw/unknown/資源上限を保持する。
-- [ ] font/renderer 初期化なしの解析・model 調査を検証する。
+- [x] font/renderer 初期化なしの解析・model 調査を検証する。
 
 ## 再現可能な解釈検証
 

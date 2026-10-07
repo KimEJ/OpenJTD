@@ -272,10 +272,6 @@ pub(crate) fn fallback_text_origin(layout: PageLayout, document: &Document) -> O
     Some((viewport.x, viewport.y))
 }
 
-pub(crate) fn document_text_raw_stream(document: &Document) -> Option<&[u8]> {
-    raw_stream_bytes(document, DOCUMENT_TEXT_PATH)
-}
-
 pub(crate) fn text_source_span_from_document_text_units(
     start: usize,
     end: usize,

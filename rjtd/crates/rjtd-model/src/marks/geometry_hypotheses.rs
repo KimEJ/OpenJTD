@@ -191,11 +191,3 @@ pub(crate) fn push_page_mark_selected_fields_from_parts_json(
     }
     output.push_str("]}");
 }
-
-pub(crate) fn line_mark_be_delta_record_byte_offset(record_index: usize) -> usize {
-    LINE_MARK_BE_DELTA_HEADER_BYTES + record_index * LINE_MARK_BE_DELTA_RECORD_BYTES
-}
-
-pub(crate) fn line_mark_be_delta_record_word_index(record_index: usize) -> usize {
-    line_mark_be_delta_record_byte_offset(record_index) / 2
-}

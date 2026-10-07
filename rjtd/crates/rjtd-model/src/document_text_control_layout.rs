@@ -390,6 +390,7 @@ pub(crate) fn range_visible_text(
         .collect()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn range_overlaps_entry_for_basis(
     entry: &DocumentTextMapEntry,
     start: usize,
@@ -403,6 +404,7 @@ pub(crate) fn range_overlaps_entry_for_basis(
     entry_start < end && entry_end > start
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn entry_range_for_basis(
     entry: &DocumentTextMapEntry,
     basis: TextCountRangeOverlapBasis,
@@ -598,4 +600,35 @@ pub(crate) fn preview_text(text: &str, max_chars: usize) -> String {
         preview.push_str("...");
     }
     preview
+}
+pub(crate) fn is_short_chapter_title(text: &str) -> bool {
+    if text.chars().count() > 32 {
+        return false;
+    }
+    let Some((prefix, suffix)) = text.split_once('、') else {
+        return false;
+    };
+    !prefix.is_empty() && !suffix.trim().is_empty() && prefix.chars().all(is_japanese_number_char)
+}
+
+pub(crate) fn is_japanese_number_char(character: char) -> bool {
+    matches!(
+        character,
+        '〇' | '零'
+            | '一'
+            | '二'
+            | '三'
+            | '四'
+            | '五'
+            | '六'
+            | '七'
+            | '八'
+            | '九'
+            | '十'
+            | '百'
+            | '千'
+            | '壱'
+            | '弐'
+            | '参'
+    )
 }

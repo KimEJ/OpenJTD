@@ -597,22 +597,6 @@ pub(crate) fn document_view_style_group_id(code: u16) -> Option<u16> {
         .then(|| group_id - 0x30)
 }
 
-pub(crate) fn utf16le_ascii_contains(bytes: &[u8], needle: &str) -> bool {
-    let mut encoded = Vec::with_capacity(needle.len() * 2);
-    for unit in needle.encode_utf16() {
-        encoded.extend_from_slice(&unit.to_le_bytes());
-    }
-    bytes.windows(encoded.len()).any(|window| window == encoded)
-}
-
-pub(crate) fn raw_stream_bytes<'a>(document: &'a Document, name: &str) -> Option<&'a [u8]> {
-    document
-        .raw_streams()
-        .iter()
-        .find(|stream| stream.name() == name)
-        .map(RawStream::bytes)
-}
-
 pub(crate) fn frame_record_unit_to_css_px(value: u16) -> f32 {
     value as f32 * FRAME_RECORD_UNIT_TO_CSS_PX
 }

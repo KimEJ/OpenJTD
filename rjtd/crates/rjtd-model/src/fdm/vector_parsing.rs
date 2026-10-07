@@ -423,6 +423,13 @@ pub(crate) struct FdmCompoundChildLayout {
     pub(crate) child_records_do_not_overlap: bool,
 }
 
+#[cfg_attr(
+    not(feature = "rendering"),
+    allow(
+        dead_code,
+        reason = "source evidence accessors retained independently of rendering"
+    )
+)]
 impl FdmCompoundChildLayout {
     pub(crate) fn child_offsets(&self) -> &[u16] {
         &self.child_offsets
@@ -868,6 +875,7 @@ pub(crate) fn fdm_vector_path_is_closed(points: &[ObjectFdmVectorPoint]) -> bool
     points.len() >= 3 && points.first() == points.last()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_primitive_is_closed(command: &ObjectFdmVectorCommandCandidate) -> bool {
     command.ellipse().is_some() || fdm_vector_path_is_closed(command.path_points())
 }
@@ -894,6 +902,7 @@ pub(crate) fn fdm_vector_primitive_kind(command: &ObjectFdmVectorCommandCandidat
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_stroke_width(command: &ObjectFdmVectorCommandCandidate) -> f32 {
     if command.ellipse().is_some() {
         return if command.style_word() == 0x0010 {
@@ -919,6 +928,7 @@ pub(crate) fn fdm_vector_stroke_width(command: &ObjectFdmVectorCommandCandidate)
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_render_stroke_color(
     diagnostic: FdmCommandDiagnostic<'_>,
     diagnostics: &[FdmCommandDiagnostic<'_>],
@@ -936,6 +946,7 @@ pub(crate) fn fdm_vector_render_stroke_color(
         })
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_render_fill_color(
     diagnostic: FdmCommandDiagnostic<'_>,
     diagnostics: &[FdmCommandDiagnostic<'_>],
@@ -960,6 +971,7 @@ pub(crate) fn fdm_vector_render_fill_color(
     fdm_vector_css_color(fill_color).unwrap_or_else(|| "none".to_string())
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_linear_gradient_colors(
     command: &ObjectFdmVectorCommandCandidate,
 ) -> Option<(String, String)> {
@@ -972,6 +984,7 @@ pub(crate) fn fdm_vector_linear_gradient_colors(
     (from != to).then_some((from, to))
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_filled_path_is_text_mask_outer(
     diagnostic: FdmCommandDiagnostic<'_>,
     diagnostics: &[FdmCommandDiagnostic<'_>],
@@ -1014,6 +1027,7 @@ pub(crate) fn fdm_vector_filled_path_is_text_mask_outer(
     })
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_filled_path_is_text_mask_inner(
     diagnostic: FdmCommandDiagnostic<'_>,
     diagnostics: &[FdmCommandDiagnostic<'_>],
@@ -1052,6 +1066,7 @@ pub(crate) fn fdm_vector_filled_path_is_text_mask_inner(
     })
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_text_mask_candidate(command: &ObjectFdmVectorCommandCandidate) -> bool {
     command.marker() == b"\x00\x00\x06\x60"
         && command.style_word() == 0x0008
@@ -1061,6 +1076,7 @@ pub(crate) fn fdm_vector_text_mask_candidate(command: &ObjectFdmVectorCommandCan
         && fdm_vector_path_is_closed(command.path_points())
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_text_mask_area_ratio(
     outer_bbox: (i32, i32, i32, i32),
     inner_bbox: (i32, i32, i32, i32),
@@ -1076,6 +1092,7 @@ pub(crate) fn fdm_vector_text_mask_area_ratio(
         .then_some(ratio)
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_filled_path_is_counter_overlay(
     diagnostic: FdmCommandDiagnostic<'_>,
     diagnostics: &[FdmCommandDiagnostic<'_>],
@@ -1084,6 +1101,7 @@ pub(crate) fn fdm_vector_filled_path_is_counter_overlay(
         || fdm_vector_filled_path_is_text_mask_inner(diagnostic, diagnostics)
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_filled_path_is_compound_hole(
     diagnostic: FdmCommandDiagnostic<'_>,
     diagnostics: &[FdmCommandDiagnostic<'_>],
@@ -1122,6 +1140,7 @@ pub(crate) fn fdm_vector_filled_path_is_compound_hole(
     })
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_containing_fill_color(
     diagnostic: FdmCommandDiagnostic<'_>,
     diagnostics: &[FdmCommandDiagnostic<'_>],
@@ -1146,6 +1165,7 @@ pub(crate) fn fdm_vector_containing_fill_color(
         .map(|(_, color)| color)
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_uncolored_path_uses_light_stroke(
     diagnostic: FdmCommandDiagnostic<'_>,
     diagnostics: &[FdmCommandDiagnostic<'_>],
@@ -1176,24 +1196,60 @@ pub(crate) fn fdm_vector_uncolored_path_uses_light_stroke(
     })
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_color_is_black(color: u32) -> bool {
     color & 0x00ff_ffff == 0
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_vector_color_is_white(color: u32) -> bool {
     color & 0x00ff_ffff == 0x00ff_ffff
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_bbox_contains(outer: (i32, i32, i32, i32), inner: (i32, i32, i32, i32)) -> bool {
     outer.0 <= inner.0 && outer.1 <= inner.1 && outer.2 >= inner.2 && outer.3 >= inner.3
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_bbox_intersects(left: (i32, i32, i32, i32), right: (i32, i32, i32, i32)) -> bool {
     left.0 < right.2 && right.0 < left.2 && left.1 < right.3 && right.1 < left.3
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_bbox_area(bbox: (i32, i32, i32, i32)) -> i64 {
     let width = i64::from(bbox.2.saturating_sub(bbox.0).max(0));
     let height = i64::from(bbox.3.saturating_sub(bbox.1).max(0));
     width.saturating_mul(height)
+}
+#[cfg(feature = "rendering")]
+pub(crate) fn fdm_vector_css_color(color: u32) -> Option<String> {
+    if color > 0x00ff_ffff {
+        return None;
+    }
+    let blue = (color >> 16) & 0xff;
+    let green = (color >> 8) & 0xff;
+    let red = color & 0xff;
+    Some(format!("#{red:02x}{green:02x}{blue:02x}"))
+}
+
+pub(crate) fn normalize_fdm_bbox(bbox: ObjectFdmIndexBbox) -> (i32, i32, i32, i32) {
+    (
+        bbox.left().min(bbox.right()),
+        bbox.top().min(bbox.bottom()),
+        bbox.left().max(bbox.right()),
+        bbox.top().max(bbox.bottom()),
+    )
+}
+
+pub(crate) fn fdm_connector_orientation(dx: f32, dy: f32) -> &'static str {
+    let abs_x = dx.abs();
+    let abs_y = dy.abs();
+    if abs_x >= abs_y * 2.0 {
+        "horizontal"
+    } else if abs_y >= abs_x * 2.0 {
+        "vertical"
+    } else {
+        "diagonal"
+    }
 }

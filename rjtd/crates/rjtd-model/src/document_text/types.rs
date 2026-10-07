@@ -2,6 +2,7 @@ use crate::*;
 
 pub(crate) const DOCUMENT_TEXT_INLINE_START_TAG: u32 = 0x001d;
 
+#[cfg(feature = "rendering")]
 pub(crate) const DOCUMENT_TEXT_TEXT_RUN_MARKER: u16 = 0x001f;
 
 pub(crate) const DOCUMENT_TEXT_RUBY_BASE_SELECTOR: u16 = 0x0003;
@@ -10,6 +11,7 @@ pub(crate) const DOCUMENT_TEXT_RUBY_TEXT_SELECTOR: u16 = 0x0082;
 
 pub(crate) const DOCUMENT_TEXT_TOC_PAGE_SELECTOR: u16 = 0x0101;
 
+#[cfg(feature = "rendering")]
 pub(crate) const DOCUMENT_TEXT_PAGE_BREAK_CONTROL: u16 = 0x000c;
 
 pub(crate) const DOCUMENT_TEXT_PATH: &str = "/DocumentText";
@@ -24,32 +26,46 @@ pub(crate) const PARAGRAPH_BOUNDARY_DELIMITER_CANDIDATE: u16 = 0x001c;
 
 pub(crate) const DOCUMENT_TEXT_CONTROL_TABLE_MAX_EMPTY_GAP_ROWS: usize = 3;
 
+#[cfg(feature = "rendering")]
 pub(crate) const SHANAI_LAN_TEXT_GROUP_LINE_HEIGHT_FACTOR: f32 = 1.5;
 
+#[cfg(feature = "rendering")]
 pub(crate) const SHANAI_LAN_TEXT_FONT_SIZE_SCALE: f32 = 1.1083333;
 
+#[cfg(feature = "rendering")]
 pub(crate) const SHANAI_LAN_TEXT_BASELINE_FACTOR: f32 = 0.8;
 
+#[cfg(feature = "rendering")]
 pub(crate) const SHANAI_LAN_TEXT_GRID_EXTENT_GUTTER_UNITS: u16 = 4;
 
+#[cfg(feature = "rendering")]
 pub(crate) const SHANAI_LAN_TEXT_FRAGMENT_GAP_UNITS: usize = 2;
 
+#[cfg(any(test, feature = "rendering"))]
 pub(crate) const LAYOUT_BOX_TEXT_MAGIC: &[u8; 8] = b"TextV.01";
 
+#[cfg(feature = "rendering")]
 pub(crate) const LAYOUT_BOX_TEXT_BODY_MIN_CHARS: usize = 80;
 
+#[cfg(feature = "rendering")]
 pub(crate) const LAYOUT_BOX_TEXT_BODY_FONT_SIZE_PX: f32 = 14.4;
 
+#[cfg(feature = "rendering")]
 pub(crate) const LAYOUT_BOX_TEXT_TITLE_FONT_SIZE_PX: f32 = 18.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const LAYOUT_BOX_TEXT_CAPTION_FONT_SIZE_PX: f32 = 10.5;
 
+#[cfg(feature = "rendering")]
 pub(crate) const LAYOUT_BOX_TEXT_LINE_HEIGHT_FACTOR: f32 = 2.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const LAYOUT_BOX_TEXT_MIN_RENDER_WIDTH_PT: u16 = 48;
 
+#[cfg(feature = "rendering")]
 pub(crate) const LAYOUT_BOX_TEXT_MAX_RENDER_WIDTH_PT: u16 = 760;
 
+#[cfg(feature = "rendering")]
 pub(crate) const PAGE_FRAME_TEXT_AFTER_BAR_GAP_LINES: f32 = 1.0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,10 +170,12 @@ impl Paragraph {
         self.style.as_ref()
     }
 
+    #[cfg(feature = "rendering")]
     pub(crate) fn set_style(&mut self, style: Option<StyleRef>) {
         self.style = style;
     }
 
+    #[cfg(feature = "rendering")]
     pub(crate) fn set_text(&mut self, text: impl Into<String>) {
         self.inlines = vec![Inline::Text(TextRun::new(text, None))];
     }

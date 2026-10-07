@@ -1068,38 +1068,6 @@ pub(crate) fn running_chapter_title_for_page(
     current
 }
 
-pub(crate) fn is_short_chapter_title(text: &str) -> bool {
-    if text.chars().count() > 32 {
-        return false;
-    }
-    let Some((prefix, suffix)) = text.split_once('、') else {
-        return false;
-    };
-    !prefix.is_empty() && !suffix.trim().is_empty() && prefix.chars().all(is_japanese_number_char)
-}
-
-pub(crate) fn is_japanese_number_char(character: char) -> bool {
-    matches!(
-        character,
-        '〇' | '零'
-            | '一'
-            | '二'
-            | '三'
-            | '四'
-            | '五'
-            | '六'
-            | '七'
-            | '八'
-            | '九'
-            | '十'
-            | '百'
-            | '千'
-            | '壱'
-            | '弐'
-            | '参'
-    )
-}
-
 pub(crate) fn toc_leader_line(title: &str, page_label: &str, max_columns: usize) -> String {
     let title_width = text_display_column_width(title);
     let page_width = text_display_column_width(page_label);

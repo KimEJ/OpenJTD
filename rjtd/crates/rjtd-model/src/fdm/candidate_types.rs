@@ -159,12 +159,14 @@ impl ObjectFdmTextIndexEntryCandidate {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmIndexSegmentBboxAxisPairGate {
     pub(crate) valid_index_row_count: usize,
     pub(crate) linked_row_count: usize,
     pub(crate) axis_pair_order_agreement_row_count: usize,
 }
 
+#[cfg(feature = "rendering")]
 impl FdmIndexSegmentBboxAxisPairGate {
     pub(crate) fn new(
         valid_index_row_count: usize,
@@ -198,6 +200,7 @@ impl FdmIndexSegmentBboxAxisPairGate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmTextMirrorAnchorAgreement {
     pub(crate) indexed_text_path: String,
     pub(crate) mirrored_text_path: String,
@@ -208,6 +211,7 @@ pub(crate) struct FdmTextMirrorAnchorAgreement {
     pub(crate) indexed_record_bbox_agreement: bool,
 }
 
+#[cfg(feature = "rendering")]
 impl FdmTextMirrorAnchorAgreement {
     pub(crate) fn new(
         indexed_text_path: impl Into<String>,
@@ -629,10 +633,24 @@ impl ObjectFdmVectorCommandCandidate {
         &self.compound_child_offsets
     }
 
+    #[cfg_attr(
+        not(feature = "rendering"),
+        allow(
+            dead_code,
+            reason = "retained source evidence has optional rendering consumers"
+        )
+    )]
     pub(crate) fn compound_child_layout(&self) -> Option<&FdmCompoundChildLayout> {
         self.compound_child_layout.as_ref()
     }
 
+    #[cfg_attr(
+        not(feature = "rendering"),
+        allow(
+            dead_code,
+            reason = "retained source evidence has optional rendering consumers"
+        )
+    )]
     pub(crate) fn gradient_colors(&self) -> Option<FdmVectorGradientContext> {
         self.gradient_colors
     }
@@ -716,6 +734,13 @@ pub(crate) struct FdmVectorGradientContext {
     pub(crate) to_color: u32,
 }
 
+#[cfg_attr(
+    not(feature = "rendering"),
+    allow(
+        dead_code,
+        reason = "source evidence accessors retained independently of rendering"
+    )
+)]
 impl FdmVectorGradientContext {
     pub(crate) fn new(from_color: u32, to_color: u32) -> Self {
         Self {

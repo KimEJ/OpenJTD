@@ -159,6 +159,7 @@ pub(crate) struct FdmVectorSegment {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct FdmProjectionViewport {
     pub(crate) x: f32,
     pub(crate) y: f32,
@@ -484,6 +485,7 @@ pub(crate) fn fdm_text_candidates_from_stream(
     candidates
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn fdm_text_mirror_anchor_agreements(
     candidates: &[ObjectStreamCandidate],
 ) -> Vec<FdmTextMirrorAnchorAgreement> {
@@ -743,6 +745,7 @@ pub(crate) fn decode_fdm_text_shift_jis_pair(first: u8, second: u8) -> Option<ch
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn project_fdm_single_page_diagram(
     document: &Document,
     pages: &mut Vec<Vec<PageTextLine>>,

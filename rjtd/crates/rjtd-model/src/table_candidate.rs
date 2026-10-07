@@ -295,6 +295,7 @@ pub(super) fn table_candidate_intervals(
         .collect()
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidates_json(candidates: &[TableCandidate]) -> String {
     let mut output = String::from("[");
     for (index, candidate) in candidates.iter().enumerate() {
@@ -307,6 +308,7 @@ pub(super) fn table_candidates_json(candidates: &[TableCandidate]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_table_candidate_json(output: &mut String, candidate: &TableCandidate) {
     output.push_str("{\"index\":");
     output.push_str(&candidate.index().to_string());
@@ -390,6 +392,7 @@ pub(super) fn push_table_candidate_json(output: &mut String, candidate: &TableCa
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_table_candidate_intervals_json(
     output: &mut String,
     intervals: &[TableCandidateInterval],
@@ -425,6 +428,7 @@ pub(super) fn push_table_candidate_intervals_json(
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_table_candidate_column_segments_json(
     output: &mut String,
     segments: &[TableCandidateColumnSegment],
@@ -455,6 +459,7 @@ pub(super) fn push_table_candidate_column_segments_json(
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidate_interval_non_empty_cell_count(
     interval: &TableCandidateInterval,
 ) -> usize {
@@ -465,6 +470,7 @@ pub(super) fn table_candidate_interval_non_empty_cell_count(
         .count()
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_answer_sheet_sparse_table_candidate_json(
     output: &mut String,
     layout: PageLayout,
@@ -523,6 +529,7 @@ pub(super) fn push_answer_sheet_sparse_table_candidate_json(
     output.push_str(",\"geometryDecoded\":false,\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn push_sparse_table_rows_json(output: &mut String, rows: &[TableCandidateInterval]) {
     output.push('[');
     for (row_array_index, row) in rows.iter().enumerate() {
@@ -573,6 +580,7 @@ pub(super) fn push_sparse_table_rows_json(output: &mut String, rows: &[TableCand
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidate_source_anchor_count(candidate: &TableCandidate) -> usize {
     candidate
         .intervals()
@@ -587,6 +595,7 @@ pub(super) fn table_candidate_source_anchor_count(candidate: &TableCandidate) ->
         .count()
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidate_document_text_line_header_rows(
     document: &Document,
     candidate: &TableCandidate,
@@ -620,6 +629,7 @@ pub(super) fn table_candidate_document_text_line_header_rows(
         .collect()
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidate_line_headers_for_interval(
     bytes: &[u8],
     basis: TextCountRangeOverlapBasis,
@@ -648,6 +658,7 @@ pub(super) fn table_candidate_line_headers_for_interval(
     headers
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidate_interval_byte_range(
     bytes: &[u8],
     basis: TextCountRangeOverlapBasis,
@@ -669,6 +680,7 @@ pub(super) fn table_candidate_interval_byte_range(
     Some((byte_start, byte_end.min(bytes.len())))
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidate_line_header_matched_cell_count(
     headers: &[ShanaiLanLineHeader],
     expected_cell_count: usize,
@@ -689,6 +701,7 @@ pub(super) fn table_candidate_line_header_matched_cell_count(
     expected_cell_count
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidate_anchor_line_index(
     document: &Document,
     lines: &[PageTextLine],
@@ -703,6 +716,7 @@ pub(super) fn table_candidate_anchor_line_index(
     })
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn table_candidate_overlaps_source_span(
     candidate: &TableCandidate,
     span: &TextSourceSpan,

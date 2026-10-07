@@ -21,7 +21,8 @@ impl Document {
     }
 }
 
-pub(super) struct NativeRunningSource {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeRunningSource {
     pub(super) slots: Vec<HeaderTextCandidate>,
     pub(super) facing: bool,
     pub(super) cover_off: bool,
@@ -190,4 +191,34 @@ pub(super) fn native_running_source(document: &Document) -> Option<NativeRunning
         footer_mm100,
         number_mm100,
     })
+}
+
+impl Document {
+    /// Saved slots/policy in the bounded running-text profile, without placement.
+    pub fn running_text_source_candidate(&self) -> Option<NativeRunningSource> {
+        native_running_source(self)
+    }
+}
+impl NativeRunningSource {
+    pub fn slots(&self) -> &[HeaderTextCandidate] {
+        &self.slots
+    }
+    pub fn facing_pages(&self) -> bool {
+        self.facing
+    }
+    pub fn suppress_first_page(&self) -> bool {
+        self.cover_off
+    }
+    pub fn page_number_enabled(&self) -> bool {
+        self.page_number_enabled
+    }
+    pub fn header_distances_mm100(&self) -> [u16; 2] {
+        self.header_mm100
+    }
+    pub fn footer_distances_mm100(&self) -> [u16; 2] {
+        self.footer_mm100
+    }
+    pub fn page_number_distance_mm100(&self) -> u16 {
+        self.number_mm100
+    }
 }

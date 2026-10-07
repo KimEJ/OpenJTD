@@ -1,13 +1,14 @@
+#[cfg(feature = "rendering")]
 mod render;
 mod source;
 
+#[cfg(feature = "rendering")]
 pub(crate) use render::*;
-pub(crate) use source::{
-    native_toc_cached_entries, native_toc_context_record, native_toc_setting_line,
-    native_toc_source_scope,
-};
+pub(crate) use source::native_toc_cached_entries;
+#[cfg(any(test, feature = "rendering"))]
+pub(crate) use source::{native_toc_setting_line, native_toc_source_scope};
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rendering"))]
 mod tests {
     use super::source::*;
     use super::*;
@@ -135,3 +136,8 @@ mod tests {
         }
     }
 }
+
+pub use source::NativeSourceLineRange as DocumentSourceLineRangeCandidate;
+
+#[cfg(feature = "rendering")]
+pub(crate) use source::native_toc_context_record;

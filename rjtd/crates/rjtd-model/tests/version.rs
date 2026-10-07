@@ -1,3 +1,5 @@
+#![cfg(feature = "rendering")]
+
 use rjtd_model::{Document, DocumentCore};
 
 #[test]

@@ -1,12 +1,12 @@
+#[cfg(feature = "rendering")]
+use rjtd_model::{Document, DocumentCore};
 use std::collections::HashSet;
 use std::io::{Cursor, Write};
 
 use rjtd_core::compressed_document::JUST_COMPRESSED_DOCUMENT_MAGIC;
 use rjtd_core::container::{CfbEntryReadMode, EntryKind, inspect_cfb_entries_with_mode};
 use rjtd_core::{Error, ParseLimits};
-use rjtd_model::{
-    Document, DocumentCore, parse_document, parse_document_with_budget, parse_document_with_limits,
-};
+use rjtd_model::{parse_document, parse_document_with_budget, parse_document_with_limits};
 
 #[test]
 fn rejects_document_input_over_default_limit() {
@@ -309,18 +309,36 @@ fn accepts_exact_and_rejects_plus_one_repeated_image_signature_candidates() {
         document_with_streams(&[("/DocumentText", b"SsmgV.01"), ("/ImageData", &signatures)]);
 
     // When / Then
-    assert!(
-        DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(3),)
-            .is_ok()
-    );
+    assert!(parse_document_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(3),).is_ok());
     assert_resource_limit(
-        DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(2)),
+        parse_document_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(2)),
         Error::ResourceLimit {
             resource: "document records",
             limit: 2,
             actual: 3,
         },
     );
+    #[cfg(feature = "rendering")]
+    {
+        // Given
+        let signatures = repeated_jpeg_signatures(3);
+        let bytes =
+            document_with_streams(&[("/DocumentText", b"SsmgV.01"), ("/ImageData", &signatures)]);
+
+        // When / Then
+        assert!(
+            DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(3),)
+                .is_ok()
+        );
+        assert_resource_limit(
+            DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(2)),
+            Error::ResourceLimit {
+                resource: "document records",
+                limit: 2,
+                actual: 3,
+            },
+        );
+    }
 }
 
 #[test]
@@ -335,18 +353,40 @@ fn accepts_exact_and_rejects_plus_one_fdm_image_signature_candidates() {
     ]);
 
     // When / Then
-    assert!(
-        DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(12),)
-            .is_ok()
-    );
+    assert!(parse_document_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(12),).is_ok());
     assert_resource_limit(
-        DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(11)),
+        parse_document_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(11)),
         Error::ResourceLimit {
             resource: "document records",
             limit: 11,
             actual: 12,
         },
     );
+    #[cfg(feature = "rendering")]
+    {
+        // Given
+        let signatures = repeated_jpeg_signatures(3);
+        let index = fdm_index_for_vector_start();
+        let bytes = document_with_streams(&[
+            ("/DocumentText", b"SsmgV.01"),
+            ("/FigureData/main_data/FDMVector", &signatures),
+            ("/FigureData/main_data/FDMIndex", &index),
+        ]);
+
+        // When / Then
+        assert!(
+            DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(12),)
+                .is_ok()
+        );
+        assert_resource_limit(
+            DocumentCore::from_bytes_with_limits(&bytes, ParseLimits::DEFAULT.with_max_records(11)),
+            Error::ResourceLimit {
+                resource: "document records",
+                limit: 11,
+                actual: 12,
+            },
+        );
+    }
 }
 
 #[test]
@@ -373,6 +413,7 @@ fn preserves_signature_candidate_budget_across_parse_layers() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn preserves_one_budget_from_model_construction_through_page_construction() {
     let mut budget = ParseLimits::DEFAULT.with_max_pages(1).resource_budget();
     budget.reserve_page().unwrap();
@@ -388,6 +429,7 @@ fn preserves_one_budget_from_model_construction_through_page_construction() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn applies_page_limits_at_default_and_custom_core_byte_entry_points() {
     let bytes = document_with_streams(&[("/DocumentText", b"SsmgV.01")]);
 

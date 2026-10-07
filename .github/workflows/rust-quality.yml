@@ -79,6 +79,15 @@ jobs:
       - name: Test workspace
         run: cargo test --workspace --locked --no-fail-fast
 
+      - name: Test source-only model
+        run: cargo test --package rjtd-model --no-default-features --locked --no-fail-fast
+
+      - name: Lint source-only model
+        run: cargo clippy --package rjtd-model --no-default-features --all-targets --locked -- -D warnings
+
+      - name: Check rendering without bitmap decoding
+        run: cargo check --package rjtd-model --no-default-features --features rendering --all-targets --locked
+
       - name: Lint workspace
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
@@ -137,3 +146,6 @@ jobs:
 
       - name: Check MSRV workspace
         run: cargo check --workspace --locked
+
+      - name: Check MSRV source-only model
+        run: cargo check --package rjtd-model --no-default-features --all-targets --locked

@@ -1,9 +1,12 @@
+#[cfg(feature = "rendering")]
 use super::*;
 
+#[cfg(feature = "rendering")]
 pub(crate) fn json_ok_with(fields: &str) -> String {
     format!("{{\"ok\":true,{fields}}}")
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_cursor_rect_json(page_index: u32) -> String {
     format!(
         "{{\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"height\":{:.1}}}",
@@ -11,14 +14,17 @@ pub(crate) fn default_cursor_rect_json(page_index: u32) -> String {
     )
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_line_info_json() -> String {
     "{\"lineIndex\":0,\"lineCount\":1,\"charStart\":0,\"charEnd\":0}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_table_dimensions_json() -> String {
     "{\"rowCount\":0,\"colCount\":0,\"cellCount\":0}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn observed_table_dimensions_json(candidate: &TableCandidate) -> String {
     let row_count = candidate.intervals().len();
     let mut output = format!(
@@ -46,6 +52,7 @@ pub(crate) fn observed_table_dimensions_json(candidate: &TableCandidate) -> Stri
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn column_grid_candidate_json(
     candidate: &TableCandidate,
     grid: &TableCandidateColumnGridCandidate,
@@ -68,10 +75,12 @@ pub(crate) fn column_grid_candidate_json(
     )
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_cell_info_json() -> String {
     "{\"row\":0,\"col\":0,\"rowSpan\":1,\"colSpan\":1}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn observed_cell_info_json(cell_idx: u32, cell: &TableCandidateInterval) -> String {
     format!(
         "{{\"row\":{cell_idx},\"col\":0,\"rowSpan\":1,\"colSpan\":1,\"source\":\"tableCandidateInterval\",\"sourceIntervalIndex\":{},\"sourceStart\":{},\"sourceEnd\":{},\"decoded\":false}}",
@@ -81,11 +90,13 @@ pub(crate) fn observed_cell_info_json(cell_idx: u32, cell: &TableCandidateInterv
     )
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn observed_cell_line_info_json(cell: &TableCandidateInterval) -> String {
     let char_end = cell.text_preview().chars().count();
     format!("{{\"lineIndex\":0,\"lineCount\":1,\"charStart\":0,\"charEnd\":{char_end}}}")
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn observed_table_signature(candidate: &TableCandidate) -> String {
     format!(
         "rjtd-table-candidate:{}:{}:0x{:04x}:{}x1",
@@ -96,6 +107,7 @@ pub(crate) fn observed_table_signature(candidate: &TableCandidate) -> String {
     )
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn char_slice(text: &str, char_offset: u32, count: u32) -> String {
     text.chars()
         .skip(char_offset as usize)
@@ -103,46 +115,57 @@ pub(crate) fn char_slice(text: &str, char_offset: u32, count: u32) -> String {
         .collect()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_table_edit_result_json() -> String {
     "{\"ok\":false,\"rowCount\":0,\"colCount\":0}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_cell_count_result_json() -> String {
     "{\"ok\":false,\"cellCount\":0}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_char_properties_json() -> String {
     "{\"fontFamily\":\"Hiragino Sans\",\"fontName\":\"Hiragino Sans\",\"fontSize\":1000,\"bold\":false,\"italic\":false,\"underline\":false,\"strikethrough\":false,\"textColor\":\"#111111\",\"shadeColor\":\"#ffffff\",\"charShapeId\":0,\"fontId\":0,\"fontIds\":[0,0,0,0,0,0,0],\"fontFamilies\":[\"Hiragino Sans\",\"Hiragino Sans\",\"Hiragino Sans\",\"Hiragino Sans\",\"Hiragino Sans\",\"Hiragino Sans\",\"Hiragino Sans\"],\"ratios\":[100,100,100,100,100,100,100],\"spacings\":[0,0,0,0,0,0,0],\"relativeSizes\":[100,100,100,100,100,100,100],\"charOffsets\":[0,0,0,0,0,0,0],\"underlineType\":\"None\",\"underlineColor\":\"#111111\",\"outlineType\":0,\"shadowType\":0,\"shadowColor\":\"#000000\",\"shadowOffsetX\":0,\"shadowOffsetY\":0,\"strikeColor\":\"#111111\",\"subscript\":false,\"superscript\":false,\"emphasisDot\":0,\"underlineShape\":0,\"strikeShape\":0,\"kerning\":false,\"borderFillId\":0,\"fillType\":\"none\",\"fillColor\":\"#ffffff\",\"patternColor\":\"#000000\",\"patternType\":0}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_para_properties_json() -> String {
     "{\"alignment\":\"left\",\"lineSpacing\":160,\"lineSpacingType\":\"Percent\",\"marginLeft\":0,\"marginRight\":0,\"indent\":0,\"spacingBefore\":0,\"spacingAfter\":0,\"paraShapeId\":0,\"headType\":\"None\",\"paraLevel\":0,\"numberingId\":0,\"widowOrphan\":false,\"keepWithNext\":false,\"keepLines\":false,\"pageBreakBefore\":false,\"fontLineHeight\":false,\"singleLine\":false,\"autoSpaceKrEn\":false,\"autoSpaceKrNum\":false,\"verticalAlign\":0,\"englishBreakUnit\":0,\"koreanBreakUnit\":0,\"tabAutoLeft\":true,\"tabAutoRight\":true,\"tabStops\":[],\"defaultTabSpacing\":0,\"borderFillId\":0,\"fillType\":\"none\",\"fillColor\":\"#ffffff\",\"patternColor\":\"#000000\",\"patternType\":0,\"borderSpacing\":[0,0,0,0]}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_cell_properties_json() -> String {
     "{\"width\":0,\"height\":0,\"paddingLeft\":0,\"paddingRight\":0,\"paddingTop\":0,\"paddingBottom\":0,\"verticalAlign\":0,\"textDirection\":0,\"isHeader\":false,\"cellProtect\":false,\"borderFillId\":0,\"fillType\":\"none\",\"fillColor\":\"#ffffff\",\"patternColor\":\"#000000\",\"patternType\":0}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_table_properties_json() -> String {
     "{\"cellSpacing\":0,\"paddingLeft\":0,\"paddingRight\":0,\"paddingTop\":0,\"paddingBottom\":0,\"pageBreak\":0,\"repeatHeader\":false,\"tableWidth\":0,\"tableHeight\":0,\"outerLeft\":0,\"outerRight\":0,\"outerTop\":0,\"outerBottom\":0,\"hasCaption\":false,\"treatAsChar\":false,\"textWrap\":\"topAndBottom\",\"vertRelTo\":\"paragraph\",\"vertAlign\":\"top\",\"horzRelTo\":\"paragraph\",\"horzAlign\":\"left\",\"vertOffset\":0,\"horzOffset\":0,\"restrictInPage\":false,\"allowOverlap\":false,\"keepWithAnchor\":false,\"borderFillId\":0,\"fillType\":\"none\",\"fillColor\":\"#ffffff\",\"patternColor\":\"#000000\",\"patternType\":0}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_picture_properties_json() -> String {
     "{\"width\":0,\"height\":0,\"treatAsChar\":false,\"vertRelTo\":\"paragraph\",\"vertAlign\":\"top\",\"horzRelTo\":\"paragraph\",\"horzAlign\":\"left\",\"vertOffset\":0,\"horzOffset\":0,\"textWrap\":\"topAndBottom\",\"brightness\":0,\"contrast\":0,\"effect\":\"none\",\"description\":\"\",\"rotationAngle\":0,\"horzFlip\":false,\"vertFlip\":false,\"originalWidth\":0,\"originalHeight\":0,\"cropLeft\":0,\"cropTop\":0,\"cropRight\":0,\"cropBottom\":0,\"paddingLeft\":0,\"paddingTop\":0,\"paddingRight\":0,\"paddingBottom\":0,\"outerMarginLeft\":0,\"outerMarginTop\":0,\"outerMarginRight\":0,\"outerMarginBottom\":0,\"borderColor\":0,\"borderWidth\":0,\"hasCaption\":false,\"captionDirection\":\"bottom\",\"captionVertAlign\":\"top\",\"captionWidth\":0,\"captionSpacing\":0,\"captionMaxWidth\":0,\"captionIncludeMargin\":false}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_shape_properties_json() -> String {
     "{\"width\":0,\"height\":0,\"treatAsChar\":false,\"vertRelTo\":\"paragraph\",\"vertAlign\":\"top\",\"horzRelTo\":\"paragraph\",\"horzAlign\":\"left\",\"vertOffset\":0,\"horzOffset\":0,\"textWrap\":\"topAndBottom\",\"tbMarginLeft\":0,\"tbMarginRight\":0,\"tbMarginTop\":0,\"tbMarginBottom\":0,\"tbVerticalAlign\":\"top\",\"borderColor\":0,\"borderWidth\":0,\"borderAttr\":0,\"borderOutlineStyle\":0,\"lineType\":0,\"lineEndShape\":0,\"arrowStart\":0,\"arrowEnd\":0,\"arrowStartSize\":0,\"arrowEndSize\":0,\"rotationAngle\":0,\"horzFlip\":false,\"vertFlip\":false,\"fillType\":\"none\",\"fillBgColor\":16777215,\"fillPatColor\":0,\"fillPatType\":0,\"fillAlpha\":0,\"gradientType\":0,\"gradientAngle\":0,\"gradientCenterX\":0,\"gradientCenterY\":0,\"gradientBlur\":0,\"roundRate\":0,\"description\":\"\"}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_equation_properties_json() -> String {
     "{\"width\":0,\"height\":0,\"treatAsChar\":true,\"vertRelTo\":\"paragraph\",\"vertAlign\":\"top\",\"horzRelTo\":\"paragraph\",\"horzAlign\":\"left\",\"vertOffset\":0,\"horzOffset\":0,\"textWrap\":\"topAndBottom\",\"zOrder\":0,\"instanceId\":0,\"outerMarginLeft\":0,\"outerMarginTop\":0,\"outerMarginRight\":0,\"outerMarginBottom\":0,\"hasCaption\":false,\"captionDirection\":\"bottom\",\"captionWidth\":0,\"captionSpacing\":0,\"description\":\"\",\"script\":\"\",\"fontSize\":1000,\"color\":0,\"baseline\":0,\"fontName\":\"Hiragino Sans\"}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn default_endnote_shape_json() -> String {
     "{\"ok\":false,\"numberFormat\":\"digit\",\"userChar\":\"\",\"prefixChar\":\"\",\"suffixChar\":\"\",\"startNumber\":1,\"separatorEnabled\":false,\"separatorLength\":0,\"separatorMarginTop\":0,\"separatorMarginBottom\":0,\"noteSpacing\":0,\"separatorLineType\":0,\"separatorLineWidth\":0,\"separatorColor\":\"#000000\",\"numbering\":\"continue\",\"placement\":\"documentEnd\"}".to_string()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn json_string(value: &str) -> String {
     let mut escaped = String::new();
     escaped.push('"');
@@ -164,10 +187,12 @@ pub(crate) fn json_string(value: &str) -> String {
     escaped
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn json_bool(value: bool) -> &'static str {
     if value { "true" } else { "false" }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_option_u32_hex_or_null_json(output: &mut String, value: Option<u32>) {
     match value {
         Some(value) => output.push_str(&json_string(&format!("0x{value:08x}"))),
@@ -175,6 +200,7 @@ pub(crate) fn push_option_u32_hex_or_null_json(output: &mut String, value: Optio
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn non_negative_i32_offset(
     field_name: &'static str,
     value: i32,
@@ -182,6 +208,7 @@ pub(crate) fn non_negative_i32_offset(
     (value >= 0).then_some((field_name, value as usize))
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_usize_array_json(output: &mut String, values: &[usize]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -193,6 +220,7 @@ pub(crate) fn push_usize_array_json(output: &mut String, values: &[usize]) {
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_optional_usize_array_json(output: &mut String, values: &[Option<usize>]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -204,6 +232,7 @@ pub(crate) fn push_optional_usize_array_json(output: &mut String, values: &[Opti
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn uniform_usize_stride(values: &[usize]) -> Option<usize> {
     if values.len() < 2 {
         return None;
@@ -218,6 +247,7 @@ pub(crate) fn uniform_usize_stride(values: &[usize]) -> Option<usize> {
         .then_some(stride)
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_u16_array_json(output: &mut String, values: &[u16]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -229,6 +259,7 @@ pub(crate) fn push_u16_array_json(output: &mut String, values: &[u16]) {
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_u16_hex_array_json(output: &mut String, values: &[u16]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -240,6 +271,7 @@ pub(crate) fn push_u16_hex_array_json(output: &mut String, values: &[u16]) {
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_i32_array_json(output: &mut String, values: &[i32]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -251,6 +283,7 @@ pub(crate) fn push_i32_array_json(output: &mut String, values: &[i32]) {
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_bool_array_json(output: &mut String, values: &[bool]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -262,6 +295,7 @@ pub(crate) fn push_bool_array_json(output: &mut String, values: &[bool]) {
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_sparse_observed_table_json(output: &mut String, candidate: &TableCandidate) {
     output.push_str("{\"source\":\"sparseDocumentTextControlRows\",\"tableCandidateIndex\":");
     output.push_str(&candidate.index().to_string());
@@ -286,6 +320,7 @@ pub(crate) fn push_sparse_observed_table_json(output: &mut String, candidate: &T
     output.push_str(",\"geometryDecoded\":false,\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_sparse_topology_candidate_json(
     output: &mut String,
     candidate: &TableCandidate,
@@ -362,6 +397,7 @@ pub(crate) fn hex_bytes(bytes: &[u8]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn document_font_names(document: &Document) -> Vec<String> {
     let mut names = Vec::new();
     let mut seen = BTreeSet::new();
@@ -382,6 +418,7 @@ pub(crate) fn document_font_names(document: &Document) -> Vec<String> {
     names
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn primary_document_font_name(font_names: &[String]) -> &str {
     font_names
         .iter()
@@ -396,6 +433,7 @@ pub(crate) fn primary_document_font_name(font_names: &[String]) -> &str {
         .unwrap_or("Hiragino Sans")
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn document_font_family_css(document: &Document) -> String {
     let font_names = document_font_names(document);
     let primary = primary_document_font_name(&font_names).to_string();
@@ -427,11 +465,13 @@ pub(crate) fn document_font_family_css(document: &Document) -> String {
         .join(", ")
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_font_family_with_aliases(output: &mut Vec<String>, name: &str) {
     output.push(name.to_string());
     output.extend(font_family_aliases(name).into_iter().map(str::to_string));
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn font_family_aliases(name: &str) -> Vec<&'static str> {
     if name.contains("游明朝") {
         return vec!["YuMincho", "Yu Mincho", "Hiragino Mincho ProN"];
@@ -448,6 +488,7 @@ pub(crate) fn font_family_aliases(name: &str) -> Vec<&'static str> {
     Vec::new()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn css_font_family_name(name: &str) -> String {
     if matches!(name, "serif" | "sans-serif" | "monospace") {
         return name.to_string();
@@ -455,21 +496,25 @@ pub(crate) fn css_font_family_name(name: &str) -> String {
     format!("'{}'", name.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn looks_like_mincho_font(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     name.contains("明朝") || name.contains('游') || lower.contains("mincho")
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn looks_like_japanese_font(name: &str) -> bool {
     name.chars().any(
         |character| matches!(character as u32, 0x3040..=0x30ff | 0x4e00..=0x9fff | 0xff00..=0xffef),
     )
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn looks_like_font_descriptor(name: &str) -> bool {
     matches!(name, "太字" | "斜体" | "太字 斜体")
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn string_array_json(values: &[String]) -> String {
     let mut output = String::from("[");
     for (index, value) in values.iter().enumerate() {
@@ -482,6 +527,7 @@ pub(crate) fn string_array_json(values: &[String]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn string_slice_array_json(values: &[&str]) -> String {
     let mut output = String::from("[");
     for (index, value) in values.iter().enumerate() {
@@ -494,6 +540,7 @@ pub(crate) fn string_slice_array_json(values: &[&str]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn font_table_json(fonts: &[DocumentFont]) -> String {
     let mut output = String::from("[");
     for (index, font) in fonts.iter().enumerate() {
@@ -515,6 +562,7 @@ pub(crate) fn font_table_json(fonts: &[DocumentFont]) -> String {
     output.push(']');
     output
 }
+#[cfg(feature = "rendering")]
 pub(crate) fn auto_texts_json(auto_texts: &[DocumentAutoText]) -> String {
     let mut output = String::from("[");
     for (index, auto_text) in auto_texts.iter().enumerate() {
@@ -533,6 +581,7 @@ pub(crate) fn auto_texts_json(auto_texts: &[DocumentAutoText]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn toc_entries_json(entries: &[DocumentTocEntry]) -> String {
     let mut output = String::from("[");
     for (index, entry) in entries.iter().enumerate() {
@@ -551,6 +600,7 @@ pub(crate) fn toc_entries_json(entries: &[DocumentTocEntry]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn writing_mode_decision_json(document: &Document, selected: WritingMode) -> String {
     let decoded_layout = page_layout_from_document(document);
     let source_layout_hint = source_document_layout_hint(document, decoded_layout);
@@ -628,12 +678,14 @@ pub(crate) fn writing_mode_decision_json(document: &Document, selected: WritingM
     )
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn writing_mode_option_json(mode: Option<WritingMode>) -> String {
     mode.map(|mode| json_string(mode.as_str()))
         .unwrap_or_else(|| "null".to_string())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct DocumentViewWritingModeCandidate {
     pub(crate) writing_mode: WritingMode,
     pub(crate) first_record_code: u16,
@@ -644,6 +696,7 @@ pub(crate) struct DocumentViewWritingModeCandidate {
 // reference-PDF samples such as tsaiten, tmogi3_2, success_data-test, and
 // shanai_lan. The bounded modern margin/direction profile takes precedence;
 // the first-code heuristic remains diagnostic-only for other stream families.
+#[cfg(feature = "rendering")]
 pub(crate) fn writing_mode_candidate_from_document_view_styles(
     styles: &[UnknownStyle],
 ) -> Option<DocumentViewWritingModeCandidate> {
@@ -670,6 +723,7 @@ pub(crate) fn writing_mode_candidate_from_document_view_styles(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct PaperMarkWritingModeDiagnostics {
     pub(crate) candidate: Option<WritingMode>,
     pub(crate) flag_bit0_vertical_candidate: bool,
@@ -679,6 +733,7 @@ pub(crate) struct PaperMarkWritingModeDiagnostics {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct StyleCandidate {
     pub(crate) id: u32,
     pub(crate) name: String,
@@ -689,6 +744,7 @@ pub(crate) struct StyleCandidate {
     pub(crate) payload_len: usize,
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn style_candidate_names_json(candidates: &[StyleCandidate]) -> String {
     let mut output = String::from("[");
     for (index, candidate) in candidates.iter().enumerate() {
@@ -701,6 +757,7 @@ pub(crate) fn style_candidate_names_json(candidates: &[StyleCandidate]) -> Strin
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_style_candidate_json(output: &mut String, candidate: &StyleCandidate) {
     output.push_str("{\"id\":");
     output.push_str(&candidate.id.to_string());
@@ -715,6 +772,7 @@ pub(crate) fn push_style_candidate_json(output: &mut String, candidate: &StyleCa
     output.push('}');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn style_candidate_detail_json(candidate: &StyleCandidate) -> String {
     let mut output = String::new();
     output.push_str("{\"id\":");
@@ -735,6 +793,7 @@ pub(crate) fn style_candidate_detail_json(candidate: &StyleCandidate) -> String 
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn style_at_candidate_json(candidate: &StyleCandidate) -> String {
     let mut output = String::new();
     output.push_str("{\"id\":");
@@ -747,6 +806,7 @@ pub(crate) fn style_at_candidate_json(candidate: &StyleCandidate) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_style_candidate_source_json(output: &mut String, candidate: &StyleCandidate) {
     output.push_str(",\"sourceStream\":");
     output.push_str(&json_string(&candidate.source_stream));
@@ -762,6 +822,7 @@ pub(crate) fn push_style_candidate_source_json(output: &mut String, candidate: &
     output.push_str(&candidate.payload_len.to_string());
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn style_source_streams_json(styles: &[UnknownStyle]) -> String {
     let mut output = String::from("[");
 
@@ -796,6 +857,7 @@ pub(crate) fn style_source_streams_json(styles: &[UnknownStyle]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_u32_array_json(output: &mut String, values: &[u32]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -807,6 +869,7 @@ pub(crate) fn push_u32_array_json(output: &mut String, values: &[u32]) {
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_u32_hex_array_json(output: &mut String, values: &[u32]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -818,6 +881,7 @@ pub(crate) fn push_u32_hex_array_json(output: &mut String, values: &[u32]) {
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_u32_hex8_array_json(output: &mut String, values: &[u32]) {
     output.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -829,6 +893,7 @@ pub(crate) fn push_u32_hex8_array_json(output: &mut String, values: &[u32]) {
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_option_usize_json(output: &mut String, value: Option<usize>) {
     match value {
         Some(value) => output.push_str(&value.to_string()),
@@ -836,6 +901,7 @@ pub(crate) fn push_option_usize_json(output: &mut String, value: Option<usize>) 
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_optional_usize_range_json(
     output: &mut String,
     start: Option<usize>,
@@ -853,6 +919,7 @@ pub(crate) fn push_optional_usize_range_json(
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_option_u16_json(output: &mut String, value: Option<u16>) {
     match value {
         Some(value) => output.push_str(&value.to_string()),
@@ -860,6 +927,7 @@ pub(crate) fn push_option_u16_json(output: &mut String, value: Option<u16>) {
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_option_u16_hex_json(output: &mut String, value: Option<u16>) {
     match value {
         Some(value) => output.push_str(&json_string(&format!("0x{value:04x}"))),
@@ -867,6 +935,7 @@ pub(crate) fn push_option_u16_hex_json(output: &mut String, value: Option<u16>) 
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_optional_f32_json(output: &mut String, value: Option<f32>) {
     match value {
         Some(value) if value.is_finite() => output.push_str(&format!("{value:.3}")),
@@ -874,6 +943,7 @@ pub(crate) fn push_optional_f32_json(output: &mut String, value: Option<f32>) {
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_optional_bbox_milli_json(
     output: &mut String,
     x_min_milli: Option<i32>,
@@ -896,6 +966,7 @@ pub(crate) fn push_optional_bbox_milli_json(
     ));
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_option_u32_json(output: &mut String, value: Option<u32>) {
     match value {
         Some(value) => output.push_str(&value.to_string()),
@@ -903,6 +974,7 @@ pub(crate) fn push_option_u32_json(output: &mut String, value: Option<u32>) {
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_style_records_json(output: &mut String, records: &[StyleStreamRecordSummary]) {
     output.push('[');
     for (index, record) in records.iter().enumerate() {
@@ -931,6 +1003,7 @@ pub(crate) fn push_style_records_json(output: &mut String, records: &[StyleStrea
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_style_subrecords_json(
     output: &mut String,
     records: &[StyleStreamSubrecordSummary],
@@ -953,4 +1026,11 @@ pub(crate) fn push_style_subrecords_json(
         output.push_str(",\"decoded\":false}");
     }
     output.push(']');
+}
+#[cfg(feature = "rendering")]
+pub(crate) fn push_optional_usize_json(output: &mut String, value: Option<usize>) {
+    match value {
+        Some(value) => output.push_str(&value.to_string()),
+        None => output.push_str("null"),
+    }
 }

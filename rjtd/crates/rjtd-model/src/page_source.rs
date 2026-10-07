@@ -1,4 +1,5 @@
 use crate::{Document, WritingMode, modern_source_writing_mode, read_be16_at, read_be32_at};
+use crate::{LayoutMapBase, PageMark, RawStream};
 use rjtd_core::style_stream::{
     DOCUMENT_VIEW_STYLES_PATH, PAGE_LAYOUT_STYLE_PATH, summarize_style_stream,
 };
@@ -209,6 +210,86 @@ pub(crate) fn document_source_margins_mm100(document: &Document) -> Option<[u16;
             page_margins_mm100_at(payload, offset)
         })
 }
+
+pub(crate) fn raw_stream_bytes<'a>(document: &'a Document, name: &str) -> Option<&'a [u8]> {
+    document
+        .raw_streams()
+        .iter()
+        .find(|stream| stream.name() == name)
+        .map(RawStream::bytes)
+}
+
+pub(crate) fn layout_map_bases() -> &'static [LayoutMapBase] {
+    &[
+        LayoutMapBase::Unit,
+        LayoutMapBase::UnitTimes2,
+        LayoutMapBase::UnitDiv2Floor,
+        LayoutMapBase::UnitDiv2Ceil,
+    ]
+}
+
+pub(crate) fn page_be32_field_points(page_mark: &PageMark) -> Vec<usize> {
+    page_mark
+        .entries()
+        .iter()
+        .flat_map(|entry| {
+            entry
+                .raw()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize)
+        })
+        .collect()
+}
+
+pub(crate) const LAYOUT_MAP_DELTA_MIN: isize = -4096;
+
+pub(crate) const LAYOUT_MAP_DELTA_MAX: isize = 4096;
+#[cfg(feature = "rendering")]
+pub(crate) fn utf16le_ascii_contains(bytes: &[u8], needle: &str) -> bool {
+    let mut encoded = Vec::with_capacity(needle.len() * 2);
+    for unit in needle.encode_utf16() {
+        encoded.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes.windows(encoded.len()).any(|window| window == encoded)
+}
+
+impl Document {
+    /// Configured source size in mm100 for the bounded style profiles.
+    /// This candidate does not resolve section inheritance or fallback orientation.
+    pub fn page_size_mm100_candidate(&self) -> Option<(u32, u32)> {
+        self.unknown_styles()
+            .iter()
+            .find(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH))
+            .and_then(|style| page_size_mm100_from_page_layout_style(style.payload()))
+            .or_else(|| {
+                self.unknown_styles()
+                    .iter()
+                    .find(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))
+                    .and_then(|style| page_size_mm100_from_document_view_styles(style.payload()))
+            })
+    }
+    /// Source margins in left/right/top/bottom order, before display conversion.
+    pub fn page_margins_mm100_candidate(&self) -> Option<[u16; 4]> {
+        document_source_margins_mm100(self)
+    }
+    /// Direction in the controlled modern view profile; other profiles stay raw.
+    pub fn writing_mode_candidate(&self) -> Option<WritingMode> {
+        modern_source_writing_mode(self)
+    }
+}
+
+#[cfg(any(test, feature = "rendering"))]
+pub(crate) const LAYOUT_BOX_RECORD_PREFIX: &[u8; 4] = &[0x02, 0x01, 0x00, 0x08];
+#[cfg(any(test, feature = "rendering"))]
+pub(crate) const LAYOUT_BOX_RECORD_ORIGIN_FIELD_OFFSET: usize = 20;
+#[cfg(any(test, feature = "rendering"))]
+pub(crate) const LAYOUT_BOX_RECORD_Y_FIELD_OFFSET: usize = 24;
+#[cfg(any(test, feature = "rendering"))]
+pub(crate) const LAYOUT_BOX_RECORD_WIDTH_FIELD_OFFSET: usize = 72;
+#[cfg(any(test, feature = "rendering"))]
+pub(crate) const LAYOUT_BOX_RECORD_X_FIELD_OFFSET: usize = 84;
 
 #[cfg(test)]
 mod tests {

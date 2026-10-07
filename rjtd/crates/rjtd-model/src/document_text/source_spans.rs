@@ -60,6 +60,7 @@ pub(crate) fn text_paragraph_boundary_candidates_from_layout(
     paragraph_candidates
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn range_visible_text_for_basis(
     entries: &[DocumentTextMapEntry],
     start: usize,
@@ -73,6 +74,7 @@ pub(crate) fn range_visible_text_for_basis(
         .collect()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn range_text_overlap_for_basis(
     entry: &DocumentTextMapEntry,
     start: usize,
@@ -339,6 +341,7 @@ pub(crate) fn text_by_utf16_units(text: &str, start: usize, end: usize) -> Strin
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ParagraphSourceTextSpan {
     pub(crate) paragraph_index: usize,
     pub(crate) char_start: usize,
@@ -347,6 +350,7 @@ pub(crate) struct ParagraphSourceTextSpan {
     pub(crate) unit_end: usize,
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn projected_text_controls(document: &Document) -> Vec<ProjectedTextControl> {
     let spans = paragraph_source_text_spans(document);
     let mut controls = Vec::new();
@@ -377,6 +381,7 @@ pub(crate) fn projected_text_controls(document: &Document) -> Vec<ProjectedTextC
     controls
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn paragraph_source_text_spans(document: &Document) -> Vec<ParagraphSourceTextSpan> {
     let mut spans = Vec::new();
     let mut paragraph_index = 0usize;
@@ -451,6 +456,7 @@ pub(crate) fn native_visible_text_span(
 
 /// Controlled grouped kana ruby; its raw grouping record and both caches must
 /// agree. This does not decode general ruby placement or annotation font changes.
+#[cfg(feature = "rendering")]
 pub(crate) fn source_group_ruby_candidate(
     document: &Document,
     span: &TextSourceSpan,
@@ -510,6 +516,7 @@ pub(crate) fn paragraph_by_index(
         .nth(paragraph_index)
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn paragraph_text(paragraph: &Paragraph) -> String {
     let mut text = String::new();
 
@@ -522,4 +529,7 @@ pub(crate) fn paragraph_text(paragraph: &Paragraph) -> String {
     }
 
     text
+}
+pub(crate) fn document_text_raw_stream(document: &Document) -> Option<&[u8]> {
+    raw_stream_bytes(document, DOCUMENT_TEXT_PATH)
 }

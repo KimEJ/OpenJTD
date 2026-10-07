@@ -1,6 +1,9 @@
+#[cfg(feature = "rendering")]
 use super::*;
+#[cfg(feature = "rendering")]
 use crate::*;
 
+#[cfg(feature = "rendering")]
 pub(crate) fn text_count_ranges_json(ranges: &[TextCountRange]) -> String {
     let mut output = String::from("[");
     for (index, range) in ranges.iter().enumerate() {
@@ -13,6 +16,7 @@ pub(crate) fn text_count_ranges_json(ranges: &[TextCountRange]) -> String {
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn text_control_boundaries_json(boundaries: &[TextControlBoundary]) -> String {
     let mut output = String::from("[");
     for (index, boundary) in boundaries.iter().enumerate() {
@@ -25,6 +29,7 @@ pub(crate) fn text_control_boundaries_json(boundaries: &[TextControlBoundary]) -
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn text_boundary_candidates_json(candidates: &[TextBoundaryCandidate]) -> String {
     let mut output = String::from("[");
     for (index, candidate) in candidates.iter().enumerate() {
@@ -37,6 +42,7 @@ pub(crate) fn text_boundary_candidates_json(candidates: &[TextBoundaryCandidate]
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn text_paragraph_boundary_candidates_json(
     candidates: &[TextParagraphBoundaryCandidate],
 ) -> String {
@@ -51,6 +57,7 @@ pub(crate) fn text_paragraph_boundary_candidates_json(
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_text_boundary_candidate_json(
     output: &mut String,
     candidate: &TextBoundaryCandidate,
@@ -83,6 +90,7 @@ pub(crate) fn push_text_boundary_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_text_paragraph_boundary_candidate_json(
     output: &mut String,
     candidate: &TextParagraphBoundaryCandidate,
@@ -110,6 +118,7 @@ pub(crate) fn push_text_paragraph_boundary_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_text_layout_exact_evidence_json(
     output: &mut String,
     evidence: &TextLayoutExactEvidence,
@@ -123,6 +132,7 @@ pub(crate) fn push_text_layout_exact_evidence_json(
     output.push('}');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_text_control_boundary_json(output: &mut String, boundary: &TextControlBoundary) {
     output.push_str("{\"index\":");
     output.push_str(&boundary.index().to_string());
@@ -138,6 +148,7 @@ pub(crate) fn push_text_control_boundary_json(output: &mut String, boundary: &Te
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_text_source_span_json(output: &mut String, span: &TextSourceSpan) {
     output.push_str("{\"byteStart\":");
     output.push_str(&span.byte_start().to_string());
@@ -150,6 +161,7 @@ pub(crate) fn push_text_source_span_json(output: &mut String, span: &TextSourceS
     output.push('}');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_text_count_range_json(output: &mut String, range: &TextCountRange) {
     output.push_str("{\"index\":");
     output.push_str(&range.index().to_string());
@@ -176,6 +188,7 @@ pub(crate) fn push_text_count_range_json(output: &mut String, range: &TextCountR
     output.push('}');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn text_count_range_overlaps_json(
     output: &mut String,
     overlaps: &[TextCountRangeOverlap],
@@ -202,6 +215,7 @@ pub(crate) fn text_count_range_overlaps_json(
     output.push(']');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn text_count_control_range_overlaps_json(
     output: &mut String,
     overlaps: &[TextCountControlRangeOverlap],

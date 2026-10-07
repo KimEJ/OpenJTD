@@ -32,5 +32,9 @@ JTT/JTTC inner 補助 stream を扱う候補がある。
 
 ## 実装境界
 
-core は低水準根拠、model は Document と現在の DocumentCore・描画・app state、export は出力/PDF、
-WASM は既存 HwpDocument を持つ。解釈/描画分離と wrapper 整理は予定のコード作業であり文書変更では実装しない。
+core は低水準根拠を持つ。model は `--no-default-features` で解析・原本調査のみを
+build でき、optional `rendering` は `DocumentCore` と app/描画状態を提供する。
+default は bitmap 描画を維持する。原本候補 API は renderer 初期化なしで原本単位、
+font identity、section/running policy、logical row range を公開する。export は出力/PDF、
+WASM は既存 `HwpDocument` を維持する。wrapper/API 整理は別の作業である。
+[model build 構成](../rjtd/crates/rjtd-model/README.md#build-configurations) を参照する。

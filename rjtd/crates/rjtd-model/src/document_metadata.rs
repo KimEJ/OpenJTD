@@ -262,12 +262,21 @@ pub(crate) fn u16_fields_be(raw: &[u8]) -> Vec<u16> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct PageMarkU16SubrecordCandidate {
     pub(crate) word_index: usize,
     pub(crate) byte_offset: usize,
     pub(crate) words: [u16; 8],
 }
 
+#[cfg(feature = "rendering")]
+#[cfg_attr(
+    not(feature = "rendering"),
+    allow(
+        dead_code,
+        reason = "source evidence accessors retained independently of rendering"
+    )
+)]
 impl PageMarkU16SubrecordCandidate {
     pub(crate) fn word_index(self) -> usize {
         self.word_index

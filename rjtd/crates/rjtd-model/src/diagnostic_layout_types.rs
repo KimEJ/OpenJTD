@@ -1,6 +1,8 @@
+#[cfg(feature = "rendering")]
 use super::*;
 
 #[derive(Debug)]
+#[cfg(feature = "rendering")]
 pub(crate) struct PageLayerTextFragment {
     pub(crate) text: String,
     pub(crate) paragraph_index: Option<usize>,
@@ -11,6 +13,7 @@ pub(crate) struct PageLayerTextFragment {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct PageLayerTextPlacement {
     pub(crate) x: f64,
     pub(crate) y: f64,
@@ -18,6 +21,7 @@ pub(crate) struct PageLayerTextPlacement {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct SuccessDataTestTextSlot {
     pub(crate) role: &'static str,
     pub(crate) text: &'static str,
@@ -26,6 +30,7 @@ pub(crate) struct SuccessDataTestTextSlot {
 }
 
 #[derive(Debug, Clone)]
+#[cfg(feature = "rendering")]
 pub(crate) struct SuccessDataTestResolvedTextSlot {
     pub(crate) role: &'static str,
     pub(crate) text: &'static str,
@@ -36,6 +41,7 @@ pub(crate) struct SuccessDataTestResolvedTextSlot {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct SuccessDataTestFormulaTextSlot {
     pub(crate) embedding_index: usize,
     pub(crate) text: &'static str,
@@ -45,6 +51,7 @@ pub(crate) struct SuccessDataTestFormulaTextSlot {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(feature = "rendering")]
 pub(crate) struct VisualListDiagnostic<'a> {
     pub(crate) candidate_index: usize,
     pub(crate) candidate: &'a ObjectStreamCandidate,
@@ -52,6 +59,7 @@ pub(crate) struct VisualListDiagnostic<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct VisualListHorizontalRun {
     pub(crate) x: usize,
     pub(crate) y: usize,
@@ -60,6 +68,7 @@ pub(crate) struct VisualListHorizontalRun {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct VisualListTitleBand {
     pub(crate) x: f32,
     pub(crate) y: f32,
@@ -68,6 +77,7 @@ pub(crate) struct VisualListTitleBand {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ObservedFormTextProjection {
     pub(crate) source: &'static str,
     pub(crate) projection_kind: &'static str,
@@ -76,6 +86,7 @@ pub(crate) struct ObservedFormTextProjection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ObservedFormShape {
     pub(crate) role: &'static str,
     pub(crate) x: f32,
@@ -89,6 +100,7 @@ pub(crate) struct ObservedFormShape {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ObservedFormTextSlot {
     pub(crate) role: &'static str,
     pub(crate) text: String,
@@ -101,6 +113,7 @@ pub(crate) struct ObservedFormTextSlot {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct PageFrameProjection {
     pub(crate) source: &'static str,
     pub(crate) projection_kind: &'static str,
@@ -110,6 +123,7 @@ pub(crate) struct PageFrameProjection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct PageFrameShape {
     pub(crate) role: &'static str,
     pub(crate) row_index: usize,
@@ -131,6 +145,7 @@ pub(crate) struct PageFrameShape {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct PageMarkSeparatorProjection {
     pub(crate) source: &'static str,
     pub(crate) projection_kind: &'static str,
@@ -151,6 +166,7 @@ pub(crate) struct PageMarkSeparatorProjection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct LayoutBoxTextProjection {
     pub(crate) source: &'static str,
     pub(crate) projection_kind: &'static str,
@@ -162,6 +178,7 @@ pub(crate) struct LayoutBoxTextProjection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct LayoutBoxTextSlot {
     pub(crate) role: &'static str,
     pub(crate) text: String,
@@ -182,6 +199,7 @@ pub(crate) struct LayoutBoxTextSlot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct LayoutBoxFrameSource {
     pub(crate) frame_id: u16,
     pub(crate) parent_frame_id: u16,
@@ -192,6 +210,7 @@ pub(crate) struct LayoutBoxFrameSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct LayoutBoxTextBlock {
     pub(crate) index: usize,
     pub(crate) byte_start: usize,
@@ -203,12 +222,14 @@ pub(crate) struct LayoutBoxTextBlock {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct LayoutBoxTextFragment {
     pub(crate) text: String,
     pub(crate) source_span: TextSourceSpan,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct LayoutBoxRecordCandidate {
     pub(crate) index: usize,
     pub(crate) byte_start: usize,
@@ -220,6 +241,7 @@ pub(crate) struct LayoutBoxRecordCandidate {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanTextProjection {
     pub(crate) source: &'static str,
     pub(crate) projection_kind: &'static str,
@@ -229,6 +251,7 @@ pub(crate) struct ShanaiLanTextProjection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanTextSlot {
     pub(crate) text: String,
     pub(crate) x: f32,
@@ -254,10 +277,12 @@ pub(crate) struct ShanaiLanTextSlot {
     pub(crate) line_header_same_segment_group_run_distinct_text_group_count: Option<usize>,
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) type ShanaiLanTextSlotAttachment<'a> =
     (&'a ShanaiLanTextSlot, f32, (f32, f32, f32, f32));
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanTextStyleLinkEvidence {
     pub(crate) source: &'static str,
     pub(crate) style_link_proven: bool,
@@ -274,6 +299,7 @@ pub(crate) struct ShanaiLanTextStyleLinkEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanTextRunFragmentContext {
     pub(crate) parent_source_span: TextSourceSpan,
     pub(crate) parent_text_unit_count: usize,
@@ -288,6 +314,7 @@ pub(crate) struct ShanaiLanTextRunFragmentContext {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanLineHeaderSameSegmentGroupRun {
     pub(crate) offset_units: u16,
     pub(crate) extent_units: u16,
@@ -298,6 +325,7 @@ pub(crate) struct ShanaiLanLineHeaderSameSegmentGroupRun {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanDocumentTextGroupHeaderCandidate {
     pub(crate) source_span: TextSourceSpan,
     pub(crate) raw_words: Vec<u16>,
@@ -307,6 +335,7 @@ pub(crate) struct ShanaiLanDocumentTextGroupHeaderCandidate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanDocumentTextInlineStyleCandidate {
     pub(crate) source_span: TextSourceSpan,
     pub(crate) selector: Option<u16>,
@@ -319,6 +348,7 @@ pub(crate) struct ShanaiLanDocumentTextInlineStyleCandidate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanTextCountRangeEvidence {
     pub(crate) index: usize,
     pub(crate) family: String,
@@ -333,6 +363,7 @@ pub(crate) struct ShanaiLanTextCountRangeEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanLineRuleProjection {
     pub(crate) source: &'static str,
     pub(crate) projection_kind: &'static str,
@@ -348,6 +379,7 @@ pub(crate) struct ShanaiLanLineRuleProjection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanLineRule {
     pub(crate) x1: f32,
     pub(crate) y1: f32,
@@ -366,6 +398,7 @@ pub(crate) struct ShanaiLanLineRule {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanLineRuleTopology {
     pub(crate) start_junction_degree: usize,
     pub(crate) end_junction_degree: usize,
@@ -374,6 +407,7 @@ pub(crate) struct ShanaiLanLineRuleTopology {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanLineRuleGraphComponentSummary {
     pub(crate) rule_indexes: Vec<usize>,
     pub(crate) bbox: (f32, f32, f32, f32),
@@ -386,6 +420,7 @@ pub(crate) struct ShanaiLanLineRuleGraphComponentSummary {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanLineHeaderInGroup {
     pub(crate) group_index: usize,
     pub(crate) header: ShanaiLanLineHeader,
@@ -400,6 +435,7 @@ pub(crate) struct ShanaiLanLineMarkInterval {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanTextFragment {
     pub(crate) text: String,
     pub(crate) source_start_units: usize,
@@ -409,6 +445,7 @@ pub(crate) struct ShanaiLanTextFragment {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "rendering")]
 pub(crate) struct ShanaiLanLineHeader {
     pub(crate) offset_units: u16,
     pub(crate) extent_units: u16,
@@ -418,6 +455,7 @@ pub(crate) struct ShanaiLanLineHeader {
     pub(crate) end: usize,
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_optional_u64_json(output: &mut String, value: Option<u64>) {
     if let Some(value) = value {
         output.push_str(&value.to_string());
@@ -426,12 +464,14 @@ pub(crate) fn push_optional_u64_json(output: &mut String, value: Option<u64>) {
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn optional_u64_svg_attr(value: Option<u64>) -> String {
     value
         .map(|value| value.to_string())
         .unwrap_or_else(|| "null".to_string())
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn aspect_delta_permille(
     frame_width: u128,
     frame_height: u128,
@@ -451,6 +491,7 @@ pub(crate) fn aspect_delta_permille(
     Some(((left.abs_diff(right).saturating_mul(1000)) / denominator) as u64)
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn canvaskit_replay_mode(mode: &str) -> Result<&'static str> {
     match mode.trim().to_ascii_lowercase().as_str() {
         "" | "default" => Ok("default"),
@@ -461,6 +502,7 @@ pub(crate) fn canvaskit_replay_mode(mode: &str) -> Result<&'static str> {
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn canvaskit_replay_plan_json(
     core: &DocumentCore,
     lines: &[PageTextLine],
@@ -498,6 +540,7 @@ pub(crate) fn canvaskit_replay_plan_json(
     )
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_optional_hex_byte_json(output: &mut String, value: Option<&u8>) {
     match value {
         Some(byte) => output.push_str(&json_string(&format!("0x{byte:02x}"))),
@@ -505,6 +548,7 @@ pub(crate) fn push_optional_hex_byte_json(output: &mut String, value: Option<&u8
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_optional_hex_bytes_json(output: &mut String, bytes: Option<&[u8]>) {
     match bytes {
         Some(bytes) => output.push_str(&json_string(&hex_bytes(bytes))),

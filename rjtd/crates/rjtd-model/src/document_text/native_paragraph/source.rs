@@ -1,7 +1,9 @@
-use crate::{Document, DocumentTextFlow, DocumentTextFlowEvent, Inline, paragraph_by_index};
+#[cfg(feature = "rendering")]
+use crate::DocumentTextFlow;
+use crate::{Document, DocumentTextFlowEvent, Inline, paragraph_by_index};
 
 #[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct NativeParagraphAttributes {
+pub struct NativeParagraphAttributes {
     pub(crate) first_mm100: u16,
     pub(crate) continuing_mm100: u16,
     pub(crate) after_permille: u16,
@@ -56,6 +58,7 @@ pub(crate) fn native_paragraph_source_bounds(
     Some((first.unit_start(), last.unit_end()))
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn native_paragraph_attrs_for_index(
     document: &Document,
     index: usize,
@@ -70,4 +73,27 @@ pub(crate) fn native_paragraph_attrs_for_index(
         .find(|event| event.unit_end() == start)
         .and_then(native_paragraph_attributes)
         .unwrap_or_default()
+}
+
+impl Document {
+    /// Exact observed paragraph attributes, without the renderer's zero fallback.
+    pub fn paragraph_attribute_candidate(&self, index: usize) -> Option<NativeParagraphAttributes> {
+        let (start, _) = native_paragraph_source_bounds(self, index)?;
+        self.document_text_flow()?
+            .events()
+            .iter()
+            .find(|event| event.unit_end() == start)
+            .and_then(native_paragraph_attributes)
+    }
+}
+impl NativeParagraphAttributes {
+    pub fn first_indent_mm100(self) -> u16 {
+        self.first_mm100
+    }
+    pub fn continuing_indent_mm100(self) -> u16 {
+        self.continuing_mm100
+    }
+    pub fn after_spacing_permille(self) -> u16 {
+        self.after_permille
+    }
 }

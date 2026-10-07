@@ -271,15 +271,6 @@ pub(crate) fn fdm_index_segment_bbox_axis_pair_gate(
     ))
 }
 
-pub(crate) fn normalize_fdm_bbox(bbox: ObjectFdmIndexBbox) -> (i32, i32, i32, i32) {
-    (
-        bbox.left().min(bbox.right()),
-        bbox.top().min(bbox.bottom()),
-        bbox.left().max(bbox.right()),
-        bbox.top().max(bbox.bottom()),
-    )
-}
-
 pub(crate) fn normalize_fdm_index_entry_bbox(bbox: ObjectFdmIndexBbox) -> (i32, i32, i32, i32) {
     (
         bbox.left().min(bbox.top()),

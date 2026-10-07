@@ -1,9 +1,12 @@
+#[cfg(feature = "rendering")]
+use crate::native_rule_character_supported;
 use crate::{
-    Block, Document, DocumentTextFlow, DocumentTextFlowEvent, DocumentTextFlowKind,
-    DocumentTocEntry, Inline, ShanaiLanLineMarkInterval, TextSourceSpan,
-    native_paragraph_source_bounds, native_rule_character_supported, native_visible_text_span,
-    paragraph_by_index, shanai_lan_line_mark_intervals, text_by_utf16_units,
+    Block, Document, DocumentTextFlowEvent, DocumentTextFlowKind, DocumentTocEntry, Inline,
+    ShanaiLanLineMarkInterval, TextSourceSpan, native_paragraph_source_bounds,
+    native_visible_text_span, paragraph_by_index, shanai_lan_line_mark_intervals,
 };
+#[cfg(any(test, feature = "rendering"))]
+use crate::{DocumentTextFlow, text_by_utf16_units};
 
 pub(super) type NativeSourceTextRun<'a> = (usize, usize, TextSourceSpan, &'a str);
 
@@ -33,11 +36,13 @@ pub(super) fn native_page_source_runs(document: &Document) -> Option<Vec<NativeS
 }
 
 /// Logical paragraph/character ranges linked to complete physical source rows.
-pub(super) struct NativeSourceLineRange {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeSourceLineRange {
     pub(super) record: usize,
     pub(super) paragraph: Option<usize>,
     pub(super) start: usize,
     pub(super) end: usize,
+    source_units: (usize, usize),
 }
 
 pub(super) fn native_page_source_intervals(
@@ -90,6 +95,7 @@ pub(super) fn native_page_source_line_range(
         (Some(paragraph), start, end)
     });
     Some(NativeSourceLineRange {
+        source_units: (interval.unit_start, interval.unit_end),
         record: interval.record_index,
         paragraph,
         start,
@@ -108,6 +114,7 @@ pub(super) fn char_offset_at_utf16_unit(text: &str, offset: usize) -> Option<usi
     (units == offset).then_some(text.chars().count())
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn inline_cache_group(events: &[DocumentTextFlowEvent]) -> bool {
     let [start, prefix, text, suffix] = events else {
         return false;
@@ -129,6 +136,7 @@ pub(super) fn inline_cache_group(events: &[DocumentTextFlowEvent]) -> bool {
             .all(|pair| pair[0].unit_end() == pair[1].unit_start())
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn heading_or_number_record(event: &DocumentTextFlowEvent) -> bool {
     let words = event.raw_words();
     if words.len() != 13 {
@@ -185,6 +193,7 @@ pub(crate) fn native_toc_context_record(event: &DocumentTextFlowEvent) -> bool {
             && words[9..] == [2, 0xa77c, 0, 0, 0, 18, 0, 0, 0x1f])
 }
 
+#[cfg(any(test, feature = "rendering"))]
 pub(crate) fn native_toc_setting_line(
     flow: &DocumentTextFlow,
     scope: Option<(usize, usize)>,
@@ -289,6 +298,32 @@ pub(crate) fn native_toc_cached_entries(document: &Document) -> Vec<DocumentTocE
         ));
     }
     entries
+}
+
+impl Document {
+    /// Logical ranges linked to complete physical source rows, not rendered pages.
+    /// Unsupported/ruby/ambiguous row associations remain None and retain raw data.
+    pub fn source_line_range_candidates(&self) -> Option<Vec<NativeSourceLineRange>> {
+        let runs = native_page_source_runs(self)?;
+        native_page_source_intervals(self)?
+            .iter()
+            .map(|interval| native_page_source_line_range(interval, &runs))
+            .collect()
+    }
+}
+impl NativeSourceLineRange {
+    pub fn record_index(&self) -> usize {
+        self.record
+    }
+    pub fn paragraph_index(&self) -> Option<usize> {
+        self.paragraph
+    }
+    pub fn char_range(&self) -> (usize, usize) {
+        (self.start, self.end)
+    }
+    pub fn source_unit_range(&self) -> (usize, usize) {
+        self.source_units
+    }
 }
 
 #[cfg(test)]

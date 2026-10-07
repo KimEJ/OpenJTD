@@ -51,14 +51,20 @@ Reverse engineering is incremental. Any data that is not understood yet must be 
 
 ## Current Implementation Boundary
 
-This separation is a design target. This documentation change does not move
-Rust modules or establish an independently buildable rendering component.
+`rjtd-core` contains low-level container, stream and record parsers. `rjtd-model`
+owns `Document`, parser integration and bounded source candidate queries. Building
+it with `--no-default-features` excludes the rendering/application surface and
+its bitmap dependencies. The `rendering` feature enables `DocumentCore`, page
+construction, SVG/page-layer output and app state; `bitmap-images` adds bitmap
+decoding and enables `rendering`. Both remain enabled by default for existing
+consumers. `rjtd-export` owns serialization and the native PDF backend.
 
-`rjtd-core` contains low-level container, stream, and record parsers.
-`rjtd-model` owns `Document` and parser integration, but also contains
-`DocumentCore`, pagination, SVG generation, page-layer serialization, and
-editing state. `rjtd-export` owns output serialization and the native PDF
-backend. The crate names therefore do not yet enforce the desired boundary.
+Source recognition for text styles, notes/fields, page/section/running instructions,
+physical rows, images, figures and equations is separated from placement and
+paint. Source queries retain mm100/source units, raw font names, flow/span and
+unknown evidence. The app owns mutation, navigation, snapshots and print context;
+rendering owns fallback layout, CSS/font measurement and output geometry. These
+are internal boundaries in the existing workspace, with no separate renderer crate.
 
 The core block model currently exposes `Paragraph` and `Unknown`; inlines expose
 text, ruby, and unknown objects. Preserved table, style, layout, and object

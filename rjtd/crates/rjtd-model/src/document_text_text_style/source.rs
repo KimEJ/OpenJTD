@@ -85,12 +85,13 @@ fn valid_font_size_mm100(size_mm100: u16) -> Option<u16> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SourceFontSize {
+pub enum SourceFontSize {
     Default,
     Mm100(u16),
 }
 
-pub(super) struct SourceCharacterStyle<'a> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceCharacterStyle<'a> {
     pub(super) flags: Option<u32>,
     pub(super) underline: bool,
     pub(super) script: Option<&'static str>,
@@ -201,4 +202,72 @@ pub(super) fn document_text_packed_bgr(
         return None;
     }
     Some(bgr)
+}
+
+fn document_text_style_resolver_for_span(
+    document: &Document,
+    span: &TextSourceSpan,
+) -> Option<DocumentTextStyleResolver> {
+    if span.unit_start() >= span.unit_end()
+        || span.unit_start().checked_mul(2)? != span.byte_start()
+        || span.unit_end().checked_mul(2)? != span.byte_end()
+    {
+        return None;
+    }
+    let mut streams = document
+        .raw_streams()
+        .iter()
+        .filter(|stream| stream.name() == "/DocumentText");
+    let bytes = streams.next()?.bytes();
+    if streams.next().is_some() {
+        return None;
+    }
+    let count = usize::try_from(u32::from_be_bytes(bytes.get(28..32)?.try_into().ok()?)).ok()?;
+    if span.unit_start() < 16
+        || span.unit_end() > 16_usize.checked_add(count)?
+        || 32_usize.checked_add(count.checked_mul(2)?)? > bytes.len()
+    {
+        return None;
+    }
+    document_text_style_resolver(document)
+}
+
+impl Document {
+    pub fn default_font_size_mm100_candidate(&self) -> Option<u16> {
+        document_default_font_size_mm100(self)
+    }
+    pub fn text_font_size_source_candidate(&self, span: &TextSourceSpan) -> Option<SourceFontSize> {
+        document_text_source_font_size(&document_text_style_resolver_for_span(self, span)?, span)
+    }
+    /// Uniform bounded source flags and raw font identity; never a CSS family list.
+    pub fn text_character_style_source_candidate(
+        &self,
+        span: &TextSourceSpan,
+    ) -> Option<SourceCharacterStyle<'_>> {
+        Some(document_text_source_character_style(
+            self,
+            &document_text_style_resolver_for_span(self, span)?,
+            span,
+        ))
+    }
+    pub fn text_foreground_bgr24_candidate(&self, span: &TextSourceSpan) -> Option<u32> {
+        document_text_packed_bgr(&document_text_style_resolver_for_span(self, span)?, span)
+    }
+}
+impl SourceCharacterStyle<'_> {
+    pub fn flags(&self) -> Option<u32> {
+        self.flags
+    }
+    pub fn underline_candidate(&self) -> bool {
+        self.underline
+    }
+    pub fn script_candidate(&self) -> Option<&'static str> {
+        self.script
+    }
+    pub fn script_basis(&self) -> Option<&'static str> {
+        self.script_basis
+    }
+    pub fn font(&self) -> Option<(u16, &str)> {
+        self.font
+    }
 }

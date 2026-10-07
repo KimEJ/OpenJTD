@@ -1,9 +1,5 @@
 use super::*;
 
-pub(super) const LAYOUT_MAP_DELTA_MIN: isize = -4096;
-
-pub(super) const LAYOUT_MAP_DELTA_MAX: isize = 4096;
-
 pub(super) const APP_PAGE_WIDTH_PX: f32 = 794.0;
 
 pub(super) const APP_PAGE_HEIGHT_PX: f32 = 1123.0;
@@ -19,16 +15,6 @@ pub(super) const TSAITEN_REFERENCE_PAGE_HEIGHT_PX: f32 = 1122.5;
 pub(super) const SHANAI_LAN_REFERENCE_PAGE_WIDTH_PX: f32 = 1122.5;
 
 pub(super) const SHANAI_LAN_REFERENCE_PAGE_HEIGHT_PX: f32 = 793.7;
-
-pub(super) const LAYOUT_BOX_RECORD_PREFIX: &[u8; 4] = &[0x02, 0x01, 0x00, 0x08];
-
-pub(super) const LAYOUT_BOX_RECORD_ORIGIN_FIELD_OFFSET: usize = 20;
-
-pub(super) const LAYOUT_BOX_RECORD_Y_FIELD_OFFSET: usize = 24;
-
-pub(super) const LAYOUT_BOX_RECORD_WIDTH_FIELD_OFFSET: usize = 72;
-
-pub(super) const LAYOUT_BOX_RECORD_X_FIELD_OFFSET: usize = 84;
 
 pub(super) const PAGE_FRAME_MIN_PATTERN_BAR_WIDTH_RATIO: f32 = 0.5;
 
@@ -121,30 +107,6 @@ pub(super) fn page_layout_from_page_layout_style(bytes: &[u8]) -> Option<PageLay
     Some(page_layout_from_size_mm100(
         page_size_mm100_from_page_layout_style(bytes)?,
     ))
-}
-
-pub(super) fn layout_map_bases() -> &'static [LayoutMapBase] {
-    &[
-        LayoutMapBase::Unit,
-        LayoutMapBase::UnitTimes2,
-        LayoutMapBase::UnitDiv2Floor,
-        LayoutMapBase::UnitDiv2Ceil,
-    ]
-}
-
-pub(super) fn page_be32_field_points(page_mark: &PageMark) -> Vec<usize> {
-    page_mark
-        .entries()
-        .iter()
-        .flat_map(|entry| {
-            entry
-                .raw()
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize)
-        })
-        .collect()
 }
 
 pub(super) fn document_page_decoration_paired_slot_pairs(document: &Document) -> Vec<(u16, u16)> {

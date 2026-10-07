@@ -1,10 +1,13 @@
+#[cfg(feature = "rendering")]
 use super::*;
+#[cfg(feature = "rendering")]
 use crate::*;
 use std::{
     collections::HashSet,
     io::{Cursor, Write},
 };
 
+#[cfg(feature = "rendering")]
 pub(super) fn running_header_svg_element(svg: &str) -> &str {
     let start = svg.find("<text class=\"rjtd-running-header\"").unwrap();
     let tail = &svg[start..];
@@ -12,6 +15,7 @@ pub(super) fn running_header_svg_element(svg: &str) -> &str {
     &tail[..end]
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn assert_json_brackets_balanced(json: &str) {
     let mut stack = Vec::new();
     let mut in_string = false;
@@ -44,12 +48,14 @@ pub(super) fn assert_json_brackets_balanced(json: &str) {
     assert!(stack.is_empty(), "unclosed JSON delimiters: {stack:?}");
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn test_json_string_array(values: &[&str]) -> String {
     let mut output = String::new();
     push_json_string_slice_array(&mut output, values);
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn tail_after_occurrence<'a>(
     haystack: &'a str,
     marker: &str,
@@ -65,6 +71,7 @@ pub(super) fn tail_after_occurrence<'a>(
     tail
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn assert_json_string_field_after(
     haystack: &str,
     marker: &str,
@@ -80,6 +87,7 @@ pub(super) fn assert_json_string_field_after(
     );
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn assert_json_number_field_after(
     haystack: &str,
     marker: &str,
@@ -95,6 +103,7 @@ pub(super) fn assert_json_number_field_after(
     );
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn assert_json_bool_field_after(
     haystack: &str,
     marker: &str,
@@ -110,6 +119,7 @@ pub(super) fn assert_json_bool_field_after(
     );
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn assert_json_string_array_field_after(
     haystack: &str,
     marker: &str,
@@ -126,6 +136,7 @@ pub(super) fn assert_json_string_array_field_after(
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn title_art_shadow_sweep_keeps_evenodd_inner_boundaries() {
     let mut commands = vec![ObjectEmbeddedPressVectorPathCommandCandidate::MoveTo { x: 0, y: 0 }];
     push_embedded_press_test_line_to(&mut commands, (0, 0), (100, 0));
@@ -166,6 +177,7 @@ fn title_art_shadow_sweep_keeps_evenodd_inner_boundaries() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn success_data_test_cone_projection_requires_text_corroboration() {
     let segments = vec![test_fdm_vector_segment(
         ObjectFdmIndexBbox::new(-12000, -12000, -10800, -10600),
@@ -192,6 +204,7 @@ fn success_data_test_cone_projection_requires_text_corroboration() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn success_data_test_cone_projection_uses_matching_text_corroboration() {
     let segments = vec![test_fdm_vector_segment(
         ObjectFdmIndexBbox::new(-12000, -12000, -10800, -10600),
@@ -223,12 +236,14 @@ fn success_data_test_cone_projection_uses_matching_text_corroboration() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn max_abs_i32_handles_i32_min_conservatively() {
     assert_eq!(max_abs_i32(&[i32::MIN]), Some(i32::MAX));
     assert_eq!(max_abs_i32(&[i32::MIN, -4, 6]), Some(i32::MAX));
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn signed_usize_delta_i32_saturates_at_signed_bounds() {
     let signed_max = i32::MAX as usize;
     let signed_overflow = signed_max + 1;
@@ -243,6 +258,7 @@ fn signed_usize_delta_i32_saturates_at_signed_bounds() {
 }
 
 #[test]
+#[cfg(feature = "rendering")]
 fn source_gap_readiness_rejects_oversized_source_range_false_zero_transform_authority() {
     let oversized_source_range_gap = i32::MAX as usize + 1;
     let probe = test_table_grid_cross_table_row_boundary_offset_probe(
@@ -307,6 +323,7 @@ fn source_gap_readiness_rejects_oversized_source_range_false_zero_transform_auth
     assert!(!output.contains("\"canDecodeSourceTransform\":true"));
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn paper_mark_fixture(entries: &[(u32, u32)]) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&u32::try_from(entries.len()).unwrap().to_be_bytes());
@@ -325,6 +342,7 @@ pub(super) fn paper_mark_fixture(entries: &[(u32, u32)]) -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn line_mark_words_0_to_20() -> Vec<u8> {
     let mut bytes = Vec::new();
     for word in 0..20u16 {
@@ -333,6 +351,7 @@ pub(super) fn line_mark_words_0_to_20() -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn page_mark_fields_0_to_20() -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&19u32.to_be_bytes());
@@ -346,6 +365,7 @@ pub(super) fn page_mark_fields_0_to_20() -> Vec<u8> {
     bytes
 }
 
+#[cfg(feature = "rendering")]
 pub(super) fn row_header_record_bytes(fixed_words: [u16; 6], payload_words: &[u16]) -> Vec<u8> {
     let total_len_words = (3 + fixed_words.len() + payload_words.len() + 4) as u16;
     let mut words = vec![0x001c, 0x0010, total_len_words];

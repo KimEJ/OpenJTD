@@ -38,8 +38,10 @@ limited. See [known divergences](VALIDATION.md#known-divergences).
 
 ## Implementation Boundaries
 
-`rjtd-core` provides low-level evidence. `rjtd-model` owns `Document` but also
-currently includes `DocumentCore`, rendering, and application state.
-`rjtd-export` provides serialization/PDF; `rjtd-wasm` retains `HwpDocument`
-for existing consumers. Interpretation/rendering separation and wrapper cleanup
-are planned code work, not changes made by this document pass.
+`rjtd-core` provides low-level evidence. `rjtd-model` supports source-only
+parsing/inspection with `--no-default-features`; optional `rendering` provides
+`DocumentCore` and app/rendering state. Defaults retain bitmap rendering.
+Bounded source candidate APIs expose raw units, font identity, sections/running
+policy and logical row ranges without renderer initialization. `rjtd-export`
+provides serialization/PDF. `rjtd-wasm` still retains `HwpDocument`; wrapper/API
+cleanup remains separate work. See the [model build configurations](../rjtd/crates/rjtd-model/README.md#build-configurations).

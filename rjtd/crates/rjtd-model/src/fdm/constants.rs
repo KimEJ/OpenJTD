@@ -82,8 +82,10 @@ pub(crate) const FDM_VECTOR_NESTED_PRIMITIVE_MARKERS: [[u8; 4]; 12] = [
     *b"\xff\x00\x09\x60",
 ];
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_VECTOR_TEXT_MASK_MIN_INNER_AREA_RATIO: f64 = 0.30;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_VECTOR_TEXT_MASK_MAX_INNER_AREA_RATIO: f64 = 0.85;
 
 pub(crate) const FDM_VECTOR_RENDERED_PRIMITIVE_MARKERS: [[u8; 4]; 12] = [
@@ -101,26 +103,36 @@ pub(crate) const FDM_VECTOR_RENDERED_PRIMITIVE_MARKERS: [[u8; 4]; 12] = [
     *b"\x01\x00\x09\x60",
 ];
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_VECTOR_PATH_DIAGNOSTIC_MAX_SPAN_RATIO: f32 = 0.28;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_TEXT_MASK_COHORT_MIN_PRIMITIVES: usize = 3;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_TEXT_MASK_COHORT_LIMIT: usize = 24;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_TEXT_MASK_RIGHT_NEIGHBOR_MAX_GAP_FACTOR: f32 = 3.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_TEXT_MASK_COMPONENT_MIN_PRIMITIVES: usize = 3;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_TEXT_MASK_COMPONENT_MAX_HEIGHT_LINE_FACTOR: f32 = 0.85;
 
 pub(crate) const FDM_CONNECTOR_CANDIDATE_MIN_SOURCE_SPAN_UNITS: i32 = 500;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_CONNECTOR_CANDIDATE_MIN_PROJECTED_SPAN_PX: f32 = 48.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_OPEN_STROKE_AXIS_RULE_MIN_PROJECTED_SPAN_PX: f32 = 5.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_OPEN_STROKE_AXIS_RULE_ROW_COHORT_LIMIT: usize = 16;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_OPEN_STROKE_ROW_COHORT_LIMIT: usize = 16;
 
 pub(crate) const FIGURE_LINK_HEADER_BYTES: usize = 8;
@@ -131,18 +143,26 @@ pub(crate) const FIGURE_LINK_RELATION_KIND_CANDIDATE_OFFSET: usize = 8;
 
 pub(crate) const FIGURE_LINK_RELATION_KIND_CANDIDATE: u16 = 0x0016;
 
+#[cfg(feature = "rendering")]
 pub(crate) const SHANAI_LAN_FDM_FRAME_X_DIVISOR: f32 = 24.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const SHANAI_LAN_FDM_FRAME_Y_DIVISOR: f32 = 1.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const SHANAI_LAN_FDM_FRAME_SIZE_DIVISOR: f32 = 24.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_CONNECTOR_LINE_RULE_SPAN_OVERFLOW_PROBE_UNITS: f32 = 2.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_CONNECTOR_LINE_RULE_TIGHT_PERPENDICULAR_PROBE_UNITS: f32 = 1.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_CONNECTOR_LINE_RULE_NEARBY_PERPENDICULAR_PROBE_UNITS: f32 = 2.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_CONNECTOR_ENDPOINT_OWNER_PROBE_RADIUS_PX: f32 = 18.0;
 
+#[cfg(feature = "rendering")]
 pub(crate) const FDM_CONNECTOR_ENDPOINT_OWNER_CANDIDATE_LIMIT: usize = 3;

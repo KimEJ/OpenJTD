@@ -409,6 +409,7 @@ pub(crate) fn decode_utf16le_c_string(bytes: &[u8]) -> Option<String> {
     String::from_utf16(&units).ok()
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn permille(numerator: usize, denominator: usize) -> Option<usize> {
     numerator.saturating_mul(1000).checked_div(denominator)
 }

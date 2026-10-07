@@ -754,10 +754,12 @@ pub(crate) fn image_mime_for_kind(kind: &str) -> &'static str {
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn next_snapshot_id(current: u32) -> u32 {
     current.checked_add(1).filter(|id| *id > 0).unwrap_or(1)
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn object_embedding_frames_json(frames: &[ObjectEmbeddingFrameCandidate]) -> String {
     let mut output = String::from("[");
     for (index, frame) in frames.iter().enumerate() {
@@ -770,6 +772,7 @@ pub(crate) fn object_embedding_frames_json(frames: &[ObjectEmbeddingFrameCandida
     output
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_embedding_frame_candidate_json(
     output: &mut String,
     frame: &ObjectEmbeddingFrameCandidate,
@@ -799,6 +802,7 @@ pub(crate) fn push_object_embedding_frame_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_jsfart_stream_profile_candidate_json(
     output: &mut String,
     profile: &ObjectJsfartStreamProfileCandidate,
@@ -824,6 +828,7 @@ pub(crate) fn push_object_jsfart_stream_profile_candidate_json(
     output.push('}');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_jsfart_art_candidate_json(
     output: &mut String,
     art: &ObjectJsfartArtCandidate,
@@ -875,6 +880,7 @@ pub(crate) fn push_object_jsfart_art_candidate_json(
     output.push_str(",\"renderable\":false,\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_jsfart_art_paint_candidate_json(
     output: &mut String,
     paint: &ObjectJsfartArtPaintCandidate,
@@ -911,6 +917,7 @@ pub(crate) fn push_object_jsfart_art_paint_candidate_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_jseq3_formula_candidate_json(
     output: &mut String,
     formula: &ObjectJseq3FormulaCandidate,
@@ -975,6 +982,7 @@ pub(crate) fn push_object_jseq3_formula_candidate_json(
     output.push_str(",\"renderable\":false,\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_visual_list_candidate_json(
     output: &mut String,
     visual_list: &ObjectVisualListCandidate,
@@ -1010,6 +1018,7 @@ pub(crate) fn push_object_visual_list_candidate_json(
     output.push_str(",\"rleEncoding\":\"bmp-rle8-like\",\"renderable\":true,\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_image_payload_span_json(
     output: &mut String,
     span: &ObjectImagePayloadSpan,
@@ -1039,6 +1048,7 @@ pub(crate) fn push_object_image_payload_span_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_image_dimensions_json(
     output: &mut String,
     dimensions: Option<ObjectImageDimensions>,
@@ -1054,6 +1064,7 @@ pub(crate) fn push_object_image_dimensions_json(
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_image_payload_envelope_json(
     output: &mut String,
     envelope: &ObjectImagePayloadEnvelope,
@@ -1107,6 +1118,7 @@ pub(crate) fn push_object_image_payload_envelope_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_image_header_fields_json(
     output: &mut String,
     fields: &ObjectImageHeaderFieldCandidates,
@@ -1134,6 +1146,7 @@ pub(crate) fn push_object_image_header_fields_json(
     output.push_str(",\"decoded\":false}");
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_image_numeric_header_field_json(
     output: &mut String,
     field: &ObjectImageNumericHeaderField,
@@ -1145,6 +1158,7 @@ pub(crate) fn push_object_image_numeric_header_field_json(
     output.push('}');
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn push_object_image_source_path_candidate_json(
     output: &mut String,
     path: &ObjectImageSourcePathCandidate,

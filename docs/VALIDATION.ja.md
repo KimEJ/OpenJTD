@@ -7,7 +7,7 @@
 
 local native batch は原本/PDF 67 対・85 page、checklist 69 項目中 T04/O07 は保留である。
 原本と詳細出力は private のままで public corpus へ移していない。実装監査は checkout `3869c48`、
-同一 engine source の dev `cce9cb2` を対象にした。local 文書変更は新実装・release ではない。
+同一 engine source の dev `cce9cb2` を対象にした。当時の文書整理は新実装・releaseではない。後続の整理検証は下記に別記する。
 
 67 ケースの SVG/layer は既に調査した artifact と同一性を確認した。PDF 本文・page 寸法/数、限定 geometry/paint、
 source span、対象 source-profile 回帰は各検証範囲で比較した。bold、plain fixed pitch、cell padding は修正後 artifact を
@@ -40,3 +40,20 @@ source span、対象 source-profile 回帰は各検証範囲で比較した。bo
 実行/skip、差異を記録する。synthetic parser 契約、import 経路、native 出力比較を区別する。
 詳細 local audit は ignored workspace にあり、public checkout に含まれると主張しない。
 品質 workflow の範囲と忠実度/browser runtime の検証を分ける。今回の文書整理で新 native 入力を作成していない。
+
+## 解釈/描画整理の検証 (2026-10-08)
+
+model の optional `rendering` 境界は上記67対の形式監査と別に検証する。local workspace
+回帰は `local_` 除外で483 passed/0 failed/17 ignored/52 filtered、source-only は43 passed、
+bitmap なしの描画は228 passed/11 ignored/24 filtered。両 Clippy、workspace/source-only MSRV、
+WASM、format、警告なし doc を通過した。stream/record/image 予算は描画なしでも検証し、
+app page 予算は描画構成で保持する。
+
+独立 consumer で source query、`DocumentCore` と bitmap 依存の不在、bitmap なし描画、
+default 描画を確認した。private native31ケースの model 調査は renderer 有無で同一だった。
+default 出力比較は31ケース49 pageの整理前rjtd出力が基準で、原本officeとの完全一致ではない。
+日付境界をまたぐ PDF 比較では既存 exporter API で printing date を固定する。
+
+model/parser、資源予算、app state、snapshot、移動した調整処理の本体を照合した。
+外部依存、共同 repository 変更、Windows 入力は追加していない。候補の限定profileと
+raw/unknownを維持する。WASM名称/APIと後続release preflightは別作業として残る。

@@ -11,7 +11,7 @@ historical item remains unresolved unless its own evidence establishes completio
 
 - [ ] Classify mixed source recognition, rendering, and app-state functions.
 - [ ] Expose source recognition results through the owned model, preserving flow, spans, raw/unknown data, and resource limits.
-- [ ] Verify parsing/model inspection without font or rendering initialization.
+- [x] Verify parsing/model inspection without font or rendering initialization.
 
 ## Reproducible Interpretation Checks
 

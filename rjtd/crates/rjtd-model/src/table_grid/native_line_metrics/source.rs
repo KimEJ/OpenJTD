@@ -1,4 +1,6 @@
-use crate::{DocumentTextFlowEvent, TextSourceSpan};
+use crate::DocumentTextFlowEvent;
+#[cfg(feature = "rendering")]
+use crate::TextSourceSpan;
 
 /// Observed repeated fixed-pitch attributes, kept as candidates in source flow.
 pub(crate) fn native_rule_fixed_pitch(event: &DocumentTextFlowEvent) -> Option<u16> {
@@ -41,11 +43,23 @@ pub(crate) fn native_rule_parent_offset(event: &DocumentTextFlowEvent) -> Option
     }
 }
 
+#[cfg(feature = "rendering")]
 pub(crate) fn native_rule_visible_span(text: &str, span: &TextSourceSpan) -> TextSourceSpan {
     let leading = text.chars().take_while(|c| *c == ' ').count();
     if leading == text.chars().count() {
         span.clone()
     } else {
         span.subspan_by_units(leading, text.encode_utf16().count())
+    }
+}
+
+impl DocumentTextFlowEvent {
+    /// Saved fixed-pitch mm100 field in the observed paragraph/table profiles.
+    pub fn fixed_pitch_mm100_candidate(&self) -> Option<u16> {
+        native_rule_fixed_pitch(self)
+    }
+    /// Candidate offset of the repeated native rule-parent field, not page placement.
+    pub fn rule_parent_offset_candidate(&self) -> Option<usize> {
+        native_rule_parent_offset(self)
     }
 }
