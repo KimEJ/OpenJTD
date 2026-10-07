@@ -57,3 +57,15 @@ default 出力比較は31ケース49 pageの整理前rjtd出力が基準で、�
 model/parser、資源予算、app state、snapshot、移動した調整処理の本体を照合した。
 外部依存、共同 repository 変更、Windows 入力は追加していない。候補の限定profileと
 raw/unknownを維持する。WASM名称/APIと後続release preflightは別作業として残る。
+
+## WASM 名称と互換 API review (2026-10-08)
+
+Rust/viewer の基本名は `JtdDocument`。Rust `HwpDocument` alias と生成 JS `HwpDocument`
+を維持し、`rjtd.mjs` は同じ constructor を両名で公開する。既存明示 export266名と
+転送本体は同一であり、viewer 未使用だけを理由に公開 SDK method を削除しなかった。
+
+生成 WASM runtime で alias identity、viewer7呼出し、入力/date error、未対応export契約が
+通過した。既存 native JTD/JTT/JTTC7ケースで生成と全page描画を実行した。workspaceは
+485 passed/0 failed/17 ignored/52 filtered。Clippy/MSRV/WASM/doc/package/noticesも通過し、
+CIに生成SDK実行検証を追加した。全browser sessionやediting/round-trip証明ではない。
+後続release preflightは別作業として残る。

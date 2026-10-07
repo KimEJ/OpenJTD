@@ -69,7 +69,7 @@ Every feature must be implemented through these layers. No exporter may read sou
 `rjtd-model::DocumentCore` provides loading, page queries, SVG/HTML rendering,
 layer diagnostics, and basic body-text editing, search, selection, clipboard,
 and snapshots. Source byte/unit spans are retained where parsed. The
-`rjtd-wasm::HwpDocument` wrapper exposes the existing viewer browser API.
+`rjtd-wasm::JtdDocument` wrapper exposes the existing viewer browser API.
 Renaming it and removing unused compatibility methods are separate code work
 requiring consumer and generated-binding checks. API count is not a JTD
 feature-completion criterion.

@@ -43,5 +43,6 @@ parsing/inspection with `--no-default-features`; optional `rendering` provides
 `DocumentCore` and app/rendering state. Defaults retain bitmap rendering.
 Bounded source candidate APIs expose raw units, font identity, sections/running
 policy and logical row ranges without renderer initialization. `rjtd-export`
-provides serialization/PDF. `rjtd-wasm` still retains `HwpDocument`; wrapper/API
-cleanup remains separate work. See the [model build configurations](../rjtd/crates/rjtd-model/README.md#build-configurations).
+provides serialization/PDF. `rjtd-wasm` uses `JtdDocument` with the existing Rust/JS `HwpDocument` compatibility
+names. The viewer uses the canonical constructor through `rjtd.mjs`; public
+compatibility exports remain after consumer review. See the [model build configurations](../rjtd/crates/rjtd-model/README.md#build-configurations).

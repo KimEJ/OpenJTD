@@ -4,7 +4,7 @@ This directory contains OpenJTD's static WASM viewer for `.jtd`, `.jtt`, and
 `.jttc` documents. It supports local file selection/drop, SVG page navigation,
 and a plain-text tab. Document contents are processed in the browser.
 
-The viewer uses `rjtd-wasm::HwpDocument` and inherits the model's fallback and
+The viewer uses `rjtd-wasm::JtdDocument` and inherits the model's fallback and
 diagnostic rendering limits. It is not a full editor or a guarantee of native
 Ichitaro layout fidelity. See [feature status](../docs/FEATURE-STATUS.md),
 [validation](../docs/VALIDATION.md), and the [roadmap](../docs/ROADMAP.md).
@@ -30,3 +30,6 @@ The Rust quality workflow checks the WASM target and viewer source contracts.
 Those checks do not run an actual browser session. Runtime regression coverage and rendering-limit warnings remain open
 implementation work in [TODO](../TODO.md#rendering-and-application-boundary).
 The original M6 scope is recorded in feature status.
+
+The viewer imports the canonical constructor from `rjtd.mjs`. It aliases the
+generated SDK `HwpDocument` class, preserving direct SDK and legacy Rust callers.

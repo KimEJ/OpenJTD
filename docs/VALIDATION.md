@@ -88,3 +88,20 @@ bodies were compared. No new external dependencies, shared-repository changes or
 Windows inputs were introduced. Source candidates retain their bounded profiles
 and raw/unknown evidence. WASM naming/API cleanup and subsequent-release
 preflight remain separate tasks.
+
+## WASM Naming and Compatibility Review (2026-10-08)
+
+`JtdDocument` is the canonical Rust/viewer name. The Rust `HwpDocument` alias and
+generated JS `HwpDocument` constructor are retained. `rjtd.mjs` exports the same
+constructor under both names. The generated declarations retain all 266 existing
+explicit export names; forwarding bodies are unchanged. No public SDK method was
+deleted merely because the repository viewer does not use it.
+
+The generated WASM runtime passed constructor/alias identity, all seven viewer
+calls, invalid-input/date errors and retained unsupported-export checks. Seven
+existing native JTD/JTT/JTTC cases constructed and rendered all pages. Workspace
+checks passed with 485 tests, 0 failures, 17 ignored and 52 filtered. Clippy,
+MSRV, WASM, documentation, package and distribution-notice checks passed. CI now
+builds and exercises the generated SDK. This does not replace a full browser
+session or establish editing/round-trip support. Subsequent-release preflight
+remains separate work.

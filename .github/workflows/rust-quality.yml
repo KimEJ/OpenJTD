@@ -11,6 +11,7 @@ on:
       - 'CONTRIBUTING.md'
       - '.github/workflows/**'
       - 'scripts/ci-*.sh'
+      - 'scripts/ci-*.mjs'
   push:
     branches: [dev, main]
     paths:
@@ -21,6 +22,7 @@ on:
       - 'CONTRIBUTING.md'
       - '.github/workflows/**'
       - 'scripts/ci-*.sh'
+      - 'scripts/ci-*.mjs'
   workflow_dispatch:
 
 permissions:
@@ -98,6 +100,16 @@ jobs:
 
       - name: Check WebAssembly target
         run: cargo check --package rjtd-wasm --target wasm32-unknown-unknown --locked
+
+      - name: Install pinned wasm-pack
+        run: |
+          wasm_pack_dir="$(bash ../scripts/ci-install-wasm-pack.sh)"
+          printf '%s\n' "$wasm_pack_dir" >> "$GITHUB_PATH"
+
+      - name: Verify generated browser SDK
+        run: |
+          wasm-pack build --target web --dev --out-dir "$RUNNER_TEMP/rjtd-wasm-sdk" --out-name rjtd_wasm crates/rjtd-wasm --locked
+          node ../scripts/ci-verify-wasm-sdk.mjs "$RUNNER_TEMP/rjtd-wasm-sdk"
 
       - name: Inspect publishable package contents
         run: bash ../scripts/ci-verify-packages.sh

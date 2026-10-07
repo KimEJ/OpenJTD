@@ -72,7 +72,7 @@ candidates carry evidence until their semantics are proven. SVG/PDF rendering
 uses this model with fallback layout and limited diagnostic projections.
 
 `DocumentCore` provides read/render APIs and basic body-text editing. The
-`HwpDocument` WASM wrapper retains an existing browser API, but many advanced calls
+`JtdDocument` WASM wrapper retains the `HwpDocument` Rust/JS compatibility names and existing browser API, but many advanced calls
 return defaults or no-op results. API presence does not establish JTD editing
 support or round-trip preservation.
 

@@ -26,12 +26,15 @@ pub fn engine_name() -> &'static str {
     "rjtd"
 }
 
-#[wasm_bindgen]
-pub struct HwpDocument {
+#[wasm_bindgen(js_name = HwpDocument)]
+pub struct JtdDocument {
     core: DocumentCore,
 }
 
-impl std::ops::Deref for HwpDocument {
+/// Legacy Rust name for the JTD document wrapper.
+pub type HwpDocument = JtdDocument;
+
+impl std::ops::Deref for JtdDocument {
     type Target = DocumentCore;
 
     fn deref(&self) -> &DocumentCore {
@@ -39,13 +42,13 @@ impl std::ops::Deref for HwpDocument {
     }
 }
 
-impl std::ops::DerefMut for HwpDocument {
+impl std::ops::DerefMut for JtdDocument {
     fn deref_mut(&mut self) -> &mut DocumentCore {
         &mut self.core
     }
 }
 
-impl HwpDocument {
+impl JtdDocument {
     pub fn from_bytes(data: &[u8]) -> rjtd_core::Result<Self> {
         Self::from_bytes_with_limits(data, ParseLimits::DEFAULT)
     }
@@ -89,8 +92,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn legacy_rust_name_preserves_the_same_jtd_wrapper_type() {
+        let legacy = HwpDocument::from_document(Document::from_plain_text("JTD"));
+        let canonical: JtdDocument = legacy;
+        assert_eq!(canonical.plain_text(), "JTD\n");
+        assert_eq!(canonical.get_source_format(), "jtd");
+    }
+
+    #[test]
     fn limits_aware_byte_loading_preserves_resource_limit_error_message() {
-        let error = match HwpDocument::from_bytes_with_limits(
+        let error = match JtdDocument::from_bytes_with_limits(
             &[0],
             ParseLimits::DEFAULT.with_max_input_bytes(0),
         ) {
@@ -114,7 +125,7 @@ mod tests {
 
     #[test]
     fn limits_aware_document_entry_point_rejects_page_allocation() {
-        let result = HwpDocument::from_document_with_limits(
+        let result = JtdDocument::from_document_with_limits(
             Document::from_plain_text("page"),
             ParseLimits::DEFAULT.with_max_pages(0),
         );
@@ -130,12 +141,12 @@ mod tests {
     }
 
     #[test]
-    fn hwp_document_wrapper_exposes_rhwp_shaped_surface() {
-        let mut document = HwpDocument::from_document(Document::from_plain_text("銀河鉄道"));
+    fn jtd_document_wrapper_exposes_application_surface() {
+        let mut document = JtdDocument::from_document(Document::from_plain_text("銀河鉄道"));
         document.set_file_name("sample.jtd");
 
         assert_eq!(
-            HwpDocument::create_empty().get_validation_warnings(),
+            JtdDocument::create_empty().get_validation_warnings(),
             "{\"count\":0,\"summary\":{},\"warnings\":[]}"
         );
         assert_eq!(document.page_count(), 1);
@@ -649,7 +660,7 @@ mod tests {
             0x001c,
             Some(TextSourceSpan::new(4, 6, 2, 3)),
         ));
-        let document = HwpDocument::from_document(model);
+        let document = JtdDocument::from_document(model);
 
         assert_eq!(document.get_control_text_positions(0, 0), "[2]");
         assert_eq!(
@@ -672,7 +683,7 @@ mod tests {
             rjtd_core::style_stream::TEXT_LAYOUT_STYLE_PATH,
             ssmg_style_with_label_fixture("本文"),
         ));
-        let mut document = HwpDocument::from_document(model);
+        let mut document = JtdDocument::from_document(model);
 
         let style_list = document.get_style_list();
         assert!(style_list.contains("\"name\":\"本文\""));

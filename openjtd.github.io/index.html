@@ -376,7 +376,7 @@
 </div>
 
 <script type="module">
-import init, { HwpDocument } from './pkg/rjtd_wasm.js';
+import init, { JtdDocument } from './rjtd.mjs';
 
 let doc = null;
 let currentPage = 0;
@@ -442,7 +442,7 @@ async function openFile(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {
     if (doc) { doc.free(); doc = null; }
-    doc = new HwpDocument(bytes);
+    doc = new JtdDocument(bytes);
     if (typeof doc.setPrintDate === 'function') {
       const now = new Date();
       const date = `${String(now.getFullYear()).padStart(4, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;

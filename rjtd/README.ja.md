@@ -62,7 +62,7 @@ Document Model
 
 `rjtd-model::DocumentCore` は読込、ページ照会、SVG/HTML 描画、layer diagnostics、
 基本的な本文編集・検索・選択・clipboard・snapshot を提供する。解析できた箇所の
-source byte/unit span を保持する。`rjtd-wasm::HwpDocument` は既存 viewer の browser API を
+source byte/unit span を保持する。`rjtd-wasm::JtdDocument` は既存 viewer の browser API を
 公開する。名称変更や不要な互換 method の整理は、consumer と generated binding を確認する
 別のコード作業である。API の数は JTD 機能の完了条件ではない。
 

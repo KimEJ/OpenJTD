@@ -50,7 +50,7 @@ fn document_core_renders_text_svg_pages() {
 }
 
 #[test]
-fn document_core_reports_rhwp_shaped_page_and_layer_info() {
+fn document_core_reports_jtd_application_page_and_layer_info() {
     let document = Document::from_plain_text("銀河鉄道\n午后の授業");
     let mut core = DocumentCore::from_document(document.clone());
     core.set_file_name("sample.jtd");

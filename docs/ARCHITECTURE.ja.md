@@ -67,8 +67,8 @@ object を公開する。表、スタイル、レイアウト、オブジェク�
 根拠として保持する。SVG/PDF 描画はこのモデルに fallback layout と限定的な診断投影を
 組み合わせる。
 
-`DocumentCore` は read/render API と基本的な本文編集を提供する。WASM の `HwpDocument`
-wrapper は既存の browser API を維持するが、多くの高度な呼出しは既定値や no-op を返す。
+`DocumentCore` は read/render API と基本的な本文編集を提供する。WASM の `JtdDocument`
+wrapper は `HwpDocument` Rust/JS 互換名と既存 browser API を維持するが、多くの高度な呼出しは既定値や no-op を返す。
 API の存在は JTD 編集対応や round-trip preservation の証明にはならない。
 
 基本的な文書 HTML 出力は `rjtd-export` に属し、app-core の HTML clipboard methods は

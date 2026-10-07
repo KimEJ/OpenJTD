@@ -17,7 +17,7 @@ fn viewer_sets_file_name_before_reading_page_count() {
         return;
     };
     let constructor_offset = viewer_html
-        .find("doc = new HwpDocument(bytes);")
+        .find("doc = new JtdDocument(bytes);")
         .expect("viewer must construct the WASM document from the selected file");
     let after_constructor = &viewer_html[constructor_offset..];
     let file_name_offset = after_constructor
@@ -56,4 +56,16 @@ fn viewer_exposes_open_errors_in_the_visible_drop_zone() {
             && viewer_html.contains("document.getElementById('drop-zone').style.display = 'flex';"),
         "failed replacement uploads must return to the drop zone before exposing the error"
     );
+}
+
+#[test]
+fn viewer_uses_the_canonical_entry_point_with_the_legacy_constructor_alias() {
+    let Some(viewer) = viewer_html() else {
+        return;
+    };
+    assert!(viewer.contains("import init, { JtdDocument } from './rjtd.mjs';"));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let entry = std::fs::read_to_string(root.join("openjtd.github.io/rjtd.mjs")).unwrap();
+    assert!(entry.contains("HwpDocument as JtdDocument"));
+    assert!(entry.contains("HwpDocument,"));
 }

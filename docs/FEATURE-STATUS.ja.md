@@ -36,5 +36,6 @@ core は低水準根拠を持つ。model は `--no-default-features` で解析�
 build でき、optional `rendering` は `DocumentCore` と app/描画状態を提供する。
 default は bitmap 描画を維持する。原本候補 API は renderer 初期化なしで原本単位、
 font identity、section/running policy、logical row range を公開する。export は出力/PDF、
-WASM は既存 `HwpDocument` を維持する。wrapper/API 整理は別の作業である。
+WASM は `JtdDocument` と既存 Rust/JS `HwpDocument` 互換名を持つ。ビューアは `rjtd.mjs` を使い、
+公開互換 API は consumer review 後も維持する。
 [model build 構成](../rjtd/crates/rjtd-model/README.md#build-configurations) を参照する。

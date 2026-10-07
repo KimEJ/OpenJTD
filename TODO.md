@@ -23,7 +23,7 @@ historical item remains unresolved unless its own evidence establishes completio
 
 - [ ] Separate saved source line/page instructions from computed fallback layout.
 - [ ] Move font measurement, output units, SVG/page-layer construction, and paint behind the model boundary.
-- [ ] Review HwpDocument naming, generated bindings, viewer callers, and unused compatibility methods together.
+- [x] Review HwpDocument naming, generated bindings, viewer callers, and unused compatibility methods together.
 - [ ] Preserve source/model behavior, output regressions, and WASM/browser contracts during moves.
 
 ## Evidence and Coverage

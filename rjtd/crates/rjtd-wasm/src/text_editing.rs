@@ -1,8 +1,8 @@
-use crate::{HwpDocument, js_error};
+use crate::{JtdDocument, js_error};
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
-impl HwpDocument {
+#[wasm_bindgen(js_class = HwpDocument)]
+impl JtdDocument {
     #[wasm_bindgen(js_name = plainText)]
     pub fn plain_text(&self) -> String {
         self.core.plain_text()

@@ -1,16 +1,16 @@
-use crate::{HwpDocument, js_error};
+use crate::{JtdDocument, js_error};
 use rjtd_model::{Document, DocumentCore};
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
-impl HwpDocument {
+#[wasm_bindgen(js_class = HwpDocument)]
+impl JtdDocument {
     #[wasm_bindgen(constructor)]
-    pub fn new(data: &[u8]) -> Result<HwpDocument, JsValue> {
+    pub fn new(data: &[u8]) -> Result<JtdDocument, JsValue> {
         Self::from_bytes(data).map_err(js_error)
     }
     #[wasm_bindgen(js_name = createEmpty)]
-    pub fn create_empty() -> HwpDocument {
-        HwpDocument::from_document(blank_document())
+    pub fn create_empty() -> JtdDocument {
+        JtdDocument::from_document(blank_document())
     }
     #[wasm_bindgen(js_name = createBlankDocument)]
     pub fn create_blank_document(&mut self) -> String {

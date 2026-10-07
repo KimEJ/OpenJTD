@@ -20,7 +20,7 @@
 
 - [ ] 保存原本行/page 指示と fallback 計算を分ける。
 - [ ] font 計測、出力単位、SVG/page layer、paint を model の外側へ移す。
-- [ ] HwpDocument 名、generated binding、viewer caller、未使用互換 method を一緒に確認する。
+- [x] HwpDocument 名、generated binding、viewer caller、未使用互換 method を一緒に確認する。
 - [ ] 移動中の source/model、出力回帰、WASM/browser contract を保持する。
 
 ## 根拠と coverage

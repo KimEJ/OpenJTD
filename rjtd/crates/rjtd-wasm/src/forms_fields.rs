@@ -1,8 +1,8 @@
-use crate::{HwpDocument, js_error};
+use crate::{JtdDocument, js_error};
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
-impl HwpDocument {
+#[wasm_bindgen(js_class = HwpDocument)]
+impl JtdDocument {
     #[wasm_bindgen(js_name = getFormObjectAt)]
     pub fn get_form_object_at(&self, page_num: u32, x: f64, y: f64) -> Result<String, JsValue> {
         self.core
