@@ -71,88 +71,6 @@ pub(crate) fn page_text_line_style_fragments(
         .collect()
 }
 
-pub(crate) fn native_visible_text_span(
-    document: &Document,
-    text: &str,
-    span: &TextSourceSpan,
-) -> Option<TextSourceSpan> {
-    if span.unit_start().checked_mul(2) != Some(span.byte_start())
-        || span.unit_end().checked_mul(2) != Some(span.byte_end())
-    {
-        return None;
-    }
-    let bytes = document_text_raw_stream(document)?;
-    let source = bytes.get(span.byte_start()..span.byte_end())?;
-    let units = text.encode_utf16().collect::<Vec<_>>();
-    let raw = source.as_chunks::<2>();
-    if !raw.1.is_empty() {
-        return None;
-    }
-    let raw = raw
-        .0
-        .iter()
-        .map(|pair| u16::from_be_bytes(*pair))
-        .collect::<Vec<_>>();
-    if raw == units {
-        return Some(span.clone());
-    }
-    if raw.len() == units.len() + 2
-        && raw.first() == Some(&0x1d)
-        && raw.last() == Some(&0x1e)
-        && raw[1..raw.len() - 1] == units
-    {
-        return Some(span.subspan_by_units(1, raw.len() - 1));
-    }
-    None
-}
-
-/// Controlled grouped kana ruby; its raw grouping record and both caches must
-/// agree. This does not decode general ruby placement or annotation font changes.
-pub(crate) fn source_group_ruby_candidate(
-    document: &Document,
-    span: &TextSourceSpan,
-    annotation: &str,
-) -> bool {
-    if annotation.is_empty()
-        || !annotation
-            .chars()
-            .all(|c| matches!(c as u32,0x3041..=0x3096|0x30a1..=0x30fa))
-    {
-        return false;
-    }
-    let Some(flow) = document.document_text_flow() else {
-        return false;
-    };
-    flow.events().windows(9).any(|g| {
-        g.windows(2).all(|p| p[0].unit_end() == p[1].unit_start())
-            && g[0].raw_words() == [0x1c, 0, 12, 0, 5, 0, 517, 512, 12, 0, 0, 0x1f]
-            && g[1].kind() == DocumentTextFlowKind::Control
-            && g[1].code() == Some(0x1c)
-            && g[2].raw_words() == [1, 7, 0, 0, 3]
-            && g[3].kind() == DocumentTextFlowKind::Inline
-            && g[3].selector() == Some(3)
-            && native_visible_text_span(document, g[3].text(), g[3].source_span()).as_ref()
-                == Some(span)
-            && g[4].raw_words() == [5, 0, 1, 0x1f]
-            && g[5].kind() == DocumentTextFlowKind::Control
-            && g[5].code() == Some(0x1c)
-            && g[6].raw_words() == [1, 7, 0, 1, 0x82]
-            && g[7].kind() == DocumentTextFlowKind::SkippedInline
-            && g[7].selector() == Some(0x82)
-            && g[7].text() == annotation
-            && g[8].raw_words() == [5, 0, 1, 0x1f]
-            && document_text_style_resolver(document).is_some_and(|r| {
-                [2, 3, 4, 5].into_iter().all(|id| {
-                    r.uniform_optional_value_in_range(
-                        g[7].unit_start() + 1,
-                        g[7].unit_end() - 1,
-                        id,
-                    ) == Some(None)
-                })
-            })
-    })
-}
-
 fn split_text_style_fragments(
     fragment: PageLayerTextFragment,
     resolver: &rjtd_core::document_text::DocumentTextStyleResolver,
@@ -212,20 +130,6 @@ pub(crate) fn text_line_font_size(
         })
         .reduce(f32::max)
         .unwrap_or(APP_FONT_SIZE_PX)
-}
-
-pub(crate) fn paragraph_by_index(
-    document: &Document,
-    paragraph_index: usize,
-) -> Option<&Paragraph> {
-    document
-        .blocks()
-        .iter()
-        .filter_map(|block| match block {
-            Block::Paragraph(paragraph) => Some(paragraph),
-            Block::Unknown(_) => None,
-        })
-        .nth(paragraph_index)
 }
 
 pub(crate) fn paragraph_line_fragments(

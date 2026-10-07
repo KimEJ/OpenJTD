@@ -282,20 +282,6 @@ pub(crate) fn paginate_selected_paragraphs(
     pages
 }
 
-pub(crate) fn paragraph_text(paragraph: &Paragraph) -> String {
-    let mut text = String::new();
-
-    for inline in paragraph.inlines() {
-        match inline {
-            Inline::Text(run) => text.push_str(run.text()),
-            Inline::Ruby(ruby) => text.push_str(ruby.base_text()),
-            Inline::Unknown(_) => {}
-        }
-    }
-
-    text
-}
-
 pub(crate) fn wrap_text_line(
     text: &str,
     paragraph_index: usize,

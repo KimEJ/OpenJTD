@@ -50,6 +50,7 @@ mod object_media;
 mod object_shape_editing;
 mod object_stream;
 mod page_layout;
+mod page_source;
 mod parse;
 mod search_render_editing;
 mod shanai_lan;
@@ -97,6 +98,7 @@ pub use object_embedded_press_model::{
 pub use object_media::*;
 use object_stream::*;
 use page_layout::*;
+use page_source::*;
 use shanai_lan::*;
 use success_data_test::*;
 use success_data_test_answer_sheet_geometry::*;
@@ -622,28 +624,6 @@ const SHANAI_LAN_LINE_RULE_STROKE_WIDTH_PX: f32 = 2.4;
 const SHANAI_LAN_LINE_RULE_MIN_SEGMENT_UNITS: u16 = 24;
 const PDF_POINT_TO_CSS_PX: f32 = APP_DEFAULT_DPI as f32 / 72.0;
 const FRAME_RECORD_UNIT_TO_CSS_PX: f32 = APP_DEFAULT_DPI as f32 / 25.4 / 100.0;
-const MIN_PAPER_SIZE_MM100: u32 = 5_000;
-const MAX_PAPER_SIZE_MM100: u32 = 50_000;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum WritingMode {
-    #[default]
-    Horizontal,
-    VerticalRl,
-}
-
-impl WritingMode {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Horizontal => "horizontal",
-            Self::VerticalRl => "vertical-rl",
-        }
-    }
-
-    fn is_vertical(self) -> bool {
-        matches!(self, Self::VerticalRl)
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PageLayout {
@@ -881,10 +861,6 @@ fn source_document_layout_hint(
     }
 
     None
-}
-
-fn paper_size_mm100_is_plausible(value: u32) -> bool {
-    (MIN_PAPER_SIZE_MM100..=MAX_PAPER_SIZE_MM100).contains(&value)
 }
 
 fn hundredth_millimeters_to_css_px(mm100: u32) -> f32 {

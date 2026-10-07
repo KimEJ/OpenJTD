@@ -7,6 +7,7 @@ mod native_rule_borders;
 mod page_y_diagnostics;
 mod render_layout;
 mod source_evidence;
+mod source_flow;
 
 pub(crate) use horizontal_solve::*;
 pub(crate) use line_mark_diagnostics::*;
@@ -17,3 +18,4 @@ pub(crate) use native_rule_borders::*;
 pub(crate) use page_y_diagnostics::*;
 pub(crate) use render_layout::*;
 pub(crate) use source_evidence::*;
+pub(crate) use source_flow::*;

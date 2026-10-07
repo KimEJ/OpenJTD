@@ -1,7 +1,5 @@
 use super::*;
 
-pub(super) const LAYOUT_BOX_PATH: &str = "/LayoutBox";
-
 pub(super) const LAYOUT_MAP_DELTA_MIN: isize = -4096;
 
 pub(super) const LAYOUT_MAP_DELTA_MAX: isize = 4096;
@@ -44,22 +42,6 @@ pub(super) const PAGE_FRAME_PATTERN_DOT_RADIUS_PX: f32 = 0.75;
 
 pub(super) const PAGE_FRAME_TIME_CAPTION_GAP_PX: f32 = 4.0;
 
-pub(super) const DOCUMENT_VIEW_STYLES_PAGE_WIDTH_OFFSET: usize = 16;
-
-pub(super) const DOCUMENT_VIEW_STYLES_PAGE_HEIGHT_OFFSET: usize = 20;
-
-pub(super) const PAGE_LAYOUT_STYLE_RECORD_CODE: u16 = 0x4444;
-
-pub(super) const PAGE_LAYOUT_STYLE_PAGE_SIZE_SUBRECORD_CODE: u16 = 0x4001;
-
-pub(super) const PAGE_LAYOUT_STYLE_PAGE_SIZE_WIDTH_OFFSET: usize = 4;
-
-pub(super) const PAGE_LAYOUT_STYLE_PAGE_SIZE_HEIGHT_OFFSET: usize = 8;
-
-pub(super) const PAGE_LAYOUT_STYLE_PAYLOAD_WIDTH_OFFSET: usize = 24;
-
-pub(super) const PAGE_LAYOUT_STYLE_PAYLOAD_HEIGHT_OFFSET: usize = 28;
-
 pub(super) fn page_layout_is_close_to_mm(
     layout: PageLayout,
     width_mm: f32,
@@ -92,62 +74,8 @@ pub(super) fn page_layout_with_source_margins(
     document: &Document,
     mut layout: PageLayout,
 ) -> PageLayout {
-    let page_style = document
-        .unknown_styles()
-        .iter()
-        .find(|style| style.name() == Some(PAGE_LAYOUT_STYLE_PATH));
-    let margins = page_style
-        .and_then(|style| {
-            let summary = summarize_style_stream(style.payload());
-            let mut records = summary
-                .records()
-                .iter()
-                .filter(|r| r.code() == PAGE_LAYOUT_STYLE_RECORD_CODE);
-            let record = records.next()?;
-            if records.next().is_some() {
-                return None;
-            }
-            let payload = record
-                .subrecords()
-                .iter()
-                .find(|s| s.code() == 0x4002)?
-                .payload();
-            if !matches!(payload.len(), 39 | 40) || payload.get(..3) != Some(&[0xfe, 0x80, 0]) {
-                return None;
-            }
-            page_margins_at(payload, 3)
-        })
-        .or_else(|| {
-            // An explicit page-layout margin record has authority over the view defaults.
-            if page_style.is_some_and(|style| {
-                summarize_style_stream(style.payload())
-                    .records()
-                    .iter()
-                    .any(|r| r.subrecords().iter().any(|s| s.code() == 0x4002))
-            }) {
-                return None;
-            }
-            let bytes = document
-                .unknown_styles()
-                .iter()
-                .find(|style| style.name() == Some(DOCUMENT_VIEW_STYLES_PATH))?
-                .payload();
-            let summary = summarize_style_stream(bytes);
-            let record = summary.records().iter().find(|r| r.code() == 0x1002)?;
-            let start = record.offset().checked_add(4)?;
-            let payload = bytes.get(start..start.checked_add(record.payload_len())?)?;
-            let offset = match (payload.len(), payload.get(..2)) {
-                (32, Some([0, 0xd8])) => 2,
-                (33, Some([0, 0xd8]))
-                    if modern_source_writing_mode(document) == Some(WritingMode::VerticalRl) =>
-                {
-                    2
-                }
-                (33, Some([0, 0xd9])) if payload.get(2) == Some(&1) => 3,
-                _ => return None,
-            };
-            page_margins_at(payload, offset)
-        });
+    let margins = document_source_margins_mm100(document)
+        .map(|margins| margins.map(|value| hundredth_millimeters_to_css_px(u32::from(value))));
     if let Some(margins) = margins
         && margins[0] + margins[1] < layout.width_px()
         && margins[2] + margins[3] < layout.height_px()
@@ -155,20 +83,6 @@ pub(super) fn page_layout_with_source_margins(
         layout.source_margins = Some(margins);
     }
     layout
-}
-
-pub(crate) fn page_margins_at(bytes: &[u8], offset: usize) -> Option<[f32; 4]> {
-    let top = read_be16_at(bytes, offset)?;
-    let bottom = read_be16_at(bytes, offset + 2)?;
-    let left = read_be16_at(bytes, offset + 4)?;
-    let right = read_be16_at(bytes, offset + 6)?;
-    if [top, bottom, left, right]
-        .iter()
-        .any(|value| *value >= 0xfffd)
-    {
-        return None;
-    }
-    Some([left, right, top, bottom].map(|value| hundredth_millimeters_to_css_px(u32::from(value))))
 }
 
 pub(super) fn decoded_page_layout_from_styles(styles: &[UnknownStyle]) -> Option<PageLayout> {
@@ -184,115 +98,28 @@ pub(super) fn decoded_page_layout_from_styles(styles: &[UnknownStyle]) -> Option
         })
 }
 
+pub(crate) fn page_layout_from_size_mm100((width, height): (u32, u32)) -> PageLayout {
+    PageLayout::new(
+        hundredth_millimeters_to_css_px(width),
+        hundredth_millimeters_to_css_px(height),
+    )
+}
+
 pub(super) fn page_layout_from_document_view_styles(bytes: &[u8]) -> Option<PageLayout> {
-    modern_document_view_layout(bytes).or_else(|| {
-        page_layout_from_encoded_mm100_shift8(
-            read_be32_at(bytes, DOCUMENT_VIEW_STYLES_PAGE_WIDTH_OFFSET)?,
-            read_be32_at(bytes, DOCUMENT_VIEW_STYLES_PAGE_HEIGHT_OFFSET)?,
-        )
-    })
+    Some(page_layout_from_size_mm100(
+        page_size_mm100_from_document_view_styles(bytes)?,
+    ))
 }
 
 pub(super) fn modern_document_view_layout(bytes: &[u8]) -> Option<PageLayout> {
-    let summary = summarize_style_stream(bytes);
-    if summary.record_layout() != rjtd_core::style_stream::StyleStreamRecordLayout::Sequential {
-        return None;
-    }
-    let records = summary
-        .records()
-        .iter()
-        .filter(|record| record.code() == 0x1001)
-        .collect::<Vec<_>>();
-    if let [record] = records.as_slice() {
-        let start = record.offset().checked_add(4)?;
-        let payload = bytes.get(start..start.checked_add(record.payload_len())?)?;
-        let extra = match payload.len() {
-            258 => 0,
-            267 if payload.first() == Some(&14) => 9,
-            _ => usize::MAX,
-        };
-        let prefix = if extra == 9 {
-            [1, 4, 1, 0, 0, 0]
-        } else {
-            [0, 4, 1, 0, 0, 0]
-        };
-        if extra != usize::MAX && payload.get(extra..extra + 6) == Some(prefix.as_slice()) {
-            let le = |offset: usize| {
-                payload
-                    .get(offset..offset + 4)
-                    .map(|value| u32::from_le_bytes(value.try_into().unwrap()))
-            };
-            let stock = (le(126 + extra)?, le(130 + extra)?);
-            if stock == (le(154 + extra)?, le(158 + extra)?) {
-                let (width, height) = if extra == 9 {
-                    (read_be32_at(payload, 1)?, read_be32_at(payload, 5)?)
-                } else {
-                    stock
-                };
-                if let Some(layout) = page_layout_from_encoded_mm100_shift8(
-                    width.checked_mul(256)?,
-                    height.checked_mul(256)?,
-                ) {
-                    return Some(layout);
-                }
-            }
-        }
-    }
-    None
+    Some(page_layout_from_size_mm100(
+        modern_document_view_size_mm100(bytes)?,
+    ))
 }
 
 pub(super) fn page_layout_from_page_layout_style(bytes: &[u8]) -> Option<PageLayout> {
-    summarize_style_stream(bytes)
-        .records()
-        .iter()
-        .filter(|record| record.code() == PAGE_LAYOUT_STYLE_RECORD_CODE)
-        .find_map(|record| {
-            if let Some(layout) = record
-                .subrecords()
-                .iter()
-                .find(|subrecord| subrecord.code() == PAGE_LAYOUT_STYLE_PAGE_SIZE_SUBRECORD_CODE)
-                .and_then(|subrecord| {
-                    page_layout_from_encoded_mm100_shift8(
-                        read_be32_at(
-                            subrecord.payload(),
-                            PAGE_LAYOUT_STYLE_PAGE_SIZE_WIDTH_OFFSET,
-                        )?,
-                        read_be32_at(
-                            subrecord.payload(),
-                            PAGE_LAYOUT_STYLE_PAGE_SIZE_HEIGHT_OFFSET,
-                        )?,
-                    )
-                })
-            {
-                return Some(layout);
-            }
-
-            let payload_start = record.offset().checked_add(4)?;
-            page_layout_from_encoded_mm100_shift8(
-                read_be32_at(
-                    bytes,
-                    payload_start.checked_add(PAGE_LAYOUT_STYLE_PAYLOAD_WIDTH_OFFSET)?,
-                )?,
-                read_be32_at(
-                    bytes,
-                    payload_start.checked_add(PAGE_LAYOUT_STYLE_PAYLOAD_HEIGHT_OFFSET)?,
-                )?,
-            )
-        })
-}
-
-pub(super) fn page_layout_from_encoded_mm100_shift8(
-    width_field: u32,
-    height_field: u32,
-) -> Option<PageLayout> {
-    let width_mm100 = width_field >> 8;
-    let height_mm100 = height_field >> 8;
-    if !paper_size_mm100_is_plausible(width_mm100) || !paper_size_mm100_is_plausible(height_mm100) {
-        return None;
-    }
-    Some(PageLayout::new(
-        hundredth_millimeters_to_css_px(width_mm100),
-        hundredth_millimeters_to_css_px(height_mm100),
+    Some(page_layout_from_size_mm100(
+        page_size_mm100_from_page_layout_style(bytes)?,
     ))
 }
 
