@@ -1,129 +1,42 @@
 # RFC 0005: JTTC JustCompressedDocument Container
 
-Status: draft
+Status: draft for publication preparation; joint review pending
 
-Observed: 2026-06-18
+English source: [0005-jttc-just-compressed-document.md](0005-jttc-just-compressed-document.md)
 
-## Summary
+## 観測した container profile
 
-観察済み `.jttc` files は CFB containers であり、document body は `/JSCompDocument` に保存される。
-
-その stream は別の CFB document を wrap している。
-
-```text
-outer CFB
-  -> /JSCompDocument
-  -> JustCompressedDocument marker
-  -> LHA -lh5- member
-  -> inner CFB
-  -> /DocumentText
-```
-
-current rjtd implementation は、この observed profile を新しい LHA/LZH dependency なしに直接 decode する。
-
-## Relationship To rhwp Policy
-
-rhwp には LHA/LZH/LH5 dependency がない。rjtd dependency policy の下では、便利さだけのために rjtd がそれを導入すべきではない。
-
-したがって current support は observed `JustCompressedDocument` profile のための narrow direct implementation である。これは project rule と一致する。rhwp が dependencies を使うところでは rhwp dependencies を使い、rhwp が comparable low-level parsing を直接実装しているところでは direct implementation を使う。
-
-## Outer CFB
-
-観察済み template samples は小さな outer stream inventory を expose する。
-
-`setsuden_05.jttc`:
+調査した JTTC は outer CFB の `/JSCompDocument` に本文 container を持ち、outer に
+`/DocumentText` は直接存在しない。
 
 ```text
-stream      336  /\x04JSRV_SegmentInformation
-stream     2294  /\x04JSRV_SummaryInformation
-stream      416  /\x05SummaryInformation
-stream   989412  /JSCompDocument
+outer CFB -> /JSCompDocument -> JustCompressedDocument
+          -> one LHA -lh5- member -> inner CFB -> /DocumentText
 ```
 
-`rjtd info` は outer file を次のように報告する。
-
-```text
-format                       cfb-just-compressed-document
-document_text_bytes          -
-compressed_document_bytes    989412
-```
-
-outer CFB は `/DocumentText` を直接 expose しない。
-
-## JSCompDocument Layout
-
-観察済み `/JSCompDocument` streams は次で始まる。
+wrapper prefix は以下である。
 
 ```text
 2600 4a75 7374 436f 6d70 7265 7373 6564 446f 6375 6d65 6e74
 ```
 
-これは `JustCompressedDocument` marker として解釈される。observed samples では、method `-lh5-` の LHA member が offset 38 から始まる。
+観測 profile の LHA member は stream byte 38 で始まり、
+展開後は CFB signature `d0 cf 11 e0 a1 b1 1a e1` になる。記録例の packed/original 長は
+989292/1598976 と 1182377/1913856 bytes。これらを固定値として一般化しない。
 
-Observed member metadata:
+## 内側の文書
 
-| Sample | `/JSCompDocument` bytes | LHA method | packed bytes | original bytes |
-| --- | ---: | --- | ---: | ---: |
-| `setsuden_05.jttc` | 989412 | `-lh5-` | 989292 | 1598976 |
-| `setsuden_06.jttc` | 1182497 | `-lh5-` | 1182377 | 1913856 |
+logical document stream は inner CFB にある。本文、style、font、layout mark、field、object を
+その範囲で調べ、outer にないことを文書中の欠落と見なさない。wrapper、展開 CFB、logical stream
+の座標を区別する。blank/control-heavy 本文も補助 stream の欠落を証明しない。
 
-decompressed bytes は CFB magic で始まる。
+## 未確認の範囲と検証
 
-```text
-d0 cf 11 e0 a1 b1 1a e1
-```
+他の LHA method、複数 member、header/checksum/CRC 全般、全 JTTC version は未確認である。
+native JTT/JTTC save pair の inner inventory、正確な stream 内容、独立した展開結果を比較する。
+作成 version、hash、権利、失敗、制限を記録する。decoder algorithm、資源 budget、回復方針、
+reader の訪問回数は実装記録に置く。
 
-## Inner CFB
+## 実装記録と履歴
 
-decompressed inner CFB は `/DocumentText` を含む。observed `setsuden_05.jttc` sample では、inner inventory は 65 streams を含み、`/DocumentText` は 564 bytes である。
-
-current text extraction はその inner `/DocumentText` を読めるが、template samples は blank/control-heavy で non-empty model blocks を生成しない。
-
-## Implemented Commands
-
-```sh
-cargo run -p rjtd-cli -- cat ../rjtd-testdata/local-samples/setsuden_05.jttc
-cargo run -p rjtd-cli -- export ../rjtd-testdata/local-samples/setsuden_05.jttc --format json
-```
-
-JSON inner raw stream summary の抜粋。現在の export は圧縮 wrapper と補助 stream も保持する。
-
-```json
-{
-  "blocks": [],
-  "rawStreams": [
-    { "name": "/DocumentText", "size": 564 }
-  ]
-}
-```
-
-## Known Gaps
-
-- observed single-member `-lh5-` profile だけを support する。
-- LHA header checksums と CRC values はまだ validate しない。
-- 他の LHA methods は reject する。
-- Multi-member archives は interpret しない。
-- Inner CFB parsing は lenient FAT fallback を含む shared container reader を使う。
-
-## Next Steps
-
-- synthetic data を使い、minimal LH5 decoder の regression fixtures を追加する。
-- metadata boundary が明確になったら、より多くの `JSCompDocument` metadata を document model に保存する。
-- template/control-heavy content を blank text として扱わず、inner `DocumentText` stream の解釈を続ける。
-
-## Model 読み込み用の共有 inner container
-
-`DocumentTextPayload` は `/DocumentText` byte と分離して、すでに解凍した inner CFB
-を公開する。model は line/page/paper mark、layout box、脚注、bookmark tag、auto text、
-position table、object/frame にこの container を使う。従来は outer wrapper だけを探し、
-inner mark が存在しても source-page 配置が fallback になった。outer named text の
-既存優先順位は維持する。
-
-元の `/JSCompDocument` byte を model raw stream に保持する。inner stream も outer と
-同じ累積 stream count/byte budget に含め、元 input と LH5 output の制限は分離する。
-補助読み取りのための追加解凍は行わない。既存の standalone style/font reader は自身の
-shared-budget visit を引き続き計上し、現在の model の三 visit を reset しない。
-生成した literal-LH5 fixture で exact limit と最初の超過 byte/count の拒否を検証する。
-
-exporter は引き続き model を読む。inner container は解析 source であり、すべての
-layout/object field の解読の証明ではない。
+[実装の command・API・出力・過去の詳細記録](../../rjtd/docs/research/0005-jttc-just-compressed-document.ja.md).

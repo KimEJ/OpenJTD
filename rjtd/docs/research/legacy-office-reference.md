@@ -1,3 +1,11 @@
+# Historical Office Reference Notes
+
+Status: superseded historical record
+
+This is a superseded historical research record. Its RHWP-first development, dependency, and integration rules are not current instructions. Current source interpretation and rendering boundaries are defined in [Architecture](../../../docs/ARCHITECTURE.md). Existing browser calls are documented in the [WASM README](../../crates/rjtd-wasm/README.md). The observations below are preserved without claiming a fresh compatibility test.
+
+## Preserved Record
+
 # rhwp Reference and Integration Scope
 
 OpenJTD develops a JTD-native engine in `rjtd`. rhwp is an independent HWP/HWPX
@@ -10,8 +18,8 @@ This document owns the rhwp reference and integration policy. The optional
 This document retains reference policy and accumulated implementation/research
 notes. Sample counts and projection measurements describe their recorded
 experiments, not a fresh compatibility certification. Use the
-[roadmap](ROADMAP.md) for current scope and priorities, and the
-[architecture](ARCHITECTURE.md) for current model boundaries. In particular,
+[roadmap](../../../docs/ROADMAP.md) for current scope and priorities, and the
+[architecture](../../../docs/ARCHITECTURE.md) for current model boundaries. In particular,
 basic `rjtd-export` HTML output is implemented; app-core rich HTML clipboard
 fallbacks are a separate surface.
 

@@ -1,3 +1,11 @@
+# 過去の Office 参照記録
+
+Status: superseded historical record
+
+旧方針と当時の研究記録である。以下の RHWP 優先・依存・連携規則は現行指示ではない。現在の境界は [Architecture](../../../docs/ARCHITECTURE.ja.md)、動作中の browser API は [WASM README](../../crates/rjtd-wasm/README.md) を参照する。観測を保存するものであり新たな互換検証ではない。
+
+## Preserved Record
+
 # rhwp の参照と連携範囲
 
 OpenJTD は `rjtd` で JTD 固有のエンジンを開発する。rhwp は独立した HWP/HWPX
@@ -9,7 +17,7 @@ JTD エンジンの実行時依存ではない。
 
 この文書は参照方針と蓄積した実装・研究メモを保持する。サンプル数と投影の測定値は
 記録当時の実験を示し、最新の互換性認証ではない。現在の範囲と優先順位は
-[roadmap](ROADMAP.ja.md)、モデルの境界は [architecture](ARCHITECTURE.ja.md) を参照する。
+[roadmap](../../../docs/ROADMAP.ja.md)、モデルの境界は [architecture](../../../docs/ARCHITECTURE.ja.md) を参照する。
 特に、基本的な `rjtd-export` HTML 出力は実装済みであり、app-core の rich HTML clipboard
 fallback とは別の surface である。
 

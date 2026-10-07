@@ -1,6 +1,7 @@
 # Support
 
-OpenJTD is a pre-stable, clean-room JTD/JTT/JTTC research and tooling project.
+This repository provides rjtd, a pre-stable JTD/JTT/JTTC implementation in the
+OpenJTD research ecosystem.
 It is not a complete rendering engine or editor. The boundaries below keep
 community help, security reports, and separately scoped paid engineering
 distinct.

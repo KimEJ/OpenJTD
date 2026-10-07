@@ -1,7 +1,6 @@
-# Contributing to OpenJTD
+# Contributing to rjtd
 
-OpenJTD is a pre-stable clean-room implementation of JTD, JTT, and JTTC document
-handling. Contributions should preserve unknown evidence, keep parser and model
+rjtd is a pre-stable clean-room JTD/JTT/JTTC implementation within OpenJTD. Contributions should preserve unknown evidence, keep parser and model
 boundaries explicit, and avoid claiming semantics that the available evidence
 does not establish.
 
@@ -77,7 +76,7 @@ Do not use or submit:
 - private SDKs, headers, type libraries, or internal documentation;
 - implementation logic reconstructed from decompiler or disassembler output;
 - third-party code, samples, fonts, images, or documents without permission;
-- code copied from the local `rhwp` reference project.
+- implementation code copied from third-party reference office projects.
 
 Preserve unproven information as unknown, diagnostic, fallback, or
 `decoded:false` evidence. Do not promote a single-sample heuristic to decoded
@@ -101,12 +100,21 @@ request. DCO sign-off does not replace permission from a sample's rights holder.
 
 ## RFC and Documentation Changes
 
+This file governs contributions to this implementation repository. Shared
+policy review and document migration are outside a local implementation edit.
+Use [ROADMAP](docs/ROADMAP.md) for future sequence,
+[feature status](docs/FEATURE-STATUS.md) for current scope,
+[validation](docs/VALIDATION.md) for executed evidence, and
+[research records](rjtd/docs/research/README.md) for implementation history.
+Keep source claims distinct from parser output and rendering approximations.
+
 Format discoveries belong in `openjtd-spec/rfc/`. A proposal begins as a draft
 pull request and should identify sources, sample provenance, observed facts,
 hypotheses, and unresolved fields. Acceptance requires maintainer review; later
 evidence may supersede an accepted record. English is the source language, and
 the matching Japanese translation should be updated when an existing paired
-RFC changes.
+RFC changes. Maintain existing local Korean working translations too; the
+current ignore policy keeps those files out of published Git content.
 
 ## Security Reports
 

@@ -1,273 +1,108 @@
 # OpenJTD Project Charter
 
-Open-source JTD Rendering Engine and Editor Project for Ichitaro Documents
+## Shared Research and Independent Implementations
 
-Open Infrastructure for Ichitaro Documents
+OpenJTD is a shared project for open research into Ichitaro's JTD, JTT, and
+JTTC formats, specifications, observations, and validation materials. Its
+shared knowledge should be independently verifiable and useful to more than
+one implementation.
 
-## Vision
+`rjtd` is the independent Rust engine in this repository. Its long-term goal
+is faithful JTD reading, rendering, editing, and preservation. Tika JTD+
+retains its own extraction and integration goals. Neither implementation's
+API, document model, output format, or feature list defines the shared format.
 
-OpenJTD is an open-source JTD rendering engine and editor project for the
-document format used by the Japanese word processor Ichitaro.
+## JTD Source First
 
-This project is not just a file converter.
+JTD source data and reproducible observations govern interpretation and the
+model. Preserve original text flow, boundary declarations, records, source
+ranges, object relationships, and unknown data. A ruled-line region need not
+become a rigid table container in the interpretation core.
 
-The final goal is an open-source JTD rendering engine and editor. The current
-implementation focus is `rjtd`, a Rust toolset for analysis, parsing, document
-modeling, export, and viewer integration. The long-term technical goal is a
-practical JTD engine that can support faithful layout rendering and editing.
+Other office implementations may be consulted when they help resolve a
+concrete problem and their use is permitted. Their architecture, addressing,
+dependencies, and API coverage are not development obligations or completion
+criteria. Reuse existing project utilities before adding new machinery;
+new dependencies require explicit approval.
 
-## Foundational Principle
+## Interpretation and Rendering
 
-### JTD Native Engine
-
-JTD source evidence governs OpenJTD's model, rendering, editing, and file
-preservation. Reuse applicable layering, preservation, and testing patterns
-from other engines without making their format-specific model a prerequisite.
-
-## Relationship with rhwp
-
-rhwp is an independent Rust engine for HWP/HWPX documents. OpenJTD develops
-the JTD/JTT/JTTC engine; rhwp is a design reference and optional integration
-target, not a mandatory document model or complete editor API contract.
-
-```text
-rhwp
- ├─ HWP
- ├─ HWPX
- └─ Hancom ecosystem
-
-OpenJTD
- ├─ JTD
- ├─ JTT / JTTC
- └─ Ichitaro ecosystem
-```
-
-External editor UIs, viewers, exporters, and indexing tools can consume
-supported JTD capabilities through focused adapters when a concrete consumer
-needs them. JTD editing and save/reopen behavior remain engine responsibilities.
-Shared IR, HWP/HWPX conversion, and full Studio parity are not prerequisites for
-a faithful JTD engine. The [rhwp integration scope](RHWP-COMPATIBILITY.md)
-defines the reference and adapter boundaries.
-
-## Architecture Policy
-
-The `rjtd` engine separates parsing, model ownership, and output through these
-layers. The boundaries protect JTD source preservation independently of an
-external editor's API shape.
+The [architecture](ARCHITECTURE.md) separates source interpretation from
+rendering and application state:
 
 ```text
-Document File
-      │
-      ▼
-Container Layer
-      │
-      ▼
-Stream Layer
-      │
-      ▼
-Record Layer
-      │
-      ▼
-Document Model
-      │
-      ├──── Plain Text / Markdown Export
-      ├──── HTML Export
-      ├──── JSON Export
-      └──── App Core / SVG / PDF Export
+Document bytes -> container / streams / records -> owned document model
+                                                    |-> extraction / inspection
+                                                    |-> rendering -> SVG / PDF / browser
+                                                    `-> supported editing / save
 ```
 
-Every feature must be implemented through these layers.
+Source coordinates, units, writing direction, formatting instructions, line
+and page ranges, anchors, and paint order belong to interpretation when
+supported by evidence. Glyph measurement, substitute fonts, fallback layout,
+DPI conversion, and output painting belong to rendering. Consumers use model
+data; exporters and renderers do not reopen the source container.
 
-No exporter may read source data directly.
+This is a target boundary. Current `rjtd-model` still contains parsing/model
+integration, rendering, and app state. Code separation requires its own
+behavior-preserving migration and regression checks.
 
-Exporters must go through the Document Model.
+## Preservation and Evidence
 
-## Workspace Structure
+Unknown records, blocks, styles, objects, and raw data remain available.
+`Candidate`, `Unknown`, `Diagnostic`, `decoded:false`, and reference-backed
+projections retain their evidence limits even when an output looks plausible.
+Do not infer format semantics from a parser's successful output or a single
+visual match.
 
-The top-level workspace keeps whole-project planning and each subproject together.
+Establish an Ichitaro 2026 baseline using native documents with one condition
+changed at a time. Record older-version applicability separately by rule and
+version. Controlled inputs and authorized real-world documents serve different
+validation purposes. Keep observations, hypotheses, counterexamples, and
+implementation behavior distinguishable.
 
-```text
-openjtd-workspace/
-├── docs
-│   ├── CHARTER.md
-│   ├── ARCHITECTURE.md
-│   ├── ROADMAP.md
-│   └── RHWP-COMPATIBILITY.md
-├── rhwp
-├── rjtd
-├── openjtd-spec
-├── openjtd-samples
-├── rjtd-testdata
-└── openjtd.github.io
-```
+## Research and Rights
 
-The top-level `docs` directory contains the project charter, architecture,
-rhwp reference and integration policy, and long-term roadmap.
+Follow [CONTRIBUTING.md](../CONTRIBUTING.md) for the implementation's current
+research rules. Public metadata, authorized document analysis, controlled
+experiments, and behavior observable through normal application use provide
+evidence. Reference artifacts and external code retain their own terms.
+This charter does not grant permission to copy proprietary code, use private
+SDKs, reconstruct implementation logic from decompiler output, or distribute
+inputs or derived output without rights.
 
-`rhwp` is a local external reference clone used to compare `rjtd`'s structure,
-API philosophy, and test strategy.
+Shared policy and data formats remain subject to recorded joint review.
+A local implementation document does not establish an organization-wide
+agreement. Preserve input provenance, sharing basis, and allowed audience;
+private storage alone is not permission to share.
 
-The `rjtd` directory contains the Rust toolset and engine implementation.
+## Repository Responsibilities
 
-## rjtd Engine Repository Structure
+| Repository | Responsibility |
+| --- | --- |
+| `OpenJTD/community` | Shared policy discussions, decisions, and agreed organization records; private during initial setup |
+| `OpenJTD/spec` | Public format RFCs, observations, reproduction procedures, and validation criteria |
+| `OpenJTD/corpus` | Redistributable inputs and permitted public manifests |
+| `OpenJTD/corpus-private` | Inputs permitted for sharing with named collaborators |
+| `OpenJTD/rjtd` | Independent Rust implementation, release procedures, and local research records |
 
-The Rust workspace separates parser, model, exporter, CLI, and browser binding
-responsibilities. Its structure supports JTD implementation needs.
+Shared RFC 0001/0003 imports retain their recorded historical status. Format
+claims are prepared separately from [rjtd implementation records](../rjtd/docs/research/README.md).
+Apache-2.0 is the default for jointly authored work; external documents retain
+their original terms and individual provenance records.
 
-```text
-rjtd/
-├── crates
-│   ├── rjtd-core
-│   ├── rjtd-model
-│   ├── rjtd-export
-│   ├── rjtd-cli
-│   ├── rjtd-wasm
-│   └── rjtd-testkit
-├── docs
-├── samples
-├── fuzz
-├── tests
-└── tools
-```
+## Workspace and Milestones
 
-Add a new crate only when implemented responsibilities need a separate boundary,
-not to reproduce the reference project's future module layout.
+The `rjtd/` Rust workspace contains core, model, export, CLI, WASM, and testkit
+crates. Top-level `docs/` owns implementation direction and boundaries;
+`openjtd-spec/` contains local format drafts; samples, testdata, and viewer
+sources retain their separate purposes. Optional external checkouts are not
+required parts of the architecture or runtime.
 
-## Document Model First
-
-The core of rjtd is not the parser.
-
-It is the Document Model.
-
-Every parser must produce a Document Model.
-
-Every exporter must consume the Document Model.
-
-```text
-JTD
-  ↓
-Parser
-  ↓
-Document Model
-  ↓
-Exporter
-```
-
-## Unknown Preservation Rule
-
-Never discard data that has not yet been analyzed.
-
-Preserve it as:
-
-```text
-UnknownRecord
-UnknownBlock
-UnknownStyle
-UnknownObject
-```
-
-This prevents data loss during reverse engineering.
-
-## Reverse Engineering Policy
-
-rjtd follows a clean-room reverse-engineering policy.
-
-Allowed:
-
-- File analysis
-- Binary structure analysis
-- Sample comparison
-- Documentation
-
-Forbidden:
-
-- Copying Ichitaro code
-- Using private SDKs
-- Copyright infringement
-
-## Initial Milestones
-
-These are the founding milestones. Current status, the additional WASM viewer
-milestone, and next acceptance criteria are maintained in [ROADMAP.md](ROADMAP.md).
-
-### M1: Container Explorer
-
-```text
-rjtd streams sample.jtd
-```
-
-Goals:
-
-- Analyze CFB
-- Obtain the stream list
-
-### M2: Text Extraction
-
-```text
-rjtd cat sample.jtd
-```
-
-Goal:
-
-- Extract text
-
-### M3: Document Model
-
-```text
-rjtd export sample.jtd --format json
-```
-
-Goals:
-
-- Paragraph
-- TextRun
-- Style
-
-Create the structure.
-
-### M4: Markdown Export
-
-```text
-rjtd export sample.jtd --format md
-```
-
-### M5: Public Specification
-
-Operate a separate repository.
-
-```text
-openjtd-spec
-```
-
-Record reverse-engineering results in RFC form.
-
-`openjtd-spec` is treated as a peer project to the `rjtd` code. For a closed
-format such as JTD, the specification repository may eventually become a larger
-asset than the code.
-
-## Long-Term Vision
-
-OpenJTD ultimately provides three things:
-
-1. JTD Editor
-2. JTD Engine and Rust Toolset
-3. JTD Specification and Document Ecosystem
-
-The goal is not to make "a library that can read JTD", but to build "an open ecosystem that can understand JTD".
-
-## GitHub Organization Model
-
-The initial GitHub organization should use the following structure. The current top-level workspace already reflects this layout.
-
-```text
-openjtd/
-├── docs
-├── rjtd
-├── openjtd-spec
-├── openjtd-samples
-├── rjtd-testdata
-└── openjtd.github.io
-```
-
-The principle that `openjtd-spec` is a peer project to the `rjtd` code is also
-reflected in the organization structure.
+Current scope is in [feature status](FEATURE-STATUS.md), evidence in
+[validation](VALIDATION.md), and future acceptance in the [roadmap](ROADMAP.md):
+container access, text extraction, model/preservation, exports, public format
+research, and the WASM viewer. Completion is tied to source-backed behavior,
+reproducible checks, and stated scope. Structure-preserving editing requires
+edit/save/reopen verification. External integration is scoped only when a
+consumer and supported operations are identified.

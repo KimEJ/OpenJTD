@@ -1,456 +1,56 @@
-# RFC 0007: Layout Mark Streams Initial Inventory
+# RFC 0007: Layout Marks and Page Instructions
 
-Status: draft
+Status: draft for publication preparation; joint review pending
 
-Observed: 2026-06-18
+English source: [0007-layout-mark-streams.md](0007-layout-mark-streams.md)
 
-## Summary
+## 範囲
 
-一部の JTD samples は `/DocumentText` の隣に layout-oriented streams を expose する。
+`/LineMark`、`/PageMark`、`/PaperMark`、`/PageLayoutStyle`、`/Header` に layout 関連の
+record がある。存在や格納形状だけで一般 layout algorithm や page count は確定しない。
+初期の過去文書と現行 version の対照 profile は別々に範囲を記録する。
 
-```text
-/LineMark
-/PageMark
-/PaperMark
-```
+## mark family
 
-これらの streams はまだ document model へ parse されていない。`DocumentText` record structure がより理解された後に page、line、paper、anchor positions を説明する可能性がある layout/cache candidates である。
+PageMark の一 family は 12-byte header と 84-byte row。header は `(N,16,N-1)` の例があるが、
+N は格納 row 数や可視 page 数と一致するとは限らない。variable-row family もある。source line
+範囲に対応する値はあるが、mixed payload と sentinel は全 row を body page とする解釈の反例となる。
+PaperMark の一 family は `(N,12,N-1)` header と BE-u32 index/flags 対を持ち、調査例の N は
+PageMark と同じである。意味と全 flag は未解読。
 
-## Local Samples
+LineMark は入力により `0x0914`、`0x090b`、`0x0912` などで始まり、`0x1000`/`0x1001`/`0x1002`
+の tag-like 値を持つ。対照 profile は source-unit interval と物理行・縦書き column を対応付けるが、
+header word の初期推測だけで方向や他 family への一般規則は解読できない。
 
-current local samples のうち、three streams すべてを持つもの:
+## page style と方向
 
-| Sample | `/LineMark` bytes | `/PageMark` bytes | `/PaperMark` bytes |
-| --- | ---: | ---: | ---: |
-| `46.jtd` | 5194 | 8160 | 788 |
-| `a5.jtd` | 5122 | 6312 | 612 |
-| `b6.jtd` | 5334 | 8244 | 796 |
-| `ichitaro-20030706232827-success-001-success_data-shanai_lan.jtd` | 190 | 272 | 108 |
+対照 class `0x0020` record は style ID 1 を適用し ID 0 に戻す。既知の 3-page 対照は middle page
+だけ landscape、PageMark flags `0x00050100`、前後は `0x00010000`。完全な profile 内の対応であり、
+一般継承 grammar ではない。
 
-`a6.jtd` と `shinsyo.jtd` は current inventory ではこれらの streams を expose しない。
+258-byte sequential view `0x1001` は offsets 126/130 と 154/158 に LE-u32 stock size 対を反復する。
+関連する 267-byte form は 9-byte orientation prefix を加え、1/5 に BE-u32 寸法を持つ。
+寸法のコピーと余白が一致する必要がある。方向・間隔は RFC 0003。原本の単位と page-relative
+anchor は形式解釈、pixel 変換と font baseline は出力実装に属する。
 
-## PageMark Observation
+## plain header slot
 
-observed large samples では first 12 bytes が compact header に見える。raw `u32be` diagnostics は `stream-dwords` と `stream-dword-frequencies` で確認できる。
+観測 `/Header` は `SsmgV.01`、byte 8 の BE-u32 count、byte 12 の `0x100` で始まる。
+`16+512*i` から 512-byte slot があり、+4 に `TextV.01`、+12 に BE-u32 unit count、+16 に本文、
+その後に zero byte と反復 count がある。+260 は空の `TCntV.01`。末尾 table は zero prefix/suffix と
+slot ごとの BE-u32 6語 `[slotID,0,17+2*units,1,1,2*i]` を持つ。
 
-```text
-46.jtd  00000060 00000010 0000005f
-a5.jtd  0000004a 00000010 00000049
-b6.jtd  00000062 00000010 00000061
-```
+対照 ID 0/1/2/5/6 は page number・primary/secondary header/footer に対応する候補。
+odd/even と cover も既知 view profile に限定する。sequential view extent 後の trailer は code/u32-length
+section `0x1001`/`0x1002` であり、u16-length style record ではない。観測した 2026-byte settings
+payload の byte 8 の BE-u32 は page-number printing に伴い 0→2。slot の存在だけでは印刷 ON にならない。
 
-Working interpretation:
+## 未解決事項
 
-- first `u32be`: count-like value。
-- second `u32be`: `0x10`。size または stride-like value の可能性が高い。
-- third `u32be`: first value minus one。
-- next `u32be` は observed 84-byte row family における row 0 の index-like value。
+他 row family、counter、原点、flag、section 継承、styled/multiline slot、任意改番を解明する。
+入力 version と設定を主張に添え、保存 source 位置と backend font 計測を区別する。描画成功は
+未知 field、脚注 layout、一般 pagination の解読ではない。
 
-total stream size は simple `header + count * 0x10` formula には還元されない。ただし current large samples は一つの stable family を証明している。
+## 実装記録と履歴
 
-```text
-12-byte header
-N rows of 84 raw bytes
-```
-
-各 84-byte row の first dword は index-like value である。remaining row は field semantics が decode されていないため raw bytes として保存する。
-
-`rjtd page-marks <file>` は 2 つの diagnostic フィールドとともに row parser を expose する：
-
-- `lineStart`：row bytes 内の固定オフセットの u16。レイアウト行開始位置として解釈。
-- `lineEnd`：row bytes 内の固定オフセットの u16。レイアウト行終了位置として解釈。
-- `flags`：固定オフセットの u32。
-- `u16Class`：`lineStart`/`lineEnd` パターンから導出されるヒューリスティックラベル — 両値が小さく `lineEnd > lineStart` で規則的な間隔なら `additive-boundary`；両値が異常に大きいか内部矛盾なら `mixed-payload`；`lineStart=lineEnd` なら `zero-sentinel`。
-
-11 件の行政・学術サンプル分析で `lineStart`/`lineEnd` は **レイアウト行番号（0 始まり）** をエンコードすることが判明した。支配的エントリ群内でのスパン `lineEnd − lineStart` は一定で、`ページあたり行数 − 1` に等しい：
-
-| Sample | 支配的スパン | ページあたり行数 |
-| --- | ---: | ---: |
-| `論文様式.jtd` | 43 | 44（45 行/ページ設定、最終行番号 = 43） |
-| `01要綱（事務局組織令）.jtd` | 12 | 13 |
-| `02案文・理由（整備令）.jtd` | 12 | 13 |
-| `04参照条文（施行日政令）.jtd` | 29 | 30 |
-| `04参照条文（整備政令）.jtd` | 29 | 30 |
-
-連続する `additive-boundary` エントリは `lineStart` が `ページあたり行数` 刻みで前進し、固定ページ高さ増分でレイアウト座標空間をタイル状に占める。同インデックスの `mixed-payload` エントリは異常に大きいか内部矛盾した値を持ち、本文ページではなくスタイルレコードスロットを表すと考えられる。`zero-sentinel` エントリは `lineStart = lineEnd` でグループ末尾のスペーサーまたはセンチネル位置に現れる。`additive-boundary` エントリ数はテキストが少ないサンプルでも多く（例：`01要綱（事務局組織令）` は 130 以上の additive エントリを持つが実テキストは 9 行のみ）、PageMark は実コンテンツ量に関係なく固定レイアウトスロットグリッドを事前確保している可能性がある。座標の物理的な意味（行 0 が本文先頭印刷行か余白・ヘッダーを含むかなど）は未解読。
-
-| Sample | header value 0 | header value 1 | header value 2 | rows | stream length formula |
-| --- | ---: | ---: | ---: | ---: | --- |
-| `46.jtd` | 96 | 16 | 95 | 97 | `12 + 97 * 84 = 8160` |
-| `a5.jtd` | 74 | 16 | 73 | 75 | `12 + 75 * 84 = 6312` |
-| `b6.jtd` | 98 | 16 | 97 | 98 | `12 + 98 * 84 = 8244` |
-
-high-frequency `u32be` values は raw rows 内に packed coordinate-like tuples があることを示すが、internal field layout はまだ decode されていない。
-
-| Sample | top non-zero dword patterns |
-| --- | --- |
-| `46.jtd` | `0x01610161` x182, `0x01610008` x100, `0x00000161` x97, `0x00f60000` x95 |
-| `a5.jtd` | `0x01610161` x138, `0x01610008` x76, `0x00000161` x74, `0x00f60000` x73 |
-| `b6.jtd` | `0x01610161` x184, `0x01610008` x102, `0x00000161` x98, `0x00f60000` x97 |
-
-`rjtd page-marks <file>` は fixed 84-byte family、preserved trailing bytes を持つ fixed 84-byte rows、count-plus-one variable-row families、count-variable family の raw-preserving parsers を expose する。current 61 local `.jtd`/`.jtt`/`.jttc` samples のうち 55 が `/PageMark` を expose し、52 が `page-marks` で parse され、3 は unsupported shapes として意図的に reject される。
-
-`rjtd page-mark-shape <file>` は remaining variants の non-failing shape candidates を expose する。current initial groups:
-
-| Group | Count | Parser status | Representative | Observation |
-| --- | ---: | --- | --- | --- |
-| fixed 84-byte rows | 17 | parsed | `justsystems-20120223023549-jp-just-finance-j200003.jtd` | tail is divisible into 84-byte raw rows |
-| fixed 84-byte rows matching count-plus-one | 3 | parsed | `a5.jtd` | `fixed84` and `count-plus-one` both fit: 75 rows of 84 bytes |
-| count-plus-one variable rows | 14 | parsed | `ichitaro-20030120132956-0007-sp-dat-tsaiten.jtd` | header `3,16,2`; tail divides into 4 rows of 274 bytes |
-| count-plus-one with 2-byte tail/trim | 9 | parsed | `ichitaro-20041103143104-seminar2004-part2_2-img-shortcutkey2.jtd` | raw stream is not u32-aligned; `(tail - 2)` divides into 7 rows of 556 bytes |
-| count-variable rows | 2 | parsed | `ichitaro-20030415170937-success-001-success_data-fujimoto_file.jtd` | tail divides by header count but not count-plus-one |
-| fixed 84-byte rows with trailing bytes | 7 | parsed | `ichitaro-20030316043238-success-001-success_data-iwata_file.jtd` | one or more 84-byte rows followed by preserved trailing bytes |
-| non-PageMark-looking payload | 3 | unsupported | `ichitaro-20030706232827-success-001-success_data-shanai_lan.jtd` | payload contains stream/object names or legacy class/control metadata rather than numeric row headers |
-
-一部の parsed regular-stream samples は、safe readable payload よりずっと大きい declared CFB sizes をまだ持つ。例えば `ichitaro-20030120133129-0007-sp-dat-tmogi3_2.jtd` は 304 readable bytes を expose する一方、directory entry は `9434469490474615088` bytes を declare する。parser は safely read payload を使い、declared-size anomaly は `page-mark-shape` に保持する。
-
-three unsupported `non-page-header` payloads は parser family に昇格しない。`stream-text-probe` はそれらが unrelated-looking text payloads を指していることを示す。
-
-| Sample | Probe evidence |
-| --- | --- |
-| `ichitaro-20030706231945-success-001-success_data-kaisya_annai.jtd` | UTF-16LE names such as `LayoutBoxTextPositionTables`, `TextLayoutStyle`, `DocumentEditStyles`, `DocumentViewStyles`, and `SummaryInformation` |
-| `ichitaro-20030706232401-success-001-success_data-kazoku_ryoko.jtd` | ASCII/class-like strings such as `Ver.2.3 for Windows95`, `JSFart2`, and `JS.FartCtrl.1` |
-| `ichitaro-20030706232827-success-001-success_data-shanai_lan.jtd` | UTF-16 names such as `JSRV_SegmentInformation`; its `/PaperMark` similarly exposes `ReferenceInfo` |
-
-Working interpretation: these three `/PageMark` directory entries は normal layout rows ではなく stale、foreign、または alternate object payload bytes を指している可能性が高い。
-
-`stream-chain` は unsupported entries が単に broken miniFAT chains ではないことを確認する。`/PageMark` chains は complete だが、mini-stream offsets の bytes は unrelated payloads と decode される。
-
-| Sample | `/PageMark` chain evidence | Payload evidence |
-| --- | --- | --- |
-| `ichitaro-20030706231945-success-001-success_data-kaisya_annai.jtd` | miniFAT start 133, complete chain, 832 bytes capacity for 796 declared bytes | CFB directory-entry-looking fragments including `LayoutBoxTextPositionTables` |
-| `ichitaro-20030706232401-success-001-success_data-kazoku_ryoko.jtd` | miniFAT start 88, complete chain, 192 bytes capacity for 162 declared bytes | OLE/ActiveX-like metadata strings `Ver.2.3 for Windows95`, `JSFart2`, `JS.FartCtrl.1` |
-| `ichitaro-20030706232827-success-001-success_data-shanai_lan.jtd` | miniFAT start 96, complete chain, 320 bytes capacity for 272 declared bytes | CFB directory-entry-looking fragments including `JSRV_SegmentInformation` |
-
-`cfb-map` はこれをさらに絞り込む。
-
-- `kaisya_annai`: root mini-stream chain は sector `13` 以降で directory chain と overlap するため、directory-entry-looking bytes は root mini-stream/directory chain overlap で説明できる。
-- `shanai_lan`: root mini-stream chain も sector `13` 以降で directory chain と overlap する。
-- `kazoku_ryoko`: `cfb-map` では同じ directory/root mini-stream overlap は見えない。`stream-find` は `/PageMark` を `/EmbedItems/Embedding 1/JSFart2Contents` offset 1664 の exact 162-byte slice に結びつけるため、この `/PageMark` entry は layout-mark variant ではなく duplicate embedded-control payload である。
-
-## PaperMark Observation
-
-first 12 bytes は `PageMark` header と関連して見える。
-
-```text
-46.jtd  00000060 0000000c 0000005f
-a5.jtd  0000004a 0000000c 00000049
-b6.jtd  00000062 0000000c 00000061
-```
-
-Working interpretation:
-
-- first `u32be`: `/PageMark` と共有される count-like value。
-- second `u32be`: `0x0c`。size または stride-like value の可能性が高い。
-- third `u32be`: first value minus one。
-
-observed large samples は stable row shape を証明している。
-
-```text
-12-byte header
-N rows of:
-  u32be index
-  u32be flags
-```
-
-row count は stream length から `(stream_len - 12) / 8` として derive する。first header value は count-like だが、常に `row_count` または `row_count - 1` と等しいわけではないため、parser は semantics を割り当てず observed header value として保存する。
-
-ただし、行政文書・学術論文サンプル（2026-06-24 追加 11 件 + その後追加 3 件）を含む**全 17 件**で、より強い不変条件が確認された：
-
-- `header_value_2 = header_value_0 - 1` （常に成立。`last_index_value = count_value - 1`）
-- `/PageMark` と `/PaperMark` のヘッダーは同じサンプル内で `count_value` が常に同一
-
-つまり `count_value` と `last_index_value` は独立していない。一方が他方から導出される。両者の共通の意味は未解読。候補：ページセクション遷移数、ページレイアウト領域数、または文書レベルの別カウンター。
-
-| Sample | header value 0 | header value 1 | header value 2 | rows | flag distribution |
-| --- | ---: | ---: | ---: | ---: | --- |
-| `46.jtd` | 96 | 12 | 95 | 97 | `0x00010000` x89, `0x00010010` x7, `0x00010011` x1 |
-| `a5.jtd` | 74 | 12 | 73 | 75 | `0x00010000` x65, `0x00010010` x9, `0x00010011` x1 |
-| `b6.jtd` | 98 | 12 | 97 | 98 | `0x00010000` x90, `0x00010010` x6, `0x00010011` x2 |
-| `論文様式.jtd` | 3 | 12 | 2 | 3 | `0x00010010` x1, `0x00010000` x2 |
-| `01要綱（事務局組織令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x129, `0x00010000` x9 |
-| `01要綱（施行期日政令）.jtd` | 8 | 12 | 7 | 138 | `0x00010010` x129, `0x00010000` x9 |
-| `01要綱（整備政令）.jtd` | 6 | 12 | 5 | 138 | `0x00010010` x128, `0x00010000` x10 |
-| `02_番号利用法・住基法改正（案文）.jtd` | 9 | 12 | 8 | 9 | `0x00010010` x5, `0x00010000` x4 |
-| `02案文・理由（施行期日政令）.jtd` | 7 | 12 | 6 | 138 | `0x00010010` x132, `0x00010000` x6 |
-| `02案文・理由（整備令）.jtd` | 8 | 12 | 7 | 138 | `0x00010010` x133, `0x00010000` x5 |
-| `02案文・理由（事務局組織令）.jtd` | 6 | 12 | 5 | 138 | `0x00010010` x130, `0x00010000` x8 |
-| `03_新旧（番号利用法）.jtd` | 208 | 12 | 207 | 208 | `0x00010010` x204, `0x00010000` x4 |
-| `03新旧（整備令）.jtd` | 11 | 12 | 10 | 16 | `0x00010010` x2, `0x00010000` x14 |
-| `04_新旧（番号利用法）.jtd` | 19 | 12 | 18 | 118 | `0x00010010` x112, `0x00010000` x6 |
-| `04参照条文（施行日政令）.jtd` | 7 | 12 | 6 | 158 | `0x00010010` x107, `0x00010000` x51 |
-| `04参照条文（組織令）.jtd` | 6 | 12 | 5 | 158 | `0x00010010` x105, `0x00010000` x53 |
-| `04参照条文（整備政令）.jtd` | 25 | 12 | 24 | 158 | `0x00010010` x114, `0x00010000` x44 |
-
-`0x00010011` フラグは Ginga 縦書きサンプル（`46`/`a5`/`b6`）にのみ出現し、14 件の横書き行政・学術サンプルには存在しない。縦書きサンプルは横書きサンプルと比べて `0x00010000` と `0x00010010` のエントリ比率も大きく異なる。
-
-注目すべき例外として `03_新旧（番号利用法）.jtd` は `count_value = row_count = 208` — 他の行政サンプルでは `count_value` が `row_count` よりはるかに小さいのに対し、このサンプルでは一致する。PaperMark の大部分も `0x00010010`（208 件中 204 件）で、セクション区切りのない長い新旧対照表文書と整合する。
-
-フラグ `0x00010000`/`0x00010010` は交互のグループをなして並ぶ — 連続する `0x00010010` エントリの群の後に連続する `0x00010000` エントリの群が続く。グループ数は `count_value` とは一致しない。
-
-PaperMark フラグ群と、同一エントリインデックスの `/PageMark` `lineStart`/`lineEnd` 値を照合すると、14 件の行政・学術サンプルで一貫した構造パターンが見える。`0x00010010` 群から `0x00010000` 群への遷移ごとに、最初の `0x00010000` エントリの `lineStart` が直前の最終 `0x00010010` エントリの `lineEnd` より大きい。ギャップは `04参照条文` サンプルで約 30 行、`02案文` サンプルで 11〜13 行。`04参照条文` の `0x00010000` 群は各々約 30 行連続した `lineStart`/`lineEnd` 値に対応し、参照する法律条文ブロック 1 本分のセクションを示すと考えられる。
-
-`04参照条文（施行日政令）.jtd` の例：
-
-```text
-PaperMark entry 3–6: flags=0x00010000, PageMark lineStart=[70,100,130,160], lineEnd=[99,129,159,160]
-  （entry 6 は lineStart=lineEnd=160 — ゼロ幅のセンチネルページ）
-PaperMark entry 7–13: flags=0x00010010, PageMark lineStart=[209,239,...,389], lineEnd=[238,268,...,418]
-  （lineEnd=160 から lineStart=209 へのギャップは 49 — 法律条文ブロック境界）
-PaperMark entry 14–20: flags=0x00010000, PageMark lineStart=[419,449,...,569]
-  （lineEnd=418 から lineStart=419 へのギャップは 1; 法律条文ブロック内遷移）
-```
-
-仮説（decoded:false）：`0x00010010` は連続した本文セクション（法律条文 1 本、または 1 つの文書セグメント）に属するページを示し、`0x00010000` は遷移ページ（セクション区切り、前付、または空白スペーサー）を示す。`lineStart=lineEnd` ゼロ幅ページ（entry 6）はセンチネルまたは空セクションマーカーの可能性がある。`0x00010011` フラグ（Ginga 縦書きサンプルのみ）は未解読のまま。
-
-`rjtd paper-marks <file>` はこの parser-backed diagnostic を expose する。header と flag semantics が unknown のため、document model にはまだ wire されていない。`rjtd paper-mark-shape <file>` は observed `/PaperMark` streams すべてに対する non-failing shape diagnostic を expose する。
-
-current 61 local `.jtd`/`.jtt`/`.jttc` samples では、55 が `/PaperMark` を expose し、52 がこの row shape で parse される。`paper-mark-shape` は 55 streams すべてを開き、3 件を `non-paper-header` として分類し `paper-marks` では reject する。
-
-| Sample | observed header/stride evidence | Text probe evidence |
-| --- | --- | --- |
-| `ichitaro-20030706231945-success-001-success_data-kaisya_annai.jtd` | stride-like dword `0xffffffff` | UTF-16 `JSRV_SegmentInfor...` |
-| `ichitaro-20030706232401-success-001-success_data-kazoku_ryoko.jtd` | stride-like dword `0xff090000` | short non-row payload; paired `/PageMark` contains `Ver.2.3 for Windows95`, `JSFart2`, `JS.FartCtrl.1` |
-| `ichitaro-20030706232827-success-001-success_data-shanai_lan.jtd` | stride-like dword `0xffffffff` | UTF-16 `ReferenceInfo` |
-
-Working interpretation: these three `/PaperMark` directory entries は normal paper-mark rows ではなく stale、foreign、または alternate object payload bytes を指している可能性が高い。
-
-`stream-chain` は `/PaperMark` でも同じ pattern を示す。miniFAT chains は structurally complete だが、payload bytes は paper-mark rows ではない。
-
-| Sample | `/PaperMark` chain evidence | Payload evidence |
-| --- | --- | --- |
-| `ichitaro-20030706231945-success-001-success_data-kaisya_annai.jtd` | miniFAT start 157, complete chain, 128 bytes capacity for 100 declared bytes | CFB directory-entry-looking fragment containing `JSRV_SegmentInfor...` |
-| `ichitaro-20030706232401-success-001-success_data-kazoku_ryoko.jtd` | miniFAT start 97, complete chain, 64 bytes capacity for 36 declared bytes | short control/object payload beginning with `SO`-like bytes, not a `0x0c` paper-mark header |
-| `ichitaro-20030706232827-success-001-success_data-shanai_lan.jtd` | miniFAT start 111, complete chain, 128 bytes capacity for 108 declared bytes | CFB directory-entry-looking fragment containing `ReferenceInfo` |
-
-同じ `cfb-map` interpretation が `/PaperMark` にも当てはまる。`kaisya_annai` と `shanai_lan` の directory-entry fragments は directory/root mini-stream chain overlap で説明できる。`kazoku_ryoko` は another complete stream と exact-match しないが、`cfb-dir` はその `/PaperMark` entry を `/EmbedFrame` と `/Figure` の間の root-level object/control sequence に置く。payload は `/Figure` と `/EmbedItems/Embedding 1/\x01CompObj` にも見える `SO` marker で始まり、`stream-find-bytes 534f0000` がそれらの marker hits を再現する。marker 後の first 20 bytes も `/EmbedItems/Embedding 2/JSFart2Contents` offset 192 と一致する。これは paper-mark row variant ではなく embedded-control/object record candidate である。
-
-`rjtd so-records <file>` はこの marker family を diagnostic として保存する。各 `SO\0\0` marker を containing stream path、offset、first little-endian `u32` fields、raw bytes とともに出力する。current 61 local samples で、`SO` records を expose するのは 4 samples、24 records total だけである。`/PaperMark` 自体に `SO` record を含む current sample は `kazoku_ryoko` だけである。
-
-`rjtd so-record-clusters <file>` はこれらの records を preserved raw bytes で group する。observed `JSFart2Contents` samples は singleton geometry-like clusters と repeated default/control clusters に分かれ、通常 three repeated offsets に現れる。`kazoku_ryoko` `/PaperMark` record は older `ichitaro-20030315133825-success-001-success_data-kazoku_ryoko.jtd` sample の geometry-like `JSFart2Contents` record と一致する。
-
-```text
-0x00004f53,0x000009ff,0x000008a0,0x0000139a,0x000008a0,...
-```
-
-これは `kazoku_ryoko` `/PaperMark` が JTD paper-mark row ではなく、leaked または duplicated embedded-control geometry record であるという解釈を強める。
-
-`rjtd so-record-fields <file>` は各 record を little-endian fields として展開する。current evidence は 9-dword diagnostic shape に合う。
-
-- field 0 は常に marker `0x00004f53` (`SO\0\0`)。
-- repeated default/control clusters は `0x00000100` や `0x00000064` のような small constants を含む。
-- singleton geometry-like clusters は fields 1-4 に coordinate-like values を持つ。通常 `JSFart2Contents` samples では high 16-bit halves は zero。
-- packed records は `packed-jseq3-like` と `packed-ffff-preamble` families に分かれ、object payloads が decode されるまでは separate SO-like families として残す。
-
-`rjtd so-record-geometry <file>` は final semantics として扱わず、この split を明示する。same 61 local samples で command は all files を successfully check し、4 files に 24 SO records を報告する: 9 `geometry-like`, 8 `default-control`, 4 `packed-jseq3-like`, 2 `packed-ffff-preamble`, 1 `truncated`。`kazoku_ryoko` `/PaperMark` record は fields `2559,2208,5018,2208` の `geometry-like` と分類され、older `JSFart2Contents` geometry-like record と一致する。
-
-`rjtd so-record-halves <file>` は each SO payload dword の low/high 16-bit unsigned/signed halves を出力する。current samples では、すべての `packed-jseq3-like` record が `JSEQ3Contents` に現れる。field 6 は field 2 の low 16 bits を繰り返し、field 7 は second small 16-bit value を持つ。二つの `packed-ffff-preamble` records は `JSFart2Contents` offset 324 に現れ、same streams 内の repeated geometry-like records に先行する。
-
-## LineMark Observation
-
-`/LineMark` は別の始まり方をし、simple fixed-width numeric table より token/control stream に近く見える。
-
-```text
-a5.jtd  0914 0000 0001 0000 048f 0000 0003 0000
-46.jtd  0914 0000 0001 0000 050e 0000 0015 0000
-b6.jtd  0914 0000 0001 0000 0531 0000 0002 0000
-```
-
-first words の後、`000d`、`000a`、`0011`、`0019`、`0082`、`1002` のような common values が繰り返される。これらは `/DocumentText` control and inline segments 周辺で既に見た values と overlap するため、`/LineMark` は structured `DocumentText` token map と一緒に調べるべきである。
-
-`stream-words` の first words:
-
-| Sample | word 0 | word 4 | word 8 |
-| --- | --- | --- | --- |
-| `46.jtd` | `0x0914` | `0x050e` | `0x050d` |
-| `a5.jtd` | `0x0914` | `0x048f` | `0x048e` |
-| `b6.jtd` | `0x0914` | `0x0531` | `0x0530` |
-
-Working interpretation:
-
-- word 0 は `LineMark` header/type candidate。
-- word 4 は count-like。
-- word 8 は word 4 minus one。
-- word 6 は sample により異なり、未解読。
-
-raw word-frequency comparison は、多くの small `/LineMark` words が raw `/DocumentText` にも現れることを示す。一方 high-frequency `0x1000`、`0x1001`、`0x1002` words は `/LineMark`-specific tags らしい。
-
-| Sample | `0x1000` | `0x1001` | `0x1002` |
-| --- | ---: | ---: | ---: |
-| `46.jtd` | 302 | 24 | 165 |
-| `a5.jtd` | 293 | 18 | 200 |
-| `b6.jtd` | 308 | 25 | 169 |
-
-これらの tag-like values は `DocumentText` control codes として扱わない。
-
-`rjtd line-mark-tags <file>` は `/LineMark` から tag-like words を scan し、word index、byte offset、previous four words、next six words を出力する。current 61 local samples の sweep:
-
-| Group | Count |
-| --- | ---: |
-| files with tag rows | 5 |
-| files without `/LineMark` | 6 |
-| readable `/LineMark` streams with no tag rows | 50 |
-| total tag rows | 1536 |
-| `0x1000` rows | 915 |
-| `0x1001` rows | 67 |
-| `0x1002` rows | 554 |
-
-tag rows を持つ five files:
-
-| Sample | `0x1000` | `0x1001` | `0x1002` | total |
-| --- | ---: | ---: | ---: | ---: |
-| `46.jtd` | 302 | 24 | 165 | 491 |
-| `a5.jtd` | 293 | 18 | 200 | 511 |
-| `b6.jtd` | 308 | 25 | 169 | 502 |
-| `ichitaro-20030316043238-success-001-success_data-iwata_file.jtd` | 0 | 0 | 5 | 5 |
-| `ichitaro-20030706234132-success-004-success_data-asobinin_24.jtd` | 12 | 0 | 15 | 27 |
-
-tag の直後の first word は unique family discriminator ではない。`0x0025`、`0x0027`、`0x002d`、`0x004d`、`0x0037`、`0x0035` のような frequent next words は tag families 間で overlap するため、current interpretation では decoded tag subtype ではなく payload-like context として扱う。
-
-`rjtd line-mark-text-context <file>` は各 tag row を `/DocumentText` token map と比較する。two weak hypotheses を test する: LineMark word/byte offset が direct に `DocumentText` map entry に落ちるか、immediate next word が raw `/DocumentText` のどこかに現れるか。
-
-same 61 local samples:
-
-| Metric | Count |
-| --- | ---: |
-| files checked successfully | 55 |
-| files without `/LineMark` | 6 |
-| tag rows reported | 1536 |
-| direct LineMark byte-offset hits in `DocumentText` map | 587 |
-| direct LineMark unit-offset hits in `DocumentText` map | 587 |
-| tag rows whose immediate next word appears in raw `/DocumentText` | 1511 |
-
-Per tag family:
-
-| Tag | direct byte hits | direct unit hits | next-word raw `DocumentText` hit rows |
-| --- | ---: | ---: | ---: |
-| `0x1000` | 344 | 344 | 904 |
-| `0x1001` | 27 | 27 | 67 |
-| `0x1002` | 216 | 216 | 540 |
-
-Working interpretation: `/LineMark` tag-next words は通常 `/DocumentText` のどこかに現れる values を再利用するが、それだけで direct offsets になるわけではない。LineMark tag index または byte offset を direct `DocumentText` coordinate として扱うと 1536 rows 中 587 rows だけが hit する。したがって `/LineMark` は own record coordinate system または layout-local payload fields を使っている可能性が高い。
-
-`rjtd text-position-line-context <file>` は `MarkV.01` header/entry offsets を `/LineMark` word positions と nearest LineMark tag rows と比較する。current samples で readable `/LineMark` と parsed `MarkV.01` の両方を expose するのは `46.jtd`、`a5.jtd`、`b6.jtd` の三つだけである。
-
-| Sample | line words | line tags | Mark entries | Page rows | Paper rows | Mark header line index | LineMark word at header index | nearest tag rows |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
-| `46.jtd` | 2597 | 491 | 8 | 97 | 97 | 1539 | `0x0029` | `0x1002@1520`, `0x1000@1564` |
-| `a5.jtd` | 2561 | 511 | 8 | 75 | 75 | 1539 | `0x0016` | `0x1002@1534`, `0x1002@1542` |
-| `b6.jtd` | 2667 | 502 | 8 | 98 | 98 | 1552 | `0x0000` | `0x1000@1548`, `0x1002@1554` |
-
-three samples の all 24 `MarkV.01` entry offsets は `/LineMark` word range 外にある。したがって entries は direct LineMark word indexes ではない。Mark header の final `u16` は `/LineMark` 内の tag clusters 近くに入るため LineMark-adjacent candidate として残るが、decode されておらず stable tag value にも落ちない。
-
-`rjtd text-position-count-layout-context <file>` は同じ direct-layout-coordinate check を `TCntV.01` tables に広げる。10 readable `TCntV.01` samples と 89 checked rows において、chosen range candidates は `/LineMark` word offsets、`/LineMark` byte offsets、`/PageMark` rows/bytes、`/PaperMark` rows/bytes のいずれにも direct hit しない。current `TCntV.01` ranges も direct layout stream coordinates として扱うべきではない。
-
-`rjtd text-position-count-fields <file>` は remaining `TCntV.01` tail を positional `u16be` fields として expose し、`rjtd text-position-count-field-deltas <file>` は chosen range span と tail `t1..t2` span を比較する。current samples では all 89 rows が `t2 >= t1` だが、`t2 - t1` が chosen range span と等しい row はない。`rjtd text-position-count-tail-context <file>` は `t1/t2` が byte hit pattern より強い `/DocumentText` UTF-16 unit hit pattern を示すが universal ではない。`rjtd text-position-count-tail-delta-scan <file>` は unit hits を delta 29/30 付近で最も増やすが、text hits は elsewhere で peak する。`rjtd text-position-count-tail-delta-groups <file>` は aggregate signal を tail-pattern groups に分ける: one major `be0` pattern は `+29`、shifted patterns は `+30/+31`、major `0x0202` pattern は many best deltas に分散する。`rjtd text-position-count-tail-row-deltas <file>` は major `0x0202` pattern が row-level best deltas でも分散したままであることを確認する。`rjtd text-position-count-tail-row-context <file>` は `0x0202` chosen ranges が later body byte ranges に触れることが多く、best-delta tail fields は early heading/date text に触れることが多いと示す。`rjtd text-position-count-range-preview <file>` は `0x0202` chosen byte ranges が direct layout-stream coordinates ではないにもかかわらず real `/DocumentText` text entries と overlap することを示す。`rjtd text-position-count-range-boundaries <file>` は major `0x0202` byte ranges が mostly whole `/DocumentText` map entries を含み、`0x001c`/`0x000e` controls を繰り返し含むことを追加する。`rjtd text-control-context <file>` は `0x001c` を high-frequency delimiter candidate、`0x000e` をより control-cluster or inline-adjacent と示す。これにより `TCntV.01` tail fields は有望なまま残るが、`t1/t2` を chosen range の単純な duplicate として扱うことは reject され、chosen-range analysis の次の target は `/DocumentText` control-delimited byte intervals になる。
-
-## LineMark ヘッダーワード 0 の変化
-
-2026-06-24 時点のローカルサンプルで `LineMark` ヘッダーワード 0 の値が 3 種類確認された：
-
-| 値 | サンプル |
-| --- | --- |
-| `0x0914` | `46.jtd`、`a5.jtd`、`b6.jtd`（Ginga 縦書きサンプル、RFC 0007 初期セット） |
-| `0x090b` | ローカルの行政文書サンプル 10 件すべて（`01要綱`、`02案文`、`03新旧`、`04参照`） |
-| `0x0912` | `論文様式.jtd`（A4 横書き学術論文テンプレート） |
-
-いずれも `0x0900` 系プレフィックスを共有し、下位バイトのみ異なる：
-`0x14 = 20`、`0x0b = 11`、`0x12 = 18`。Ginga 縦書きと A4 横書きの差は `2`（`0x0914` vs `0x0912`）、Ginga と行政文書の差は `9`（`0x0914` vs `0x090b`）。
-下位バイトの意味は未解読。文書種別・書字方向・その他の文書レベル属性をエンコードしている可能性がある。
-
-## LineMark と DocumentText 0x001c の相関
-
-RFC 0009 により、`/DocumentText` の各 `0x001c` が自己記述型の段落/レイアウトレコードのオープナーであることが確立された。`be16-delta-v1` LineMark プロファイルは表示行ごとに 1 レコードを出力し、`0x001c` は論理段落（複数の表示行に折り返す場合がある）をマークする。
-
-`論文様式.jtd`（LineMark レコード 25 件、`0x001c` レコード 19 件）では、25 件の LineMark `unit-start` 値のうち 14 件が `0x001c` レコード位置と完全一致する。残り 11 件はテキストラン内部または `0x0000` ドキュメントターミネーターに対応する。`flag=0x0000` を持つ LineMark レコードは `0x001c` 位置と一致しない傾向があり、折り返した段落内の続き表示行と整合する。
-
-`03新旧（整備令）.jtd`（解析済み LineMark レコード 157 件）では、`0x001c` レコードが表セルクラス `0x0030`（703 件）と段落クラス `0x0010`（151 件）を含み、新旧対照文書の表多用構造を反映している。LineMark のデルタ値も対応して小さく多様である。
-
-## PageLayoutStyle の観測
-
-10 のローカル官公庁/学術サンプルは `/LineMark`/`/PageMark`/`/PaperMark` に加えて `/PageLayoutStyle` と `/PageLayoutStyleHeader` ストリームを持つ。（`04参照条文` 系 4 件と `論文様式.jtd` には `/PageLayoutStyle` がない。）
-
-**`/PageLayoutStyle` 構造（初期目録）：** `SsmgV.01` マジック（8 バイト）で始まる。ヘッダーワードはほぼゼロで、`w5=0x0004` または `0x0005`、`w7=0x0100`、`w9`=エントリ数的な値、`w10=0x0001`、`w11=0x0002` の小さな領域のみ非ゼロ。最初の大きな非ゼロワードクラスタはワード 138 から始まる。10 サンプル全てにおいて `0x4001` がワード 155 または 156 に現れ、直後に `0x010d=269` が続く。この `269` は `0x010c=268`（`03新旧（整備令）.jtd` のセル最大 b1 = 表幅）より 1 多い値。表のないサンプル（`01要綱`、`02案文` 系）でも同値が出現するため、ページレベルのレイアウトパラメーター（候補：`/DocumentText` の `0x0030` セル座標と同単位のテキスト領域幅）の可能性がある。`03新旧` では 2 箇所（ワード 155 と 792）に出現し、セクション単位の繰り返しが示唆される。
-
-**`/PageLayoutStyleHeader` 構造（初期目録）：** `SsmgV.01` マジックで始まる。ワード 10–13 に `TextV.01` マジック、ワード 138 に `TCntV.01` マジック、ワード 266 に再び `TextV.01` が出現する。この繰り返しマジック文字列は `/PageLayoutStyleHeader` が `TextV.01` と `TCntV.01` サブレコードを平坦なバイトストリームに混在させた複合コンテナであることを示す。ワード 299, 300, 302–306 は `/DocumentText` のインライン opener/terminator シーケンスに対応する `0x001c`/`0x001f`/`0x001d`/`0x001e` パターンを含み、スタイルブロックのペイロードが埋め込みテキストランを含む可能性を示す。`0x0198=408` がワード 279、341、440 に繰り返し出現し、`0x07dd=2013` がワード 285 と 447 に出現する。全フィールドの物理的意味は未解読。
-
-**`/PageLayoutStyle` スロット `part06` クロスサンプル分析（decoded:false）：**
-スロット `0x32`–`0x39` の `part06` バイト列の末尾 u16（ビッグエンディアン）はサンプル固有の値をエンコードする。10 サンプルに拡張（decoded:false）：
-
-| サンプルファミリー | 0x32/0x33 | 0x34/0x35 | 0x36/0x37 | 0x38/0x39 | part06 byte1 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `01要綱`/`02案文` | 1000 | 453 | 600（5バイト） | 407 | `0x01` |
-| `03新旧（整備令）` | 800 | 453 | 407+773（7バイト） | 411 | `0x00` |
-| `02_番号利用法（案文）` | 2000 | 0 | 0（5バイト） | 0 | `0x00` |
-| `03_新旧（番号利用法）` | 1405 | 0 | 0+1397（7バイト） | 0 | `0x00` |
-| `04_新旧（番号利用法）` | 1405 | 0 | 0+1397（7バイト） | 0 | `0x00` |
-
-`03_新旧（番号利用法）` と `04_新旧（番号利用法）` は全スロットで完全一致 — 同一文書改訂作業の異なる処理段階と整合する。`0x34/0x35=453` は `01要綱`/`02案文`/`03新旧（整備令）` クラスターにのみ出現し、番号利用法系 3 件では 0。part06 バイト 1 は `01要綱`/`02案文` ファミリーのみ `0x01`；他全サンプルは `0x00`。
-
-スロット 0x31 の part06 は 01要綱 で `03002b010201ff01`（8 バイト）、03新旧（整備令）では末尾 u16 が異なる（`0xff01`→`0x2501=549`）。数値の物理的意味は未解読；`/DocumentText` `0x0030` セル座標と同じ座標系でのページ領域高さまたはスタイルパラメータをエンコードしている可能性がある。
-
-## Known Gaps
-
-- `LineMark` record parser はまだ存在しない。
-- `/PageMark` には fixed 84-byte rows、preserved trailing bytes 付き fixed 84-byte rows、count-plus-one variable-row families、count-variable rows の raw-preserving parsers があるが、一部 local `/PageMark` streams はまだ unsupported variants を使う。
-- `/PaperMark` には initial row parser があるが、semantic model mapping はまだない。
-- count-like header values が entry counts であることは未証明。
-- これらの streams と `MarkV.01` / `TCntV.01` の関係は decode されていない。current evidence は direct Mark-entry-to-LineMark-word indexing と direct `TCntV.01` range-to-layout-stream offsets を reject する。
-- small malformed samples は mini-stream chains が safely readable ではない inventory entries を expose することがある。small layout streams を解釈する前に `stream-meta` を使うべきである。
-- `/LineMark` は semantics unknown の tag-like values (`0x1000`, `0x1001`, `0x1002`) を持つ。current tag-context evidence は immediate next word を unique family discriminator にせず、direct `DocumentText` coordinates も証明しない。
-- LineMark ヘッダーワード 0 の値（`0x0914` / `0x090b` / `0x0912`）の意味は未解読。文書種別・書字方向・その他の文書レベル属性をエンコードしている可能性がある。
-
-## Next Steps
-
-- header と flag semantics が decode されるまで `/PaperMark` は parser-backed diagnostic として保つ。
-- `SO` object/control record family field semantics を decode する。current evidence は singleton records の fields 1-4 が geometry-like tuples を持ち、repeated records が default/control constants を持つことを示す。
-- `/PageMark` と `/PaperMark` count-like values を known samples の rendered page または paper counts と比較する。
-- `/PaperMark` flags を page breaks、paper sections、visible layout changes と比較する。
-- tag offsets と contexts を text/layout boundaries と比較し、`/LineMark` 内の `0x1000`、`0x1001`、`0x1002` tag families を decode する。
-- final Mark header `u16` が `/LineMark` tag clusters 近くに入る一方で Mark entries が入らない理由を decode する。
-- direct `/LineMark`、`/PageMark`、`/PaperMark` coordinates が rejected された後の `TCntV.01` ranges の actual target を decode する。`text-position-count-fields`、`text-position-count-field-deltas`、`text-position-count-tail-context`、`text-position-count-tail-delta-scan`、`text-position-count-tail-delta-groups`、`text-position-count-tail-row-deltas`、`text-position-count-tail-row-context`、`text-position-count-range-preview`、`text-position-count-range-boundaries`、`text-control-context` を使って tail field patterns と chosen `/DocumentText` byte-range/control overlap を比較する。
-
-## 限定的なページ書式の方向切替
-
-統制した単一 page style は、subfield `0x0010` の 12-unit class `0x0020`
-record で ID1 適用と ID0 復帰を行う。中央 page の fixed84 flag `0x00050100` と
-隣接 page の `0x00010000` を照合する。一つの既知 style、中央 page source 境界の
-apply/reset、連続する三つの active page、入れ替わった紙寸法、同じ view/style margin
-quad のみ許容する。他の ID・関係・寸法・余白・record shape は fallback のまま。
-
-258-byte sequential view `0x1001` profile の payload offset 126/130 と 154/158 は
-重複する LE-u32 stock size。統制した 267-byte 方向 profile は 9-byte prefix を加え、
-offset1/5 の BE-u32 に明示寸法を持つ。重複値と既知 prefix を確認してから使用する。
-観測した 39/40-byte `0x4002` margin profile は既存 mm quad 解釈を共有し、
-残りの field は raw として保持する。
-
-SVG・layer/page info・PDF・canvas 寸法は同じ model page layout を選ぶ。
-書式設定 record と行末だけなら text pitch を消費しないが、本文空行や表示文字には
-拡張しない。限定的な source-backed 方向候補であり、一般 section DOM、任意の書式継承、
-完全な navigation layout、native 文字間隔の解読ではない。raw/decoded-false evidence を保つ。
-
-## 限定的な plain running 領域
-
-観測した `/Header` は `SsmgV.01`、offset8 の BE-u32 slot count、offset12 の
-`0x100` で始まる。512-byte slot は `16 + 512*i` にあり、+4 の `TextV.01`、
-+12 の BE-u32 UTF-16 unit count、+16 の本文に続き、zero byte と同じ BE-u32
-unit count を持つ。空の `TCntV.01` part は +260。末尾 table は zero の prefix/suffix と
-slot ごとの 24-byte row `[slotID, 0, 17+2*units, 1, 1, 2*i]`（BE-u32）を持つ。
-model は byte range と ID を公開する。不正 Unicode、書式・control text、重複 ID、
-切れた stream、別 layout は plain-slot 投影せず raw のまま保存する。
-
-統制した global 横書き profile の ID0/1/2/5/6 は page-number、primary/secondary
-header、primary/secondary footer 候補に対応し、既知 view group `0x31`、`0x32/33`、
-`0x36/37` で照合する。mode3 と alignment2/3 の組は奇数左・偶数右を裏付ける。
-`0x1011` の既知表紙 profile は最初の page を非表示にし、後続番号を変更しない。
-宣言された sequential view 範囲の後には four-byte header と code/u32-length section
-`0x1001`、`0x1002` がある。限定した 2026-byte settings section の payload offset8
-の BE-u32 は page-number 印刷有効時に 0 から 2 に変わる。slot0 の存在だけでは
-表示を有効にしない。この trailer は sequential u16-length style record ではない。
-
-SVG/PDF と layer output は source 対応と名目 mm100 anchor を共有する。
-header は紙上端、footer は本文下端から下方、page-number は紙下端を基準とする。
-geometry は `decoded:false` のまま。native PDF との差は縦方向 font metrics に約1.3pt、
-page-number の空白幅にも残る。reference 座標合わせは行わない。明示 page style、任意の
-番号開始・形式、複数行・書式付き slot、別 mode/cover/settings profile は対象外。
-元 stream を保全する。
+[実装の command・API・出力・過去の詳細記録](../../rjtd/docs/research/0007-layout-mark-streams.ja.md).

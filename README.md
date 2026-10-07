@@ -1,13 +1,23 @@
-# OpenJTD
+# rjtd
 
-Open-source JTD rendering engine and editor project for Ichitaro documents
+Independent Rust JTD rendering engine and editor project for Ichitaro documents
 (`.jtd`, `.jtt`, and `.jttc`).
 
-OpenJTD aims to become an open-source JTD rendering engine and editor. The
-current phase focuses on `rjtd`, a Rust toolset that builds the components
+`rjtd` is an independent implementation within the OpenJTD research ecosystem.
+OpenJTD is the shared umbrella for JTD research, specifications, and validation
+materials; rjtd and Tika JTD+ retain their own implementation goals. The
+current phase focuses on a Rust toolset that builds the components
 needed to get there: container inspection, text extraction, document modeling,
 export, and viewer integration. The longer-term technical milestone is a
 practical JTD engine that can support faithful layout rendering and editing.
+
+Shared work lives in [OpenJTD/spec](https://github.com/OpenJTD/spec) and
+[OpenJTD/corpus](https://github.com/OpenJTD/corpus). Organization policy
+discussions use `community`, which remains private during initial setup;
+`corpus-private` holds only material permitted for collaborator sharing.
+The initial shared policy and manifest formats are drafts for joint review.
+This repository's implementation, release flow, and local research records
+remain independent.
 
 ## Current rjtd Components
 
@@ -77,41 +87,39 @@ scripts/regenerate-pdf-output.sh
   RFC process.
 - [`docs/CHARTER.md`](docs/CHARTER.md) defines the long-term vision and research policy.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) defines engine layers and model boundaries.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) owns the current milestone summary, next
-  priorities, and completion criteria.
-- [`TODO.md`](TODO.md) retains the detailed backlog and historical experiments;
-  completed diagnostic tasks do not imply decoded format semantics.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) owns future work order and completion criteria.
+- [`docs/FEATURE-STATUS.md`](docs/FEATURE-STATUS.md) records current capabilities and M1–M6.
+- [`docs/VALIDATION.md`](docs/VALIDATION.md) records executed evidence and known limits.
+- [`TODO.md`](TODO.md) lists actionable development tasks and links the complete
+  historical backlog; completed diagnostics do not imply decoded semantics.
 - [`rjtd-testdata/README.md`](rjtd-testdata/README.md) explains fixture provenance
   and the distinction between portable checks and local reference validation.
 
 ## Design Reference
 
-OpenJTD's repository layout and engine boundaries take inspiration from the
-`rhwp` project. JTD source evidence governs its internal model; full rhwp Studio
-compatibility is not a required milestone. See the
-[rhwp reference and integration scope](docs/RHWP-COMPATIBILITY.md).
+JTD source data and reproducible observations govern the model and behavior.
+Other office implementations may be consulted when useful and permitted;
+their architecture, addressing, dependencies, and API coverage are not project
+requirements. See the [architecture](docs/ARCHITECTURE.md) for interpretation,
+rendering, and application boundaries.
 
 ## Project Status
 
-OpenJTD is in the reverse-engineering and component-building stage. It is not
-yet a complete JTD rendering engine or editor, and the `rjtd` APIs, data model,
-and diagnostic commands may still change.
+The development tree provides bounded reading/rendering profiles and basic
+body editing; general layout fidelity and structure-preserving editing/save
+remain unfinished. The dated registry release and the current development
+checkout may differ. See [feature status](docs/FEATURE-STATUS.md) for capability
+scope and [validation](docs/VALIDATION.md) for experiments and divergences.
 
-Text extraction works for observed files, but full paragraph semantics, layout
-fidelity, styles, tables, ruby annotations, images, and native editing behavior
-are incomplete. PDF and SVG combine text-oriented fallback layout with limited
-source- or reference-backed projections; native layout fidelity is not guaranteed.
-Basic body-text editing exists, but structure-preserving editing and saving
-back to JTD remain unfinished.
-
-The next goal is reproducible reading and rendering of horizontal body text and
-a simple table on one page. See the [roadmap](docs/ROADMAP.md#next-priorities) for
-acceptance criteria and the path toward broader layout and editing support.
+The next sequence is interpretation-core separation, reproducible local
+interpretation checks, a rendering boundary, evidence-led rule expansion,
+and structure-preserving editing/save. See the [roadmap](docs/ROADMAP.md).
 
 ## Translations
 
 English is the default documentation language. Japanese translations use
-`*.ja.md`.
+`*.ja.md`. Korean working translations use `*.ko.md` and remain ignored local
+files under the current repository policy; local updates do not publish them.
 
 ## Contributing and Security
 

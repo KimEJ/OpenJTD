@@ -32,6 +32,11 @@ source-y probe テストは `local-samples/ichitaro-source-y-probe/` の manifes
 `corpus/baseline-sweep/`、`corpus/page01-grid/` を必要とする。ローカルの来歴メモでは
 native 作成文書と RTF-import surrogate を区別している。解読規則を確定するときも
 この区別を維持する。
+同名の旧 top-level directory は手動 guide だけであり、回帰 corpus はこの local-samples に残る。
+native fixture と source-y surrogate は別入力集合である。
+native CLI fixture も現在 ignored の `local-samples/native-fixtures/` にあり、test は基本 ignore である。
+project 作成テキストという条件だけでは入力や参照 PDF が public checkout に含まれることにならない。67 native pair の記録は
+[検証](../docs/VALIDATION.ja.md) を参照する。
 
 PDF 生成検査は構造上の妥当性を確認する。再現精度の検証には信頼できる参照 PDF が必要で、
 artifact テストには `openjtd-samples/pdf-output/` の生成物も必要である。exporter テストは

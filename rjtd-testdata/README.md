@@ -33,6 +33,14 @@ The source-y probe tests expect `local-samples/ichitaro-source-y-probe/`, includ
 its manifest and `corpus/baseline-sweep/` and `corpus/page01-grid/` directories.
 Its local provenance notes distinguish native-authored documents from
 RTF-import surrogates. Keep that distinction when promoting a decoding rule.
+The obsolete top-level directory of the same name was only a manual guide;
+the regression corpus remains under this local-samples path.
+Native fixtures and source-y surrogate probes are different input sets.
+The native CLI fixtures currently also reside under ignored
+`local-samples/native-fixtures/`; their tests are explicitly ignored by default.
+Project-authored text alone does not place the input or reference PDF in a
+public checkout.
+See [validation](../docs/VALIDATION.md) for the recorded 67-pair native batch.
 
 PDF generation checks establish structural plausibility. Fidelity checks also
 need trusted reference PDFs and, for artifact tests, generated output under

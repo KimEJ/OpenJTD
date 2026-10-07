@@ -3,14 +3,21 @@
 Experimental text, Markdown, HTML, JSON, and PDF exporters for OpenJTD
 documents.
 
-`rjtd-export` is the export layer of
-[OpenJTD](https://github.com/KimEJ/OpenJTD). It consumes `rjtd-model::Document`;
+`rjtd-export` is the export layer of the
+[rjtd implementation](https://github.com/OpenJTD/rjtd). It consumes `rjtd-model::Document`;
 it does not parse source files directly.
 
 ## Developer preview
 
 Version 0.0.1 is an experimental developer preview. All public APIs and output
 details may change in any later 0.0.x release.
+
+The source checkout may include unreleased development after the dated 0.0.1
+release. See [feature status](../../../docs/FEATURE-STATUS.md) and
+[validation](../../../docs/VALIDATION.md) for current scope, and the
+[changelog](../../CHANGELOG.md) for the release record. The
+[architecture](../../../docs/ARCHITECTURE.md) describes planned interpretation/
+rendering separation; this documentation does not implement that migration.
 
 ## Exports
 

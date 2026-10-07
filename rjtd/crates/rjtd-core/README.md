@@ -2,8 +2,8 @@
 
 Low-level parsers and diagnostics for Ichitaro JTD compound documents.
 
-`rjtd-core` is the container and stream layer of
-[OpenJTD](https://github.com/KimEJ/OpenJTD). Higher-level document semantics
+`rjtd-core` is the container and stream layer of the
+[rjtd implementation](https://github.com/OpenJTD/rjtd). Higher-level document semantics
 live in `rjtd-model`; end-user exports live in `rjtd-export` and `rjtd-cli`.
 
 ## Developer preview
@@ -11,6 +11,13 @@ live in `rjtd-model`; end-user exports live in `rjtd-export` and `rjtd-cli`.
 Version 0.0.1 is an experimental developer preview. The implementation is
 based on observed files and is not a complete specification of the JTD family.
 All public APIs may change in any later 0.0.x release.
+
+The source checkout may include unreleased development after the dated 0.0.1
+release. See [feature status](../../../docs/FEATURE-STATUS.md) and
+[validation](../../../docs/VALIDATION.md) for current scope, and the
+[changelog](../../CHANGELOG.md) for the release record. The
+[architecture](../../../docs/ARCHITECTURE.md) describes planned interpretation/
+rendering separation; this documentation does not implement that migration.
 
 ## What it provides
 

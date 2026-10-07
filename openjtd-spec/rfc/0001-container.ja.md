@@ -1,116 +1,68 @@
 # RFC 0001: JTD Container Inventory
 
-Status: draft
+Status: draft for publication preparation; joint review pending
 
-Observed: 2026-06-18
+English source: [0001-container.md](0001-container.md)
 
-## Summary
+## 範囲と根拠
 
-初期 local JTD samples は Compound File Binary (CFB) documents である。
+観測した JTD/JTT は Compound File Binary（CFB）storage を使う。これは調査した文書の
+inventory であり、歴史的な全 variant に同じ tree を要求するものではない。初期観測日は
+2026-06-18。再配布可能な再現入力一式は、この draft に添付されていない。
 
-M1 は container inventory だけを実装する。stream payloads は解釈しない。
+## 観測した stream
 
-container layer はまず `cfb` crate を使う。これは OLE/CFB files に対する rhwp の dependency choice と一致する。standard reader が reject する malformed FAT data を CFB file が持つ場合、rjtd は rhwp の `LenientCfbReader` approach を model にした narrow lenient reader に fallback する。
-
-## Command
-
-```sh
-cd rjtd
-cargo run -p rjtd-cli -- streams ../rjtd-testdata/local-samples/a5.jtd
-```
-
-output format は tab-separated:
+初期 5 文書に共通する logical stream は以下である。
 
 ```text
-<entry-kind>    <byte-size>    <path>
+/\x04JSRV_SegmentInformation
+/\x04JSRV_SummaryInformation
+/\x05SummaryInformation
+/AutoTextInfo
+/DocumentEditStyles
+/DocumentPeripheralThree
+/DocumentPeripheralTwo
+/DocumentText
+/DocumentTextPositionTables
+/DocumentViewStyles
+/Font
+/Footnote
+/Header
+/MarkTag
+/PageLayoutStyle
+/ReferenceInfo
+/RelatedDocuments
+/TextLayoutStyle
+/ThinkingTemplate
 ```
 
-`entry-kind` は `storage` または `stream`。
+`\x04` と `\x05` は
+名前中の制御文字を示し、文字列としての backslash ではない。
+`/DocumentText`、`/DocumentTextPositionTables`、`/DocumentViewStyles`、
+`/DocumentEditStyles`、`/TextLayoutStyle`、`/PageLayoutStyle`、`/Font`、
+`/Footnote`、`/Header`、`/MarkTag` と metadata stream が含まれる。
 
-stream names 内の ASCII control characters は表示用に escape される。例: `\x04JSRV_SegmentInformation`。
+一部には `/LineMark`、`/PageMark`、`/PaperMark`、`/PageLayoutStyleHeader` もあるが、
+存在しない文書もある。macro storage には `/DocumentMacro/Macros/BaseStorage0` と
+`InfoStream`、`MacrosStream`、`MacrosStreamStyle3` がある。存在だけでは payload の意味や
+実行許可を証明しない。
 
-## Lenient FAT Fallback
+## 解釈と反例
 
-一部の local `.jtd` samples には duplicate sector pointers のような FAT inconsistencies が含まれる。rhwp は同等の HWP files を、別 dependency 追加ではなく direct `LenientCfbReader` implementation で処理する。
+調査 profile では `/DocumentText` が本文と対応する。style、position table、layout mark の
+意味は別途検証する。stream の大きさや名前だけで役割を確定しない。named `/DocumentText` を
+直接読めず、埋込み `SsmgV.01` / `TextV.01` fragment を持つ文書もある。JTTC wrapper は
+RFC 0005 に記録する。
 
-rjtd はその pattern に従う。
+一部の local 入力には FAT 不整合がある。reader の回復方針は実装の選択であり、読めたことは
+不正 sector chain が JTD の規範構造である証拠にはならない。
 
-- standard `cfb` parsing を最初に試す。
-- lenient parsing は、standard parsing が CFB らしい file で失敗した後だけ使う。
-- stream inventory と stream reads は同じ fallback を共有する。
-- successful lenient open 後も、missing streams は `not found` errors のままにする。
+## 必要な検証
 
-Current local sweep:
+作成 version、正確な inventory、hash、取得根拠、readability を入力ごとに記録する。
+一条件だけ変えた native 文書と過去の文書を独立に比較し、stream の欠落、読めない chain、
+未知 payload を明示する。
 
-| Command | Local samples checked | Result |
-| --- | ---: | --- |
-| `rjtd info` | 61 | 61 opened |
-| `rjtd cat` | 61 | 61 opened; 2 use embedded `SsmgV.01` fragments instead of named `/DocumentText` |
+## 実装記録と履歴
 
-## Local Samples
-
-以下の sample names は、初期 container inventory work で使った local files を指す。
-観察済み stream layouts を比較するための examples である。
-
-| Sample | Entry count | Notes |
-| --- | ---: | --- |
-| `a5.jtd` | 32 | `LineMark`, `PageMark`, `PaperMark`, `PageLayoutStyleHeader` を持つ |
-| `46.jtd` | 31 | `LineMark`, `PageMark`, `PaperMark` を持つ |
-| `b6.jtd` | 31 | `LineMark`, `PageMark`, `PaperMark` を持つ |
-| `shinsyo.jtd` | 28 | initial inventory では `LineMark`, `PageMark`, `PaperMark` を持たない |
-| `a6.jtd` | 28 | initial inventory では `LineMark`, `PageMark`, `PaperMark` を持たない |
-
-## Common Top-Level Streams
-
-これらの top-level streams は five local samples すべてに現れる。
-
-- `/\x04JSRV_SegmentInformation`
-- `/\x04JSRV_SummaryInformation`
-- `/\x05SummaryInformation`
-- `/AutoTextInfo`
-- `/DocumentEditStyles`
-- `/DocumentPeripheralThree`
-- `/DocumentPeripheralTwo`
-- `/DocumentText`
-- `/DocumentTextPositionTables`
-- `/DocumentViewStyles`
-- `/Font`
-- `/Footnote`
-- `/Header`
-- `/MarkTag`
-- `/PageLayoutStyle`
-- `/ReferenceInfo`
-- `/RelatedDocuments`
-- `/TextLayoutStyle`
-- `/ThinkingTemplate`
-
-## Common Storage Tree
-
-five samples はすべて次の macro storage tree を含む。
-
-```text
-/DocumentMacro
-/DocumentMacro/\x04JSRV_SegmentInformation
-/DocumentMacro/Macros
-/DocumentMacro/Macros/\x04JSRV_SegmentInformation
-/DocumentMacro/Macros/BaseStorage0
-/DocumentMacro/Macros/BaseStorage0/\x04JSRV_SegmentInformation
-/DocumentMacro/Macros/BaseStorage0/InfoStream
-/DocumentMacro/Macros/BaseStorage0/MacrosStream
-/DocumentMacro/Macros/BaseStorage0/MacrosStreamStyle3
-```
-
-## Early Hypotheses
-
-- `/DocumentText` は圧倒的に大きな common stream なので、primary body text candidate である。
-- `/DocumentTextPositionTables` は text positions を index または map している可能性が高い。
-- `/DocumentViewStyles`、`/DocumentEditStyles`、`/TextLayoutStyle`、`/PageLayoutStyle`、`/Font` は style/model candidates である。
-- `JSRV_*` streams と `SummaryInformation` streams は、理解される前でも保存すべきである。
-
-## Next Questions
-
-- `/DocumentText` が compressed、encoded、segmented、encrypted のいずれかを判定する。
-- `/DocumentText` size と content を、known text を持つ trivial documents と比較する。
-- page size variants が `a5`、`a6`、`b6`、`46` の違いを説明するか確認する。
-- line/page mark streams が optional layout caches なのか required model data なのか判断する。
-- named `/DocumentText` ではなく embedded `SsmgV.01` fragments を使う samples の proper object/stream boundaries を特定する。
+[実装の command・API・出力・過去の詳細記録](../../rjtd/docs/research/0001-container.ja.md).

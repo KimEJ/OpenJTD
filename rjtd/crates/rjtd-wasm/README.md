@@ -4,17 +4,24 @@ WebAssembly bindings for parsing and rendering Ichitaro JTD documents in
 browsers.
 
 `rjtd-wasm` is the browser binding layer of
-[OpenJTD](https://github.com/KimEJ/OpenJTD). Its `HwpDocument` wrapper mirrors
-part of the rhwp-shaped application API, while all implementation remains
-original OpenJTD code. The existing wrapper name and working viewer contract
-are retained, not a promise of complete rhwp Studio integration. The
-[integration scope](../../../docs/RHWP-COMPATIBILITY.md) defines the adapter
-boundary.
+[rjtd](https://github.com/OpenJTD/rjtd). `HwpDocument` is the existing public
+wrapper used by the repository viewer. The name does not define the engine's
+format or architectural requirements. Consumer-specific APIs belong at the
+application boundary described in the [architecture](../../../docs/ARCHITECTURE.md).
+Renaming the wrapper or removing methods requires a separate code migration
+with viewer and generated-binding checks.
 
 ## Developer preview
 
 Version 0.0.1 is an experimental developer preview. Rust, generated JavaScript,
 and WebAssembly-facing APIs may change in any later 0.0.x release.
+
+The source checkout may include unreleased development after the dated 0.0.1
+release. See [feature status](../../../docs/FEATURE-STATUS.md) and
+[validation](../../../docs/VALIDATION.md) for current scope, and the
+[changelog](../../CHANGELOG.md) for the release record. The
+[architecture](../../../docs/ARCHITECTURE.md) describes planned interpretation/
+rendering separation; this documentation does not implement that migration.
 
 ## What it provides
 

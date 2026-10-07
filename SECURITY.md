@@ -1,6 +1,7 @@
 # Security Policy
 
-OpenJTD parses externally supplied JTD, JTT, and JTTC binary documents. Parser
+This policy covers the rjtd implementation, which parses externally supplied
+JTD, JTT, and JTTC binary documents. Parser
 crashes, hangs, excessive resource use, malformed output, and unsafe handling of
 embedded content are in scope for security reports.
 
@@ -19,7 +20,7 @@ maintained after a fixed release is available.
 ## Reporting a Vulnerability
 
 Use GitHub Private Vulnerability Reporting from the repository's
-[Security advisories page](https://github.com/KimEJ/OpenJTD/security/advisories).
+[Security advisories page](https://github.com/OpenJTD/rjtd/security/advisories).
 Do not disclose vulnerability details in a public issue, discussion, or pull
 request.
 

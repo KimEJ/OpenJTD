@@ -2,6 +2,22 @@
 
 This file records user-visible changes to the OpenJTD Rust workspace.
 
+## Unreleased
+
+### Documentation
+
+- Separate the forward roadmap, feature status, validation record, and active
+  development tasks; retain complete historical research/backlogs.
+- Clarify source interpretation, rendering, and application boundaries and
+  keep external implementation references optional.
+- Separate local format drafts from implementation records and align primary
+  English/Japanese documents and local Korean working translations.
+- Distinguish the completed initial release record from future release
+  preparation; the first-release preflight still needs a code update.
+
+Current development scope is in [feature status](../docs/FEATURE-STATUS.md).
+The limitations below describe the dated 0.0.1 release, not every later checkout.
+
 ## 0.0.1 - 2026-07-14
 
 ### Added

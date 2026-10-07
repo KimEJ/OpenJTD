@@ -2,17 +2,24 @@
 
 Experimental document model and parser integration for Ichitaro JTD files.
 
-`rjtd-model` is the model layer of
-[OpenJTD](https://github.com/KimEJ/OpenJTD). It consumes the low-level evidence
+`rjtd-model` is the model layer of the
+[rjtd implementation](https://github.com/OpenJTD/rjtd). It consumes the low-level evidence
 produced by `rjtd-core` and provides the `Document`, `DocumentParser`, and
 `DocumentCore` APIs used by exporters, the CLI, WebAssembly bindings, and the
-OpenJTD viewer.
+repository viewer.
 
 ## Developer preview
 
 Version 0.0.1 is an experimental developer preview. All public APIs may change
 in any later 0.0.x release. The model deliberately exposes diagnostic and
 evidence-preserving types while the JTD format is still being decoded.
+
+The source checkout may include unreleased development after the dated 0.0.1
+release. See [feature status](../../../docs/FEATURE-STATUS.md) and
+[validation](../../../docs/VALIDATION.md) for current scope, and the
+[changelog](../../CHANGELOG.md) for the release record. The
+[architecture](../../../docs/ARCHITECTURE.md) describes planned interpretation/
+rendering separation; this documentation does not implement that migration.
 
 ## What it provides
 
@@ -103,16 +110,17 @@ current consumers, not the source representation. Their normalized row/cell
 text does not replace the original events. JSON export exposes the source flow
 as `documentTextFlow` with `decoded:false`. A document constructed without JTD
 payload bytes has no source flow; fallback paragraph edits do not rewrite it.
-Logical wrapping/merging, ruled-line paint semantics, and saving source changes
-still require independent evidence and implementation.
+General logical wrapping/merging, paint semantics, and saving source changes
+still require evidence and implementation beyond the bounded candidates.
 
 A bounded first-page horizontal ASCII/Japanese projection places physical ruled spans
 directly from source events, LineMark intervals, PageMark pitch, and source
 margins. Explicit left/distributed alignment can be shown without rebuilding
 logical rows. Explicit center/right spans use source midpoint/end anchors and
 SVG's font-aware `text-anchor`; layer JSON separates `anchorX` from estimated
-bbox/glyph positions. This remains a first-page horizontal text profile, not
-logical-cell reconstruction. Distributed spans retain their source extent as SVG
+bbox/glyph positions. This particular projection is a first-page horizontal text profile, not
+logical-cell reconstruction. Other bounded source-page paths are described
+in feature status; none establishes general table semantics. Distributed spans retain their source extent as SVG
 `textLength`/`lengthAdjust="spacing"` and layer-tree metadata. Overlapping table
 fallbacks remain diagnostics instead of painting the same text twice. Raw span
 flags and `decoded:false` remain visible. Inherited wrapped automatic spacing,
@@ -160,8 +168,8 @@ PageMark ranges assign the physical lines to pages. Paragraph/character addresse
 and noncontiguous cell source fragments remain intact. Body text and rules use
 page-local line indices; capacity-only entries do not create blank pages.
 Native page/line counts are reserved before page text is cloned. Missing or
-edited source spans, unknown/inline content, unsupported scripts, or per-page
-layout-style streams retain the previous fallback. Metadata stays candidate /
+edited source spans, unknown/inline content, unsupported scripts, or unsupported per-page
+layout-style associations retain the previous fallback. Metadata stays candidate /
 `decoded:false`; exact font tracking and general section pagination are unproven.
 
 Native line positions accumulate source advances instead of multiplying one

@@ -23,3 +23,7 @@ scripts/regenerate-pdf-output.sh
 
 The script reads `.jtd`, `.jtt`, and `.jttc` files from
 `rjtd-testdata/local-samples/` and writes same-stem PDFs into `pdf-output/`.
+
+Generated `pdf-output/` files are ignored local comparison artifacts. A file
+being generated there does not make it redistributable or part of a public
+corpus. Current evidence scope is in [validation](../docs/VALIDATION.md).

@@ -1,13 +1,21 @@
-# OpenJTD
+# rjtd
 
-一太郎文書（`.jtd`、`.jtt`、`.jttc`）向けのオープンソース JTD
+一太郎文書（`.jtd`、`.jtt`、`.jttc`）向けの独立した Rust JTD
 レンダリングエンジン兼エディタプロジェクトです。
 
-OpenJTD は、オープンソースの JTD レンダリングエンジン兼エディタになることを
-目指しています。現在は `rjtd` という Rust ツール群を中心に、コンテナ調査、
+`rjtd` は OpenJTD の共同研究エコシステムに属する独立した実装です。
+OpenJTD は JTD の研究・仕様・検証資料を共有する名称であり、rjtd と Tika JTD+ は
+それぞれの実装目標を維持します。現在は Rust ツール群を中心に、コンテナ調査、
 テキスト抽出、文書モデル化、エクスポート、ビューア統合に必要な構成要素を作って
 います。長期的な技術マイルストーンは、忠実なレイアウト描画と編集機能を支えられる
 実用的な JTD エンジンを作ることです。
+
+共同研究は [OpenJTD/spec](https://github.com/OpenJTD/spec) と
+[OpenJTD/corpus](https://github.com/OpenJTD/corpus) で管理します。
+組織方針の議論に使う `community` は初期設定中は非公開とし、`corpus-private` には
+共同研究者への共有が許可された資料のみを置きます。共同方針と manifest 形式は
+共同レビュー用の草案です。本リポジトリの実装・リリース手順・ローカル研究記録は
+独立して維持します。
 
 ## 現在の rjtd コンポーネント
 
@@ -77,38 +85,33 @@ scripts/regenerate-pdf-output.sh
   索引です。
 - [`docs/CHARTER.ja.md`](docs/CHARTER.ja.md) は長期ビジョンと研究方針を定義します。
 - [`docs/ARCHITECTURE.ja.md`](docs/ARCHITECTURE.ja.md) はエンジン層とモデルの境界を定義します。
-- [`docs/ROADMAP.ja.md`](docs/ROADMAP.ja.md) は現在のマイルストーン、次の優先順位、
-  完了条件を管理します。
-- [`TODO.ja.md`](TODO.ja.md) は詳細 backlog と過去の実験を保持します。
-  診断タスクの完了は形式の意味が解読されたことを意味しません。
+- [`docs/ROADMAP.ja.md`](docs/ROADMAP.ja.md) は将来の順序と完了条件を管理します。
+- [`機能状況`](docs/FEATURE-STATUS.ja.md) は現在の能力と M1–M6 を記録します。
+- [`検証`](docs/VALIDATION.ja.md) は実行根拠と限界を記録します。
+- [`TODO.ja.md`](TODO.ja.md) は実行する作業と全過去 backlog の参照を持ちます。
+  診断完了は形式解読の証明ではありません。
 - [`rjtd-testdata/README.ja.md`](rjtd-testdata/README.ja.md) は fixture の来歴と、
   portable な検査・ローカル参照検証の違いを説明します。
 
 ## 設計上の参照
 
-OpenJTD のリポジトリ構成とエンジン境界は `rhwp` を参考にしています。内部モデルは JTD の
-原本根拠に従い、rhwp Studio の完全互換を必須のマイルストーンにはしません。
-[rhwp の参照・連携範囲](docs/RHWP-COMPATIBILITY.ja.md) を参照してください。
+model と動作は JTD 原本と再現可能な観測で決める。他の office 実装は問題解決に役立ち、
+参照が許される場合に利用する。その構造、address、依存、API coverage を開発義務にしない。
+解釈・描画・application の境界は [architecture](docs/ARCHITECTURE.ja.md) を参照する。
 
 ## プロジェクト状況
 
-OpenJTD は、リバースエンジニアリングと構成要素の整備段階です。まだ完全な JTD
-レンダリングエンジンでもエディタでもなく、`rjtd` の API、データモデル、診断
-コマンドは今後も変わる可能性があります。
+開発 tree は限定読取/描画と基本本文編集を持つが、一般 fidelity と構造保持 editing/save は未完成です。
+公開済み release と開発 checkout は異なり得ます。[機能状況](docs/FEATURE-STATUS.ja.md) と
+[検証](docs/VALIDATION.ja.md) で能力・根拠・差異を確認します。
 
-観測済みファイルではテキスト抽出が動作しますが、段落セマンティクス、レイアウト
-再現性、スタイル、表、ルビ、画像、ネイティブ編集挙動は未完成です。PDF と SVG は
-テキスト中心の fallback layout と限定的な source/reference-backed projection を
-組み合わせており、native layout の再現精度は保証しません。基本的な本文編集は
-存在しますが、構造を保持した編集と JTD への保存は未完成です。
-
-次の目標は、横書き本文と単純な表を持つ 1 ページ文書の読み取り・描画を再現可能に
-することです。完了条件と、より広いレイアウト・編集対応への道筋は
-[roadmap](docs/ROADMAP.ja.md#next-priorities) を参照してください。
+次の順序は解釈コア分離、local 再現検証、描画境界、根拠に基づく規則拡張、構造保持編集/save です。
+[roadmap](docs/ROADMAP.ja.md) を参照してください。
 
 ## 翻訳
 
-英語を既定のドキュメント言語とします。日本語訳は `*.ja.md` を使います。
+英語を既定のドキュメント言語とします。日本語訳は `*.ja.md` を使います。韓国語作業版は既存規則に従う local ignored の `*.ko.md` であり、
+local 更新は公開を意味しません。
 
 ## コントリビューションとセキュリティ
 
